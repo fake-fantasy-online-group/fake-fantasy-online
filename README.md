@@ -19,13 +19,14 @@
 - 下方 `make` 命令用于 macOS/Linux 的 POSIX shell 环境；macOS Player 构建及签名整理需在 macOS 执行。
 - Windows 原生环境可直接使用 Unity CLI，见下方示例。
 
-可通过 `UNITY_EDITOR_BIN` 指定 Unity Editor 可执行文件路径。默认命令名为 `Unity`。
+可通过 `UNITY_EDITOR_BIN` 指定 Unity Editor 可执行文件路径。默认命令名为 `Unity`。本机配置可写在被 Git 忽略的 `LocalConfig/build.mk` 中，例如 `UNITY_EDITOR_BIN := /path/to/Unity`。
 
 ## 用户自行准备的资源
 
 当前源码目标版本为 1.6.0；资源需与当前读取格式匹配。将有权使用的兼容资源放到以下项目路径，并保留原有目录层级。不要提交这些资源：
 
 ```text
+Assets/LocalBranding/AppIcon.png          # 应用图标，建议正方形 PNG
 Assets/Resources/gbk_table.bytes
 Assets/StreamingAssets/ReferenceClient/
 Assets/StreamingAssets/ReferenceClient/packages/
@@ -53,6 +54,8 @@ zpatch_tower10.pkg
 以上目录只说明源码当前读取的相对路径，不代表项目提供资源，也不授予资源使用权。资源缺失、版本不匹配或文件不完整时，部分界面、地图、角色、音乐或音效可能不可用。
 
 ## 构建
+
+应用图标读取 `Assets/LocalBranding/AppIcon.png`，构建时自动应用到默认图标和桌面平台图标；Unity 启动画面已关闭。图标、游戏素材及其元数据均由 `.gitignore` 排除，仅在本地保留，不随源码仓库或源码压缩包发布。
 
 ```bash
 make build-macos

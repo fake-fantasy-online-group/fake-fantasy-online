@@ -91,3 +91,7 @@ SavedVariables/
 /handoff.md
 /docs/
 /reference-content/
+
+# Local application branding supplied separately from the source release
+/Assets/LocalBranding/
+/Assets/LocalBranding.meta

@@ -1,3 +1,5 @@
+-include LocalConfig/build.mk
+
 UNITY_EDITOR_BIN ?= Unity
 BUILD_PATH ?= $(CURDIR)/Build/fake-fantasy-online.app
 WINDOWS_BUILD_PATH ?= $(CURDIR)/Build/Windows/fake-fantasy-online.exe

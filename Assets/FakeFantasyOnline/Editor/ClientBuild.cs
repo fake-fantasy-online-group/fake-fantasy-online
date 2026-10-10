@@ -3,6 +3,7 @@ using System.IO;
 using Process = System.Diagnostics.Process;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -30,7 +31,34 @@ public static class ClientBuild
         {
             new EditorBuildSettingsScene(ScenePath, true)
         };
+        ConfigureBranding();
         AssetDatabase.SaveAssets();
+    }
+
+    private static void ConfigureBranding()
+    {
+        const string iconPath = "Assets/LocalBranding/AppIcon.png";
+        if (!File.Exists(iconPath))
+        {
+            throw new FileNotFoundException(
+                "Supply your local application icon at Assets/LocalBranding/AppIcon.png before building.",
+                iconPath);
+        }
+
+        AssetDatabase.ImportAsset(iconPath, ImportAssetOptions.ForceSynchronousImport);
+        Texture2D icon = AssetDatabase.LoadAssetAtPath<Texture2D>(iconPath);
+        if (icon == null)
+            throw new InvalidDataException("The application icon could not be imported as a Texture2D.");
+
+        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Unknown, NamedBuildTarget.Standalone })
+        {
+            int[] sizes = PlayerSettings.GetIconSizes(target, IconKind.Any);
+            Texture2D[] icons = new Texture2D[sizes.Length];
+            for (int index = 0; index < icons.Length; index++) icons[index] = icon;
+            PlayerSettings.SetIcons(target, icons, IconKind.Any);
+        }
+        PlayerSettings.SplashScreen.show = false;
+        PlayerSettings.SplashScreen.showUnityLogo = false;
     }
 
     public static void BuildMacOS()
