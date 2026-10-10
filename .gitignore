@@ -1,0 +1,93 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# IDE
+.idea/
+.vscode/
+.vs/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Worktree-local and interrupted-patch residue
+/.worktrees/
+/worktrees/
+.cache/
+*.log
+*.orig
+*.rej
+*.tmp
+*.swp
+*~
+
+# Builds and packages
+*.app
+*.dmg
+*.unitypackage
+
+# Local secrets and player data
+.env
+.env.*
+!.env.example
+LocalConfig/
+PlayerData/
+SavedVariables/
+
+# External content is supplied locally and never committed.
+/Assets/StreamingAssets/*
+!/Assets/StreamingAssets/AddOns/
+!/Assets/StreamingAssets/AddOns.meta
+/Assets/Resources/
+/Assets/Resources.meta
+*.pkg
+*.pkg.part-*
+*.bundle
+*.gsa
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tga
+*.psd
+*.fbx
+*.blend
+*.wav
+*.ogg
+*.mp3
+*.mp4
+*.mov
+*.ttf
+*.otf
+*.bytes
+*.dll
+*.exe
+*.zip
+*.7z
+
+# Local research and development records
+/.workbuddy/
+/AGENTS.md
+/handoff.md
+/docs/
+/reference-content/

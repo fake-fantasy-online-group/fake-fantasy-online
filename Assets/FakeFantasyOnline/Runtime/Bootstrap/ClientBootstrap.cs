@@ -1,0 +1,105 @@
+using System;
+using FakeFantasyOnline.Protocol;
+using FakeFantasyOnline.Presentation;
+using FakeFantasyOnline.Presentation.ReferenceAssets;
+using UnityEngine;
+
+namespace FakeFantasyOnline.Bootstrap
+{
+
+public sealed class ClientBootstrap : MonoBehaviour
+{
+    private NativeNetClientHost _unboundNetwork;
+    private INetClientInstanceHost _networkHost;
+    private ClientRootView _view;
+    private bool _terminalQuitRequested;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void CreateCompositionRoot()
+    {
+        if (UnityEngine.Object.FindAnyObjectByType<ClientBootstrap>() != null)
+        {
+            return;
+        }
+
+        GameObject root = new GameObject("FakeFantasyOnline");
+        DontDestroyOnLoad(root);
+        root.AddComponent<ClientBootstrap>();
+    }
+
+
+    private void Awake()
+    {
+        PrivateServerOptions options = PrivateServerOptions.LocalDefault();
+        NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri.AbsoluteUri);
+        // Before title creation the native test-world path still has its original
+        // unbound session. SetupNet transfers this graph to its first actual owner.
+        _unboundNetwork = new NativeNetClientHost(options);
+        _view = gameObject.AddComponent<ClientRootView>();
+        _view.Initialize(_unboundNetwork.Session, RequestTerminalQuit, options.NoticeUri);
+        _unboundNetwork.ObserveUnboundView(_view);
+        _view.BindTitleNetworkSetupForIndependentRuntime(() =>
+        {
+            if (_terminalQuitRequested || this == null) return;
+            EnsureNativeNetworkOwner(options);
+            _view.SetupNativeTitleNetworkForIndependentRuntime();
+        }, () => _networkHost.SendTitleWorldReturn());
+        _view.WorldBootstrapForIndependentRuntime.BindTitleStartupForIndependentRuntime(() =>
+        {
+            if (_terminalQuitRequested || this == null) return;
+            var title = _view.InitializeTitleForIndependentRuntime();
+            if (_terminalQuitRequested || this == null) return;
+            _view.BindTitleBootstrapForIndependentRuntime(title);
+        });
+    }
+
+    private void EnsureNativeNetworkOwner(PrivateServerOptions options)
+    {
+        var owner = FakeFantasyOnline.Presentation.ReferenceAssets.NetClient.I;
+        NativeNetClientHost created = null;
+        if (owner == null)
+        {
+            // Official SetupNet: Unity-null I -> new GameObject("NetClient") -> AddComponent.
+            // The existing seven Protocol field initializers run for this new instance,
+            // before the component's Awake publishes I. No old core is retargeted.
+            GameObject host = new GameObject("NetClient");
+            created = _unboundNetwork != null && !_unboundNetwork.HasOwner
+                ? _unboundNetwork : new NativeNetClientHost(options);
+            host.AddComponent<FakeFantasyOnline.Presentation.ReferenceAssets.NetClient>();
+            owner = FakeFantasyOnline.Presentation.ReferenceAssets.NetClient.I;
+        }
+        if (owner.InstanceHostForIndependentRuntime == null)
+        {
+            created = created ?? (_unboundNetwork != null && !_unboundNetwork.HasOwner
+                ? _unboundNetwork : new NativeNetClientHost(options));
+            created.BindOwner(owner, _view);
+            if (ReferenceEquals(_unboundNetwork, created)) _unboundNetwork = null;
+        }
+        INetClientInstanceHost selected = owner.InstanceHostForIndependentRuntime;
+        if (!ReferenceEquals(_networkHost, selected)) _networkHost?.DetachView(_view);
+        _networkHost = selected;
+        selected.AttachView(_view);
+        // An already-live foreign owner keeps its own graph. The unused initial graph
+        // has never owned a Unity component and can be released without closing I.
+        _unboundNetwork?.ReleaseUnbound();
+        _unboundNetwork = null;
+    }
+
+    private void RequestTerminalQuit(int exitCode)
+    {
+        if (_terminalQuitRequested) return;
+        _terminalQuitRequested = true;
+        UnityEngine.Application.Quit(exitCode);
+    }
+
+    private void OnDestroy()
+    {
+        // Each NetClient owns its Close, coroutines, session and executor. Destroying
+        // this view cannot release a persistent or foreign component's transport.
+        _networkHost?.DetachView(_view);
+        _unboundNetwork?.ReleaseUnbound();
+        _unboundNetwork = null;
+        _networkHost = null;
+    }
+}
+}

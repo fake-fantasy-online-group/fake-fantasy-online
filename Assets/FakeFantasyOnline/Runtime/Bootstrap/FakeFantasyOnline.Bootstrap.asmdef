@@ -1,0 +1,22 @@
+{
+    "name": "FakeFantasyOnline.Bootstrap",
+    "rootNamespace": "FakeFantasyOnline.Bootstrap",
+    "references": [
+        "FakeFantasyOnline.Foundation",
+        "FakeFantasyOnline.Domain",
+        "FakeFantasyOnline.Application",
+        "FakeFantasyOnline.Protocol",
+        "FakeFantasyOnline.PluginApi",
+        "FakeFantasyOnline.PluginHost",
+        "FakeFantasyOnline.Presentation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

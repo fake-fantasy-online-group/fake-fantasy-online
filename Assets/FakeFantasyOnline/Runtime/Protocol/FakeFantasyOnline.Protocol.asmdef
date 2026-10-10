@@ -1,0 +1,17 @@
+{
+    "name": "FakeFantasyOnline.Protocol",
+    "rootNamespace": "FakeFantasyOnline.Protocol",
+    "references": [
+        "FakeFantasyOnline.Foundation",
+        "FakeFantasyOnline.Application"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
