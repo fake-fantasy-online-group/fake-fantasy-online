@@ -96,6 +96,7 @@ public partial class PlayerController
     // 0x060009f7
     private void SetPathTo(float tx, float ty, int hops)
     {
+        if (hops == 0) pluginNavigationRevision++;
         path.Clear();
         pathIdx = 0;
         moveToTarget = false;

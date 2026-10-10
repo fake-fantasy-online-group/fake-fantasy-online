@@ -23,6 +23,8 @@ public sealed partial class ClientRootView : MonoBehaviour, IWorldReceiveContext
 
     private const float WindowWidth = 520f;
     internal ClientSessionCoordinator _session;
+    // Read at call time: native network ownership may replace the attached session.
+    public ClientSessionCoordinator CurrentSessionForPlugins => _session;
     internal Action _projectNativeState;
     public void BindNativeStateProjectionForIndependentRuntime(Action projection) =>
         _projectNativeState = projection;

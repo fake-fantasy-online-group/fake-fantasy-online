@@ -27,6 +27,7 @@ public partial class CombatWorld
     public static void RequestSkill(int skillId, float rangePx)
     {
         Ensure();
+        if (!I.pluginResumingQueuedSkill) I.pluginSkillIntentRevision++;
         if (I.pvpTarget != null && !I.pvpTarget.IsDead)
         {
             if (NetClient.I != null) NetClient.I.UseSkill(skillId, I.pvpTarget.id);

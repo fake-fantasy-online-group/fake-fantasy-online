@@ -10,8 +10,9 @@ namespace UnityEngine {
  public enum TextAnchor { MiddleCenter } public enum TextClipping { Clip }
  public class RectOffset { public RectOffset(int a,int b,int c,int d){} }
  public class GUIContent {public string text;}
+ public class Font {}
  public class GUIStyleState { public Color textColor; }
- public class GUIStyle {public GUIStyle(){} public GUIStyle(GUIStyle old){} public TextAnchor alignment; public TextClipping clipping; public bool richText,wordWrap; public RectOffset padding; public int fontSize; public GUIStyleState normal=new GUIStyleState(); public Vector2 CalcSize(GUIContent c){return new Vector2(c.text.Length*fontSize,fontSize);} }
+ public class GUIStyle {public GUIStyle(){} public GUIStyle(GUIStyle old){} public Font font; public TextAnchor alignment; public TextClipping clipping; public bool richText,wordWrap; public RectOffset padding; public int fontSize; public GUIStyleState normal=new GUIStyleState(); public Vector2 CalcSize(GUIContent c){return new Vector2(c.text.Length*fontSize,fontSize);} }
  public class GUISkin {public GUIStyle label=new GUIStyle();}
  public enum EventType { Repaint,MouseDown,MouseUp,KeyDown,Used } public enum KeyCode { Space,Return,KeypadEnter,Escape } public enum FocusType { Keyboard }
  public class Event { public static Event current=new Event(); public EventType type; public int button; public Vector2 mousePosition; public KeyCode keyCode; public EventType GetTypeForControl(int id){return type;} public void Use(){type=EventType.Used;} }
@@ -19,6 +20,7 @@ namespace UnityEngine {
  public static class GUI {public static GUISkin skin=new GUISkin(); public static string lastLabel; public static void Label(Rect r,GUIContent c,GUIStyle st){lastLabel=c.text;} public static Color color=Color.white; public static bool enabled=true; public static List<Rect> cells=new List<Rect>(); public static Texture2D last; public static void DrawTexture(Rect r,Texture2D t){cells.Add(r);last=t;} public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv){if(uv.x < -0.0001||uv.y < -0.0001||uv.xMax>1.0001||uv.yMax>1.0001)throw new Exception("UV outside texture");DrawTexture(r,t);} }
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
+ public static class NpcChatter { public static UnityEngine.Font CnFont(){return null;} }
  public class ResLoader { public static ResLoader I; public object Pkg=new object(); public int calls; public UnityEngine.Texture2D LoadGsa(string p){calls++; return new UnityEngine.Texture2D{name=p};} public UnityEngine.Texture2D LoadGsaFrameA(string p,int i){calls++;return new UnityEngine.Texture2D{name=p+":"+i};} }
  public static class TexScale { public static float W(UnityEngine.Texture2D t){return t.width;} public static float H(UnityEngine.Texture2D t){return t.height;} }
  public static class BitmapFont { public static bool Ready=true; public static float lastScale; public static float Measure(string s,float z){return s.Length*12*z;} public static void CenterOutline(UnityEngine.Rect r,string s,UnityEngine.Color c,float z){lastScale=z;} }

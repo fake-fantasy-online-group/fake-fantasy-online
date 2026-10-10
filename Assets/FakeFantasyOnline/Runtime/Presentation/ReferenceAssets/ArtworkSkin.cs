@@ -167,6 +167,7 @@ internal static class ArtworkSkin
         if (fallbackLabel == null)
             fallbackLabel = new GUIStyle(GUI.skin.label)
             {
+                font = NpcChatter.CnFont(),
                 alignment = TextAnchor.MiddleCenter,
                 clipping = TextClipping.Clip,
                 richText = false,

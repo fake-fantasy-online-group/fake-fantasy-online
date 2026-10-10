@@ -39,6 +39,14 @@ internal static class WinZ
         }
     }
 
+    // Additive lifetime hook for addon-owned windows; removes hit zones immediately.
+    public static void Forget(object owner)
+    {
+        if (owner == null) return;
+        order.Remove(owner);
+        reg.Remove(owner);
+    }
+
     public static void Raise(object owner)
     {
         int index = order.IndexOf(owner);

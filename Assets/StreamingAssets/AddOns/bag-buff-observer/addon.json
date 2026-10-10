@@ -1,0 +1,13 @@
+{
+  "id": "bag-buff-observer",
+  "name": "背包与增益观察",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entry": "main.lua",
+  "dependencies": [],
+  "capabilities": [
+    "game.observe",
+    "game.events",
+    "ui.panel"
+  ]
+}

@@ -16,7 +16,7 @@ public partial class CombatWorld
             int skill = queuedSkillId;
             float range = queuedRangePx;
             queuedSkillId = 0;
-            RequestSkill(skill, range);
+            ResumeQueuedSkillForPlugins(skill, range);
         }
 
         AdvanceGroundCastForIndependentRuntime();

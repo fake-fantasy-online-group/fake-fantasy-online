@@ -25,6 +25,8 @@ public partial class PlayerController
     /// </remarks>
     public bool OverAnyUI()
     {
+        // Addon overlays participate before the original UI chain to prevent world click-through.
+        if (AddonUiHost.MouseOver()) return true;
         if (GameHud.I != null && GameHud.I.MouseOverHud()) return true;
         if (SkillTargeting.Active) return true;
         if (WorkTipOpen) return true;

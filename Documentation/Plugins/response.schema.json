@@ -1,0 +1,372 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "FFO external agent response (ffo-agent/1)",
+    "$defs": {
+        "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S"
+        },
+        "sequence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+        },
+        "receipt": {
+            "type": "object",
+            "properties": {
+                "actionId": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "pattern": "\\S"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "requestId": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "pattern": "\\S"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "state": {
+                    "enum": [
+                        "queued",
+                        "sent",
+                        "running",
+                        "completed",
+                        "rejected",
+                        "cancelled",
+                        "timedout",
+                        "unknown"
+                    ]
+                },
+                "code": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "actionId",
+                "requestId",
+                "name",
+                "state",
+                "code",
+                "message",
+                "data"
+            ],
+            "additionalProperties": false
+        },
+        "event": {
+            "type": "object",
+            "properties": {
+                "sequence": {
+                    "$ref": "#/$defs/sequence"
+                },
+                "sceneRevision": {
+                    "$ref": "#/$defs/sequence"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "sequence",
+                "sceneRevision",
+                "name",
+                "data"
+            ],
+            "additionalProperties": false
+        },
+        "snapshot": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string"
+                },
+                "sceneRevision": {
+                    "$ref": "#/$defs/sequence"
+                },
+                "revision": {
+                    "$ref": "#/$defs/sequence"
+                },
+                "data": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "domain",
+                "sceneRevision",
+                "revision",
+                "data"
+            ],
+            "additionalProperties": false
+        },
+        "eventBatch": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/event"
+                    }
+                },
+                "nextSequence": {
+                    "$ref": "#/$defs/sequence"
+                },
+                "resyncRequired": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "events",
+                "nextSequence",
+                "resyncRequired"
+            ],
+            "additionalProperties": false
+        },
+        "cancelResult": {
+            "type": "object",
+            "properties": {
+                "actionId": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "cancelled": {
+                    "type": "boolean"
+                },
+                "receipt": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/receipt"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "actionId",
+                "cancelled",
+                "receipt"
+            ],
+            "additionalProperties": false
+        },
+        "discovery": {
+            "type": "object",
+            "properties": {
+                "protocol": {
+                    "const": "ffo-agent/1"
+                },
+                "queries": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "domain": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "arguments": {
+                                "type": "object"
+                            }
+                        },
+                        "required": [
+                            "domain",
+                            "description",
+                            "arguments"
+                        ],
+                        "additionalProperties": false
+                    }
+                },
+                "observationDiscoveryAvailable": {
+                    "type": "boolean"
+                },
+                "methods": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "arguments": {
+                                "type": "object"
+                            },
+                            "available": {
+                                "type": "boolean"
+                            },
+                            "unavailableReason": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "description",
+                            "arguments",
+                            "available",
+                            "unavailableReason"
+                        ],
+                        "additionalProperties": false
+                    }
+                },
+                "maxEventCount": {
+                    "const": 512
+                },
+                "eventCursor": {
+                    "type": "string"
+                },
+                "actionSemantics": {
+                    "type": "string"
+                },
+                "cancellation": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "protocol",
+                "queries",
+                "observationDiscoveryAvailable",
+                "methods",
+                "actions",
+                "maxEventCount",
+                "eventCursor",
+                "actionSemantics",
+                "cancellation"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "oneOf": [
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "pattern": "\\S"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "ok": {
+                    "const": true
+                },
+                "result": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/snapshot"
+                        },
+                        {
+                            "$ref": "#/$defs/receipt"
+                        },
+                        {
+                            "$ref": "#/$defs/eventBatch"
+                        },
+                        {
+                            "$ref": "#/$defs/cancelResult"
+                        },
+                        {
+                            "$ref": "#/$defs/discovery"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "id",
+                "ok",
+                "result"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "pattern": "\\S"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "ok": {
+                    "const": false
+                },
+                "error": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string"
+                        },
+                        "message": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "code",
+                        "message"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "ok",
+                "error"
+            ],
+            "additionalProperties": false
+        }
+    ]
+}
