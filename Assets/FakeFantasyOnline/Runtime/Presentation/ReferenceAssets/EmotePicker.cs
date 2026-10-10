@@ -23,16 +23,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static int Draw(Rect rect, Event e, float scale)
         {
             EnsureFrames();
-            Color originalColor = GUI.color;
-            GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.94f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = new Color(1f, 0.85f, 0.4f, 0.7f);
-            const float edge = 1f;
-            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, edge), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - edge, rect.width, edge), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.y, edge, rect.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - edge, rect.y, edge, rect.height), Texture2D.whiteTexture);
-            GUI.color = originalColor;
+            ArtworkSkin.Panel(rect, scale);
 
             Rect view = new Rect(rect.x + 6f * scale, rect.y + 6f * scale,
                 rect.width - 12f * scale, rect.height - 12f * scale);
@@ -44,13 +35,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             {
                 Rect cell = new Rect((index & 7) * Cell * scale, (index >> 3) * Cell * scale,
                     Icon * scale, Icon * scale);
-                if (cell.Contains(e.mousePosition))
-                {
-                    Color previousColor = GUI.color;
-                    GUI.color = new Color(1f, 0.9f, 0.4f, 0.3f);
-                    GUI.DrawTexture(cell, Texture2D.whiteTexture);
-                    GUI.color = previousColor;
-                }
+                ArtworkSkin.Row(cell, scale, cell.Contains(e.mousePosition));
                 Texture2D texture = icons == null ? null : icons[index];
                 if (texture != null)
                     GUI.DrawTexture(new Rect(cell.x, cell.y, Icon * scale, Icon * scale), texture,

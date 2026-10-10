@@ -52,11 +52,7 @@ internal partial class ChatUI
     {
         Rect panel = FilterPanel(barY, scale);
         Color previous = GUI.color;
-        GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.94f);
-        GUI.DrawTexture(panel, Texture2D.whiteTexture);
-        GUI.color = new Color(0.4f, 0.7f, 0.4f, 0.7f);
-        DrawBorder(panel);
-        GUI.color = previous;
+        ArtworkSkin.Panel(panel, scale);
 
         LoadFilter();
         for (int index = 0; index < FilterChans.Length; index++)
@@ -65,12 +61,7 @@ internal partial class ChatUI
             Rect row = new Rect(panel.x + 3f * scale,
                 (panel.y + 4f * scale) + (index * 20) * scale,
                 panel.width - 6f * scale, 16f * scale);
-            if (row.Contains(current.mousePosition))
-            {
-                GUI.color = new Color(0.4f, 0.7f, 0.4f, 0.3f);
-                GUI.DrawTexture(row, Texture2D.whiteTexture);
-                GUI.color = previous;
-            }
+            ArtworkSkin.Row(row, scale, row.Contains(current.mousePosition));
 
             bool shown = (filterHide & (1 << index)) == 0;
             scale = s;
@@ -81,10 +72,13 @@ internal partial class ChatUI
             if (shown && checkbox != null && checkbox.Length > 1 && checkbox[1] != null)
                 GUI.DrawTexture(box, checkbox[1]);
 
-            // The native path draws this border even after a checkbox texture succeeds.
-            GUI.color = new Color(0.47f, 0.47f, 0.47f, 1f);
-            DrawBorder(box);
-            GUI.color = previous;
+            // Preserve a visible control when resources are unavailable without drawing over its artwork.
+            if (checkbox == null || checkbox.Length == 0 || checkbox[0] == null)
+            {
+                GUI.color = new Color(0.47f, 0.47f, 0.47f, 1f);
+                DrawBorder(box);
+                GUI.color = previous;
+            }
 
             if (BitmapFont.Ready)
             {

@@ -39,25 +39,22 @@ internal partial class AccountSecDlg
         {
             _e = new GUIStyle(GUIStyle.none) { font = NpcChatter.CnFont(), alignment = TextAnchor.MiddleLeft };
             _e.normal.textColor = Color.white;
+            _e.hover.textColor = Color.white;
+            _e.active.textColor = Color.white;
+            _e.focused.textColor = Color.white;
         }
         _e.fontSize = Mathf.RoundToInt(13f * s);
         return _e;
-    }
-    private void Fill(Rect rect, Color color)
-    {
-        GUI.color = color;
-        GUI.DrawTexture(rect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
     }
     private string Row(string ctrl, float y, string label, string value)
     {
         if (BitmapFont.Ready)
             BitmapFont.DrawOutline(winX + 14f * s, winY + (y + 4f) * s, label, new Color(1f, 0.9f, 0.6f, 1f), s);
         Rect rect = L(96, y, 158, 20);
-        Fill(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f), new Color(0.62f, 0.5f, 0.26f, 1f));
-        Fill(rect, new Color(0.24f, 0.22f, 0.18f, 1f));
+        ArtworkSkin.Input(new Rect(rect.x - 2f * s, rect.y - 2f * s, rect.width + 4f * s, rect.height + 4f * s),
+            s, GUI.GetNameOfFocusedControl() == ctrl);
         GUI.SetNextControlName(ctrl);
-        return GUI.PasswordField(new Rect(rect.x + 5f, rect.y + 2f, rect.width - 10f, rect.height - 4f), value ?? "", '*', 32, E());
+        return GUI.PasswordField(new Rect(rect.x + 5f * s, rect.y + 2f * s, rect.width - 10f * s, rect.height - 4f * s), value ?? "", '*', 32, E());
     }
     private void Confirm()
     {
@@ -87,6 +84,19 @@ internal partial class AccountSecDlg
     private void OnGUI()
     {
         if (!visible) return;
+        Color previousColor = GUI.color;
+        int previousDepth = GUI.depth;
+        try { DrawWindow(); }
+        finally
+        {
+            GUI.color = previousColor;
+            GUI.depth = previousDepth;
+        }
+    }
+
+    private void DrawWindow()
+    {
+        if (!visible) return;
         s = UIScale.Factor;
         if (busy && Time.realtimeSinceStartup - busySince > BusyTimeout)
         {
@@ -102,8 +112,8 @@ internal partial class AccountSecDlg
         }
         Vector2 mp = Event.current.mousePosition;
         GUI.depth = 2;
-        PopUI.Panel(L(0, 0, NW, height));
-        Fill(L(2, 2, 264, 18), new Color(0.18f, 0.15f, 0.1f, 1f));
+        ArtworkSkin.Panel(L(0, 0, NW, height), s);
+        ArtworkSkin.Panel(L(2, 2, 264, 18), s, true);
         string title = mode == 1 ? "修改密码" : AccountSec.HasSecCode ? "修改安全码" : "设置安全码";
         if (BitmapFont.Ready) BitmapFont.CenterOutline(L(0, 5, NW, 14), title, new Color(1f, 0.9f, 0.55f, 1f), s);
         float statusY;
@@ -131,13 +141,10 @@ internal partial class AccountSecDlg
         }
         Rect ok = L(66, height - 26, 60, 18), cancel = L(142, height - 26, 60, 18);
         bool overOk = ok.Contains(mp), overCancel = cancel.Contains(mp);
-        Fill(ok, overOk ? new Color(0.62f, 0.5f, 0.2f, 1f) : new Color(0.42f, 0.34f, 0.18f, 1f));
-        Fill(cancel, overCancel ? new Color(0.55f, 0.3f, 0.25f, 1f) : new Color(0.38f, 0.28f, 0.24f, 1f));
-        if (BitmapFont.Ready)
-        {
-            BitmapFont.CenterOutline(ok, "确定", new Color(1f, 0.95f, 0.7f, 1f), s);
-            BitmapFont.CenterOutline(cancel, "取消", new Color(0.92f, 0.86f, 0.8f, 1f), s);
-        }
+        ArtworkSkin.ButtonFace(ok, "确定", s, !busy, selected: overOk,
+            pressed: overOk && Input.GetMouseButton(0));
+        ArtworkSkin.ButtonFace(cancel, "取消", s, selected: overCancel,
+            pressed: overCancel && Input.GetMouseButton(0));
         Event e = Event.current;
         if ((e.type == EventType.MouseDown && e.button == 0 && overOk) ||
             (e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)))

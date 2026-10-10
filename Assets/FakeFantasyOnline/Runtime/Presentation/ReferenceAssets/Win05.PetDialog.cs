@@ -31,6 +31,7 @@ public partial class Win05
     private static bool petSkillPanelOpen;
     private static bool petRenaming;
     private bool petDialogReady;
+    private GUIStyle petRenameStyle;
 
     // The host consumes only the last view mask at its existing observation point.
     // Intermediate masks only overwrote the same bool; publishing these scalars cannot
@@ -248,7 +249,8 @@ public partial class Win05
     private void DrawPetRename(PetDrawCapture capture, int model, float scale, Event current)
     {
         Func<float, float, float, float, Rect> L = capture.L;
-        Texture2D edit = UiFrame("res/uires/petdlg/nicknameedit.gsa", 0);
+        Texture2D edit = UiFrame("res/uires/petdlg/nicknameedit.gsa", petRenaming ? 1 : 0)
+            ?? UiFrame("res/uires/petdlg/nicknameedit.gsa", 0);
         if (edit != null)
         {
             float width = TexScale.W(edit);
@@ -258,11 +260,21 @@ public partial class Win05
         }
         if (petRenaming)
         {
-            var style = new GUIStyle(GUI.skin.textField);
-            style.fontSize = Mathf.RoundToInt(12f * scale);
-            style.normal.textColor = Color.white;
+            if (petRenameStyle == null)
+            {
+                petRenameStyle = new GUIStyle(GUIStyle.none)
+                {
+                    font = NpcChatter.CnFont(), alignment = TextAnchor.MiddleLeft,
+                    richText = false
+                };
+                petRenameStyle.normal.textColor = Color.white;
+                petRenameStyle.hover.textColor = Color.white;
+                petRenameStyle.active.textColor = Color.white;
+                petRenameStyle.focused.textColor = Color.white;
+            }
+            petRenameStyle.fontSize = Mathf.RoundToInt(12f * scale);
             petRenameText = UiInput.Field(L(100f, 49f, 92f, 14f),
-                "petNick", petRenameText ?? string.Empty, 10, style, scale);
+                "petNick", petRenameText ?? string.Empty, 10, petRenameStyle, scale);
             GUI.FocusControl("petNick");
             if (current.type == EventType.KeyDown && current.keyCode == KeyCode.Return)
             {

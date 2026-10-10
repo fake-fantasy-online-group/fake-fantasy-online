@@ -28,7 +28,6 @@ public sealed class FamilyMailDlg : MonoBehaviour
 
     private bool visible;
     private bool tried;
-    private Texture2D bg;
     private Texture2D icoClose;
     private Texture2D icoOk;
     private Texture2D icoCancel;
@@ -104,9 +103,9 @@ public sealed class FamilyMailDlg : MonoBehaviour
             tried = false;
             return;
         }
-        bg = loader.LoadGsa("res/uires/family/jobcustomdlg.gsa");
+        // The role editor background has baked role headings, so mail uses a blank panel.
         icoClose = loader.LoadGsa("res/uires/common/miniclose.gsa");
-        icoOk = loader.LoadGsa("res/uires/common/affirmbtn.gsa");
+        icoOk = loader.LoadGsa("res/uires/common/sendbtn.gsa");
         icoCancel = loader.LoadGsa("res/uires/common/cancelbtn.gsa");
     }
 
@@ -178,16 +177,7 @@ public sealed class FamilyMailDlg : MonoBehaviour
         Vector2 mouse = Event.current.mousePosition;
         GUI.depth = 1;
 
-        if (bg == null)
-        {
-            GUI.color = new Color(0.1f, 0.09f, 0.13f, 0.98f);
-            GUI.DrawTexture(L(0f, 0f, NW, NH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-        else
-        {
-            GUI.DrawTexture(L(0f, 0f, NW, NH), bg);
-        }
+        ArtworkSkin.Panel(L(0f, 0f, NW, NH), s);
 
         Color labelColor = JobUI.GOLD;
         if (BitmapFont.Ready)
@@ -201,13 +191,12 @@ public sealed class FamilyMailDlg : MonoBehaviour
             BitmapFont.DrawOutline(winX + 20f * s, winY + 58f * s, "标题", labelColor, s);
         }
 
-        Rect titleRect = L(56f, 56f, 200f, 14f);
-        GUI.color = new Color(0f, 0f, 0f, 0.35f);
-        GUI.DrawTexture(titleRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        // The official insets are absolute pixels (+3 on x, -6 on the width), not scaled.
+        Rect titleRect = L(56f, 52f, 200f, 24f);
+        ArtworkSkin.Input(titleRect, s, GUI.GetNameOfFocusedControl() == "family_mail_title");
+        GUI.SetNextControlName("family_mail_title");
+        // Match the artwork border at every UI scale while keeping the same text limit.
         title = GUI.TextField(
-            new Rect(titleRect.x + 3f, titleRect.y, titleRect.width - 6f, titleRect.height),
+            new Rect(titleRect.x + 4f * s, titleRect.y + 4f * s, titleRect.width - 8f * s, titleRect.height - 8f * s),
             title ?? "", 30, TS());
 
         labelColor = JobUI.GRAY;
@@ -217,11 +206,10 @@ public sealed class FamilyMailDlg : MonoBehaviour
         }
 
         Rect bodyRect = L(20f, 96f, 236f, 96f);
-        GUI.color = new Color(0f, 0f, 0f, 0.35f);
-        GUI.DrawTexture(bodyRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(bodyRect, s, GUI.GetNameOfFocusedControl() == "family_mail_body");
+        GUI.SetNextControlName("family_mail_body");
         body = GUI.TextArea(
-            new Rect(bodyRect.x + 3f, bodyRect.y + 2f, bodyRect.width - 6f, bodyRect.height - 4f),
+            new Rect(bodyRect.x + 4f * s, bodyRect.y + 4f * s, bodyRect.width - 8f * s, bodyRect.height - 8f * s),
             body ?? "", 300, BS());
 
         if (JobUI.Btn(L(50f, 206f, 70f, 22f), icoOk, "发送", mouse, s))

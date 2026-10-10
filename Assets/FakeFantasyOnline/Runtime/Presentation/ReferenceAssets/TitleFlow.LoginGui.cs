@@ -24,9 +24,7 @@ internal sealed partial class TitleFlow
     private GUIStyle _center;
     private GUIStyle _placeholderStyle;
     private GUIStyle _disclaimerStyle;
-    private Texture2D _buttonBackground;
-    private Texture2D _panelBackground;
-    private Texture2D _inputBackground;
+    private GUIStyle _versionBadgeStyle;
     // Official 1.5.8 TitleFlow declares these three as process-level statics: the frozen atlas
     // (ReferenceReverseIndex-1.5.8/index.sqlite3 -> fields) lists rememberAcc ordinal 24 at
     // offset 0x10, rememberPwd ordinal 25 at 0x11 and loginPrefLoaded ordinal 26 at 0x12, all
@@ -287,9 +285,7 @@ internal sealed partial class TitleFlow
 
     internal void ReleaseGeneratedLoginTexturesForIndependentRuntime()
     {
-        RecoveredTitleLoginSurface.DestroyTexture(_buttonBackground);
-        RecoveredTitleLoginSurface.DestroyTexture(_panelBackground);
-        RecoveredTitleLoginSurface.DestroyTexture(_inputBackground);
+        // ArtworkSkin borrows ResLoader-owned textures; title teardown must not destroy them.
     }
 
     private void DrawLogin()
@@ -307,12 +303,14 @@ internal sealed partial class TitleFlow
 
         Rect accountBox = new Rect(319f, 392f, 150f, 22f);
         Rect passwordBox = new Rect(319f, 429f, 150f, 22f);
-        GUI.Box(accountBox, GUIContent.none, _inputStyle);
-        GUI.Box(passwordBox, GUIContent.none, _inputStyle);
+        ArtworkSkin.Input(accountBox, focused: GUI.GetNameOfFocusedControl() == "TitleAccount");
+        ArtworkSkin.Input(passwordBox, focused: GUI.GetNameOfFocusedControl() == "TitlePassword");
 
         Rect accountField = new Rect(327f, 392f, 134f, 22f);
         Rect passwordField = new Rect(327f, 429f, 134f, 22f);
+        GUI.SetNextControlName("TitleAccount");
         account = GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
+        GUI.SetNextControlName("TitlePassword");
         password = DrawMaskedField(passwordField, password ?? string.Empty);
 
         if (string.IsNullOrEmpty(account))
@@ -351,7 +349,7 @@ internal sealed partial class TitleFlow
 
         GUI.enabled = !loggingIn && !RecoveredTitleLoginSurface.NeedUpdate;
         string loginLabel = RecoveredTitleLoginSurface.NeedUpdate ? "请先更新" : loggingIn ? "登录中…" : "登录游戏";
-        if (GUI.Button(new Rect(316f, 482f, ButtonWidth, ButtonHeight), loginLabel, _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(316f, 482f, ButtonWidth, ButtonHeight), loginLabel, fontScale: 1.15f))
         {
             // Official DrawLogin (06000ee6) evaluates account.Trim() exactly once per click and
             // keeps the result in the closure only — TitleFlow.account (+0x1d8) never receives
@@ -376,17 +374,17 @@ internal sealed partial class TitleFlow
         }
 
         GUI.enabled = true;
-        if (GUI.Button(new Rect(644f, 498f, ButtonWidth, ButtonHeight), "退出游戏", _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(644f, 498f, ButtonWidth, ButtonHeight), "退出游戏", fontScale: 1.15f))
         {
             GameBootstrap.QuitGame();
         }
 
-        if (GUI.Button(new Rect(644f, 459f, ButtonWidth, ButtonHeight), "申请账号", _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(644f, 459f, ButtonWidth, ButtonHeight), "申请账号", fontScale: 1.15f))
         {
             OpenRegisterForm();
         }
 
-        if (GUI.Button(new Rect(644f, 420f, ButtonWidth, ButtonHeight), "找回密码", _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(644f, 420f, ButtonWidth, ButtonHeight), "找回密码", fontScale: 1.15f))
         {
             OpenRecoverForm();
         }
@@ -397,7 +395,7 @@ internal sealed partial class TitleFlow
         // native body, after 退出游戏 (498), 申请账号 (459) and 找回密码 (420), and the click arm
         // writes state (+0x28) = 3, netMsg (+0x250) = "" and then apAcc = account.Trim(),
         // apWhen = "", apReason = "" at this exact button site.
-        if (GUI.Button(new Rect(644f, 381f, ButtonWidth, ButtonHeight), "被盗申诉", _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(644f, 381f, ButtonWidth, ButtonHeight), "被盗申诉", fontScale: 1.15f))
         {
             OpenAppealForm(account);
         }
@@ -421,7 +419,7 @@ internal sealed partial class TitleFlow
 
     private void DrawNoticeButton()
     {
-        if (GUI.Button(new Rect(640f, 8f, ButtonWidth, ButtonHeight), "更新公告", _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(640f, 8f, ButtonWidth, ButtonHeight), "更新公告", fontScale: 1.15f))
         {
             _noticeOpen = true;
             _noticeScroll = 0f;
@@ -460,7 +458,7 @@ internal sealed partial class TitleFlow
         // GUI.Box(190, 262, 420, 246, GUIContent.none, style +0x2b0): the panel style is the
         // 14px black 0.78 panel with the gold two-pixel border, i.e. this surface's
         // _panelStyle (OnGUI 0x06000ec7, MakeRoundTex(0,0,0,0.78 / 0.72,0.58,0.3,1, 14, 2)).
-        GUI.Box(new Rect(190f, 262f, 420f, 246f), GUIContent.none, _panelStyle);
+        ArtworkSkin.Panel(new Rect(190f, 262f, 420f, 246f));
 
         // GUI.Label(190, 272, 420, 24, usage 17744 "注 册 新 账 号", style +0x288): skin
         // label, MiddleCenter, richText, clipping Clip - the same construction as _center.
@@ -507,7 +505,7 @@ internal sealed partial class TitleFlow
         Matrix4x4 previousMatrix = BeginGuiFrameForIndependentRuntime(false);
         // GUI.Box(190, 279, 420, 214, GUIContent.none, style +0x2b0): the 14px black 0.78
         // panel with the gold two-pixel border, i.e. this surface's _panelStyle.
-        GUI.Box(new Rect(190f, 279f, 420f, 214f), GUIContent.none, _panelStyle);
+        ArtworkSkin.Panel(new Rect(190f, 279f, 420f, 214f));
 
         // GUI.Label(190, 289, 420, 24, usage 17499 "找 回 密 码", style +0x288): the same
         // skin-label MiddleCenter richText Clip construction the register title uses.
@@ -547,14 +545,20 @@ internal sealed partial class TitleFlow
         float returnWidth = _returnButton ? GsaTextureScale.Width(_returnButton) : 110f;
         float returnHeight = _returnButton ? GsaTextureScale.Height(_returnButton) : 30f;
 
-        if (RecoveredTitleLoginSurface.DrawImageButton(
-                new Rect(388f - completeWidth, y, completeWidth, completeHeight),
-                _completeButton))
+        Rect completeRect = new Rect(388f - completeWidth, y, completeWidth, completeHeight);
+        bool completeClicked = _completeButton
+            ? RecoveredTitleLoginSurface.DrawImageButton(completeRect, _completeButton)
+            : ArtworkSkin.Button(completeRect, "完成", fontScale: 1.15f);
+        if (completeClicked)
         {
             onComplete();
         }
 
-        if (RecoveredTitleLoginSurface.DrawImageButton(new Rect(412f, y, returnWidth, returnHeight), _returnButton))
+        Rect returnRect = new Rect(412f, y, returnWidth, returnHeight);
+        bool returnClicked = _returnButton
+            ? RecoveredTitleLoginSurface.DrawImageButton(returnRect, _returnButton)
+            : ArtworkSkin.Button(returnRect, "返回", fontScale: 1.15f);
+        if (returnClicked)
         {
             _page = TitlePage.Login;
             netMsg = string.Empty;
@@ -678,7 +682,7 @@ internal sealed partial class TitleFlow
         EnsureStyles();
         Matrix4x4 previousMatrix = BeginGuiFrameForIndependentRuntime(false);
         // GUI.Box(170, 262, 460, 250, GUIContent.none, style +0x2b0).
-        GUI.Box(new Rect(170f, 262f, 460f, 250f), GUIContent.none, _panelStyle);
+        ArtworkSkin.Panel(new Rect(170f, 262f, 460f, 250f));
 
         // GUI.Label(170, 272, 460, 24, usage 17982 "被 盗 申 诉", style +0x288).
         GUI.Label(new Rect(170f, 272f, 460f, 24f), "被 盗 申 诉", _center);
@@ -695,10 +699,11 @@ internal sealed partial class TitleFlow
 
         // GUI.Box(316, 372, 274, 76, GUIContent.none, style +0x2b8): the taller input frame
         // behind the text area, i.e. _inputStyle.
-        GUI.Box(new Rect(316f, 372f, 274f, 76f), GUIContent.none, _inputStyle);
+        ArtworkSkin.Input(new Rect(316f, 372f, 274f, 76f), focused: GUI.GetNameOfFocusedControl() == "TitleAppealReason");
 
         // GUI.TextArea(322, 374, 262, 72, apReason, 200, style +0x290): maxLength is the
         // literal 200 (0xc8), far above the 0x18 the single-line rows use.
+        GUI.SetNextControlName("TitleAppealReason");
         _appealReason = GUI.TextArea(
             new Rect(322f, 374f, 262f, 72f),
             _appealReason,
@@ -833,7 +838,7 @@ internal sealed partial class TitleFlow
 
         (int Width, int Height) selected = GameSettings.ResOpts[_resolutionIndex];
         string label = string.Format("分辨率 {0}×{1}", selected.Width, selected.Height);
-        if (GUI.Button(new Rect(8f, 559f, ButtonWidth, ButtonHeight), label, _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(8f, 559f, ButtonWidth, ButtonHeight), label, fontScale: 1.15f))
         {
             _resolutionListOpen = !_resolutionListOpen;
             if (!_resolutionListOpen)
@@ -854,7 +859,7 @@ internal sealed partial class TitleFlow
 
         float height = GameSettings.ResOpts.Length * 30f + 16f;
         float y = 559f - height - 4f;
-        GUI.Box(new Rect(8f, y, ButtonWidth, height), GUIContent.none, _panelStyle);
+        ArtworkSkin.Panel(new Rect(8f, y, ButtonWidth, height));
         for (int index = 0; index < GameSettings.ResOpts.Length; index++)
         {
             (int Width, int Height) option = GameSettings.ResOpts[index];
@@ -864,10 +869,9 @@ internal sealed partial class TitleFlow
                 item = "◆ " + item;
             }
 
-            if (!GUI.Button(
+            if (!ArtworkSkin.Tab(
                     new Rect(16f, y + 8f + index * 30f, 136f, 28f),
-                    item,
-                    _regButtonStyle))
+                    item, selected: index == _resolutionIndex))
             {
                 continue;
             }
@@ -896,7 +900,7 @@ internal sealed partial class TitleFlow
     {
         GameSettings.EnsureLoaded();
         string head = "帧率 " + GameSettings.FpsLabel(GameSettings.FrameRateMode);
-        if (GUI.Button(new Rect(8f, 522f, ButtonWidth, ButtonHeight), head, _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(8f, 522f, ButtonWidth, ButtonHeight), head, fontScale: 1.15f))
         {
             _frameRateListOpen = !_frameRateListOpen;
             if (!_frameRateListOpen)
@@ -911,7 +915,7 @@ internal sealed partial class TitleFlow
             return;
         }
 
-        GUI.Box(new Rect(8f, 412f, ButtonWidth, 106f), GUIContent.none, _panelStyle);
+        ArtworkSkin.Panel(new Rect(8f, 412f, ButtonWidth, 106f));
         for (int mode = 0; mode < 3; mode++)
         {
             // The native body is unrolled: option i uses the literal y 420/450/480 and writes
@@ -920,10 +924,9 @@ internal sealed partial class TitleFlow
             // within the same frame in the official code too.
             string item = (GameSettings.FrameRateMode == mode ? "◆ " : string.Empty) +
                 GameSettings.FpsLabel(mode);
-            if (!GUI.Button(
+            if (!ArtworkSkin.Tab(
                     new Rect(16f, 420f + 30f * mode, 136f, 28f),
-                    item,
-                    _regButtonStyle))
+                    item, selected: GameSettings.FrameRateMode == mode))
             {
                 continue;
             }
@@ -948,11 +951,13 @@ internal sealed partial class TitleFlow
             ? "服务端 未知"
             : "服务端 v" + serverVersion;
 
-        GUIStyle style = new GUIStyle(_loginLabel)
-        {
-            alignment = TextAnchor.MiddleRight,
-            fontSize = 12
-        };
+        if (_versionBadgeStyle == null)
+            _versionBadgeStyle = new GUIStyle(_loginLabel)
+            {
+                alignment = TextAnchor.MiddleRight,
+                fontSize = 12
+            };
+        GUIStyle style = _versionBadgeStyle;
         style.normal.textColor = serverColor;
         GUI.Label(new Rect(586f, 566f, 210f, 16f), serverText, style);
         style.normal.textColor = new Color(0.82f, 0.82f, 0.82f, 1f);
@@ -1005,48 +1010,8 @@ internal sealed partial class TitleFlow
             };
             _loginLabel.normal.textColor = new Color(1f, 0.78f, 0.32f, 1f);
 
-            _buttonBackground = RecoveredTitleLoginSurface.MakeRoundTexture(
-                8,
-                2,
-                new Color(0.117647f, 0.098039f, 0.07451f, 1f),
-                new Color(0.72f, 0.58f, 0.3f, 1f),
-                new Color(0.588235f, 0.470588f, 0.258824f, 1f));
-            _regButtonStyle = new GUIStyle(GUI.skin.button)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 15,
-                fontStyle = FontStyle.Bold,
-                border = new RectOffset(8, 8, 8, 8)
-            };
-            RecoveredTitleLoginSurface.SetAllStyleBackgrounds(_regButtonStyle, _buttonBackground);
-            _regButtonStyle.normal.textColor = new Color(1f, 0.82f, 0.4f, 1f);
-            _regButtonStyle.focused.textColor = _regButtonStyle.normal.textColor;
-            _regButtonStyle.hover.textColor = Color.white;
-            _regButtonStyle.active.textColor = Color.white;
-
-            _panelBackground = RecoveredTitleLoginSurface.MakeRoundTexture(
-                14,
-                2,
-                new Color(0f, 0f, 0f, 0.78f),
-                new Color(0.72f, 0.58f, 0.3f, 1f),
-                null);
-            _panelStyle = new GUIStyle
-            {
-                border = new RectOffset(14, 14, 14, 14)
-            };
-            _panelStyle.normal.background = _panelBackground;
-
-            _inputBackground = RecoveredTitleLoginSurface.MakeRoundTexture(
-                6,
-                0,
-                new Color(0.16f, 0.15f, 0.13f, 1f),
-                Color.clear,
-                null);
-            _inputStyle = new GUIStyle
-            {
-                border = new RectOffset(6, 6, 6, 6)
-            };
-            _inputStyle.normal.background = _inputBackground;
+            // Panels, blank buttons and fields are painted by ArtworkSkin. No generated
+            // procedural textures are owned by this title surface.
 
             _hintStyle = new GUIStyle(_center)
             {

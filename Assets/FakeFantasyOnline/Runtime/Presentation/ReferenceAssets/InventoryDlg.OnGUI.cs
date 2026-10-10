@@ -129,14 +129,12 @@ internal partial class InventoryDlg
         }
 
         // --- sort button: design (365, 41) sized 48x21 ---
-        Color previous = GUI.color;
-        GUI.color = new Color(64f / 255f, 54f / 255f, 38f / 255f, 235f / 255f);
-        GUI.DrawTexture(new Rect(X + s * 365f, Y + s * 41f, s * 48f, s * 21f), Texture2D.whiteTexture);
-        GUI.color = previous;
-        if (BitmapFont.Ready)
-            BitmapFont.Draw(X + s * 365f + s * 6f, Y + s * 41f + s * 5f,
-                "整理", new Color(235f / 255f, 220f / 255f, 180f / 255f, 1f), s);
-        if (GUI.Button(new Rect(X + s * 365f, Y + s * 41f, s * 48f, s * 21f), GUIContent.none, GUIStyle.none))
+        Rect sort = new Rect(X + s * 365f, Y + s * 41f, s * 48f, s * 21f);
+        bool sortHover = sort.Contains(ev.mousePosition);
+        // Keep the native hit box and click timing; only the blank artwork is nine-sliced.
+        ArtworkSkin.ButtonFace(sort, "整理", s, GUI.enabled, sortHover,
+            pressed: sortHover && Input.GetMouseButton(0));
+        if (GUI.Button(sort, GUIContent.none, GUIStyle.none))
         {
             // Native clears all three carried indices even when no client is available.
             // Unlike the close branch it does not reset heldBound.
@@ -147,7 +145,7 @@ internal partial class InventoryDlg
         }
 
         // --- bag page: 10x10, pitch 40/40, first slot at design (14, 66), slot box 36x36 ---
-        previous = GUI.color;
+        Color previous = GUI.color;
         GUI.color = new Color(20f / 255f, 18f / 255f, 15f / 255f, 1f);
         GUI.DrawTexture(new Rect(X + s * 12f, Y + s * 64f, s * 400f, s * 402f), Texture2D.whiteTexture);
         GUI.color = previous;

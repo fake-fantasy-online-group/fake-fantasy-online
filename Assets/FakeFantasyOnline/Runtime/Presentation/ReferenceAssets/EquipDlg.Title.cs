@@ -69,14 +69,12 @@ internal partial class EquipDlg
                     Event.current.Use();
                 }
                 taskScroll = Mathf.Clamp(taskScroll,0,maximum);
-                Rect up = f.L(494,40,14,14), down = f.L(494,174,14,14);
-                if (BitmapFont.Ready)
-                {
-                    CenterPlain(f.L(494,42,14,12),"▲",taskScroll > 0 ? Color.white : new Color(110f/255f,110f/255f,110f/255f,1f));
-                    CenterPlain(f.L(494,176,14,12),"▼",taskScroll < maximum ? Color.white : new Color(110f/255f,110f/255f,110f/255f,1f));
-                }
-                if (GUI.Button(up,GUIContent.none,GUIStyle.none)) taskScroll = Math.Max(0,taskScroll - 1);
-                if (GUI.Button(down,GUIContent.none,GUIStyle.none)) taskScroll = Math.Min(maximum,taskScroll + 1);
+                // The real arrows are 15x10; retain the forgiving 14px-high hit area.
+                Rect up = f.L(494,40,15,14), down = f.L(494,174,15,14);
+                if (TitleArrow(up, "res/uires/common/miniupbtn.gsa", "▲", taskScroll > 0, ev))
+                    taskScroll = Math.Max(0,taskScroll - 1);
+                if (TitleArrow(down, "res/uires/common/minidnbtn.gsa", "▼", taskScroll < maximum, ev))
+                    taskScroll = Math.Min(maximum,taskScroll + 1);
             }
             if (Btn(f.L(390,188,44,22),okBtn,ev))
             {
@@ -90,6 +88,25 @@ internal partial class EquipDlg
             }
         }
         GUI.Button(ownedPanel,GUIContent.none,GUIStyle.none);
+    }
+
+    private bool TitleArrow(Rect hit, string resource, string fallback, bool enabled, Event current)
+    {
+        Texture2D[] frames = ArtworkSkin.Frames(resource, 3);
+        bool hover = enabled && GUI.enabled && hit.Contains(current.mousePosition);
+        if (frames != null && frames.Length != 0 && frames[0] != null)
+            ArtworkSkin.IconFace(new Rect(hit.x, hit.y + 2f * s, 15f * s, 10f * s),
+                frames, hover, hover && Input.GetMouseButton(0), enabled);
+        else if (BitmapFont.Ready)
+            CenterPlain(new Rect(hit.x, hit.y + 2f * s, hit.width, 12f * s), fallback,
+                enabled ? Color.white : new Color(110f/255f,110f/255f,110f/255f,1f));
+        bool previous = GUI.enabled;
+        try
+        {
+            GUI.enabled = previous && enabled;
+            return GUI.Button(hit, GUIContent.none, GUIStyle.none);
+        }
+        finally { GUI.enabled = previous; }
     }
 
     // Reuses 0311's original callback/store/membership/send order against its actual roots.

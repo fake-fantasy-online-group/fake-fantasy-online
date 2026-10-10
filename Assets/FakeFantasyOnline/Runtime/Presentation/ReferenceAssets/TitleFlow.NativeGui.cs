@@ -9,6 +9,25 @@ internal sealed partial class TitleFlow
     // the original TitleFlow.state field independently selects the single visible page.
     private void OnGUI()
     {
+        Color color = GUI.color, background = GUI.backgroundColor, content = GUI.contentColor;
+        bool enabled = GUI.enabled;
+        Matrix4x4 matrix = GUI.matrix;
+        Color selection = GUI.skin.settings.selectionColor, cursor = GUI.skin.settings.cursorColor;
+        try { DrawTitleGui(); }
+        finally
+        {
+            GUI.color = color;
+            GUI.backgroundColor = background;
+            GUI.contentColor = content;
+            GUI.enabled = enabled;
+            GUI.matrix = matrix;
+            GUI.skin.settings.selectionColor = selection;
+            GUI.skin.settings.cursorColor = cursor;
+        }
+    }
+
+    private void DrawTitleGui()
+    {
         guiHost._projectNativeState?.Invoke();
         if (guiHost._session == null) return;
         TryLoad05Login();

@@ -138,14 +138,13 @@ public sealed class MoneyInputDlg : MonoBehaviour
         GUI.SetNextControlName(n);
         return Digits(GUI.TextField(r, v ?? "", 7, E()));
     }
-    private Rect Btn(float x, string label, Vector2 mp, Color baseCol, Color hovCol, out bool hov)
+    private Rect Btn(float x, string label, Vector2 mp, out bool hov)
     {
         Rect r = L(x, 44f, 48f, 18f);
         hov = r.Contains(mp);
-        GUI.color = hov ? hovCol : baseCol;
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        if (BitmapFont.Ready) BitmapFont.CenterOutline(r, label, new Color(1f, .92f, .66f, 1f), s);
+        // The small controls retain their native geometry and MouseDown handling below.
+        ArtworkSkin.ButtonFace(r, label, s, GUI.enabled, hov,
+            pressed: hov && Input.GetMouseButton(0));
         return r;
     }
     private void OnGUI()
@@ -161,7 +160,7 @@ public sealed class MoneyInputDlg : MonoBehaviour
         Event e = Event.current;
         Vector2 mp = e.mousePosition;
         GUI.depth = 2;
-        PopUI.Panel(L(0, 0, NW, NH));
+        ArtworkSkin.Panel(L(0, 0, NW, NH), s);
         if (bg != null) GUI.DrawTexture(L(0, 0, NW, 26), bg);
         string oldG = g, oldS = sv, oldC = c;
         g = F("mi_g", L(21, 7, 24, 12), g);
@@ -189,9 +188,9 @@ public sealed class MoneyInputDlg : MonoBehaviour
                 warning ? new Color(1f, .55f, .45f, 1f) : new Color(.85f, .82f, .72f, 1f), s);
         }
         bool all = false;
-        if (limit > 0) Btn(10, "全部", mp, new Color(.24f, .3f, .2f, .9f), new Color(.4f, .52f, .3f, .95f), out all);
-        Btn(66, "确定", mp, new Color(.3f, .26f, .16f, .9f), new Color(.5f, .4f, .15f, .95f), out bool ok);
-        Btn(122, "取消", mp, new Color(.3f, .2f, .2f, .9f), new Color(.45f, .2f, .2f, .95f), out bool cancel);
+        if (limit > 0) Btn(10, "全部", mp, out all);
+        Btn(66, "确定", mp, out bool ok);
+        Btn(122, "取消", mp, out bool cancel);
         bool click = e.type == EventType.MouseDown && e.button == 0;
         if (click && all)
         {

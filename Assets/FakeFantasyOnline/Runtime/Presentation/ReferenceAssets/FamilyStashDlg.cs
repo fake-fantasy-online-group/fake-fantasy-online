@@ -184,14 +184,8 @@ public partial class FamilyStashDlg : MonoBehaviour
         float rh = s * 20f;
         bool sel = TakePos == pos;
         Rect r = new Rect(rx, ry, rw, rh);
-        GUI.color = sel ? new Color(0.55f, 0.42f, 0.18f, 0.95f)
-                        : new Color(0.25f, 0.23f, 0.16f, 0.85f);
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        if (BitmapFont.Ready)
-        {
-            BitmapFont.CenterOutline(r, label, sel ? GOLD : GRAY, s);
-        }
+        ArtworkSkin.ButtonFace(r, label, s, !SysMsgBox.Visible, sel || r.Contains(mp),
+            pressed: r.Contains(mp) && Input.GetMouseButton(0));
         if (Click(r, mp) && !sel)
         {
             NetClient.I?.FamilyStashPermForIndependentRuntime(pos);

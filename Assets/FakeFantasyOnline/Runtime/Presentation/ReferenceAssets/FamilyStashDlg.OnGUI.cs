@@ -52,9 +52,7 @@ public partial class FamilyStashDlg
             }
             Vector2 mouse = Event.current.mousePosition;
             GUI.depth = depth;
-            GUI.color = new Color(0.1f, 0.09f, 0.13f, 0.98f);
-            GUI.DrawTexture(L(0f, 0f, NW, NH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            ArtworkSkin.Panel(L(0f, 0f, NW, NH), s);
             if (BitmapFont.Ready)
             {
                 BitmapFont.Draw(winX + s * 12f, winY + s * 10f, "家族仓库", GOLD, s);
@@ -67,10 +65,10 @@ public partial class FamilyStashDlg
             }
             else
             {
-                if (BitmapFont.Ready)
-                {
-                    BitmapFont.Draw(winX + s * 450f, winY + s * 8f, "×", WHITE, s);
-                }
+                ArtworkSkin.CloseFace(L(448f, 6f, 16f, 16f),
+                    hover: L(448f, 6f, 16f, 16f).Contains(mouse),
+                    pressed: L(448f, 6f, 16f, 16f).Contains(mouse) && Input.GetMouseButton(0),
+                    enabled: !SysMsgBox.Visible);
                 if (BitmapFont.Ready)
                 {
                     BitmapFont.Draw(winX + s * 12f, winY + s * 32f, "我的背包（点一下存入）", WHITE, s);
@@ -79,9 +77,8 @@ public partial class FamilyStashDlg
                 // ---- left column: the depositable bag rows -------------------------------
                 // Official 1.6.0 06000360 captures and draws this plate before building the bag.
                 Rect leftPanel = L(8f, 46f, 218f, 276f);
-                GUI.color = new Color(0f, 0f, 0f, 0.35f);
-                GUI.DrawTexture(leftPanel, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                ArtworkSkin.Panel(leftPanel, s);
+                Rect leftView = L(13f, 51f, 208f, 266f);
 
                 // Rebuilt every frame. Only rows without a pet, without a bind and without a
                 // lock are offered, and each surviving row keeps the tab it came from.
@@ -101,17 +98,18 @@ public partial class FamilyStashDlg
 
                 // The content rect keeps one row of height even for an empty list.
                 int bagRows = bag.Count > 1 ? bag.Count : 1;
-                scL = GUI.BeginScrollView(leftPanel, scL,
-                    new Rect(0f, 0f, 200f * s, (bagRows * 30) * s));
+                float bagHeight = bagRows * 30f * s;
+                scL.y = Mathf.Clamp(scL.y, 0f, Mathf.Max(0f, bagHeight - leftView.height));
+                scL.x = 0f;
+                scL = GUI.BeginScrollView(leftView, scL,
+                    new Rect(0f, 0f, 190f * s, bagHeight), false, false, GUIStyle.none, GUIStyle.none);
                 for (int i = 0; i < bag.Count; i++)
                 {
                     (byte tab, InventoryDlg.Item it) = bag[i];
-                    Rect row = new Rect(2f * s, (i * 30) * s, 196f * s, 28f * s);
+                    Rect row = new Rect(2f * s, (i * 30) * s, 186f * s, 28f * s);
                     if (row.Contains(Event.current.mousePosition))
                     {
-                        GUI.color = new Color(1f, 1f, 1f, 0.12f);
-                        GUI.DrawTexture(row, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
+                        ArtworkSkin.Row(row, s, true);
                         tip = TooltipContent.Fmt(TooltipContent.QualityName(it.name, it.quality), it.desc);
                     }
                     if (it.icon != null)
@@ -121,7 +119,8 @@ public partial class FamilyStashDlg
                     if (BitmapFont.Ready)
                     {
                         string txt = it.name + (it.count > 1 ? " ×" + it.count : string.Empty);
-                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 8f, txt, UITip.QualityColor(it.quality), s);
+                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 8f,
+                            BitmapFont.Elide(txt, row.width - 34f * s, s), UITip.QualityColor(it.quality), s);
                     }
                     if (Click(row, Event.current.mousePosition))
                     {
@@ -139,33 +138,35 @@ public partial class FamilyStashDlg
                     }
                 }
                 GUI.EndScrollView();
+                NativeScroll.Bar(this, leftView, bagHeight, ref scL);
 
                 // ---- capacity line between the two columns -------------------------------
                 string head = string.Format("家族仓库 {0}/{1}", Stash.Count, Cap)
                     + (CanTake ? "（点一下取出）" : "（你的职位不能取出）");
                 if (BitmapFont.Ready)
                 {
-                    BitmapFont.Draw(winX + s * 236f, winY + s * 32f, head,
-                        CanTake ? WHITE : GRAY, s);
+                    BitmapFont.Draw(winX + s * 236f, winY + s * 32f,
+                        BitmapFont.Elide(head, 224f * s, s), CanTake ? WHITE : GRAY, s);
+                    if (L(236f, 30f, 224f, 16f).Contains(mouse)) tip = head;
                 }
 
                 // ---- right column: the stash contents ------------------------------------
                 Rect rightPanel = L(232f, 46f, 230f, 276f);
-                GUI.color = new Color(0f, 0f, 0f, 0.35f);
-                GUI.DrawTexture(rightPanel, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                ArtworkSkin.Panel(rightPanel, s);
+                Rect rightView = L(237f, 51f, 220f, 266f);
                 int stashRows = Stash.Count > 1 ? Stash.Count : 1;
-                scR = GUI.BeginScrollView(rightPanel, scR,
-                    new Rect(0f, 0f, 212f * s, (stashRows * 30) * s));
+                float stashHeight = stashRows * 30f * s;
+                scR.y = Mathf.Clamp(scR.y, 0f, Mathf.Max(0f, stashHeight - rightView.height));
+                scR.x = 0f;
+                scR = GUI.BeginScrollView(rightView, scR,
+                    new Rect(0f, 0f, 202f * s, stashHeight), false, false, GUIStyle.none, GUIStyle.none);
                 for (int i = 0; i < Stash.Count; i++)
                 {
                     Entry e = Stash[i];
-                    Rect row = new Rect(2f * s, (i * 30) * s, 208f * s, 28f * s);
+                    Rect row = new Rect(2f * s, (i * 30) * s, 198f * s, 28f * s);
                     if (row.Contains(Event.current.mousePosition))
                     {
-                        GUI.color = new Color(1f, 1f, 1f, 0.12f);
-                        GUI.DrawTexture(row, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
+                        ArtworkSkin.Row(row, s, true);
                         tip = TooltipContent.Fmt(TooltipContent.QualityName(e.name, e.quality), e.desc)
                             + "\n【" + e.by + "】存入";
                     }
@@ -176,8 +177,10 @@ public partial class FamilyStashDlg
                     if (BitmapFont.Ready)
                     {
                         string txt = e.name + (e.count > 1 ? " ×" + e.count : string.Empty);
-                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 3f, txt, UITip.QualityColor(e.quality), s);
-                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 15f, e.by + " 存入", GRAY, s);
+                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 3f,
+                            BitmapFont.Elide(txt, row.width - 34f * s, s), UITip.QualityColor(e.quality), s);
+                        BitmapFont.Draw(row.x + s * 32f, row.y + s * 15f,
+                            BitmapFont.Elide(e.by + " 存入", row.width - 34f * s, s), GRAY, s);
                     }
                     if (Click(row, Event.current.mousePosition) && CanTake)
                     {
@@ -185,6 +188,7 @@ public partial class FamilyStashDlg
                     }
                 }
                 GUI.EndScrollView();
+                NativeScroll.Bar(this, rightView, stashHeight, ref scR);
 
                 // ---- bottom row: the take permission -------------------------------------
                 if (IsLeader)

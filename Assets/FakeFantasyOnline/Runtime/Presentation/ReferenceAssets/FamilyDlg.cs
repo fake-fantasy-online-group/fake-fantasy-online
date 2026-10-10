@@ -160,18 +160,14 @@ public sealed partial class FamilyDlg : MonoBehaviour
                 Rect r = L(cx, 40f, cw, 12f);
                 if (r.Contains(mouse))
                 {
-                    GUI.color = new Color(0.3f, 0.3f, 0.7f, 0.4f);
-                    GUI.DrawTexture(r, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    ArtworkSkin.Row(r, s, true);
                 }
                 if (BitmapFont.Ready) BitmapFont.DrawOutline(r.x, r.y, name, Head, s);
                 Click(r, mouse);
             }
 
             Rect panel = L(23f, 56f, 440f, 230f);
-            GUI.color = new Color(0f, 0f, 0f, 0.16f);
-            GUI.DrawTexture(panel, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            ArtworkSkin.Input(panel, s);
 
             IReadOnlyList<(string, int, int, int, string)> rows = Browse;
             int count = rows.Count;
@@ -196,18 +192,8 @@ public sealed partial class FamilyDlg : MonoBehaviour
                     if (rowIndex >= count) break;
                     Rect rowRect = new Rect(
                         winX + 24f * s, winY + (57f + 18f * i) * s, 422f * s, 17f * s);
-                    if (sel == rowIndex)
-                    {
-                        GUI.color = new Color(0.45f, 0.38f, 0.16f, 0.6f);
-                        GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
-                    }
-                    else if (rowRect.Contains(mouse))
-                    {
-                        GUI.color = new Color(0.3f, 0.3f, 0.7f, 0.25f);
-                        GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
-                    }
+                    if (sel == rowIndex) ArtworkSkin.Input(rowRect, s, true);
+                    else ArtworkSkin.Row(rowRect, s, rowRect.Contains(mouse));
                     (string name, int level, int members, int cap, string leader) = rows[rowIndex];
                     float rowTextY = 58f + 18f * i;
                     Lbl(28f, rowTextY, BitmapFont.Elide(name, 138f * s, s),
@@ -235,8 +221,7 @@ public sealed partial class FamilyDlg : MonoBehaviour
             {
                 FamilyCreateDlg.Toggle();
             }
-            if (Btn(new Rect(winX + 378f * s, winY + 296f * s, 90f * s, 22f * s),
-                    null, "刷新", mouse))
+            if (RefreshBtn(new Rect(winX + 378f * s, winY + 296f * s, 90f * s, 22f * s), mouse))
             {
                 Refresh();
             }
@@ -272,23 +257,46 @@ public sealed partial class FamilyDlg : MonoBehaviour
         return true;
     }
 
+    private bool RefreshBtn(Rect r, Vector2 mouse)
+    {
+        bool enabled = GUI.enabled && !SysMsgBox.Visible;
+        bool hover = enabled && r.Contains(mouse);
+        int frame = !enabled ? 3 : hover && Input.GetMouseButton(0) ? 2 : hover ? 1 : 0;
+        Texture2D[] refreshFrames = ArtworkSkin.Frames("res/uires/family/refreshbtn.gsa");
+        Texture2D texture = refreshFrames != null ? refreshFrames[frame] ?? refreshFrames[0] : null;
+        if (texture != null)
+        {
+            Color oldColor = GUI.color;
+            try
+            {
+                GUI.color = enabled ? oldColor : oldColor * new Color(.65f, .65f, .65f, 1f);
+                GUI.DrawTexture(r, texture);
+            }
+            finally { GUI.color = oldColor; }
+        }
+        else
+            ArtworkSkin.ButtonFace(r, "刷新", s, enabled, hover,
+                pressed: hover && Input.GetMouseButton(0));
+        return Click(r, mouse);
+    }
+
     private bool Btn(Rect r, Texture2D tex, string fallback, Vector2 mp)
     {
         bool hover = r.Contains(mp);
         if (tex != null)
         {
-            GUI.color = hover ? new Color(1.25f, 1.25f, 1.25f, 1f) : Color.white;
-            GUI.DrawTexture(r, tex);
-            GUI.color = Color.white;
+            Color oldColor = GUI.color;
+            try
+            {
+                GUI.color = hover && !SysMsgBox.Visible ? oldColor * new Color(1.25f, 1.25f, 1.25f, 1f) : oldColor;
+                GUI.DrawTexture(r, tex);
+            }
+            finally { GUI.color = oldColor; }
         }
         else
         {
-            GUI.color = hover
-                ? new Color(0.55f, 0.42f, 0.18f, 0.95f)
-                : new Color(0.3f, 0.26f, 0.16f, 0.88f);
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            if (BitmapFont.Ready) BitmapFont.CenterOutline(r, fallback, Gold, s);
+            ArtworkSkin.ButtonFace(r, fallback, s, !SysMsgBox.Visible, hover,
+                pressed: hover && Input.GetMouseButton(0));
         }
         if (!hover || SysMsgBox.Visible) return false;
         if (Event.current.type != EventType.MouseDown || Event.current.button != 0) return false;

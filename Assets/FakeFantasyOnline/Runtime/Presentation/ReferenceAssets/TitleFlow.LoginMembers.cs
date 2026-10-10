@@ -19,20 +19,21 @@ internal sealed partial class TitleFlow
     // Official 1.5.8 06000edd, shared with the existing update-gate buttons.
     private bool RegBtn(float x, float y, float w, string label)
     {
-        return GUI.Button(new Rect(x, y, w, 33f), label,
-            _regButtonStyle ?? GUI.skin.button);
+        return ArtworkSkin.Button(new Rect(x, y, w, 33f), label, fontScale: 1.15f);
     }
 
     internal GUIStyle _fieldStyle;
     internal GUIStyle _loginLabel;
-    internal GUIStyle _regButtonStyle;
-    internal GUIStyle _panelStyle;
-    internal GUIStyle _inputStyle;
     internal GUIStyle _hintStyle;
     private GUIStyle _noticeTitleStyle;
     private GUIStyle _noticeTextStyle;
     internal bool _noticeOpen;
     internal float _noticeScroll;
+    private Changelog _noticeContentSource;
+    private GUIContent _noticeContent;
+    private string _hintText;
+    private float _hintWidth;
+    private System.Collections.Generic.List<string> _hintLines;
     internal bool _changelogTried;
     private Changelog _changelog;
 
@@ -61,16 +62,7 @@ internal sealed partial class TitleFlow
         GUI.color = Color.white;
 
         GUI.BeginGroup(new Rect(170f, 85f, 460f, 430f));
-        if (_panelStyle != null)
-        {
-            GUI.Box(new Rect(0f, 0f, 460f, 430f), GUIContent.none, _panelStyle);
-        }
-        else
-        {
-            GUI.color = new Color(0f, 0f, 0f, 0.88f);
-            GUI.DrawTexture(new Rect(0f, 0f, 460f, 430f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
+        ArtworkSkin.Panel(new Rect(0f, 0f, 460f, 430f));
 
         EnsureNoticeStyles();
 
@@ -82,18 +74,15 @@ internal sealed partial class TitleFlow
             : "1.6.0";
         GUI.Label(new Rect(0f, 12f, 460f, 26f), "更新公告  v" + version, _noticeTitleStyle);
 
-        string noticeBody;
-        if (_changelog == null || _changelog.notes == null || _changelog.notes.Length < 1)
+        if (_noticeContent == null || !ReferenceEquals(_noticeContentSource, _changelog))
         {
-            noticeBody = "(暂无公告内容)";
+            _noticeContentSource = _changelog;
+            string noticeBody = _changelog == null || _changelog.notes == null || _changelog.notes.Length < 1
+                ? "(暂无公告内容)"
+                : "· " + string.Join("\n\n· ", Array.ConvertAll(_changelog.notes, NoticeBoard.Rich));
+            _noticeContent = new GUIContent(noticeBody);
         }
-        else
-        {
-            noticeBody = "· " +
-                string.Join("\n\n· ", Array.ConvertAll(_changelog.notes, NoticeBoard.Rich));
-        }
-
-        GUIContent content = new GUIContent(noticeBody);
+        GUIContent content = _noticeContent;
         float contentHeight = _noticeTextStyle.CalcHeight(content, 416f);
         Event current = Event.current;
         Rect scrollRegion = new Rect(22f, 48f, 416f, 326f);
@@ -116,21 +105,14 @@ internal sealed partial class TitleFlow
 
         if (contentHeight > 326f)
         {
-            GUI.color = new Color(1f, 1f, 1f, 0.25f);
-            GUI.DrawTexture(
-                new Rect(
-                    450f,
-                    (_noticeScroll / contentHeight) * 326f + 48f,
-                    3f,
-                    (326f / contentHeight) * 326f),
-                Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            Texture2D[] thumb = ArtworkSkin.Frames("res/uires/common/slidebtn.gsa", 1);
+            float thumbY = 48f + Mathf.Clamp01(_noticeScroll / (contentHeight - 326f)) * 306f;
+            Rect thumbRect = new Rect(441f, thumbY, 15f, 20f);
+            if (thumb != null && thumb[0] != null) ArtworkSkin.IconFace(thumbRect, thumb);
+            else ArtworkSkin.Input(thumbRect);
         }
 
-        if (GUI.Button(
-                new Rect(154f, 384f, ButtonWidth, ButtonHeight),
-                "关 闭",
-                _regButtonStyle))
+        if (ArtworkSkin.Button(new Rect(154f, 384f, ButtonWidth, ButtonHeight), "关 闭", fontScale: 1.15f))
         {
             _noticeOpen = false;
         }
@@ -192,7 +174,7 @@ internal sealed partial class TitleFlow
         }
         else
         {
-            GUI.Box(new Rect(x, y, 14f, 13f), GUIContent.none, _inputStyle);
+            ArtworkSkin.Input(new Rect(x, y, 14f, 13f));
             if (on)
             {
                 Color previous = GUI.color;
@@ -253,7 +235,13 @@ internal sealed partial class TitleFlow
             return;
         }
 
-        System.Collections.Generic.List<string> lines = RecoveredTitleLoginSurface.WrapEstimatedText(text, 13f, maxWidth - 30f);
+        if (_hintLines == null || _hintText != text || _hintWidth != maxWidth)
+        {
+            _hintText = text;
+            _hintWidth = maxWidth;
+            _hintLines = RecoveredTitleLoginSurface.WrapEstimatedText(text, 13f, maxWidth - 30f);
+        }
+        System.Collections.Generic.List<string> lines = _hintLines;
         float textWidth = 0f;
         for (int index = 0; index < lines.Count; index++)
         {
@@ -265,9 +253,7 @@ internal sealed partial class TitleFlow
         float x = Mathf.Round(centerX - width * 0.5f);
         float top = Mathf.Round(y);
         Color previous = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, 0.72f);
-        GUI.DrawTexture(new Rect(x, top, width, height), Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Panel(new Rect(x, top, width, height));
         for (int index = 0; index < lines.Count; index++)
         {
             GUI.Label(
@@ -288,12 +274,11 @@ internal sealed partial class TitleFlow
         GUI.Label(new Rect(px + 40f, y, 100f, 24f), label, _loginLabel);
         // GUI.Box(px + 146, y, pw - 186, 24, GUIContent.none, style +0x2b8): the 6px input frame,
         // i.e. _inputStyle (MakeRoundTex(0.16,0.15,0.13,1 / 0,0,0,0, 6, 0), border 6).
-        GUI.Box(
-            new Rect(px + 146f, y, pw - 186f, 24f),
-            GUIContent.none,
-            _inputStyle);
+        ArtworkSkin.Input(new Rect(px + 146f, y, pw - 186f, 24f),
+            focused: GUI.GetNameOfFocusedControl() == label);
 
         Rect field = new Rect(px + 146f + 6f, y, pw - 186f - 12f, 24f);
+        GUI.SetNextControlName(label);
         if (pwd)
         {
             // MaskField (0x06000ed9): the bullet string has the length of the val and the

@@ -60,17 +60,19 @@ public partial class StallConfigDlg
                 if (row.Contains(Event.current.mousePosition)) hoverIndex = i;
                 Rect remove = new Rect(160f * s, y + 8f * s, 70f * s, 22f * s);
                 bool hover = remove.Contains(Event.current.mousePosition);
-                GUI.color = hover ? new Color(0.55f, 0.3f, 0.18f, 0.95f) : new Color(0.35f, 0.22f, 0.16f, 0.9f);
-                GUI.DrawTexture(remove, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                if (BitmapFont.Ready) BitmapFont.CenterOutline(remove, "下架", GOLD, s);
+                ArtworkSkin.ButtonFace(remove, "下架", s, GUI.enabled, hover,
+                    pressed: hover && Input.GetMouseButton(0));
                 if (hover && Event.current.type == EventType.MouseDown && Event.current.button == 0)
-                { staged.RemoveAt(i); SaveTemplate(); Event.current.Use(); break; }
+                {
+                    staged.RemoveAt(i); SaveTemplate(); Event.current.Use();
+                    // No tooltip may borrow the removed row (including the former last row).
+                    hoverIndex = -1;
+                    break;
+                }
             }
             GUI.EndScrollView();
             if (hoverIndex >= 0 && view.Contains(mp))
             {
-                // Original owner reuses the pre-removal hover index; no approved deviation changes it.
                 Staged item = staged[hoverIndex];
                 string name = item.count > 1 ? string.Format("{0} ×{1}", item.name, item.count) : item.name;
                 UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(name, item.quality), item.desc), s);

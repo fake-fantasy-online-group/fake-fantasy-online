@@ -84,13 +84,8 @@ public partial class Win05
                     Rect no = new Rect(s * 440f, y + s, s * 52f, s * 18f);
                     if (row.Item5 == 0)
                     {
-                        GUI.color = new Color(.2f, .38f, .2f, .95f);
-                        GUI.DrawTexture(yes, Texture2D.whiteTexture);
-                        GUI.color = new Color(.4f, .2f, .2f, .95f);
-                        GUI.DrawTexture(no, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
-                        BitmapFont.CenterOutline(yes, "赞成", new Color32(180, 245, 180, 255), s);
-                        BitmapFont.CenterOutline(no, "反对", new Color32(250, 190, 180, 255), s);
+                        ArtworkSkin.ButtonFace(yes, "赞成", s, selected: yes.Contains(ev.mousePosition), pressed: yes.Contains(ev.mousePosition) && Input.GetMouseButton(0));
+                        ArtworkSkin.ButtonFace(no, "反对", s, selected: no.Contains(ev.mousePosition), pressed: no.Contains(ev.mousePosition) && Input.GetMouseButton(0));
                         if (ev.type == EventType.MouseDown && ev.button == 0)
                         {
                             if (yes.Contains(ev.mousePosition))
@@ -137,15 +132,8 @@ public partial class Win05
             string.Format("提名(怪物/角色/变装的名字, 2~20字, 当前{0}字):", (voteInput ?? "").Length),
             new Color32(190, 185, 165, 255), s);
         Rect input = L(22f, 442f, 372f, 22f);
-        GUI.color = new Color(0f, 0f, 0f, .55f);
-        GUI.DrawTexture(input, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        var style = new GUIStyle(GUI.skin.textField);
-        style.fontSize = Mathf.RoundToInt(s * 12f);
-        style.normal.textColor = Color.white;
-        style.normal.background = null;
-        style.focused.textColor = Color.white;
-        style.focused.background = null;
+        ArtworkSkin.Input(input, s, GUI.GetNameOfFocusedControl() == "voteinput");
+        GUIStyle style = HistoryInputStyle(false);
         bool enter = GUI.GetNameOfFocusedControl() == "voteinput" &&
             ev.type == EventType.KeyDown &&
             (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter);
@@ -154,17 +142,15 @@ public partial class Win05
             ev.Use();
         }
         // UiInput.Draw (0x06000fd1) already drew the menu from the control that opened it.
-        voteInput = UiInput.Field(new Rect(input.x + 3f, input.y + 2f,
-            input.width - 6f, input.height - 4f), "voteinput", voteInput ?? "", 20, style, s);
+        voteInput = UiInput.Field(new Rect(input.x + 4f * s, input.y + 2f * s,
+            input.width - 8f * s, input.height - 4f * s), "voteinput", voteInput ?? "", 20, style, s);
         if (GUI.GetNameOfFocusedControl() == "voteinput")
         {
             gmTypeFrame = Time.frameCount;
         }
         Rect nominate = L(402f, 442f, 68f, 20f);
-        GUI.color = new Color(.5f, .4f, .18f, .95f);
-        GUI.DrawTexture(nominate, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        BitmapFont.CenterOutline(nominate, "提 名", new Color(1f, .85f, .3f, 1f), s);
+        ArtworkSkin.ButtonFace(nominate, "提 名", s, selected: nominate.Contains(ev.mousePosition),
+            pressed: nominate.Contains(ev.mousePosition) && Input.GetMouseButton(0));
         bool click = ev.type == EventType.MouseDown && ev.button == 0 &&
             nominate.Contains(ev.mousePosition);
         if (enter || click)

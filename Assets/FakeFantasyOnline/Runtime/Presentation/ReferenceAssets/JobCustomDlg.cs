@@ -144,9 +144,8 @@ public sealed class JobCustomDlg : MonoBehaviour
             GUI.DrawTexture(L(0f, 0f, NW, NH), bg);
         }
 
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(L(27f, 56f, 240f, 140f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        Rect listRect = L(27f, 56f, 240f, 126f);
+        ArtworkSkin.Input(listRect, s);
 
         IReadOnlyList<(int Id, string Name, string Note)> rows = JobRightDlg.Positions;
         if (rows.Count == 0)
@@ -160,22 +159,20 @@ public sealed class JobCustomDlg : MonoBehaviour
         }
         else
         {
-            scroll = GUI.BeginScrollView(L(27f, 56f, 240f, 140f), scroll,
-                new Rect(0f, 0f, 226f * s, rows.Count * 16f * s), GUIStyle.none, GUIStyle.none);
+            Rect listView = L(30f, 59f, 234f, 120f);
+            float contentHeight = rows.Count * 16f * s;
+            scroll.y = Mathf.Clamp(scroll.y, 0f, Mathf.Max(0f, contentHeight - listView.height));
+            scroll.x = 0f;
+            scroll = GUI.BeginScrollView(listView, scroll,
+                new Rect(0f, 0f, 216f * s, contentHeight), GUIStyle.none, GUIStyle.none);
             for (int i = 0; i < rows.Count; i++)
             {
                 float rowY = i * 16f * s;
                 float rowH = 16f * s - 1f;
-                Rect rowRect = new Rect(0f, rowY, 226f * s, rowH);
+                Rect rowRect = new Rect(0f, rowY, 216f * s, rowH);
 
-                if (i == sel)
-                {
-                    // The official saves GUI.color, fills the selected row and restores it.
-                    Color saved = GUI.color;
-                    GUI.color = new Color(1f, 0.85f, 0.3f, 0.25f);
-                    GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                    GUI.color = saved;
-                }
+                if (i == sel) ArtworkSkin.Input(rowRect, s, true);
+                else ArtworkSkin.Row(rowRect, s, rowRect.Contains(Event.current.mousePosition));
 
                 if (GUI.Button(rowRect, GUIContent.none, GUIStyle.none))
                 {
@@ -191,27 +188,27 @@ public sealed class JobCustomDlg : MonoBehaviour
                         ? new Color(0.588f, 0.9216f, 1f, 1f)
                         : new Color(0.745f, 0.8235f, 0.843f, 1f);
                     string label = String.Format("{0}. {1}", rows[i].Id, rows[i].Name);
-                    BitmapFont.DrawOutline(4f * s, rowY + 2f * s, label, textColor, s);
+                    BitmapFont.DrawOutline(4f * s, rowY + 2f * s,
+                        BitmapFont.Elide(label, (custom ? 162f : 208f) * s, s), textColor, s);
                     if (custom)
                     {
-                        BitmapFont.DrawOutline(182f * s, rowY + 2f * s, "自定义",
+                        BitmapFont.DrawOutline(174f * s, rowY + 2f * s, "自定义",
                             new Color(1f, 0.8627f, 0.5882f, 1f), s);
                     }
                 }
             }
             GUI.EndScrollView();
+            NativeScroll.Bar(this, listView, contentHeight, ref scroll);
         }
 
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(L(27f, 200f, 150f, 16f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        nameEdit = GUI.TextField(
-            new Rect(winX + 27f * s + 3f, winY + 200f * s, 150f * s - 6f, 16f * s),
+        ArtworkSkin.Input(L(27f, 186f, 240f, 22f), s,
+            GUI.GetNameOfFocusedControl() == "family_job_name");
+        GUI.SetNextControlName("family_job_name");
+        nameEdit = GUI.TextField(L(31f, 189f, 232f, 16f),
             nameEdit ?? "", 8, JobUI.Edit(s));
         if (BitmapFont.Ready && sel < 0)
         {
-            BitmapFont.DrawOutline(winX + 33f * s, winY + 202f * s, "先在上面选一个职位",
+            BitmapFont.DrawOutline(winX + 33f * s, winY + 190f * s, "先在上面选一个职位",
                 JobUI.GRAY, s);
         }
 

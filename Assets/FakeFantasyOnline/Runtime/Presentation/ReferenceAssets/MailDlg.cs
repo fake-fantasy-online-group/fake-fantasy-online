@@ -314,9 +314,8 @@ public partial class MailDlg : MonoBehaviour
             _ = commands.ActionAsync(1, mails[selected].id, CancellationToken.None);
         if (Btn(L(79, 297, 90, 22), Texture("delallbtn"), "全部删除", pointer) && NetClient.I != null)
             _ = commands.ActionAsync(3, 0, CancellationToken.None);
-        // 官方 0600059a（arm64 0x47104c）：同视图的 删除/全部删除/关闭/拒收列表/邮箱设置 五个 Btn 都传实例贴图
-        // 字段（+0xe0/+0xe8/+0xf8/+0x118/+0x120），只有「写  信」与读信视图的「退回」一样传 tex = 0，
-        // 即走 Btn 的文字兜底（三层底 + CenterOutlineBold），不画 sendbtn.gsa。
+        // Writing and returning mail have no matching baked-word artwork. Keep their current
+        // labels on the shared blank skin instead of borrowing the unrelated send/team buttons.
         if (Btn(L(175, 297, 70, 22), null, "写  信", pointer)) StartCompose(0, string.Empty, string.Empty);
         if (Btn(L(342, 297, 70, 22), Texture("cancelbtn"), "关闭", pointer)) { visible = false; Typing = false; }
         if (Btn(L(233, 266, 90, 22), Texture("mailresistbtn"), "拒收列表", pointer)) MailResistDlg.Toggle();
@@ -692,33 +691,25 @@ public partial class MailDlg : MonoBehaviour
         return true;
     }
 
-    // Btn（060005a6）：官方 arm64 0x474684（1308 字节）/ x86_64 0x48bc10（1344 字节）双架构一致。
-    // 先算 hover = r.Contains(mp)；tex != null 时只贴图（hover 用 1.25 提亮），否则按
-    // inset = s * 3 画三层底 + CenterOutlineBold(fallback, (1,.93,.5,1))；最后复用与 Click
-    // 相同的 SysMsgBox / MouseDown / button / Use 判定返回是否命中。
+    // Retain the original MouseDown/Use contract; this helper changes only the button face.
     private bool Btn(Rect r, Texture2D tex, string fallback, Vector2 mp)
     {
         bool hover = r.Contains(mp);
+        bool enabled = GUI.enabled && !SysMsgBox.Visible;
         if (tex != null)
         {
-            GUI.color = hover ? new Color(1.25f, 1.25f, 1.25f, 1f) : Color.white;
-            GUI.DrawTexture(r, tex);
-            GUI.color = Color.white;
+            Color oldColor = GUI.color;
+            try
+            {
+                GUI.color = hover && enabled ? oldColor * new Color(1.25f, 1.25f, 1.25f, 1f) : oldColor;
+                GUI.DrawTexture(r, tex);
+            }
+            finally { GUI.color = oldColor; }
         }
         else
         {
-            float inset = 3f * s;
-            float h = r.height - (inset + inset);
-            GUI.color = new Color(.07f, .02f, .01f, 1f);
-            GUI.DrawTexture(new Rect(r.x, r.y + inset, r.width, h), Texture2D.whiteTexture);
-            float y = r.y + inset + 1f;
-            h -= 2f;
-            GUI.color = hover ? new Color(.78f, .22f, .13f, 1f) : new Color(.58f, .14f, .09f, 1f);
-            GUI.DrawTexture(new Rect(r.x + 1f, y, r.width - 2f, h), Texture2D.whiteTexture);
-            GUI.color = new Color(1f, 1f, 1f, .16f);
-            GUI.DrawTexture(new Rect(r.x + 1f, y, r.width - 2f, Mathf.Max(1f, h * .42f)), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            if (BitmapFont.Ready) BitmapFont.CenterOutlineBold(r, fallback, new Color(1f, .93f, .5f, 1f), s);
+            ArtworkSkin.ButtonFace(r, fallback, s, enabled, hover,
+                pressed: hover && enabled && Input.GetMouseButton(0));
         }
         if (!hover || SysMsgBox.Visible) return false;
         if (Event.current.type != EventType.MouseDown) return false;

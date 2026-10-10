@@ -23,14 +23,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private bool FitPartTab(float x, float y, float width, string name, bool selected, Vector2 mouse)
         {
             Rect rect = L(x, y, width, 18f);
-            bool hover = rect.Contains(mouse);
-            if (selected || hover)
-            {
-                GUI.color = new Color(1f, 1f, 1f, selected ? 0.22f : 0.1f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-            LblC(rect, name, selected ? Color.red : hover ? GOLD : Color.white);
+            TextButtonFace(rect, name, mouse, selected);
             return Click(rect, mouse);
         }
 
@@ -56,7 +49,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             int categoryRows = 1;
             foreach (string name in names)
             {
-                float width = name.Length * 12f + 8f;
+                float width = Mathf.Min(228f, name.Length * 12f + 8f);
                 if (categoryX > 156f && categoryX + width > 384f) { categoryX = 156f; categoryRows++; }
                 categoryX += width + 3f;
             }
@@ -78,26 +71,18 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             else if (shopPartTab >= 0) shopPartTab = -1;
             Rect categoryPanel = L(150f, 98f, 396f, categoryHeight + partHeight);
-            GUI.color = new Color(34f / 255f, 34f / 255f, 17f / 255f, 1f);
-            GUI.DrawTexture(categoryPanel, Texture2D.whiteTexture);
-            GUI.color = Color.white;
             FrameBox(categoryPanel);
 
             categoryX = 156f;
             float categoryY = 105f;
             for (int i = 0; i < names.Length; i++)
             {
-                float width = names[i].Length * 12f + 8f;
+                float width = Mathf.Min(228f, names[i].Length * 12f + 8f);
                 if (categoryX > 156f && categoryX + width > 384f) { categoryX = 156f; categoryY += 23f; }
                 Rect rect = L(categoryX, categoryY, width, 20f);
                 bool selected = groupFilter == i;
-                if (selected)
-                {
-                    GUI.color = new Color(1f, 1f, 1f, 0.22f);
-                    GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
-                LblC(rect, names[i], selected ? Color.red : rect.Contains(mouse) ? GOLD : Color.white);
+                TextButtonFace(rect, names[i], mouse, selected);
+                if (rect.Contains(mouse)) tipText = names[i];
                 if (Click(rect, mouse)) { groupFilter = i; shopPartTab = -1; page = 0; }
                 categoryX += width + 3f;
             }
@@ -114,20 +99,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     partX += width + 3f;
                 }
             }
-            if (_searchSt == null)
-            {
-                var style = new GUIStyle(GUI.skin.textField);
-                style.font = NpcChatter.CnFont();
-                style.alignment = TextAnchor.MiddleLeft;
-                style.fontSize = (int)Math.Round(s * 12f);
-                _searchSt = style;
-            }
-            _searchSt.fontSize = (int)Math.Round(s * 12f);
+            InputStyle(ref _searchSt, 12f, TextAnchor.MiddleLeft);
             Rect searchRect = L(390f, 105f, 150f, 20f);
-            GUI.SetNextControlName("rackSearch");
+            ArtworkSkin.Input(searchRect, s, GUI.GetNameOfFocusedControl() == "rack_search");
+            GUI.SetNextControlName("rack_search");
             string nextSearch = UiInput.Field(searchRect, "rack_search", search ?? "", 24, _searchSt, s);
             if (nextSearch != search) search = nextSearch;
-            if (string.IsNullOrEmpty(search) && GUI.GetNameOfFocusedControl() != "rackSearch")
+            if (string.IsNullOrEmpty(search) && GUI.GetNameOfFocusedControl() != "rack_search")
                 LblC(searchRect, "搜索…", GRAY);
 
             float gridTop = categoryHeight + partHeight + 98f + 8f;

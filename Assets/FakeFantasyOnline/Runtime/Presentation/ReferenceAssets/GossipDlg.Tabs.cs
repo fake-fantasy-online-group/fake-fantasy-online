@@ -12,7 +12,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             tabPage = Mathf.Clamp(tabPage, 0, maximum);
             stripRect = ComputeStripRect();
             Rect strip = stripRect;
-            PopUI.Panel(strip);
+            ArtworkSkin.Panel(strip, s);
             if (Event.current.type == EventType.ScrollWheel && strip.Contains(mouse) && maximum > 0)
             {
                 tabPage = Mathf.Clamp(tabPage + (Event.current.delta.y < 0f ? -1 : 1), 0, maximum);
@@ -27,13 +27,12 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Rect rect = new Rect(strip.x + 2f * s + i * 57f * s, strip.y + 2f * s, TabW * s, TabH * s);
                 bool hover = rect.Contains(mouse);
                 bool hasUnread = unreadPeers.Contains(name);
-                GUI.color = selected ? new Color(0.55f, 0.45f, 0.18f, 0.95f)
-                    : hover ? new Color(0.36f, 0.32f, 0.22f, 0.95f) : new Color(0.2f, 0.19f, 0.16f, 0.9f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                ArtworkSkin.Input(rect, s, selected || hover);
+                ArtworkSkin.Row(new Rect(rect.x + 3f * s, rect.y + 3f * s,
+                    rect.width - 6f * s, rect.height - 6f * s), s, selected || hover);
                 if (BitmapFont.Ready)
                 {
-                    string label = BitmapFont.Elide((hasUnread ? "*" : "") + name, rect.width - 4f * s, s);
+                    string label = BitmapFont.Elide((hasUnread ? "*" : "") + name, rect.width - 8f * s, s);
                     Color color = hasUnread ? new Color(1f, 0.55f, 0.5f, 1f)
                         : selected ? new Color(1f, 0.95f, 0.7f, 1f) : new Color(0.82f, 0.8f, 0.74f, 1f);
                     BitmapFont.CenterOutline(rect, label, color, s);
@@ -46,7 +45,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 }
             }
             if (maximum > 0 && BitmapFont.Ready)
-                BitmapFont.CenterOutline(new Rect(strip.xMax - 22f * s, strip.y + 2f * s, 20f * s, 14f * s),
+                BitmapFont.CenterOutline(new Rect(strip.xMax - 22f * s, strip.y + 2f * s, 20f * s, TabH * s),
                     tabPage >= maximum ? "◀" : "▶", new Color(0.8f, 0.75f, 0.6f, 1f), s);
         }
 

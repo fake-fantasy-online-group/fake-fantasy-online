@@ -117,11 +117,11 @@ public partial class Win05
         {
             Rect button = L(22 + i * 92, 406f, 88f, 20f);
             bool selected = i == fbSub;
-            GUI.color = selected ? new Color(.5f, .4f, .18f, .95f) : new Color(.16f, .15f, .13f, .9f);
-            GUI.DrawTexture(button, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            ArtworkSkin.Panel(button, s, selected || button.Contains(ev.mousePosition));
+            float labelScale = Mathf.Min(s, (button.width - 10f * s) /
+                Mathf.Max(1f, BitmapFont.Measure(labels[i], 1f)));
             BitmapFont.CenterOutline(button, labels[i], selected ? new Color(1f, .85f, .3f, 1f)
-                : new Color32(170, 165, 150, 255), s);
+                : new Color32(170, 165, 150, 255), labelScale);
             if (ev.type == EventType.MouseDown && ev.button == 0 && button.Contains(ev.mousePosition))
             {
                 if (fbSub != i)
@@ -139,28 +139,18 @@ public partial class Win05
             string.Format("你的意见(2~200字, 当前{0}字):", (fbInput ?? "").Length),
             new Color32(190, 185, 165, 255), s);
         Rect input = L(22f, 442f, 372f, 44f);
-        GUI.color = new Color(0f, 0f, 0f, .55f);
-        GUI.DrawTexture(input, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        var style = new GUIStyle(GUI.skin.textArea);
-        style.fontSize = Mathf.RoundToInt(s * 12f);
-        style.wordWrap = true;
-        style.normal.textColor = Color.white;
-        style.normal.background = null;
-        style.focused.textColor = Color.white;
-        style.focused.background = null;
+        ArtworkSkin.Input(input, s, GUI.GetNameOfFocusedControl() == "gmfbinput");
+        GUIStyle style = HistoryInputStyle(true);
         bool enter = GUI.GetNameOfFocusedControl() == "gmfbinput" && ev.type == EventType.KeyDown &&
             (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter);
         if (enter) ev.Use();
         // UiInput.Draw (0x06000fd1) already drew the menu from the control that opened it.
-        fbInput = UiInput.Area(new Rect(input.x + 3f, input.y + 2f, input.width - 6f, input.height - 4f),
+        fbInput = UiInput.Area(new Rect(input.x + 4f * s, input.y + 3f * s, input.width - 8f * s, input.height - 6f * s),
             "gmfbinput", fbInput ?? "", 200, style, s);
         if (GUI.GetNameOfFocusedControl() == "gmfbinput") gmTypeFrame = Time.frameCount;
         Rect submit = L(402f, 442f, 68f, 20f);
-        GUI.color = new Color(.5f, .4f, .18f, .95f);
-        GUI.DrawTexture(submit, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        BitmapFont.CenterOutline(submit, "提 交", new Color(1f, .85f, .3f, 1f), s);
+        ArtworkSkin.ButtonFace(submit, "提 交", s, selected: submit.Contains(ev.mousePosition),
+            pressed: submit.Contains(ev.mousePosition) && Input.GetMouseButton(0));
         bool clicked = ev.type == EventType.MouseDown && ev.button == 0 && submit.Contains(ev.mousePosition);
         if (enter || clicked)
         {

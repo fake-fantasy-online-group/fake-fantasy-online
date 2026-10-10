@@ -16,9 +16,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 if (good.group == 255 && (good.flags & mask) != 0) rows.Add(good);
 
             Rect heading = L(150f, 98f, 396f, 34f);
-            GUI.color = new Color(0.13333334f, 0.13333334f, 0.06666667f, 1f);
-            GUI.DrawTexture(heading, Texture2D.whiteTexture);
-            GUI.color = Color.white;
             FrameBox(heading);
             LblC(heading, title, GOLD);
 
@@ -57,10 +54,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 bool inCart = cart.ContainsKey(good.id);
                 bool hover = row.Contains(mouse) || add.Contains(mouse);
 
+                // exitembk bakes in 彩玉, so gold/limited cards use the unlabelled patch artwork.
                 FrameBox(row);
-                GUI.color = new Color(0f, 0f, 0f, 0.35f);
-                GUI.DrawTexture(iconBg, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                ArtworkSkin.Input(iconBg, s);
                 if (inCart)
                 {
                     GUI.color = new Color(1f, 0.85f, 0.3f, 0.2f);
@@ -78,7 +74,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 if (good.icon != null) ItemIconUI.Draw(icon, good.icon, s);
                 BlockMask(icon, good.blocked);
                 int nameLength = good.remain < 0 ? 8 : 6;
-                LblC(L(x + 42f, y + 5f, good.remain < 0 ? 104f : 74f, 12f),
+                LblC(L(x + 42f, y + 8f, good.remain < 0 ? 104f : 74f, 12f),
                     Trunc(good.name, nameLength), inCart ? GOLD : Color.white);
                 if (good.remain >= 0)
                 {
@@ -86,7 +82,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     Color remainColor = good.remain > 0
                         ? new Color(0.55f, 1f, 0.55f, 1f)
                         : new Color(1f, 0.45f, 0.45f, 1f);
-                    LblC(L(x + 114f, y + 4f, 30f, 13f), remain, remainColor);
+                    LblC(L(x + 114f, y + 8f, 30f, 13f), remain, remainColor);
                 }
                 if (IsGold(good.flags))
                 {
@@ -117,22 +113,15 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
         private void DrawFlagAdd(Rect rect, Vector2 mouse)
         {
-            Texture2D texture = carBtn == null ? null : (carBtn[rect.Contains(mouse) ? 1 : 0] ?? carBtn[0]);
-            if (texture != null) GUI.DrawTexture(rect, texture);
-            else
-            {
-                GUI.color = new Color(0.5f, 0.4f, 0.16f, 0.9f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                LblC(rect, "+", GOLD);
-            }
+            if (carBtn != null && carBtn.Length > 0 && carBtn[0] != null)
+                ArtworkSkin.IconFace(rect, carBtn, rect.Contains(mouse), rect.Contains(mouse) && Input.GetMouseButton(0), !SysMsgBox.Visible);
+            else TextButtonFace(rect, "+", mouse);
         }
 
         private static void DrawFlagPage(Rect rect, bool enabled, Texture2D[] frames, Vector2 mouse)
         {
-            if (frames == null || frames[0] == null) return;
-            int index = enabled ? (rect.Contains(mouse) && frames.Length > 1 ? 1 : 0) : Mathf.Min(3, frames.Length - 1);
-            GUI.DrawTexture(rect, frames[index]);
+            ArtworkSkin.IconFace(rect, frames, rect.Contains(mouse), rect.Contains(mouse) && Input.GetMouseButton(0),
+                enabled && !SysMsgBox.Visible);
         }
     }
 }
