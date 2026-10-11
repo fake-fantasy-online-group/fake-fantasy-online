@@ -21,16 +21,17 @@ public sealed class EndgameRequest
     public string Json { get; }
     public string Catalog { get; }
     public string Cursor { get; }
-    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave";
+    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance";
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
-        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null)
+        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0)
     {
-        if (Array.IndexOf(new[] { "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
+        if (Array.IndexOf(new[] { "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
         if (RequestID.Length < 16 || RequestID.Length > 64) throw new ArgumentException("Invalid request ID.");
         foreach (char c in RequestID) if (c < 33 || c > 126) throw new ArgumentException("Invalid request ID.");
-        if (socket < 0 || socket > 4 || tier < 0 || tier > 50 || recipeID < 0) throw new ArgumentException("Command is out of range.");
+        if (socket < 0 || socket > 4 || tier < 0 || tier > 150 || recipeID < 0 || floorIndex < 0) throw new ArgumentException("Command is out of range.");
+        if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
         if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1" });
@@ -42,6 +43,7 @@ public sealed class EndgameRequest
         if (op.StartsWith("socket.", StringComparison.Ordinal)) data.Add("socket", socket);
         if (recipeID != 0) data.Add("recipeId", recipeID);
         if (tier != 0) data.Add("tier", tier);
+        if (op == "rift.advance") data.Add("floorIndex", floorIndex);
         if (itemUIDs != null)
         {
             if (itemUIDs.Count > 5) throw new ArgumentException("Too many rune UIDs.");

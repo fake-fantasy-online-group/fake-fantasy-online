@@ -140,13 +140,42 @@
     "description": "报价试验"
   },
   "rift": {
+    "seed": "18446744073709551615",
+    "generatorVersion": 1,
+    "floorIndex": 3,
+    "mapName": "试炼秘林",
+    "canAdvance": true,
+    "transitioning": true,
+    "exitX": 720,
+    "exitY": 960,
+    "maxTier": 150,
+    "unlockedTier": 150,
+    "telegraphs": [
+      {
+        "id": "tell-fixture-1",
+        "entityId": "4294967295",
+        "ability": "震环冲击",
+        "shape": "ring",
+        "x": 100,
+        "y": 200,
+        "endX": 300,
+        "endY": 400,
+        "radius": 220,
+        "innerRadius": 85,
+        "remainingMS": 1800
+      }
+    ],
     "name": "洞天试验",
     "keyCount": 3,
     "keyItemId": 1900010001,
     "auras": [
       {
         "entityId": "4294967295",
-        "class": 3
+        "class": 3,
+        "affixes": [
+          "烈焰",
+          "震环"
+        ]
       }
     ],
     "globes": [
@@ -160,7 +189,7 @@
     "runId": "rift-full-fixture",
     "revision": "20",
     "phase": "completed",
-    "tier": 50,
+    "tier": 150,
     "progress": 10000,
     "progressMax": 10000,
     "remainingSeconds": 99,

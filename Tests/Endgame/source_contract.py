@@ -30,7 +30,8 @@ contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', '"socket.insert"'
 contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'chosen.Materials', 'wallet.Count', 'salvage.rune', 'socket.reorder',
          'rune.convert', 'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', '妖魔结界守卫', '试炼小仙', 'rift.Claimable', '"reward_pending"',
-         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes')
+         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes', '"rift.advance"', 'floorIndex: rift.FloorIndex', 'rift.Transitioning', 'RiftDepth', 'aura.Affixes')
+contains('Presentation/ReferenceAssets/EndgamePanel.RiftTelegraphs.cs', 'DrawRiftArea', 'DrawRiftRing', 'DrawRiftLine', 'TelegraphRemainingMS', 'tell.InnerRadius', 'tell.RemainingMS', 'GUI.matrix = matrix', 'Texture2D.whiteTexture')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.BagTooltip(')
 contains('Presentation/ReferenceAssets/EquipDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(')
 for path in runtime.rglob('Endgame*.cs'):

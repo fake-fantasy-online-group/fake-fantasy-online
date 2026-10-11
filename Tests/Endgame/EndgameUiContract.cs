@@ -30,9 +30,50 @@ class EndgameUiContract
         var request = c.Endgame.PendingRequest;
         Apply(c, "{\"kind\":\"" + (request.Op == "cube.execute" ? "cube.result" : request.Op) + "\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"revision\":\"2\"}");
     }
-    static void Rift(Client c, string runID, string phase, bool claimable = false, int keys = 0, bool ok = true)
+    static void Rift(Client c, string runID, string phase, bool claimable = false, int keys = 0, bool ok = true, string extra = "")
     {
-        Apply(c, "{\"kind\":\"rift.state\",\"ok\":" + (ok ? "true" : "false") + ",\"error\":\"requirements\",\"rift\":{\"runId\":\"" + runID + "\",\"revision\":\"4\",\"phase\":\"" + phase + "\",\"tier\":2,\"claimable\":" + (claimable ? "true" : "false") + ",\"keyCount\":" + keys + "}}");
+        Apply(c, "{\"kind\":\"rift.state\",\"ok\":" + (ok ? "true" : "false") + ",\"error\":\"requirements\",\"rift\":{\"runId\":\"" + runID + "\",\"revision\":\"4\",\"phase\":\"" + phase + "\",\"tier\":2,\"claimable\":" + (claimable ? "true" : "false") + ",\"keyCount\":" + keys + extra + "}}");
+    }
+    static void MultiFloorContracts(Client c, EndgamePanel p)
+    {
+        Set(p, "open", true); Set(p, "tab", 3); Rift(c, "", "closed", keys: 1);
+        UnityEngine.GUI.nextText = "151"; int before = c.Sent.Count; Draw(p, "消耗一钥 · 开启洞天");
+        Check(c.Sent.Count == before && !ArtworkSkin.enableds["消耗一钥 · 开启洞天"], "out-of-range direct tier input cannot spend a key");
+        UnityEngine.GUI.nextText = "150"; Draw(p);
+        Check((int)Get(p, "tier") == 150 && UnityEngine.GUI.labels.Exists(t => t.Contains("阶")) && !ArtworkSkin.enableds["+"], "direct difficulty selection reaches150 and retains upper bound");
+        Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Json.Contains("\"tier\":150") && !c.Last.Json.Contains("floorIndex"), "fresh paid entry chooses difficulty independently of run floor"); Receipt(c);
+        string floor = ",\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"秘林\",\"canAdvance\":true,\"exitX\":700,\"exitY\":850";
+        Rift(c, "multifloor", "active", extra: floor); Call(p, "Update");
+        Check((string)Get(p, "announcement") == "", "restored floor does not invent an arrival notice");
+        Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("第 2 阶") && t.Contains("第 3 层")) && ArtworkSkin.enableds["前往下一层 · 跳过余敌"], "UI separates difficulty and floor and allows skipping without full progress");
+        Draw(p, "前往下一层 · 跳过余敌"); var pending = c.Last;
+        Check(pending.Op == "rift.advance" && pending.Json.Contains("\"floorIndex\":3") && pending.Json.Contains("multifloor") && pending.Json.Contains("\"expectedRevision\":\"" + c.Endgame.Revision + "\"") && !pending.Json.Contains("tier"), "advance captures exact run and floor only");
+        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌"); Check(c.Sent.Count == before, "double advance is blocked while pending");
+        Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending), "closing retains uncertain floor transition");
+        Set(p, "open", true); Draw(p, "查询原请求"); Check(ReferenceEquals(c.Endgame.PendingRequest, pending), "manual floor retry retains nonce"); Receipt(c);
+        Set(p, "confirmLeave", true); Rift(c, "multifloor", "active", extra: floor.Replace("\"floorIndex\":3", "\"floorIndex\":4")); Call(p, "Update");
+        Check(((string)Get(p, "announcement")).Contains("第 4 层") && !(bool)Get(p, "confirmLeave") && c.Endgame.Rift.Tier == 2, "arrival announces floor while preserving tier and clearing old leave confirmation");
+        float until = (float)Get(p, "announcementUntil"); Call(p, "Update"); Check((float)Get(p, "announcementUntil") == until, "same floor does not replay arrival");
+        Rift(c, "multifloor", "active", extra: floor + ",\"transitioning\":true"); Draw(p);
+        Check(!ArtworkSkin.enableds["正在前往下一层…"] && !ArtworkSkin.enableds["进入已有洞天"], "native transition blocks repeated advance and reentry");
+        Rift(c, "multifloor", "boss", extra: floor); ArtworkSkin.enableds.Clear(); Draw(p);
+        Check(!ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "guardian phase cannot offer skipping");
+        string tells = ",\"telegraphs\":[{\"id\":\"circle\",\"entityId\":\"1\",\"ability\":\"烈焰爆裂\",\"shape\":\"circle\",\"x\":500,\"y\":500,\"radius\":105,\"remainingMS\":1500},{\"id\":\"ring\",\"entityId\":\"2\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":500,\"y\":500,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800},{\"id\":\"line\",\"entityId\":\"3\",\"ability\":\"裂地斩\",\"shape\":\"line\",\"x\":500,\"y\":500,\"endX\":700,\"endY\":500,\"radius\":38,\"remainingMS\":1400}]";
+        UnityEngine.Camera.main = new UnityEngine.Camera(); Rift(c, "multifloor", "active", extra: floor + tells);
+        Set(p, "open", false); BitmapFont.labels.Clear(); UnityEngine.GUI.textures.Clear(); Draw(p);
+        Check(BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") && t.Contains("秒") && t.Contains("离开圆圈")) && BitmapFont.labels.Exists(t => t.Contains("震环冲击") && t.Contains("避开圆环")) && BitmapFont.labels.Exists(t => t.Contains("裂地斩") && t.Contains("离开直线")), "all danger shapes show readable ability, countdown and dodge hint");
+        Check(UnityEngine.GUI.textures.Count > 100 && BitmapFont.labels.Exists(t => t.Contains("下一层出口")), "native overlay draws real geometry and the optional exit marker");
+        Rift(c, "multifloor", "boss", extra: floor); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); before = c.Sent.Count; Draw(p, "下一层 · 出口 (700, 850)");
+        Check(BitmapFont.labels.Exists(t => t == "镇境劫影 · 出口 (700, 850)") && BitmapFont.labels.Exists(t => t == "◆ 镇境劫影 · 本层出口") && BitmapFont.labels.Exists(t => t.Contains("前往本层出口，击败")), "guardian phase retains spawn marker, HUD coordinates and exit objective");
+        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !BitmapFont.labels.Exists(t => t.Contains("下一层出口")), "guardian location is informational and cannot advance the floor");
+        Rift(c, "multifloor", "active", extra: floor.Replace("\"canAdvance\":true", "\"canAdvance\":false")); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); Draw(p);
+        Check(BitmapFont.labels.Exists(t => t.Contains("下一层出口")) && ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !ArtworkSkin.enableds["下一层 · 出口 (700, 850)"], "faraway players can discover exit marker and HUD coordinates without advance authority");
+        Rift(c, "multifloor", "active", extra: floor + tells);
+        typeof(EndgameClientState).GetField("<RiftReceivedUtc>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, DateTime.UtcNow.AddSeconds(-4));
+        BitmapFont.labels.Clear(); Draw(p); Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("震环冲击") || t.Contains("裂地斩")), "elapsed tells disappear without fabricating impact or damage");
+        Rift(c, "multifloor", "active", extra: floor + tells + ",\"transitioning\":true"); BitmapFont.labels.Clear(); Draw(p);
+        Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("下一层出口")), "transition suppresses old map danger and exit geometry");
+        UnityEngine.Camera.main = null;
     }
     static void Main()
     {
@@ -97,6 +138,7 @@ class EndgameUiContract
         typeof(EndgamePanel).GetMethod("ShowPanelTooltip", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(p, new object[] { "screen hover" });
         Check(UITip.mouse.x == 811 && UITip.mouse.y == 477 && UITip.scale == (float)Get(p, "panelScale"), "panel tooltip forwards original screen pointer and window scale");
         UnityEngine.Event.current.mousePosition = new UnityEngine.Vector2(-9000, -9000);
+        MultiFloorContracts(c, p);
         c.Endgame.Reset(); Call(p, "Update"); Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection"); Check((string)Get(p, "announcement") == "", "reset clears phase feedback"); Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "new negotiation required");
         var requirement = EndgameResponse.Parse("{\"kind\":\"catalog.uniques\",\"ok\":true,\"items\":[{\"itemId\":1001,\"uniqueId\":1001,\"profession\":24,\"uniqueRollBp\":10000}]}").Items[0];
         string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");

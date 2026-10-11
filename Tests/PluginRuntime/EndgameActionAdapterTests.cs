@@ -26,6 +26,7 @@ internal static partial class GameActionAdapterTests
         EndgameReceiptsAndRetry();
         EndgameCubeAndEquipment();
         EndgameRiftRouting();
+        EndgameRiftAdvance();
         EndgameProjectionContracts();
         Console.WriteLine("Endgame adapter passed: " + (checks - initial) + " assertions (real DTO/state/actions/projections; native substitutes).");
     }
@@ -34,7 +35,7 @@ internal static partial class GameActionAdapterTests
         var api = Setup(); int endgameCount = 0;
         foreach (var definition in api.GetActions()) if (definition.Name.StartsWith("endgame.", StringComparison.Ordinal))
         { endgameCount++; Check(!definition.Available && definition.UnavailableReason.Length > 0, "missing owner explicitly disables " + definition.Name); }
-        Check(endgameCount == 13, "all endgame native operations are discoverable without owner");
+        Check(endgameCount == 14, "all endgame native operations are discoverable without owner");
         Check(!(bool)api.TestObserveEndgame("endgame")["available"], "missing endgame owner observes unavailable");
         EndgameNative native; api = SetupEndgame(out native, false);
         Check(EndAct(api, "refresh").Code == "action.unavailable" && native.Sent.Count == 0, "unnegotiated refresh never sends");
@@ -45,7 +46,7 @@ internal static partial class GameActionAdapterTests
         Check(Convert.ToInt32(Property(definitionInsert, "socket")["minimum"]) == 0 && Convert.ToInt32(Property(definitionInsert, "socket")["maximum"]) == 4, "schema bounds native zero-based sockets");
         Check((string)Property(definitionInsert, "targetUid")["type"] == "string" && Convert.ToInt32(Property(definitionInsert, "targetUid")["maxLength"]) == 19 && (string)Property(definitionInsert, "targetUid")["pattern"] == "^[1-9][0-9]{0,18}$", "schema advertises exact positive string UIDs");
         var tierSchema = Property(Definition(api, "endgame.rift.start"), "tier");
-        Check(Convert.ToInt32(tierSchema["minimum"]) == 1 && Convert.ToInt32(tierSchema["maximum"]) == 50, "schema bounds rift tiers");
+        Check(Convert.ToInt32(tierSchema["minimum"]) == 1 && Convert.ToInt32(tierSchema["maximum"]) == 150, "schema bounds rift tiers");
         var arraySchema = Property(Definition(api, "endgame.cube.quote"), "itemUids");
         Check(Convert.ToInt32(arraySchema["maxItems"]) == 5 && (bool)arraySchema["uniqueItems"] && (string)Object(arraySchema["items"])["type"] == "string", "schema advertises bounded unique ordered UID array");
         Check((bool)Property(Definition(api, "endgame.rift.leave"), "confirmLeave")["const"], "leave schema requires explicit true confirmation");
@@ -207,7 +208,7 @@ internal static partial class GameActionAdapterTests
         EndgameNative native; var api = SetupEndgame(out native);
         Check(!Definition(api, "endgame.rift.start").Available, "rift must be observed before paid admission");
         PublishRift(native, phase: "reserved");
-        foreach (object tier in new object[] { 0, 51, 1.0000000000000002 })
+        foreach (object tier in new object[] { 0, 151, 1.0000000000000002 })
             Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", tier, "runId", "run-current")).Code == "arguments.invalid", "rift invalid tier rejected");
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2)).Code == "endgame.run_stale", "invitation cannot accidentally start a fresh paid run");
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 3, "runId", "run-current")).Code == "endgame.run_stale", "invitation tier is guarded");
@@ -231,7 +232,38 @@ internal static partial class GameActionAdapterTests
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2)).Code == "endgame.rift_unavailable", "reward persistence pending blocks new run");
         PublishRift(native, phase: "closed");
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2, "runId", "run-current")).Code == "endgame.run_stale", "closed run cannot masquerade as invitation");
-        Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 50)).State == GameActionState.Sent && !SentArguments(native).ContainsKey("runId"), "fresh paid admission omits obsolete run ID");
+        Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 150)).State == GameActionState.Sent && !SentArguments(native).ContainsKey("runId"), "fresh paid admission omits obsolete run ID");
+    }
+    private static void EndgameRiftAdvance()
+    {
+        EndgameNative native; var api = SetupEndgame(out native);
+        Check(!Definition(api, "endgame.rift.advance").Available, "advance requires an observed server floor");
+        PublishRift(native);
+        var definition = Definition(api, "endgame.rift.advance");
+        Check(definition.Available && Convert.ToInt32(Property(definition, "floorIndex")["minimum"]) == 1, "advance advertises positive floor guard");
+        foreach (object floor in new object[] { 0, -1, 1.5, "3" })
+            Check(EndAct(api, "rift.advance", Map("expectedRevision", TestRevision, "runId", "run-current", "floorIndex", floor)).Code == "arguments.invalid", "invalid floor guard rejected");
+        Check(EndAct(api, "rift.advance", Map("expectedRevision", TestRevision, "runId", "old-run", "floorIndex", 3)).Code == "endgame.floor_stale", "advance rejects unrelated run");
+        Check(EndAct(api, "rift.advance", Map("expectedRevision", TestRevision, "runId", "run-current", "floorIndex", 2)).Code == "endgame.floor_stale", "advance rejects already passed floor");
+        Check(EndAct(api, "rift.advance", Map("expectedRevision", TestRevision, "runId", "run-current", "floorIndex", 3, "tier", 150)).Code == "arguments.invalid", "advance cannot redefine difficulty");
+        Check(EndAct(api, "rift.advance", Map("expectedRevision", "1", "runId", "run-current", "floorIndex", 3)).Code == "endgame.stale_revision", "advance preserves inventory revision guard");
+        var advanced = EndAct(api, "rift.advance", Map("expectedRevision", TestRevision, "runId", "run-current", "floorIndex", 3));
+        var command = native.Last; var arguments = SentArguments(native);
+        Check(advanced.State == GameActionState.Sent && command.Op == "rift.advance" && command.Mutates && (long)arguments["floorIndex"] == 3 && !arguments.ContainsKey("tier"), "advance uses immutable native guarded mutation without changing tier");
+        Check(!Definition(api, "endgame.rift.advance").Available, "pending advance prevents a second floor skip");
+        string frozen = command.Json;
+        EndAct(api, "retry", Map("expectedRequestId", command.RequestID));
+        Check(ReferenceEquals(command, native.Last) && native.Last.Json == frozen, "advance retry preserves original floor and request ID");
+        ApplyReceipt(native, command);
+        Check(api.GetAction(advanced.ActionId).State == GameActionState.Completed, "matching advance receipt establishes server completion");
+        PublishRift(native, transitioning: true);
+        Check(!Definition(api, "endgame.rift.advance").Available, "transitioning floor disables another advance");
+        PublishRift(native, phase: "boss");
+        Check(!Definition(api, "endgame.rift.advance").Available, "guardian phase cannot be skipped");
+        PublishRift(native, canAdvance: false);
+        Check(!Definition(api, "endgame.rift.advance").Available, "server exit eligibility controls advance availability");
+        PublishRift(native, phase: "closed", unlockedTier: 80);
+        Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 81)).Code == "endgame.tier_locked", "fresh entry respects observed tier unlock ceiling");
     }
     private static void EndgameProjectionContracts()
     {
@@ -260,8 +292,15 @@ internal static partial class GameActionAdapterTests
         var rift = Object(api.TestObserveEndgame("endgame.rift", limit: 1)["rift"]);
         Check((string)Object(Rows(rift["members"])[0])["charId"] == EquipmentUID && (string)Object(Rows(rift["auras"])[0])["entityId"] == "4294967295" && (string)Object(Rows(rift["auras"])[0])["targetEntityId"] == "monster:1:-1", "rift member and unsigned native aura identities remain exact and scene-qualified");
         Check((int)rift["globePickupRadius"] == 75 && (int)Object(Rows(rift["globes"])[0])["x"] == 321, "rift observes actual globe routing coordinates and pickup radius");
-        var emptyMarkers = Object(api.TestObserveEndgame("endgame.rift", offset: 1, limit: 1)["rift"]);
-        Check(Rows(emptyMarkers["auras"]).Count == 0 && Rows(emptyMarkers["globes"]).Count == 0 && emptyMarkers["nextOffset"] == null, "marker offset safely reaches terminal page");
+        Check((int)rift["tier"] == 2 && (int)rift["floorIndex"] == 3 && (string)rift["seed"] == "18446744073709551615" && (int)rift["generatorVersion"] == 1, "difficulty, floor and exact uint64 seed remain independent");
+        Check((bool)rift["canAdvance"] && !(bool)rift["transitioning"] && (int)rift["exitX"] == 720 && (int)rift["maxTier"] == 150 && (int)rift["unlockedTier"] == 150, "exit and difficulty limits project authoritative server fields");
+        Check((string)Rows(Object(Rows(rift["auras"])[0])["affixes"])[0] == "烈焰" && (int)Object(Rows(rift["telegraphs"])[0])["remainingMS"] == 1500 && (string)Object(Rows(rift["telegraphs"])[0])["shape"] == "circle", "readable affixes and bounded danger geometry project alongside combat targets");
+        Check(!Object(status["rift"]).ContainsKey("telegraphs"), "summary omits telegraph bulk");
+        Check((int)rift["telegraphsTotal"] == 2 && (bool)rift["telegraphsTruncated"] && (int)rift["nextOffset"] == 1, "telegraph paging exposes total/truncation independently of other marker lists");
+        var laterTell = Object(api.TestObserveEndgame("endgame.rift", offset: 1, limit: 1)["rift"]);
+        Check(Rows(laterTell["auras"]).Count == 0 && Rows(laterTell["globes"]).Count == 0 && Rows(laterTell["telegraphs"]).Count == 1 && (string)Object(Rows(laterTell["telegraphs"])[0])["shape"] == "line", "paging continues for danger markers after other lists end");
+        var emptyMarkers = Object(api.TestObserveEndgame("endgame.rift", offset: 2, limit: 1)["rift"]);
+        Check(Rows(emptyMarkers["auras"]).Count == 0 && Rows(emptyMarkers["globes"]).Count == 0 && Rows(emptyMarkers["telegraphs"]).Count == 0 && emptyMarkers["nextOffset"] == null, "marker offset safely reaches terminal page");
         EndAct(api, "socket.insert", InsertArgs()); status = api.TestObserveEndgame("endgame");
         var pending = Object(status["pendingRequest"]);
         Check((bool)status["pending"] && (string)pending["requestId"] == native.Last.RequestID && (string)Object(pending["arguments"])["targetUid"] == EquipmentUID, "pending projection exposes exact immutable command required for safe retry");
@@ -338,12 +377,14 @@ internal static partial class GameActionAdapterTests
             Map("id", 11002, "name", "Synthetic reorder", "operation", "socket.reorder", "targetRequired", true, "money", "100"),
             Map("id", 11003, "name", "Synthetic conversion", "operation", "rune.convert", "money", "100") }));
     }
-    private static void PublishRift(EndgameNative native, string id = "run-current", string phase = "active", bool claimable = false)
+    private static void PublishRift(EndgameNative native, string id = "run-current", string phase = "active", bool claimable = false, bool canAdvance = true, bool transitioning = false, int unlockedTier = 150)
     {
         Apply(native, Map("kind", "rift.state", "ok", true, "rift", Map("runId", id, "revision", TestRevision, "phase", phase, "tier", 2,
+            "seed", "18446744073709551615", "generatorVersion", 1, "floorIndex", 3, "mapName", "Synthetic floor", "canAdvance", canAdvance, "transitioning", transitioning, "exitX", 720, "exitY", 960, "maxTier", 150, "unlockedTier", unlockedTier,
+            "telegraphs", new object[] { Map("id", "tell-1", "entityId", "4294967295", "ability", "烈焰爆裂", "shape", "circle", "x", 400, "y", 500, "radius", 105, "remainingMS", 1500), Map("id", "tell-2", "entityId", "2", "ability", "裂地斩", "shape", "line", "x", 400, "y", 500, "endX", 800, "endY", 500, "radius", 38, "remainingMS", 1400) },
             "progress", 50, "progressMax", 100, "remainingSeconds", 90, "keyCount", 1, "claimable", claimable,
             "members", new object[] { Map("charId", EquipmentUID, "name", "Synthetic member", "level", 50) },
-            "auras", new object[] { Map("entityId", "4294967295", "class", 3) },
+            "auras", new object[] { Map("entityId", "4294967295", "class", 3, "affixes", new object[] { "烈焰", "震环" }) },
             "globes", new object[] { Map("entityId", "4294967294", "x", 321, "y", 654, "value", 900) })));
     }
     private static IReadOnlyDictionary<string, object> Object(object value) => (IReadOnlyDictionary<string, object>)value;

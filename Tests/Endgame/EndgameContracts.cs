@@ -115,6 +115,9 @@ class EndgameContracts
         Check(full.Recipes[0].TargetRequired && full.Recipes[0].Money == "9007199254740993" && full.Recipes[0].Materials[0].Owned == 99 && full.Materials[0].Count == 7, "Go recipe/material types");
         Check(full.Quote.QuoteID == "quote-full-fixture" && full.Quote.RecipeID == 11001 && full.Quote.Materials[0].Owned == 99, "Go quote types");
         Check(full.Rift.Auras[0].NativeEntityID == -1 && full.Rift.Globes[0].Value == 900 && full.Rift.Globes[0].X == 321 && full.Rift.Claimable && full.Rift.Members[0].Claimed, "Go aura/globe/claim types");
+        Check(full.Rift.Tier == 150 && full.Rift.FloorIndex == 3 && full.Rift.Seed == "18446744073709551615" && full.Rift.GeneratorVersion == 1, "production Go fixture seeded difficulty/floor fields");
+        Check(full.Rift.CanAdvance && full.Rift.Transitioning && full.Rift.MaxTier == 150 && full.Rift.UnlockedTier == 150 && full.Rift.ExitX == 720 && full.Rift.ExitY == 960 && full.Rift.MapName == "试炼秘林", "production Go fixture floor exit/limits fields");
+        Check(full.Rift.Auras[0].Affixes[0] == "烈焰" && full.Rift.Telegraphs[0].Ability == "震环冲击" && full.Rift.Telegraphs[0].RemainingMS == 1800 && full.Rift.Telegraphs[0].InnerRadius == 85 && full.Rift.Telegraphs[0].EndX == 300, "production Go fixture readable combat fields");
         Check(full.Chunk == 1 && full.Chunks == 2 && full.Cursor == "32" && full.NextCursor == "64" && full.Result["status"] == "saved", "Go envelope/result types");
         Reject(() => Response(Snap("badprofession", "1", 0, 1, Item().Replace("\"itemId\":1001", "\"profession\":\"4\",\"itemId\":1001"))), "string profession rejected");
         var transient = new EndgameClientState();
@@ -125,6 +128,35 @@ class EndgameContracts
             transient.Tick(DateTime.UtcNow.AddSeconds(3)); Check(transient.HelloSent == (attempt == 2), "hello retry bounded to three attempts");
         }
         Check(!transient.Negotiated && !transient.Pending, "hello never creates mutation");
+        var extended = Response("{\"kind\":\"rift.state\",\"ok\":true,\"rift\":{\"runId\":\"seeded\",\"tier\":150,\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"试炼地图\",\"canAdvance\":true,\"transitioning\":false,\"exitX\":700,\"exitY\":850,\"maxTier\":150,\"unlockedTier\":150,\"auras\":[{\"entityId\":\"4294967295\",\"class\":2,\"affixes\":[\"烈焰\",\"震环\"]}],\"telegraphs\":[{\"id\":\"tell-1\",\"entityId\":\"4294967295\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":100,\"y\":200,\"endX\":300,\"endY\":400,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800}]}}").Rift;
+        Check(extended.Tier == 150 && extended.FloorIndex == 3 && extended.Seed == "18446744073709551615" && extended.GeneratorVersion == 1, "difficulty and floor preserve exact unsigned seed independently");
+        Check(extended.CanAdvance && !extended.Transitioning && extended.ExitX == 700 && extended.ExitY == 850 && extended.MaxTier == 150 && extended.UnlockedTier == 150, "optional exit and selection metadata types");
+        Check(extended.Auras[0].Affixes[1] == "震环" && extended.Telegraphs[0].InnerRadius == 85 && extended.Telegraphs[0].RemainingMS == 1800 && extended.Telegraphs[0].Shape == "ring", "affix and telegraph DTO projection");
+        Check(Response("{\"kind\":\"rift.state\",\"rift\":{\"tier\":50}}").Rift.FloorIndex == 0, "legacy floorless DTO remains readable");
+        foreach (string seed in new[] { "01", "-1", "18446744073709551616", "1.0", "+1" })
+            Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"seed\":\"" + seed + "\"}}"), "noncanonical or overflowing seed");
+        Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"seed\":42}}"), "numeric seed loses uint64 safety");
+        Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"tier\":151}}"), "difficulty over 150");
+        Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"floorIndex\":-1}}"), "negative run floor");
+        Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"unlockedTier\":151}}"), "invalid tier unlock metadata");
+        string tell = "{\"id\":\"tell-1\",\"entityId\":\"1\",\"shape\":\"circle\",\"radius\":105,\"remainingMS\":1500}";
+        foreach (string invalid in new[] { tell.Replace("circle", "triangle"), tell.Replace("105", "-1"), tell.Replace("1500", "-1"), tell.Replace("\"1\"", "\"4294967296\""), tell.Replace("1500", "1500,\"innerRadius\":106") })
+            Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"telegraphs\":[" + invalid + "]}}"), "invalid danger geometry");
+        var tooManyTells = new string[129]; for (int i = 0; i < tooManyTells.Length; i++) tooManyTells[i] = tell;
+        Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"telegraphs\":[" + string.Join(",", tooManyTells) + "]}}"), "danger list capped before publication");
+        var advance = new EndgameRequest("rift.advance", runID: "seeded", floorIndex: 3);
+        Check(advance.Mutates && advance.Json.Contains("\"floorIndex\":3") && !advance.Json.Contains("tier"), "floor command guards floor without changing difficulty");
+        Reject(() => new EndgameRequest("rift.advance", runID: "seeded"), "advance requires positive observed floor");
+        Reject(() => new EndgameRequest("rift.advance", floorIndex: 3), "advance requires observed run");
+        Reject(() => new EndgameRequest("rift.start", tier: 151), "native command tier maximum");
+        Check(new EndgameRequest("rift.start", tier: 150).Json.Contains("\"tier\":150"), "native command accepts tier150");
+        var advancedState = State(); advancedState.Begin(advance);
+        advancedState.Apply(Response("{\"kind\":\"rift.advance\",\"requestId\":\"" + advance.RequestID + "\",\"ok\":false,\"error\":\"busy\"}"));
+        Check(ReferenceEquals(advancedState.PendingRequest, advance), "busy floor transition keeps immutable retry");
+        advancedState.Apply(Response("{\"kind\":\"rift.state\",\"requestId\":\"" + advance.RequestID + "\",\"ok\":true}"));
+        Check(advancedState.Pending, "wrong-kind floor receipt cannot complete transition");
+        advancedState.Apply(Response("{\"kind\":\"rift.advance\",\"requestId\":\"" + advance.RequestID + "\",\"ok\":true}"));
+        Check(!advancedState.Pending, "correlated advance receipt completes transition");
         Console.WriteLine("PASS " + assertions + " endgame contracts including real Go-produced wire fixtures.");
     }
 }

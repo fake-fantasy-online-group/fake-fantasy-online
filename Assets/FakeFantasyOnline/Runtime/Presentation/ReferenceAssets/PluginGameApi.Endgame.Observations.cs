@@ -94,18 +94,23 @@ public sealed partial class PluginGameApi
     {
         EndgameRiftView row = state.Rift; if (row == null) return null;
         var data = Values("runId", row.RunID, "revision", row.Revision, "phase", row.Phase, "name", BoundText(row.Name), "tier", row.Tier,
+            "seed", row.Seed, "generatorVersion", row.GeneratorVersion, "floorIndex", row.FloorIndex, "mapName", BoundText(row.MapName),
+            "canAdvance", row.CanAdvance, "transitioning", row.Transitioning, "exitX", row.ExitX, "exitY", row.ExitY, "maxTier", row.MaxTier, "unlockedTier", row.UnlockedTier,
             "progress", row.Progress, "progressMax", row.ProgressMax, "remainingSeconds", row.RemainingSeconds,
             "receivedUtc", state.RiftReceivedUtc.ToString("o", CultureInfo.InvariantCulture), "bossName", BoundText(row.BossName),
             "keyCount", row.KeyCount, "keyItemId", row.KeyItemID, "claimable", row.Claimable,
             "members", EndgameRows(row.Members, m => Values("charId", m.CharID, "name", BoundText(m.Name), "level", m.Level, "eligible", m.Eligible, "claimed", m.Claimed)));
         if (!includeMarkers) return data;
-        var auras = new List<object>(); var globes = new List<object>();
-        EndgamePageRows(auras, row.Auras, args, a => Values("entityId", a.EntityID, "targetEntityId", EntityReference("monster", a.NativeEntityID), "nativeEntityId", a.NativeEntityID, "class", a.Class));
+        var auras = new List<object>(); var globes = new List<object>(); var telegraphs = new List<object>();
+        EndgamePageRows(auras, row.Auras, args, a => Values("entityId", a.EntityID, "targetEntityId", EntityReference("monster", a.NativeEntityID), "nativeEntityId", a.NativeEntityID, "class", a.Class, "affixes", new List<string>(a.Affixes)));
         EndgamePageRows(globes, row.Globes, args, g => Values("entityId", g.EntityID, "x", g.X, "y", g.Y, "value", g.Value));
+        EndgamePageRows(telegraphs, row.Telegraphs, args, t => Values("id", t.ID, "entityId", t.EntityID, "ability", BoundText(t.Ability), "shape", t.Shape,
+            "x", t.X, "y", t.Y, "endX", t.EndX, "endY", t.EndY, "radius", t.Radius, "innerRadius", t.InnerRadius, "remainingMS", t.RemainingMS));
+        data["telegraphs"] = telegraphs; data["telegraphsTotal"] = row.Telegraphs.Count; data["telegraphsTruncated"] = args.Offset + telegraphs.Count < row.Telegraphs.Count;
         data["auras"] = auras; data["aurasTotal"] = row.Auras.Count; data["aurasTruncated"] = args.Offset + auras.Count < row.Auras.Count;
         data["globes"] = globes; data["globesTotal"] = row.Globes.Count; data["globesTruncated"] = args.Offset + globes.Count < row.Globes.Count;
         data["offset"] = args.Offset; data["limit"] = args.Limit;
-        data["nextOffset"] = args.Offset + args.Limit < Math.Max(row.Auras.Count, row.Globes.Count) ? (object)(args.Offset + args.Limit) : null;
+        data["nextOffset"] = args.Offset + args.Limit < Math.Max(row.Telegraphs.Count, Math.Max(row.Auras.Count, row.Globes.Count)) ? (object)(args.Offset + args.Limit) : null;
         data["globePickupRadius"] = 75; data["coordinateSystem"] = CoordinateSystem();
         return data;
     }

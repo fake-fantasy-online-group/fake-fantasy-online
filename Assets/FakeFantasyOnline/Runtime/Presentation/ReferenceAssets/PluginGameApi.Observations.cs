@@ -19,7 +19,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("endgame", "Native endgame negotiation/session/revision, pending immutable request, quote, wallet and active formations."),
             QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
             QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes, formations or recipes. No network request is implicit.", "catalog:string", "offset:integer"),
-            QueryDefinition("endgame.rift", "Authoritative rift phase, claim eligibility, members, combat aura targets and map-pixel globes. offset/limit page auras and globes independently.", "offset:integer"),
+            QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
             QueryDefinition("player", "Local player position, authoritative vitals, attributes, pet and local movement/combat state."),
             QueryDefinition("entities", "Remote players, monsters, pets and traps from authoritative receipts; positions may predate paths. Bounded server paths are included.", "radius:number", "x:number", "y:number", "kind:string", "entityId:string", "name:string"),

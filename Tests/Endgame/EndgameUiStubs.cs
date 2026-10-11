@@ -52,7 +52,7 @@ namespace UnityEngine
         public Vector2 mousePosition = new Vector2(-9000, -9000);
         public void Use() { type = EventType.Used; }
     }
-    public class Camera { public static Camera main; public Vector3 WorldToScreenPoint(Vector3 p) => p; }
+    public class Camera { public static Camera main; public Vector3 WorldToScreenPoint(Vector3 p) => new Vector3(p.x * 100, p.y * 100, 1); }
     public class Font { }
     public enum FontStyle { Bold }
     public enum ScaleMode { ScaleToFit }
@@ -68,15 +68,18 @@ namespace UnityEngine
         public float CalcHeight(GUIContent c, float width) => 40 + c.text.Length / 5;
     }
     public class GUISkin { public GUIStyle label = new GUIStyle(), textField = new GUIStyle(); }
+    public static class GUIUtility { public static void RotateAroundPivot(float angle, Vector2 pivot) { } }
     public static class GUI
     {
         public static GUISkin skin = new GUISkin(); public static int depth; public static Color color; public static Matrix4x4 matrix;
         public static List<string> labels = new List<string>();
+        public static List<Rect> textures = new List<Rect>();
+        public static string nextText;
         public static void Label(Rect r, string text, GUIStyle style) { labels.Add(text); }
-        public static string TextField(Rect r, string text, int n, GUIStyle style) => text;
+        public static string TextField(Rect r, string text, int n, GUIStyle style) { string value = nextText ?? text; nextText = null; return value; }
         public static Vector2 BeginScrollView(Rect r, Vector2 p, Rect inner) => p;
         public static void EndScrollView() { }
-        public static void DrawTexture(Rect r, Texture2D t) { }
+        public static void DrawTexture(Rect r, Texture2D t) { textures.Add(r); }
         public static void DrawTexture(Rect r, Texture2D t, ScaleMode s) { }
     }
 }
@@ -97,7 +100,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static Texture2D[] Frames(string path, int count = 4) => null;
     }
     internal static class NpcChatter { public static Font CnFont() => new Font(); }
-    internal static class BitmapFont { public static void CenterOutline(Rect r, string text, Color c, float scale) { } }
+    internal static class BitmapFont { public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
     internal static class UIScale { public static float Factor = 1; }
     internal static class WinZ
     {
