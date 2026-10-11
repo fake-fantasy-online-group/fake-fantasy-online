@@ -152,6 +152,43 @@ class EndgameUiContract
         Check(Occurrences(tip, "每2秒恢复1点生命") == 1, "rune catalog fallback remains available without native properties");
         InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1001, bagIdx = 0 };
     }
+    static void SpecialLoreTooltipPathContracts(Client c, EndgamePanel p)
+    {
+        // The native server omits only template prose for these identities, before
+        // composing item.desc. The client must preserve that result and supplement
+        // authored lore without filtering arbitrary native requirement/effect text.
+        const string footer = "（绑定物品不可交易/摆摊/邮寄, 可卖NPC）";
+        string nativeBody = "\u0007(武器)\n（绑定）（可用天工剪解除绑定）\n\u00034变装: 原生外观\n耐久度: 0/50\n\u0004需要等级: 60\n需要职业: 剑客\n攻击 20-30\n重量 5\n\u00035孔数 2/2\n法宝技能: 原生技能\n技能效果: 原生技能效果。\n" + footer;
+        foreach (bool unique in new[] { true, false })
+        {
+            c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+            string special = unique ? "\"uniqueId\":1,\"description\":\"仙遗旧事。\\n故人已去。\",\"trait\":\"普通攻击伤害提高10%\"" : "\"formationId\":1,\"trait\":\"连环枪法伤害提高12%\"";
+            string fields = "\"name\":\"器物\",\"socketCount\":2,\"level\":60," + special;
+            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"lore-paths\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0," + fields + "},{\"uid\":\"82\",\"itemId\":1002,\"location\":\"equipped\",\"slot\":25," + fields + "}],\"formations\":[{\"id\":1,\"name\":\"宿阵之名\",\"description\":\"宿阵旧事。\\n星河长明。\"}]}");
+            string native = nativeBody;
+            if (unique) native = native.Replace("（绑定）（可用天工剪解除绑定）", "仙遗·器物\n基底：原生剑\n力量 +12\n普通攻击伤害提高10%\n仙遗旧事。\n故人已去。\n\n（绑定）（可用天工剪解除绑定）");
+            var bag = new InventoryDlg.Item { id = 1001, bagIdx = 0, quality = 4, name = "器物+7", desc = native };
+            var equipped = new EquipDlg.EquippedItem { id = 1002, slot = 25, quality = 4, name = "器物+7", desc = native };
+            InventoryDlg.rows[0] = bag;
+            EquipDlg.Equipped.RemoveAll(row => row.slot == 25); EquipDlg.Equipped.Add(equipped);
+            string original = TooltipContent.Fmt(TooltipContent.QualityName(bag.name, bag.quality), native);
+            string bagTip = EndgamePanel.BagTooltip(2, bag, original);
+            string equippedTip = EndgamePanel.EquippedTooltip(equipped, original);
+            var ownedTooltip = typeof(EndgamePanel).GetMethod("OwnedItemTooltip", BindingFlags.Static | BindingFlags.NonPublic);
+            Check(bagTip == equippedTip, "bag and equipped/comparison preserve the same authored-only lore for " + special);
+            foreach (var item in c.Endgame.Items)
+                Check((string)ownedTooltip.Invoke(null, new object[] { item }) == bagTip, "workbench shares the native authored-only tooltip for " + item.Location);
+            foreach (string lore in unique ? new[] { "仙遗旧事。", "故人已去。" } : new[] { "宿阵旧事。", "星河长明。" })
+                Check(Occurrences(bagTip, lore) == 1 && bagTip.IndexOf("技能效果:") < bagTip.IndexOf(lore) && bagTip.IndexOf(lore) < bagTip.IndexOf(footer), "authored lore remains once after functional sections and before binding footer: " + lore);
+            foreach (string preserved in new[] { "（绑定）（可用天工剪解除绑定）", "\u00034变装: 原生外观", "耐久度: 0/50", "\u0004需要等级: 60", "需要职业: 剑客", "攻击 20-30", "重量 5", "孔数 2/2", "法宝技能: 原生技能", "技能效果: 原生技能效果。", footer })
+                Check(bagTip.Contains(preserved), "native functional section and status survives authored-only lore: " + preserved);
+            Check(!bagTip.Contains("旧底材的来历") && bagTip.EndsWith(footer), "authored overlay never reintroduces template lore or displaces binding footer");
+        }
+        c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"ordinary-lore\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0}]}");
+        string ordinary = "\u0007普通剑\n" + nativeBody.Replace(footer, "旧底材的来历。\n另一段原装叙述。\n" + footer);
+        Check(EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], ordinary) == ordinary, "ordinary multiline base prose remains byte-for-byte unchanged through the bag path");
+    }
     static void SocketRecipeContracts()
     {
         // The native client has no capacity/probability model: each target-specific quote is server text.
@@ -271,6 +308,7 @@ class EndgameUiContract
         string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");
         TooltipContracts(c, p);
         AuthoredDescriptionContracts(c, p);
+        SpecialLoreTooltipPathContracts(c, p);
         SocketRecipeContracts();
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
