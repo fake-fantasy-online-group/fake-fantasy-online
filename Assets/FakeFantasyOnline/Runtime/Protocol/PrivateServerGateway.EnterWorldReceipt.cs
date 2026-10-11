@@ -94,7 +94,7 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
         _worldReceiveOwner?.ReceiveSelfDataIdentity(entityId);
         reader.U8(); // compatibility byte
         string name = reader.Str();
-        endgameCharacter = name;
+        endgameCharacter = "";
         mapId = reader.I32();
         float x = reader.F32();
         float y = reader.F32();
@@ -119,6 +119,8 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
         if (reader.Remaining >= 8)
         {
             persistentCharacterId = reader.I64();
+            if (persistentCharacterId.Value > 0)
+                endgameCharacter = persistentCharacterId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (reader.Remaining >= 1)

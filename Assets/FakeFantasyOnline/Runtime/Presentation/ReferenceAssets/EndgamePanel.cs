@@ -87,7 +87,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         if (!State.Negotiated)
         {
             ArtworkSkin.ButtonFace(launch, "演劫 · 未开放", scale, false);
-            if (launch.Contains(Event.current.mousePosition)) UITip.Show("当前服务器尚未启用演劫系统。", scale);
+            if (launch.Contains(Event.current.mousePosition)) UITip.Show(State.Message.Length > 0 ? State.Message : "当前服务器尚未启用演劫系统。", scale);
             return;
         }
         if (ArtworkSkin.Button(launch, "演劫 · F8", scale, selected: open)) Toggle();

@@ -22,8 +22,8 @@ public sealed partial class EndgamePanel
     internal static string ItemDescription(EndgameItemView item, bool tooltip)
     {
         var text = new StringBuilder();
-        if (item.UniqueID > 0) text.Append("仙遗余韵 · 道意 ").Append((item.UniqueRollBP / 100f).ToString("0.##", CultureInfo.InvariantCulture)).Append("%\n");
-        if (item.Profession.Length > 0) text.Append("职业：").Append(item.Profession).Append('\n');
+        if (item.UniqueID > 0 && item.UniqueRollBP > 0) text.Append(item.UID.Length == 0 ? "图鉴基准 · 道意 " : "仙遗余韵 · 道意 ").Append((item.UniqueRollBP / 100f).ToString("0.##", CultureInfo.InvariantCulture)).Append("%\n");
+        if (item.Profession != 0) text.Append("职业要求：").Append(ProfessionNames(item.Profession)).Append('\n');
         if (item.Trait.Length > 0) text.Append('\n').Append(item.Trait).Append('\n');
         if (!tooltip && item.Description.Length > 0) text.Append('\n').Append(item.Description).Append('\n');
         foreach (var stat in item.Stats) text.Append(StatText(stat)).Append('\n');
@@ -34,13 +34,21 @@ public sealed partial class EndgamePanel
             {
                 EndgameSocketView found = null; foreach (var row in item.Sockets) if (row.Index == index) found = row;
                 text.Append(index == 0 ? "" : " → ").Append(index + 1).Append('·');
-                text.Append(found == null || found.ItemID == 0 ? "空窍" : found.Name.Length > 0 ? found.Name : "星篆");
+                text.Append(found == null || found.ItemID == 0 ? "空窍" : found.Name.Length > 0 ? found.Name : Current != null && Current.State != null ? Current.RuneName(found.ItemID) : "星篆 " + found.ItemID);
             }
             text.Append('\n');
         }
         if (item.FormationID > 0) text.Append(item.Active ? "\n宿阵已生效" : "\n宿阵：" + item.InactiveReason).Append('\n');
         if (!tooltip) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
         return text.ToString();
+    }
+    private static string ProfessionNames(int mask)
+    {
+        string[] names = { "战士", "剑客", "刺客", "药师", "术士" };
+        var text = new StringBuilder();
+        for (int i = 0; i < names.Length; i++) if ((mask & (1 << i)) != 0)
+        { if (text.Length > 0) text.Append('/'); text.Append(names[i]); }
+        return text.Length == 0 ? "依原装备限制" : text.ToString();
     }
     private static string StatText(EndgameStatView stat) => StatName(stat.Attr) + "：" + (stat.Value >= 0 ? "+" : "") + stat.Value + (stat.Mode == 1 ? "%" : "");
     private static string StatName(int id)

@@ -43,7 +43,7 @@ public sealed class EndgameItemView
     public string Description { get; }
     public string Trait { get; }
     public int Level { get; }
-    public string Profession { get; }
+    public int Profession { get; }
     public int SocketCount { get; }
     public IReadOnlyList<EndgameSocketView> Sockets { get; }
     public IReadOnlyList<EndgameStatView> Stats { get; }
@@ -59,7 +59,7 @@ public sealed class EndgameItemView
         Location = EndgameData.String(d, "location", 32); Tab = EndgameData.Int(d, "tab"); Slot = EndgameData.Int(d, "slot");
         Revision = EndgameData.ID(d, "revision"); UniqueID = EndgameData.Int(d, "uniqueId"); UniqueRollBP = EndgameData.Int(d, "uniqueRollBp");
         Name = EndgameData.String(d, "name"); Description = EndgameData.String(d, "description"); Trait = EndgameData.String(d, "trait");
-        Level = EndgameData.Int(d, "level"); Profession = EndgameData.String(d, "profession");
+        Level = EndgameData.Int(d, "level"); Profession = EndgameData.Int(d, "profession");
         SocketCount = EndgameData.Int(d, "socketCount");
         Sockets = EndgameData.List(d, "sockets", 5, v => new EndgameSocketView(EndgameData.Object(v)));
         Stats = EndgameData.List(d, "stats", 64, v => new EndgameStatView(EndgameData.Object(v)));

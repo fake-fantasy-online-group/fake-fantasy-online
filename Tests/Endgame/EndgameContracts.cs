@@ -77,6 +77,7 @@ class EndgameContracts
         Check(s.Begin(cmd) && !s.Begin(cmd), "one pending mutation");
         s.Apply(Response("{\"kind\":\"socket.insert\",\"requestId\":\"" + cmd.RequestID + "\",\"ok\":false,\"error\":\"pending\"}"));
         Check(ReferenceEquals(cmd, s.PendingRequest) && serialized == cmd.Json, "pending immutable retry");
+        s.Apply(Response("{\"kind\":\"socket.insert\",\"requestId\":\"" + cmd.RequestID + "\",\"ok\":false,\"error\":\"storage\"}")); Check(ReferenceEquals(cmd, s.PendingRequest), "uncertain storage retains exact nonce");
         s.Apply(Response("{\"kind\":\"socket.insert\",\"requestId\":\"" + cmd.RequestID + "\",\"ok\":true,\"revision\":\"9007199254740995\"}")); Check(!s.Pending, "receipt clears pending");
         var quote = new EndgameRequest("cube.quote", s.Revision, recipeID: 11001); s.Begin(quote);
         s.Apply(Response("{\"kind\":\"cube.quote\",\"requestId\":\"" + quote.RequestID + "\",\"ok\":false,\"error\":\"pending\"}")); Check(!s.QuotePending, "quote error releases");
@@ -107,6 +108,23 @@ class EndgameContracts
         var q = new EndgameRequest("cube.quote", "0", recipeID: 11001); extra.Begin(q); extra.InvalidateQuote();
         extra.Apply(Response("{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + q.RequestID + "\",\"quote\":{\"quoteId\":\"old\",\"recipeId\":11001,\"revision\":\"0\",\"expiresAt\":\"2099-01-01T00:00:00Z\"}}")); Check(extra.Quote == null, "late quote ignored");
         extra.Apply(Response("{\"kind\":\"cube.quote\",\"ok\":true,\"quote\":{\"quoteId\":\"unsolicited\",\"recipeId\":11001,\"revision\":\"0\",\"expiresAt\":\"2099-01-01T00:00:00Z\"}}")); Check(extra.Quote == null, "unrequested quote rejected");
+        var full = Fixture(args[0], "full-fields");
+        Check(full.Items[0].Profession == 4 && full.Items[0].Level == 50 && full.Items[0].Tab == 2 && full.Items[0].Bound && full.Items[0].Locked, "Go nonzero numeric item fields");
+        Check(full.Items[0].Sockets[0].Index == 1 && full.Items[0].Sockets[0].UID == "9223372036854775807" && full.Items[0].Stats[0].Mode == 1, "Go nonzero socket/stat fields");
+        Check(full.Runes[0].Mansion == "角" && full.Formations[0].Professions == 31 && full.Formations[0].Slots[1] == 25 && full.Formations[0].Runes.Count == 2, "Go rune/formation types");
+        Check(full.Recipes[0].TargetRequired && full.Recipes[0].Money == "9007199254740993" && full.Recipes[0].Materials[0].Owned == 99 && full.Materials[0].Count == 7, "Go recipe/material types");
+        Check(full.Quote.QuoteID == "quote-full-fixture" && full.Quote.RecipeID == 11001 && full.Quote.Materials[0].Owned == 99, "Go quote types");
+        Check(full.Rift.Auras[0].NativeEntityID == -1 && full.Rift.Globes[0].Value == 900 && full.Rift.Globes[0].X == 321 && full.Rift.Claimable && full.Rift.Members[0].Claimed, "Go aura/globe/claim types");
+        Check(full.Chunk == 1 && full.Chunks == 2 && full.Cursor == "32" && full.NextCursor == "64" && full.Result["status"] == "saved", "Go envelope/result types");
+        Reject(() => Response(Snap("badprofession", "1", 0, 1, Item().Replace("\"itemId\":1001", "\"profession\":\"4\",\"itemId\":1001"))), "string profession rejected");
+        var transient = new EndgameClientState();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            transient.Begin(new EndgameRequest("hello"));
+            transient.Apply(Response("{\"kind\":\"hello\",\"ok\":false,\"error\":\"storage\"}"));
+            transient.Tick(DateTime.UtcNow.AddSeconds(1)); Check(transient.HelloSent, "hello retry cooldown");
+            transient.Tick(DateTime.UtcNow.AddSeconds(3)); Check(transient.HelloSent == (attempt == 2), "hello retry bounded to three attempts");
+        }
+        Check(!transient.Negotiated && !transient.Pending, "hello never creates mutation");
         Console.WriteLine("PASS " + assertions + " endgame contracts including real Go-produced wire fixtures.");
     }
 }

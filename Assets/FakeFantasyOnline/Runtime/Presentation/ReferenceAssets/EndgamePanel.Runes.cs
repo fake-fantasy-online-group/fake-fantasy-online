@@ -17,7 +17,7 @@ public sealed partial class EndgamePanel
         for (int index = 0; index < 5; index++)
         {
             EndgameSocketView installed = null; if (item != null) foreach (var row in item.Sockets) if (row.Index == index) installed = row;
-            string name = item == null || index >= item.SocketCount ? "未开窍" : installed == null || installed.ItemID == 0 ? "空窍" : installed.Name;
+            string name = item == null || index >= item.SocketCount ? "未开窍" : installed == null || installed.ItemID == 0 ? "空窍" : installed.Name.Length > 0 ? installed.Name : RuneName(installed.ItemID);
             if (ArtworkSkin.Tab(new Rect(298 + index * 117, 232, 110, 47), (index + 1) + " · " + name, enabled: item != null && index < item.SocketCount && !State.Pending, selected: socket == index)) socket = index;
         }
         DrawRuneBank(new Rect(297, 292, 594, 112), false);
@@ -65,7 +65,7 @@ public sealed partial class EndgamePanel
         text.Append("\n\n宿阵图鉴 · 次序必须相同\n");
         foreach (var formation in State.Formations)
         {
-            text.Append(formation.Name).Append("（").Append(formation.Channel).Append(" / ").Append(formation.MinLevel).Append("级）：");
+            text.Append(formation.Name).Append("（").Append(formation.Channel).Append(" / ").Append(formation.MinLevel).Append("级 / ").Append(ProfessionNames(formation.Professions)).Append("）：");
             for (int i = 0; i < formation.Runes.Count; i++) text.Append(i == 0 ? "" : " → ").Append(RuneName(formation.Runes[i]));
             text.Append('\n').Append(formation.Description);
             foreach (var stat in formation.Stats) text.Append('\n').Append(StatText(stat));

@@ -1,0 +1,182 @@
+{
+  "kind": "snapshot",
+  "requestId": "full-fields-request-0001",
+  "ok": true,
+  "error": "fixture",
+  "message": "全字段合成测试",
+  "revision": "19",
+  "catalogVersion": "full-fixture-v1",
+  "capabilities": [
+    "endgame.v1"
+  ],
+  "cursor": "32",
+  "nextCursor": "64",
+  "snapshotId": "full-fields-snapshot",
+  "chunk": 1,
+  "chunks": 2,
+  "items": [
+    {
+      "tab": 2,
+      "level": 50,
+      "profession": 4,
+      "uid": "9007199254740993",
+      "itemId": 22211,
+      "location": "bag",
+      "slot": 99,
+      "revision": "18",
+      "uniqueId": 22211,
+      "uniqueRollBp": 12000,
+      "name": "青冥承露",
+      "description": "全字段器物",
+      "trait": "职业道意试验",
+      "socketCount": 2,
+      "sockets": [
+        {
+          "name": "角木蛟",
+          "index": 1,
+          "itemId": 1900028001,
+          "uid": "9223372036854775807"
+        }
+      ],
+      "stats": [
+        {
+          "attr": 34,
+          "value": 9,
+          "mode": 1
+        }
+      ],
+      "formationId": 9,
+      "active": true,
+      "inactiveReason": "fixture",
+      "bound": true,
+      "locked": true
+    }
+  ],
+  "runes": [
+    {
+      "mansion": "角",
+      "itemId": 1900028001,
+      "name": "角木蛟",
+      "description": "星篆试验",
+      "quadrant": "青龙",
+      "stats": [
+        {
+          "attr": 34,
+          "value": 9,
+          "mode": 1
+        }
+      ]
+    }
+  ],
+  "formations": [
+    {
+      "id": 9,
+      "name": "太清宿阵",
+      "description": "合宿试验",
+      "channel": "攻",
+      "runes": [
+        1900028001,
+        1900028002
+      ],
+      "stats": [
+        {
+          "attr": 34,
+          "value": 9,
+          "mode": 1
+        }
+      ],
+      "minLevel": 50,
+      "professions": 31,
+      "slots": [
+        1,
+        25
+      ],
+      "active": true,
+      "inactiveReason": "fixture"
+    }
+  ],
+  "recipes": [
+    {
+      "id": 11001,
+      "name": "篆星",
+      "description": "配方试验",
+      "operation": "rune.inscribe",
+      "money": "9007199254740993",
+      "materials": [
+        {
+          "owned": 99,
+          "itemId": 1900030001,
+          "count": 7,
+          "name": "星髓"
+        }
+      ],
+      "outputItemId": 1900028001,
+      "targetRequired": true
+    }
+  ],
+  "materials": [
+    {
+      "owned": 99,
+      "itemId": 1900030001,
+      "count": 7,
+      "name": "星髓"
+    }
+  ],
+  "quote": {
+    "quoteId": "quote-full-fixture",
+    "recipeId": 11001,
+    "targetUid": "9007199254740993",
+    "revision": "19",
+    "money": "9007199254740993",
+    "materials": [
+      {
+        "owned": 99,
+        "itemId": 1900030001,
+        "count": 7,
+        "name": "星髓"
+      }
+    ],
+    "expiresAt": "2099-01-01T00:00:00Z",
+    "description": "报价试验"
+  },
+  "rift": {
+    "name": "洞天试验",
+    "keyCount": 3,
+    "keyItemId": 1900010001,
+    "auras": [
+      {
+        "entityId": "4294967295",
+        "class": 3
+      }
+    ],
+    "globes": [
+      {
+        "entityId": "4294967294",
+        "x": 321,
+        "y": 654,
+        "value": 900
+      }
+    ],
+    "runId": "rift-full-fixture",
+    "revision": "20",
+    "phase": "completed",
+    "tier": 50,
+    "progress": 10000,
+    "progressMax": 10000,
+    "remainingSeconds": 99,
+    "bossName": "劫影",
+    "members": [
+      {
+        "name": "同道",
+        "charId": "9007199254740993",
+        "level": 50,
+        "eligible": true,
+        "claimed": true
+      }
+    ],
+    "claimable": true
+  },
+  "result": {
+    "status": "saved"
+  }
+}

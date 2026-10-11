@@ -2,14 +2,14 @@
 
 ## Play entry
 
-The native world host negotiates `endgame.v1` after character admission. Press **F8** or select **演劫 · F8** at the right edge of the game. An older server displays a disabled entry rather than sending mutations.
+The native world host negotiates `endgame.v1` after character admission. Transient loading/storage hello failures retry at two-second intervals, with at most three attempts per connection; this is separate from manual mutation retries. Press **F8** or select **演劫 · F8** at the right edge of the game. An older server displays a disabled entry rather than sending mutations.
 
 - **仙遗**: choose a real bag/equipped item; inspect gold name, server trait, rolled stats and ordered sockets. Equip and unequip use existing native commands. Equipped slots **14–25** appear here even though the original paperdoll has only 13 slots. 图鉴 opens the paged unique catalog.
 - **星篆 · 宿阵**: select equipment, a socket and a rune from the bag, then insert or extract. Rune discovery lists the 28 mansions and their real stats. Formation discovery lists ordered runes, level/channel requirements and bonuses. Current active formations are separate from the discovery catalog.
 - **周天鼎**: choose a recipe and real inputs. For rune salvage choose one bag rune; for conversion/array insertion choose ordered bag rune UIDs; for reordering choose the installed runes in the desired order. 问鼎 is a server quote, showing costs and the result/risk description. 照此投料 executes that quote; selection changes or a new inventory snapshot invalidate it. A quote is not a success or an inventory change.
 - **演劫洞天**: 四村试炼小仙接取试炼；完成领钥后，与妖魔结界守卫对话，再在此开境。队友须在队长附近。Choose tier 1–50. Joining an invitation preserves its run ID; fresh entry leaves the run ID empty. The HUD shows server progress, time, elite aura colors and globe markers. Move within 75 pixels of a globe for the server's automatic pickup. Claim is enabled only by the server's `claimable` flag. Interrupted paid runs can expose compensation. Leaving requires a second click.
 
-Close/Escape clears selections and quotes but keeps an uncertain mutation. **查询原请求** resends the same immutable request ID and parameters, never a new purchase or reroll. Disconnect/title return clears visible state. A bounded, process-memory retry journal restores only the same endpoint/account/authenticated character's uncertain request after a new hello; it never automatically executes it. **The journal does not survive quitting the client process.** Server receipts remain authoritative.
+Close/Escape clears selections and quotes but keeps an uncertain mutation. **查询原请求** resends the same immutable request ID and parameters, never a new purchase or reroll. Disconnect/title return clears visible state. A bounded, process-memory retry journal restores only the same endpoint/account/server-issued persistent character ID's uncertain request after a new hello; it never automatically executes it. **The journal does not survive quitting the client process.** Server receipts remain authoritative.
 
 ## Pairing and installation
 
@@ -38,3 +38,27 @@ Both also accept the existing `UNITY_EDITOR_DIR` convention. These scripts run m
 - The cloud rebuild compiled the complete original Foundation, Domain, Application, Protocol, PluginApi, MoonSharp and PluginHost assemblies with official Roslyn 4.8 and Mono 6.8 references, without stubs. The entire modified gateway is included. Unity-dependent assembly compilation and rendered/Player validation are separate checks and were not established by those seven assemblies.
 
 Existing plugin regression scripts and `Tests/UiArtwork/run-artwork-contract.sh` remain applicable. Test fixtures contain synthetic game data, not account credentials.
+
+### Reproduce the complete managed and host checks
+
+Prerequisites: a working Mono runtime plus `mcs.exe`, .NET Framework 4.7.2 reference assemblies (including Facades), and Roslyn `csc.exe` supporting C# 9. The cloud check used official Debian bookworm Mono 6.8 packages (including `mono-devel` reference assemblies) and the official NuGet `Microsoft.Net.Compilers.Toolset` 4.8.0 package (`tasks/net472/csc.exe`). Dependencies include System.Xml.Linq, System.Net.Http and System.Runtime.Serialization. No compiler/runtime binary is committed. `FFO_MONO_ROOT` must expose `bin/mono` and `lib/mono/4.5/mcs.exe`; an existing Unity Editor's MonoBleedingEdge directory is compatible, but the scripts do not start it. Older `mcs` alone cannot compile the existing C# 9 Application sources.
+
+```sh
+export FFO_MONO_ROOT=/path/to/MonoBleedingEdge
+export FFO_CSC=/path/to/Microsoft.Net.Compilers.Toolset/tasks/net472/csc.exe
+export FFO_FRAMEWORK_DIR=/path/to/mono/4.7.2-api
+export FFO_COMPILE_DIR=/tmp/ffo-managed-compile
+Tests/Endgame/run-managed-compile.sh
+Tests/Endgame/run-host-contract.sh
+python3 Tests/Endgame/compare-go-dto.py /path/to/paired-server/server/internal/domain/endgame_contract.go
+```
+
+The managed compile script records exact source lists and compiler logs in `FFO_COMPILE_DIR`. It compiles all 642 actual sources across seven assemblies (5 Foundation, 1 Domain, 147 Application, 221 Protocol, 9 PluginApi, 248 MoonSharp, 11 PluginHost), with no substitutes. Host integration then compiles the actual `NativeNetClientHost` and its actual interface against those assemblies; only Unity and presentation capabilities are substituted. It executes the real gateway's connected/host-thread gates, native encrypted send queue, main receive dispatch, receipt retry, reconnect scope and title fence using a local loopback connection. It does not connect to an external server or start networking background loops.
+
+Recorded final counts: **116** codec/state/production-Go-fixture assertions, **26** actual-panel action assertions with Unity substitutes, **38** actual host/gateway/crypto integration assertions, **80** source/metadata checks and **112** Go/client DTO field-type checks. Existing plugin checks also passed: 723 contracts, 38 actions, 39 addon UI, 58 real-Lua runtime and 83 transport assertions plus Python client integration; existing artwork checks passed 32 assertions.
+
+`Fixtures/full-fields.*` was emitted by production `protocol.EncodeEndgame` with every response DTO field populated. To regenerate it, copy `Tests/Endgame/generate-full-fixture.go` into a temporary command directory under the paired server's `server/cmd`, run that directory with the absolute client `Tests/Endgame/Fixtures` output path, then remove the temporary directory. The other base fixtures are generated by the server's `cmd/endgame-fixtures`; the prefixed audit fixtures came from its protocol-storage audit generator. All fixtures are synthetic text JSON/hex.
+
+Remaining verification: full Unity-dependent Presentation/Bootstrap/Editor assembly compilation with real Unity references, rendered layout/art/font availability, a live client/server play session and a Player build were **not run**. The panel/host substitutes do not establish those outcomes.
+
+Profession requirements are native bitmasks (1 战士, 2 剑客, 4 刺客, 8 药师, 16 术士), not ordinal class IDs. A zero mask keeps the native-restriction fallback. Unique catalog potency is labeled 图鉴基准 when supplied; owned UID-bearing items show the actual server roll. Snapshot material `count` is the wallet total; quote material `count` is required and `owned` is available.

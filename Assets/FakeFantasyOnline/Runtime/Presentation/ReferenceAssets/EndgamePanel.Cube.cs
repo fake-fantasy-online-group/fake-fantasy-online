@@ -50,7 +50,7 @@ public sealed partial class EndgamePanel
             costs.Append("\n铜币：").Append(chosen.Money);
             foreach (var material in chosen.Materials)
             {
-                int owned = 0; foreach (var wallet in State.Materials) if (wallet.ItemID == material.ItemID) owned = wallet.Owned;
+                int owned = 0; foreach (var wallet in State.Materials) if (wallet.ItemID == material.ItemID) owned = wallet.Count;
                 costs.Append("\n").Append(material.Name).Append("：持有 ").Append(owned).Append(" / 需要 ").Append(material.Count).Append(owned < material.Count ? "（不足）" : "");
             }
         }
@@ -86,7 +86,7 @@ public sealed partial class EndgamePanel
         {
             if (rune.UID.Length == 0 || rune.ItemID == 0) continue;
             int position = orderedRunes.IndexOf(rune.UID);
-            if (ArtworkSkin.Button(new Rect(rect.x + rune.Index * 117, rect.y, 111, 43), (position < 0 ? "" : (position + 1) + "·") + rune.Name, enabled: !State.Pending, selected: position >= 0))
+            if (ArtworkSkin.Button(new Rect(rect.x + rune.Index * 117, rect.y, 111, 43), (position < 0 ? "" : (position + 1) + "·") + (rune.Name.Length > 0 ? rune.Name : RuneName(rune.ItemID)), enabled: !State.Pending, selected: position >= 0))
             { if (!orderedRunes.Remove(rune.UID)) orderedRunes.Add(rune.UID); quotedInputs = null; State.InvalidateQuote(); }
         }
     }

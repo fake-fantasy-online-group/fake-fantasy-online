@@ -16,7 +16,7 @@ contains('Bootstrap/NativeNetClientHost.cs', 'view.gameObject.AddComponent<Endga
          'endgame.Bind(_gateway)', 'Unbind(_gateway)', '_gateway.TickEndgameForIndependentRuntime()')
 contains('Protocol/PrivateServerGateway.cs', 'TryReceiveEndgamePacket(', 'ResetEndgameConnection()', 'endgameAccount =')
 contains('Protocol/PrivateServerGateway.TitleResults.cs', 'endgameAccount =')
-contains('Protocol/PrivateServerGateway.EnterWorldReceipt.cs', 'endgameCharacter =', 'endgameWorldEntered = true')
+contains('Protocol/PrivateServerGateway.EnterWorldReceipt.cs', 'endgameCharacter =', 'persistentCharacterId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)', 'endgameWorldEntered = true')
 contains('Protocol/PrivateServerGateway.WorldReturn.cs', 'ResetEndgameConnection()')
 contains('Protocol/PrivateServerGateway.Endgame.cs', 'IEndgameClient', '_host.IsHostThread', '_worldEntryAdmission != null',
          'endgameRetryJournal.Remember', 'RestoreUncertainRequest', '_netClient.EquipItem(item.Slot)',
@@ -27,7 +27,7 @@ contains('Presentation/ReferenceAssets/EndgamePanel.cs', 'NpcChatter.CnFont()', 
          'State.Rift.RunID', 'PlayerController.SuppressWorldClick()')
 contains('Presentation/ReferenceAssets/EndgamePanel.Items.cs', 'EquipEndgameItem(', 'UnequipEndgameItem(', 'NetClient.LoadItemIcon(')
 contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', '"socket.insert"', '"socket.remove"', 'State.ActiveFormations', 'rune.Stats')
-contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'chosen.Materials', 'wallet.Owned', 'salvage.rune', 'socket.reorder',
+contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'chosen.Materials', 'wallet.Count', 'salvage.rune', 'socket.reorder',
          'rune.convert', 'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', '妖魔结界守卫', '试炼小仙', 'rift.Claimable', '"reward_pending"',
          '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes')

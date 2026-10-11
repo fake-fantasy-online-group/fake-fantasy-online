@@ -71,7 +71,7 @@ public sealed partial class EndgamePanel
     {
         Icon(new Rect(rect.x, rect.y, 60, 60), item.ItemID, item.UniqueID > 0);
         Text(new Rect(rect.x + 73, rect.y, rect.width - 73, 32), item.Name, heading, item.UniqueID > 0 ? Gold : Jade);
-        Text(new Rect(rect.x + 73, rect.y + 36, rect.width - 73, 24), "需求 " + item.Level + "级 · " + (item.Profession.Length > 0 ? item.Profession : "依底材职业") + (item.Bound ? " · 已绑定" : ""), small);
+        Text(new Rect(rect.x + 73, rect.y + 36, rect.width - 73, 24), "需求 " + item.Level + "级 · " + ProfessionNames(item.Profession) + (item.Bound ? " · 已绑定" : ""), small);
         string detail = ItemDescription(item, false);
         Rect area = new Rect(rect.x, rect.y + 73, rect.width, rect.height - 73);
         float height = Math.Max(area.height, label.CalcHeight(new GUIContent(detail), area.width - 24) + 12);
@@ -82,13 +82,13 @@ public sealed partial class EndgamePanel
     {
         ArtworkSkin.Input(new Rect(282, 141, 462, 29)); search = GUI.TextField(new Rect(288, 144, 450, 23), search, 64, textField);
         var rows = new List<EndgameItemView>();
-        foreach (var row in State.Uniques) if (search.Length == 0 || (row.Name + row.Profession).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0) rows.Add(row);
+        foreach (var row in State.Uniques) if (search.Length == 0 || (row.Name + ProfessionNames(row.Profession)).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0) rows.Add(row);
         Rect area = new Rect(22, 181, 894, 369);
         catalogScroll = GUI.BeginScrollView(area, catalogScroll, new Rect(0, 0, 872, Math.Max(area.height, rows.Count * 94)));
         for (int i = 0; i < rows.Count; i++)
         {
             var item = rows[i]; float y = i * 94; ArtworkSkin.Panel(new Rect(0, y, 868, 89)); Icon(new Rect(9, y + 13, 57, 57), item.ItemID, true);
-            Text(new Rect(81, y + 8, 770, 25), item.Name + " · " + item.Profession + " · " + item.Level + "级", label, Gold);
+            Text(new Rect(81, y + 8, 770, 25), item.Name + " · " + ProfessionNames(item.Profession) + " · " + item.Level + "级", label, Gold);
             Text(new Rect(81, y + 37, 770, 49), item.Trait.Length > 0 ? item.Trait : item.Description, small);
             if (new Rect(0, y, 868, 89).Contains(Event.current.mousePosition)) UITip.Show(item.Name + "\n" + ItemDescription(item, true), 1f);
         }

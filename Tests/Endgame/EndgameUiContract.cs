@@ -54,8 +54,9 @@ class EndgameUiContract
         Set(p, "open", true); Set(p, "tab", 2); Set(p, "recipeID", 11001);
         c.Endgame.Begin(new EndgameRequest("catalog", catalog: "recipes"));
         Apply(c, "{\"kind\":\"catalog.recipes\",\"ok\":true,\"recipes\":[{\"id\":11001,\"name\":\"凝髓成篆\",\"description\":\"确定星篆\",\"operation\":\"rune.inscribe\",\"money\":\"30000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":30}]}]}");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"wallet\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + items + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":12}]}");
         Draw(p, "问鼎 · 查看完整耗费"); var quoteRequest = c.Last;
-        Check(quoteRequest.Op == "cube.quote" && !quoteRequest.Json.Contains("targetUid"), "inscribe quote needs no target"); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("需要 30")), "material shortfall visible before quote");
+        Check(quoteRequest.Op == "cube.quote" && !quoteRequest.Json.Contains("targetUid"), "inscribe quote needs no target"); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("持有 12 / 需要 30")), "material shortfall visible before quote");
         Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + quoteRequest.RequestID + "\",\"quote\":{\"quoteId\":\"opaque-quote\",\"recipeId\":11001,\"revision\":\"2\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"消耗材料炼制\",\"money\":\"30000\"}}");
         Draw(p, "照此投料 · 炼化"); Check(c.Last.Op == "cube.execute" && c.Last.Json.Contains("opaque-quote") && !c.Last.Json.Contains("itemUids") && !c.Last.Json.Contains("recipeId"), "execute contains only frozen quote identity"); Receipt(c);
         Set(p, "tab", 3); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
@@ -67,6 +68,8 @@ class EndgameUiContract
         int beforeLeave = c.Sent.Count; Draw(p, "离开洞天"); Check(c.Sent.Count == beforeLeave, "leave requires confirmation"); Draw(p, "确认离境 · 无自动返钥"); Check(c.Last.Op == "rift.leave", "confirmed leave reaches server"); Receipt(c);
         Rift(c, "completed-run", "closed", keys: 1); Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Op == "rift.start" && !c.Last.Json.Contains("runId"), "closed run permits new paid run");
         c.Endgame.Reset(); Call(p, "Update"); Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection"); Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "new negotiation required");
+        var requirement = EndgameResponse.Parse("{\"kind\":\"catalog.uniques\",\"ok\":true,\"items\":[{\"itemId\":1001,\"uniqueId\":1001,\"profession\":24,\"uniqueRollBp\":10000}]}").Items[0];
+        string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

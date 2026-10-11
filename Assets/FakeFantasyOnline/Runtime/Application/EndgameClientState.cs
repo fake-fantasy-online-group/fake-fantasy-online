@@ -26,18 +26,21 @@ public sealed partial class EndgameClientState
     public IReadOnlyList<EndgameItemView> Items { get; private set; } = Array.Empty<EndgameItemView>();
     public IReadOnlyList<EndgameMaterialView> Materials { get; private set; } = Array.Empty<EndgameMaterialView>();
     public IReadOnlyList<EndgameFormationView> ActiveFormations { get; private set; } = Array.Empty<EndgameFormationView>();
-    private DateTime quoteRequestedAt;
+    private DateTime quoteRequestedAt, helloRetryAt;
+    private int helloAttempts;
+    private bool helloRetryScheduled;
 
     public void Reset()
     {
         Negotiated = HelloSent = HasSnapshot = false; Revision = "0"; CatalogVersion = Error = Message = "";
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
+        helloAttempts = 0; helloRetryScheduled = false;
         DiscardChunks(); publishedSnapshotID = null; ResetCatalogs(); Generation++; Version++;
     }
     public bool Begin(EndgameRequest request)
     {
-        if (request.Op == "hello") { HelloSent = true; Version++; return true; }
+        if (request.Op == "hello") { HelloSent = true; helloAttempts++; helloRetryScheduled = false; Version++; return true; }
         if (!Negotiated) return false;
         if (request.Mutates)
         {
@@ -66,6 +69,8 @@ public sealed partial class EndgameClientState
     public void NoteInvalidResponse(string message) { DiscardChunks(); Error = "invalid_response"; Message = message; Version++; }
     public void Tick(DateTime now)
     {
+        if (helloRetryScheduled && !Negotiated && now >= helloRetryAt)
+        { helloRetryScheduled = false; HelloSent = false; Version++; }
         if (SnapshotLoading && (now - snapshotStartedAt).TotalSeconds >= 15)
         { DiscardChunks(); Error = "timeout"; Message = "星图接收未完成，请刷新重试。"; Version++; }
         if (QuotePending && (now - quoteRequestedAt).TotalSeconds >= 15)
@@ -94,7 +99,10 @@ public sealed partial class EndgameClientState
             if (!HelloSent) return false;
             bool capable = false; foreach (var value in response.Capabilities) if (value == "endgame.v1") capable = true;
             Negotiated = response.OK && capable; Error = Negotiated ? "" : response.Error;
-            Message = Negotiated ? "星图已启，静候仙缘。" : "当前服务器未开放演劫系统。"; Version++; return Negotiated;
+            helloRetryScheduled = !Negotiated && helloAttempts < 3 && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy");
+            if (helloRetryScheduled) helloRetryAt = DateTime.UtcNow.AddSeconds(2);
+            Message = Negotiated ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";
+            Version++; return Negotiated;
         }
         if (!Negotiated) return false;
         if (response.RequestID == QuoteRequestID) QuotePending = false;
@@ -106,7 +114,7 @@ public sealed partial class EndgameClientState
         {
             ReleaseReadRequest(response.RequestID); Error = response.Error;
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
-            if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "busy") PendingRequest = null;
+            if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
             Version++; return false;
         }
@@ -135,6 +143,7 @@ public sealed partial class EndgameClientState
         {
             case "pending": return "结果确认中，请以同一请求重试。";
             case "busy": return "角色正在处理另一笔操作，请稍候重试。";
+            case "storage":
             case "storage_unavailable": return "暂时无法保存，请稍后查询原请求。";
             case "stale_revision": return "背包已变化，请刷新后重新选择。";
             case "quote_expired": return "鼎中预览已过期，请重新问鼎。";
