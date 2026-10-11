@@ -1313,6 +1313,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                         // A later cancelled Task reply keeps its original Task observation
                         // path; absence of an active waiter alone never grants native UI ownership.
                         _titleLoginResultWithoutWaiter = false;
+                        endgameAccount = credentials.AccountName;
                         _netClient.Login(credentials.AccountName, credentials.Password);
                     },
                     cancellationToken)
@@ -5393,6 +5394,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     private void Dispatch(ushort opcode, byte[] payload)
     {
+        if (TryReceiveEndgamePacket(opcode, payload)) return;
         if (TryReceiveCombatEntityTailPacket(opcode, payload)) return;
         if (TryReceiveCombatRegistryPacket(opcode, payload)) return;
         if (TryReceiveRemotePlayerTailPacket(opcode, payload)) return;
@@ -9033,6 +9035,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     private void DisposeConnectionCore(bool closeNativeConnection)
     {
+        ResetEndgameConnection();
         lock (_worldDrainSync)
         {
             _stage = GatewayStage.Disconnected;

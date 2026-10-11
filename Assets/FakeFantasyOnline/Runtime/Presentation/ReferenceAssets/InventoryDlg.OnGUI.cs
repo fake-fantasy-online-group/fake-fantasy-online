@@ -313,6 +313,7 @@ internal partial class InventoryDlg
             return;
         }
         string text = TooltipContent.Fmt(TooltipContent.QualityName(it.name, it.quality), it.desc);
+        text = EndgamePanel.BagTooltip(tab, it, text);
         if (it.locked) text += "\n【已加锁】不能卖店/交易/摆摊/邮寄/丢弃 (Shift+右键 解锁)";
         string comparison = null;
         if (it.slot >= 0 && !it.cosmetic)

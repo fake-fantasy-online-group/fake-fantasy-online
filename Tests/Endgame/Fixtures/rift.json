@@ -1,0 +1,25 @@
+{
+  "kind": "rift.state",
+  "ok": true,
+  "revision": "4",
+  "rift": {
+    "keyCount": 0,
+    "keyItemId": 0,
+    "runId": "rift-fixture-001",
+    "revision": "5",
+    "phase": "active",
+    "tier": 1,
+    "progress": 40,
+    "progressMax": 10000,
+    "remainingSeconds": 899,
+    "members": [
+      {
+        "charId": "9007199254740993",
+        "level": 50,
+        "eligible": true,
+        "claimed": false
+      }
+    ],
+    "claimable": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "socket.insert",
+  "requestId": "fixture-request-0001",
+  "ok": true,
+  "message": "星篆已镶入",
+  "revision": "4"
+}

@@ -12,7 +12,7 @@ public sealed partial class PrivateServerGateway
 {
     // The local native-world return is already on the Unity host. It has no server
     // world-drain/roster handoff; preserve the original writer's own connected gate.
-    public void SendTitleWorldReturnForIndependentRuntime() => _netClient.LeaveWorld();
+    public void SendTitleWorldReturnForIndependentRuntime() { ResetEndgameConnection(); _netClient.LeaveWorld(); }
 
     public async Task<Result<IReadOnlyList<ServerCharacterRecord>>> LeaveWorldForTitleAsync(
         CancellationToken cancellationToken)
@@ -82,6 +82,7 @@ public sealed partial class PrivateServerGateway
 
     private void ClearDepartedPlayerSnapshots(CancellationToken cancellationToken)
     {
+        ResetEndgameConnection();
         lock (_worldStateSync)
         {
             cancellationToken.ThrowIfCancellationRequested();

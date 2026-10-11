@@ -136,7 +136,11 @@ internal sealed class NativeNetClientHost : INetClientInstanceHost
     {
         if (_released) throw new ObjectDisposedException(nameof(NativeNetClientHost));
         if (ReferenceEquals(_view, view)) return;
+        if (_view != null) _view.GetComponent<EndgamePanel>()?.Unbind(_gateway);
         _view = view ?? throw new ArgumentNullException(nameof(view));
+        var endgame = view.GetComponent<EndgamePanel>();
+        if (endgame == null) endgame = view.gameObject.AddComponent<EndgamePanel>();
+        endgame.Bind(_gateway);
         view.BindNetworkInstanceForIndependentRuntime(
             this, _characterSkillUse.ProjectCurrentStateForIndependentRuntime,
             () => _gateway.HasStartupAddressResultForIndependentRuntime);
@@ -147,7 +151,7 @@ internal sealed class NativeNetClientHost : INetClientInstanceHost
     public void DetachView(ClientRootView view)
     {
         // A different composition root may already have borrowed the live owner.
-        if (ReferenceEquals(_view, view)) _view = null;
+        if (ReferenceEquals(_view, view)) { view.GetComponent<EndgamePanel>()?.Unbind(_gateway); _view = null; }
     }
 
     public void SendTitleWorldReturn() => _gateway.SendTitleWorldReturnForIndependentRuntime();
@@ -157,6 +161,7 @@ internal sealed class NativeNetClientHost : INetClientInstanceHost
         if (_released) return;
         if (_view != null) Session.Pump(_view);
         else Session.Pump();
+        _gateway.TickEndgameForIndependentRuntime();
     }
 
     private void CloseAndRelease()

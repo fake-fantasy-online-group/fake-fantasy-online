@@ -94,6 +94,7 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
         _worldReceiveOwner?.ReceiveSelfDataIdentity(entityId);
         reader.U8(); // compatibility byte
         string name = reader.Str();
+        endgameCharacter = name;
         mapId = reader.I32();
         float x = reader.F32();
         float y = reader.F32();
@@ -388,6 +389,7 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
             Volatile.Write(ref _currentWorldEntityId, entityId);
             admission.ReturnedEntry = entry;
             _stage = GatewayStage.InWorld;
+            endgameWorldEntered = true;
         }
         // Return the adapted entry to its host while the common inbox remains fenced.
         // The host acknowledges a normally returned BuildWorld attempt, then the same

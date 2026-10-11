@@ -1,0 +1,22 @@
+{
+  "kind": "snapshot",
+  "ok": true,
+  "revision": "3",
+  "snapshotId": "fixture-v1",
+  "chunk": 1,
+  "chunks": 2,
+  "items": [
+    {
+      "tab": 0,
+      "uid": "9007199254740994",
+      "itemId": 22212,
+      "location": "equipped",
+      "slot": 25,
+      "revision": "0",
+      "name": "玄门护佩",
+      "socketCount": 0,
+      "bound": false,
+      "locked": false
+    }
+  ]
+}

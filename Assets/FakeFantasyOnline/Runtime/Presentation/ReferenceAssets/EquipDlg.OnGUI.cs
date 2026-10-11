@@ -302,7 +302,7 @@ internal partial class EquipDlg
     {
         if (AvatarFuse.Active)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击将变装融合到此装备", s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { AvatarFuse.PickTarget(item.slot,item.name,item.avatar > 0); ev.Use(); }
@@ -310,7 +310,7 @@ internal partial class EquipDlg
         }
         else if (ToolTarget.Active)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击对此装备" + ToolTarget.Verb, s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { ToolTarget.PickEquip(item.slot,item.name,item.avatar > 0); ev.Use(); }
@@ -318,7 +318,7 @@ internal partial class EquipDlg
         }
         else if (AttrWashDlg.Picking)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击放入属性洗炼", s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { AttrWashDlg.SetTarget(1,0,item.slot,item.name,item.icon); ev.Use(); }
@@ -326,7 +326,7 @@ internal partial class EquipDlg
         }
         else if (RepairDlg.Picking)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击修理此装备(特殊档: 不掉耐久上限)", s);
             if (ev.type == EventType.MouseDown && ev.button == 0) { RepairDlg.PickSlot(item.slot); ev.Use(); }
             if (ev.type == EventType.MouseDown && ev.button == 1) { RepairDlg.CancelPick(); ev.Use(); }
@@ -340,7 +340,7 @@ internal partial class EquipDlg
                     if (pair.Key >= 14001 && pair.Key < 14020 && pair.Value >= 1)
                     { skill = pair.Key; break; }
             }
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 (skill != 0 ? "\n左键拖法宝技到快捷栏 · 右键卸下" : "\n右键卸下"), s);
             if (ev.type == EventType.MouseDown && ev.button == 0 && InventoryDlg.ShareModHeld(ev))
             { InventoryDlg.ShareToChat(2,0,item.slot,item.name); ev.Use(); return; }
