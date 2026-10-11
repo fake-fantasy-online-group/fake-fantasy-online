@@ -20,6 +20,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
             QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes, formations or recipes. No network request is implicit.", "catalog:string", "offset:integer"),
             QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
+            QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
             QueryDefinition("player", "Local player position, authoritative vitals, attributes, pet and local movement/combat state."),
             QueryDefinition("entities", "Remote players, monsters, pets and traps from authoritative receipts; positions may predate paths. Bounded server paths are included.", "radius:number", "x:number", "y:number", "kind:string", "entityId:string", "name:string"),
@@ -90,13 +91,14 @@ public sealed partial class PluginGameApi
             ClientSessionCoordinator s = Session;
             if (!IsObservationDomain(domain))
                 data = Unavailable("unknown_domain", "This observation domain is not implemented.");
-            else if (domain != "world" && domain != "ui" && !domain.StartsWith("endgame", StringComparison.Ordinal) && !ObservationWorldReady(s))
+            else if (domain != "title" && domain != "world" && domain != "ui" && !domain.StartsWith("endgame", StringComparison.Ordinal) && !ObservationWorldReady(s))
                 data = Unavailable("not_in_world", "An active, built world is required for this observation.");
             else
             {
                 switch (domain)
                 {
                     case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": data = ObserveEndgame(domain, args); break;
+                    case "title": data = ObserveTitle(args); break;
                     case "world": data = ObserveWorld(s); break;
                     case "player": data = ObservePlayer(s); break;
                     case "entities": data = ObserveEntities(s, args); break;
@@ -577,7 +579,7 @@ public sealed partial class PluginGameApi
     {
         switch (domain)
         {
-            case "world": case "player": case "entities": case "npcs": case "loot":
+            case "title": case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
             case "party": case "quests": case "dialogue": case "ui":
             case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": return true;
@@ -593,7 +595,7 @@ public sealed partial class PluginGameApi
             case "endgame.items": specific = "|uid|location|tab|itemId|name|offset|"; break;
             case "endgame.catalog": specific = "|catalog|offset|"; break;
             case "endgame.rift": specific = "|offset|"; break;
-            case "party": specific = "|offset|"; break;
+            case "title": case "party": specific = "|offset|"; break;
             case "entities": specific = "|radius|x|y|kind|entityId|name|"; break;
             case "npcs": specific = "|radius|x|y|entityId|name|"; break;
             case "loot": specific = "|radius|x|y|entityId|name|itemId|"; break;

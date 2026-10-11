@@ -81,3 +81,50 @@ The previously supplied reference screenshots and external font/button textures
 are unavailable in this workspace. No visual comparison, Unity import, PlayMode,
 or Player build was performed for this refinement. The 12-pixel point-filtered
 font basis comes from `BitmapFont.cs`; it is source evidence, not a screenshot.
+
+## Original pregame restoration (2026-10-11)
+
+The title/login and character-selection portions of the harmonization above have
+been reverted at the user's request. The authoritative baseline is
+`99c800c6f0c369a231733b292887d12ad7132803`, the parent of the first 26-group
+harmonization commit `7b295bf9774990525fe7fbdfd8bccd72b9b2c789`.
+All 22 original title source files at that baseline are also identical to the
+initial source release `f8d8885`; this is not merely a rollback of the later
+`d9cbf21` button refinement.
+
+Restored visual sources:
+- `TitleFlow.LoginGui.cs`: original input wells, 15px bold GUI button font,
+  procedural rounded gold-bordered textures/styles, registration/recovery/appeal
+  panels, resolution/frame-rate lists and original form-button fallback behavior.
+- `TitleFlow.LoginMembers.cs`: original button style, announcement panel/scroll
+  indicator, hint box, checkbox fallback and form rows.
+- `TitleFlow.VersionGui.cs`: original update-gate panel and text styles.
+- `TitleFlow.CharacterSelection.cs`: original empty-slot outline/text and
+  character-delete confirmation appearance.
+- `RecoveredTitleLoginSurface.cs`: original image-button rendering without the
+  subsequently added hover/pressed tint.
+
+Server-selection, character-creation, title resources, layout, sprite helpers and
+other unchanged title drawing sources are checked against the same baseline.
+The unrelated in-game harmonization and endgame artwork remain intact.
+
+The only allowed differences in the visual sources are plugin owner registration,
+opaque input-edit revisions and timeout notifications. `TitleFlow.NativeGui.cs`
+retains its non-drawing GUI-state cleanup guard and shared server-binding helper;
+its actual draw sequence is checked against the original after inlining that
+helper. Login connection and lifecycle files retain the plugin functional hooks.
+
+Reproduce the source proof (requires baseline Git history):
+
+```sh
+python3 Tests/UiArtwork/pregame_original_regression.py
+bash Tests/PluginRuntime/run-native-pregame-bridge.sh
+```
+
+Recorded checks: **42** provenance/equivalence checks across **22** original title
+source files, **32** native bridge execution checks plus its source invariants,
+**41** shared artwork contracts, and **200** unrelated inventory/social regression
+checks passed. The C# checks use deterministic test substitutes. No Unity import,
+PlayMode, rendered screenshot comparison, Mac operation, Player build or external
+resource modification was performed. Source restoration is established; runtime
+visual acceptance remains unverified.

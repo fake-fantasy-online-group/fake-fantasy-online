@@ -147,6 +147,7 @@ internal sealed partial class TitleFlow : MonoBehaviour
     // actual title component is destroyed, not when a host requests its destruction.
     private void OnDestroy()
     {
+        if (ReferenceEquals(pluginTitleOwner, this)) pluginTitleOwner = null;
         if (NetClient.I != null)
         {
             NetClient receiver = NetClient.I;

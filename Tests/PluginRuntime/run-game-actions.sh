@@ -13,6 +13,8 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/Result.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Actions.cs" \
+  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Title.*.cs \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TitleFlow.PluginBridge.Contracts.cs" \
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Endgame*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Actions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Observations.cs" \
@@ -22,5 +24,6 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Tests/PluginRuntime/GameActionAdapterTests.cs" \
   "$ROOT/Tests/PluginRuntime/EndgameActionAdapterTests.cs" \
   "$ROOT/Tests/PluginRuntime/PartyActionAdapterTests.cs" \
-  "$ROOT/Tests/PluginRuntime/PartyObservationAdapterTests.cs"
+  "$ROOT/Tests/PluginRuntime/PartyObservationAdapterTests.cs" \
+  "$ROOT/Tests/PluginRuntime/TitleActionAdapterTests.cs"
 "$MONO/bin/mono" "$OUT/GameActionAdapterTests.exe"

@@ -251,15 +251,16 @@ namespace FakeFantasyOnline.PluginHost
                 if (Interlocked.Exchange(ref closed, 1) != 0) return;
                 cancellation.Cancel();
                 socket.Close();
-                lock (queueGate) queue.Clear();
+                lock (queueGate) { foreach (var bytes in queue) Array.Clear(bytes, 0, bytes.Length); queue.Clear(); }
             }
 
             private void ReadLoop()
             {
+                var buffer = new byte[4096];
+                var frame = new MemoryStream();
                 try
                 {
-                    var buffer = new byte[4096];
-                    using (var frame = new MemoryStream())
+                    using (frame)
                     {
                         while (!cancellation.IsCancellationRequested)
                         {
@@ -270,11 +271,14 @@ namespace FakeFantasyOnline.PluginHost
                                 if (buffer[index] == 10)
                                 {
                                     var bytes = frame.ToArray();
+                                    Array.Clear(frame.GetBuffer(), 0, (int)frame.Length);
                                     frame.SetLength(0);
                                     lock (queueGate)
                                     {
+                                        if (cancellation.IsCancellationRequested) { Array.Clear(bytes, 0, bytes.Length); return; }
                                         if (queue.Count >= options.MaxPendingRequestsPerClient)
                                         {
+                                            Array.Clear(bytes, 0, bytes.Length);
                                             Write(GameAgentProtocol.Error(null, "queue_full", "Too many pending requests; reconnect after reducing request rate."));
                                             return;
                                         }
@@ -292,13 +296,21 @@ namespace FakeFantasyOnline.PluginHost
                                     frame.WriteByte(buffer[index]);
                                 }
                             }
+                            Array.Clear(buffer, 0, count);
                         }
+                        Array.Clear(frame.GetBuffer(), 0, (int)frame.Length);
                     }
                 }
                 catch (IOException) { }
                 catch (SocketException) { }
                 catch (ObjectDisposedException) { }
-                finally { Close(); }
+                finally
+                {
+                    Array.Clear(buffer, 0, buffer.Length);
+                    var storage = frame.GetBuffer(); // MemoryStream exposes its buffer even after disposal.
+                    Array.Clear(storage, 0, storage.Length);
+                    Close();
+                }
             }
 
             private async Task ProcessLoop()
@@ -314,7 +326,7 @@ namespace FakeFantasyOnline.PluginHost
                             if (queue.Count == 0) continue;
                             bytes = queue.Dequeue();
                         }
-                        object request;
+                        object request = null;
                         string id = null;
                         try
                         {
@@ -334,6 +346,7 @@ namespace FakeFantasyOnline.PluginHost
                             Write(GameAgentProtocol.Error(null, "invalid_json", "Expected one UTF-8 JSON object per line."));
                             continue;
                         }
+                        finally { Array.Clear(bytes, 0, bytes.Length); }
                         object response;
                         using (var dispatch = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token))
                         {
@@ -358,6 +371,23 @@ namespace FakeFantasyOnline.PluginHost
                             catch (Exception)
                             {
                                 response = GameAgentProtocol.Error(id, "api_error", "The game dispatcher could not complete this request.");
+                            }
+                            finally
+                            {
+                                // Drop all credential references after execution, cancellation, or timeout.
+                                // Managed JSON strings cannot be guaranteed zeroed in memory.
+                                if (GameAgentProtocol.IsSensitiveLogin(request))
+                                {
+                                    var map = request as IDictionary<string, object>;
+                                    object args;
+                                    if (map != null && map.TryGetValue("params", out args))
+                                    {
+                                        var fields = args as IDictionary<string, object>;
+                                        if (fields != null) fields.Clear();
+                                    }
+                                    if (map != null) map.Clear();
+                                }
+                                request = null;
                             }
                         }
                         if (!cancellation.IsCancellationRequested) Write(response);

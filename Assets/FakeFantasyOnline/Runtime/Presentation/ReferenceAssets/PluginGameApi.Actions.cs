@@ -22,6 +22,12 @@ public sealed partial class PluginGameApi
 
     private sealed class PluginAction
     {
+        internal ReferenceFirstWorldInitialFrame TitlePreviousFrame;
+        internal ClientSessionCoordinator TitleSession;
+        internal IPluginTitleBridge TitleOwner;
+        internal string TitleInstance;
+        internal long TitleResultSequence;
+        internal long TitleSubmittedRevision;
         internal GameActionRequest Request;
         internal GameActionReceipt Receipt;
         internal long Scene;
@@ -106,6 +112,7 @@ public sealed partial class PluginGameApi
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
                 "entityId:string", "text:string")
         };
+        AddTitleActions(definitions);
         AddPartyActions(definitions);
         AddEndgameActions(definitions);
         return definitions.AsReadOnly();
@@ -134,6 +141,10 @@ public sealed partial class PluginGameApi
         if (request == null) throw new ArgumentNullException(nameof(request));
         RefreshScene();
         TickActions();
+        // Title actions accept identifiers only. Reject unsupported (possibly sensitive)
+        // fields before retaining the request, and never echo their keys or values.
+        if (!ValidateTitleActionEnvelope(request))
+            return ActionRejected(request, "arguments.invalid", "Ordinary actions do not accept credential fields; title actions accept only documented non-sensitive identifiers and guards.");
         if (request.RequestId != null && (request.RequestId.Length == 0 || request.RequestId.Length > 128))
             return ActionRejected(request, "request_id.invalid", "requestId must contain between 1 and 128 characters.");
         string previousId;
@@ -206,7 +217,7 @@ public sealed partial class PluginGameApi
         catch (Exception error)
         {
             // Native callbacks may already have begun side effects. An exception cannot prove rejection.
-            ActionSet(entry, GameActionState.Unknown, "action.exception", error.GetType().Name + ": " + error.Message);
+            ActionSet(entry, GameActionState.Unknown, "action.exception", entry.Request.Name.StartsWith("title.", StringComparison.Ordinal) ? "Native title dispatch failed; its outcome is unknown. Observe title before retrying." : error.GetType().Name + ": " + error.Message);
         }
         return entry.Receipt;
     }
@@ -252,6 +263,7 @@ public sealed partial class PluginGameApi
 
     private void ActionDispatch(PluginAction entry)
     {
+        if (entry.Request.Name.StartsWith("title.", StringComparison.Ordinal)) { DispatchTitle(entry); return; }
         if (entry.Request.Name.StartsWith("party.", StringComparison.Ordinal)) { DispatchParty(entry); return; }
         if (entry.Request.Name.StartsWith("endgame.", StringComparison.Ordinal)) { DispatchEndgame(entry); return; }
         var args = entry.Request.Arguments;
@@ -476,6 +488,7 @@ public sealed partial class PluginGameApi
 
     private void ActionPoll(PluginAction entry)
     {
+        if (entry.TitleOwner != null) { PollTitle(entry); return; }
         if (entry.EndgameRequest != null) { PollEndgame(entry); return; }
         if (!ActionActive(entry) && (entry.Pending == null || entry.PendingSettled)) return;
         // Observe a native queued pickup/skill's actual gateway task before scene/cancel checks.

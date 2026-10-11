@@ -60,21 +60,7 @@ internal sealed partial class TitleFlow
         }
         if (page == TitlePage.ServerSelection)
         {
-            // Keep the live receiver/endpoint readers, not an early state snapshot.
-            if (NetClient.I != null)
-                NetClient.I.BindTitleServerConnectionForIndependentRuntime(
-                    () => guiHost._session.Connected,
-                    () => guiHost._session.ServerHostForIndependentRuntime,
-                    () => guiHost._session.ServerPortForIndependentRuntime,
-                    guiHost.BeginRefreshServerStatus);
-            BindServerPageForIndependentRuntime(guiHost._session, () => netMsg,
-                guiHost._session.ReturnToLoginFromServerPageForIndependentRuntime,
-                result =>
-                {
-                    if (result.IsSuccess) entering = false;
-                    else if (result.Error.Code != ClientSessionCoordinator.ServerSwitchReauthenticationCode)
-                        netMsg = ClientRootView.SafeError(result.Error);
-                });
+            PrepareServerPageForPluginAndGui();
             EnsureStylesForIndependentRuntime();
             Matrix4x4 previous = BeginGuiFrameForIndependentRuntime(false);
             DrawServer();
@@ -91,6 +77,7 @@ internal sealed partial class TitleFlow
         {
             loggingIn = false;
             netMsg = "登录超时, 请重试";
+            PublishPluginTitleResult("login_timeout");
         }
         LoadLoginPrefs();
         EnsureStyles();
@@ -103,5 +90,24 @@ internal sealed partial class TitleFlow
         }
         GUI.matrix = previousMatrix;
     }
+    private void PrepareServerPageForPluginAndGui()
+    {
+        // Keep the live receiver/endpoint readers, not an early state snapshot.
+        if (NetClient.I != null)
+            NetClient.I.BindTitleServerConnectionForIndependentRuntime(
+                () => guiHost._session.Connected,
+                () => guiHost._session.ServerHostForIndependentRuntime,
+                () => guiHost._session.ServerPortForIndependentRuntime,
+                guiHost.BeginRefreshServerStatus);
+        BindServerPageForIndependentRuntime(guiHost._session, () => netMsg,
+            guiHost._session.ReturnToLoginFromServerPageForIndependentRuntime,
+            result =>
+            {
+                if (result.IsSuccess) entering = false;
+                else if (result.Error.Code != ClientSessionCoordinator.ServerSwitchReauthenticationCode)
+                    netMsg = ClientRootView.SafeError(result.Error);
+            });
+    }
+
 }
 }

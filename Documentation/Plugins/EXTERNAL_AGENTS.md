@@ -306,3 +306,34 @@ the adapter does not auto-accept requests or bypass server eligibility. There is
 no new party-list matchmaking API, pending invitation/approval adapter, follow
 command, or atomic create-and-invite batch. Create and subsequent invitations are
 separate deliberate decisions using fresh observations.
+
+## Pregame and ephemeral login
+
+Observe `title` before issuing pregame actions; see [native title workflow](TITLE.md).
+The opt-in newline-JSON IPv4 loopback listener has **no token authentication**.
+Only enable it where every local process is trusted. This extension does not open
+another port or enable the listener when the bridge is disabled. Lua addons do not
+receive the sensitive interface.
+
+`describe.result.sensitiveLoginAvailable` reports whether the API implements the
+separate `sensitive-login` method. Its params are `account` (1–20 characters),
+`password` (1–40 characters), `expectedTitleInstanceId` and
+`expectedTitleRevision` copied from the current title snapshot. The existing frame,
+queue and dispatch bounds apply. Never place credentials in ordinary `act`,
+request IDs, journal/decision files, command arguments, logs or transcripts.
+
+The method invokes the existing native authentication flow on the main thread,
+without saving preferences or retaining a game action/receipt. It returns only
+`submitted` and an allowlisted `code`. A submitted request is not authenticated
+login or world-entry success. Read `title` afterward; login results include a new
+`resultSequence`, safe `resultCode` and native numeric result where available.
+`outcome_unknown` means even `submitted:false` cannot prove no request was sent.
+There is no automatic retry or credential replay. A queued dispatch cancelled
+before execution cannot later submit. Strings may remain in managed process memory
+until collection; writable transport buffers and temporary references are cleared
+best effort, not a secure-erasure guarantee.
+
+The companion toolkit provides `ffo-play sensitive-login` with hidden prompts or
+explicit `--credentials-stdin` for a protected two-line input stream. It bypasses
+the ordinary durable intent journal. Normal title selection actions stay journaled
+and require current title instance/revision, scene revision and API-instance guards.

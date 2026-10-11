@@ -91,3 +91,9 @@ builds pending review and a separately authorized update.
 Remaining party adapter gaps: pending invitation/join approval UI, matchmaking
 party lists, native follow behavior and atomic create-and-invite batching are not
 exposed. Incoming approval still belongs to the ordinary native player flow.
+
+## Native title adapter extension (2026-10-11)
+
+Offline `run-game-actions.sh`: **338 assertions**, including **59 title adapter assertions**, using actual production title actions/projections and deterministic native owners. Covers stale instance/revision, wrong page/loading/update/modal, secret argument rejection before retention (including ordinary unknown actions), replay, native server/name identity, local confirmation, callback outcomes/timeouts/redaction, owner replacement, connected matching new-world completion, title teardown, bounded immutable title observations and ephemeral sensitive submission. Separate native bridge runner covers 32 assertions plus source routing checks.
+
+Engine-free source compile passed for Foundation (5), Domain (1), Application (147), Protocol (221), PluginApi (10), MoonSharp (248), and PluginHost (11), **643 source files**. Unity reference assemblies are absent in the current environment, so full Presentation/Unity compilation and Player/real-server verification remain unverified. No real login or credential transmission occurred in these tests.

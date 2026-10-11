@@ -22,6 +22,7 @@ internal static class AgentTransportContract
         try
         {
             if (args.Length == 1 && args[0] == "--python-fixture") return RunPythonFixture();
+            SensitiveLoginIsEphemeral();
             RoundTripsAndIndependentCursors();
             MalformedFramesAndBounds();
             TinyResponseBudget();
@@ -49,6 +50,46 @@ internal static class AgentTransportContract
             Check(!api.WrongThread, "Python fixture stayed on game thread");
         }
         return 0;
+    }
+
+    private static void SensitiveLoginIsEphemeral()
+    {
+        const string secret = "dummysecret";
+        var api = new FakeGame();
+        using (var dispatcher = new MainThreadGameDispatcher())
+        using (var server = new GameAgentServer(api, dispatcher, 0,
+            new GameAgentServerOptions(dispatchTimeoutMilliseconds: 100)))
+        {
+            server.Start();
+            using (var peer = new Peer(server.Port))
+            {
+                var fields = Map("account", "dummyaccount", "password", secret,
+                    "expectedTitleInstanceId", "title1", "expectedTitleRevision", "rev1");
+                var sent = peer.Call(dispatcher, "sensitive-login", fields);
+                Check((bool)Result(sent)["submitted"] && api.LoginSubmissions == 1, "ephemeral native submission");
+                Check(!GameJson.Serialize(sent).Contains(secret) && api.Executions == 0, "no secret response or retained action");
+                Check(!api.WrongThread, "sensitive login runs on game thread");
+                var ordinary = peer.Call(dispatcher, "act", Map("name", "fake.step", "requestId", "sensitive-act",
+                    "arguments", Map("nested", Map("password", secret))));
+                Check(Error(ordinary) == "sensitive_arguments" && api.Executions == 0, "act credentials rejected before durable API");
+                fields[secret] = secret;
+                var invalid = peer.Call(dispatcher, "sensitive-login", fields);
+                Check(Error(invalid) == "invalid_params" && !GameJson.Serialize(invalid).Contains(secret), "unknown sensitive field never echoed");
+                fields.Remove(secret);
+                api.LoginThrows = true;
+                var failed = peer.Call(dispatcher, "sensitive-login", fields);
+                Check(Error(failed) == "invalid_params" && !GameJson.Serialize(failed).Contains(secret), "native exception is redacted");
+                api.LoginThrows = false;
+                var submitted = api.LoginSubmissions;
+                peer.Send("sensitive-login", fields);
+                var expired = ReadResponse(peer.Read(), null);
+                Check(Error(expired) == "dispatch_timeout", "sensitive queued request times out");
+                dispatcher.Pump();
+                Check(api.LoginSubmissions == submitted && dispatcher.PendingCount == 0, "timed-out credential submission never runs later");
+                Check(!GameJson.Serialize(peer.Call(dispatcher, "observe", Map("domain", "player"))).Contains(secret), "observations omit credentials");
+                Check(!GameJson.Serialize(peer.Call(dispatcher, "events", Map("afterSequence", 0))).Contains(secret), "events omit credentials");
+            }
+        }
     }
 
     private static void RoundTripsAndIndependentCursors()
@@ -340,7 +381,7 @@ internal static class AgentTransportContract
         public void Dispose() { socket.Close(); Reader.Dispose(); }
     }
 
-    private sealed class FakeGame : IGameApi, IGameObservationCatalog
+    private sealed class FakeGame : IGameApi, IGameObservationCatalog, IGameSensitiveLogin
     {
         private readonly int owner = Thread.CurrentThread.ManagedThreadId;
         private readonly Dictionary<string, GameActionReceipt> actions = new Dictionary<string, GameActionReceipt>();
@@ -349,6 +390,17 @@ internal static class AgentTransportContract
         private readonly Queue<GameEvent> journal = new Queue<GameEvent>();
         private long sequence;
         internal int Executions;
+        internal int LoginSubmissions;
+        internal bool LoginThrows;
+        public GameSensitiveLoginResult SubmitLogin(string account, string password, string expectedTitleInstanceId, string expectedTitleRevision)
+        {
+            OnThread();
+            if (LoginThrows) throw new ArgumentException(password);
+            Check(account == "dummyaccount" && password == "dummysecret", "credentials reach native only");
+            Check(expectedTitleInstanceId == "title1" && expectedTitleRevision == "rev1", "title guards preserved");
+            LoginSubmissions++;
+            return new GameSensitiveLoginResult(true, "submitted");
+        }
         internal bool WrongThread;
         private void OnThread() { WrongThread |= owner != Thread.CurrentThread.ManagedThreadId; if (WrongThread) throw new Exception("Not game thread"); }
         public GameSnapshot Observe(GameQuery query)

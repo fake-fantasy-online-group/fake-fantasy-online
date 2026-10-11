@@ -4,8 +4,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 internal sealed partial class TitleFlow
 {
-    private GUIStyle _updateHeadingStyle, _updateDetailStyle;
-
     // Official 06000ee9, in the same existing carrier as the title panel/button styles.
     // DrawLogin calls this after its disclaimer, before the notice button.
     // The version coroutine still has no activation supplied by this title consumer.
@@ -14,27 +12,26 @@ internal sealed partial class TitleFlow
         GUI.color = new Color(0f, 0f, 0f, 0.72f);
         GUI.DrawTexture(new Rect(0f, 0f, 800f, 600f), Texture2D.whiteTexture);
         GUI.color = Color.white;
-        ArtworkSkin.Panel(new Rect(190f, 210f, 420f, 190f));
+        GUI.Box(new Rect(190f, 210f, 420f, 190f), GUIContent.none,
+            _panelStyle ?? GUI.skin.box);
 
-        if (_updateHeadingStyle == null) _updateHeadingStyle = new GUIStyle(GUI.skin.label)
+        GUIStyle heading = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
             fontSize = 15,
             wordWrap = true,
             clipping = TextClipping.Overflow
         };
-        GUIStyle heading = _updateHeadingStyle;
         heading.normal.textColor = new Color(1f, 0.9f, 0.6f, 1f);
         GUI.Label(new Rect(190f, 226f, 420f, 26f), "发现新版本", heading);
 
-        if (_updateDetailStyle == null) _updateDetailStyle = new GUIStyle(GUI.skin.label)
+        GUIStyle detail = new GUIStyle(GUI.skin.label)
         {
             alignment = TextAnchor.MiddleCenter,
             fontSize = 13,
             wordWrap = true,
             clipping = TextClipping.Overflow
         };
-        GUIStyle detail = _updateDetailStyle;
         detail.normal.textColor = Color.white;
         GUI.Label(new Rect(210f, 260f, 380f, 70f),
             "你的版本 v1.6.0,最新版本 v" + NetClient.LatestVer + "。", detail);

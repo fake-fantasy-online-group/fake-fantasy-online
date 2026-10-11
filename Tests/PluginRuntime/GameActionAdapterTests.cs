@@ -146,6 +146,7 @@ internal static partial class GameActionAdapterTests
             var retained = Act(api, "inventory.sort", Map("tab", 0), "old");
             for (int i = 0; i < 1024; i++) Act(api, "inventory.sort", Map("tab", 0), "new" + i);
             Check(api.GetAction(retained.ActionId).Code == "action.not_found", "settled action retention bounded to 1024");
+            RunTitleTests();
             RunPartyTests();
             RunPartyObservationTests();
             RunEndgameTests();
@@ -159,7 +160,7 @@ internal static partial class GameActionAdapterTests
 namespace UnityEngine { internal static class Time { internal static float time; } }
 namespace FakeFantasyOnline.Application
 {
-    public enum ClientSessionState { InWorld, Offline }
+    public enum ClientSessionState { InWorld, Offline, EnteringWorld }
     public enum WorldReviveOption : byte { RespawnCharacter }
     public sealed class WorldPartyMemberState
     {
@@ -186,6 +187,7 @@ namespace FakeFantasyOnline.Application
     public sealed class WorldChatSendRequest { public static WorldChatSendRequest ForChannel(byte c, string t, object s) => new WorldChatSendRequest(); public static WorldChatSendRequest ForWhisper(string n, string t, object s) => new WorldChatSendRequest(); }
     public sealed class ClientSessionCoordinator
     {
+        public bool Connected = true;
         public ClientSessionState State = ClientSessionState.InWorld;
         public IEndgameClient EndgameClientForPlugins;
         public WorldInventoryState InventoryState = new WorldInventoryState();
@@ -246,6 +248,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal sealed class Window { internal ReferenceFirstWorldInitialFrame Frame; }
     internal sealed class ReferenceFirstWorldInitialFrame
     {
+        internal bool Built = true;
         internal LocalPlayer Player = new LocalPlayer(); internal CombatWorld CombatOwnerForIndependentRuntime = new CombatWorld();
         internal float MapWidthForIndependentRuntime => 1000; internal float MapHeightForIndependentRuntime => 1000;
         internal Dictionary<int, ReferenceWorldNpcActor> NpcActors = new Dictionary<int, ReferenceWorldNpcActor>();
@@ -275,7 +278,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public void WalkToPickup(int id, int x, int y) { PendingPickupIdForIndependentRuntime = id; SetTestPath(); }
         internal void StopForNpcPointerForIndependentRuntime() { MoveToTargetForIndependentRuntime = false; }
     }
-    internal static class CharData { internal static int immobile, rideAnchorId; internal static long charId; }
+    internal static class CharData { internal static int immobile, rideAnchorId; internal static long charId; internal static string name; }
     internal partial class NetClient { internal static NetClient I; internal static bool IsMiningTool(int id) => false; }
     public partial class CombatWorld
     {

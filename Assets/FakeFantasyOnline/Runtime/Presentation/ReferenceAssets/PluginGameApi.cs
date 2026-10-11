@@ -12,7 +12,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// Main-thread, transport-neutral view of the native game. Observations never acknowledge
 /// gameplay queues. Each consumer keeps its own event cursor; all returned values are copies.
 /// </summary>
-public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IDisposable
+public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IGameSensitiveLogin, IDisposable
 {
     private readonly string apiInstanceId = Guid.NewGuid().ToString("N");
     private const int EventCapacity = 1024;
@@ -140,6 +140,7 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
     private void RefreshObservationRevisions()
     {
         ClientSessionCoordinator s = Session;
+        TrackTitleObservation();
         ReferenceFirstWorldInitialFrame frame = ObservationFrame;
         var endgame = s?.EndgameClientForPlugins;
         string endgameToken = Token(endgame?.EndgameInWorld, endgame?.Endgame.Generation, endgame?.Endgame.Version);
