@@ -26,13 +26,26 @@ public sealed partial class EndgameClientState
     public IReadOnlyList<EndgameItemView> Items { get; private set; } = Array.Empty<EndgameItemView>();
     public IReadOnlyList<EndgameMaterialView> Materials { get; private set; } = Array.Empty<EndgameMaterialView>();
     public IReadOnlyList<EndgameFormationView> ActiveFormations { get; private set; } = Array.Empty<EndgameFormationView>();
+    // Bounded, generation-scoped authoritative responses for native API receipt correlation.
+    // A transient error is a response, not proof that a mutation failed.
+    private readonly Dictionary<string, EndgameResponse> responses = new Dictionary<string, EndgameResponse>(StringComparer.Ordinal);
+    private readonly Queue<string> responseOrder = new Queue<string>();
+    public EndgameResponse ResponseFor(string requestID) => requestID != null && responses.TryGetValue(requestID, out EndgameResponse response) ? response : null;
+    private void RememberResponse(EndgameResponse response)
+    {
+        if (response.RequestID.Length == 0) return;
+        if (!responses.ContainsKey(response.RequestID)) responseOrder.Enqueue(response.RequestID);
+        responses[response.RequestID] = response;
+        while (responseOrder.Count > 128) responses.Remove(responseOrder.Dequeue());
+    }
     private DateTime quoteRequestedAt, helloRetryAt;
     private int helloAttempts;
     private bool helloRetryScheduled;
 
     public void Reset()
     {
-        Negotiated = HelloSent = HasSnapshot = false; Revision = "0"; CatalogVersion = Error = Message = "";
+        Negotiated = HelloSent = HasSnapshot = false; Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
+        responses.Clear(); responseOrder.Clear();
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRetryScheduled = false;
@@ -105,6 +118,10 @@ public sealed partial class EndgameClientState
             Version++; return Negotiated;
         }
         if (!Negotiated) return false;
+        if (PendingRequest != null && response.RequestID == PendingRequest.RequestID && !PendingRequest.MatchesResponse(response))
+        { NoteInvalidResponse("服务器回执类型与原请求不符，请查询原请求。"); return false; }
+        if (QuoteRequestID.Length > 0 && response.RequestID == QuoteRequestID && response.Kind != "cube.quote")
+        { NoteInvalidResponse("服务器问鼎回执类型无效，请刷新重试。"); return false; }
         if (response.RequestID == QuoteRequestID) QuotePending = false;
         bool receipt = PendingRequest != null && response.RequestID == PendingRequest.RequestID;
         // A rejected admission can still return the authoritative prior run to claim.
@@ -116,7 +133,7 @@ public sealed partial class EndgameClientState
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
-            Version++; return false;
+            RememberResponse(response); Version++; return false;
         }
         if (receipt) { PendingRequest = null; InvalidateQuote(); Error = ""; Message = response.Message.Length > 0 ? response.Message : "服务器已确认。"; }
         if (response.Kind != "snapshot" && response.Revision.Length > 0 && CompareRevision(response.Revision, Revision) >= 0) Revision = response.Revision;
@@ -130,7 +147,7 @@ public sealed partial class EndgameClientState
         if (catalog != null) ApplyCatalog(catalog, response);
         if (response.Quote != null && response.RequestID.Length > 0 && response.RequestID == QuoteRequestID && CompareRevision(response.Quote.Revision, Revision) >= 0)
         { Quote = response.Quote; Error = ""; Message = "问鼎已成，请核对耗费与所得。"; }
-        Version++; return true;
+        RememberResponse(response); Version++; return true;
     }
     public static int CompareRevision(string a, string b)
     {

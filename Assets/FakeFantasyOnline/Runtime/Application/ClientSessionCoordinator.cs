@@ -131,6 +131,8 @@ public sealed partial class ClientSessionCoordinator : IDisposable
     public ClientSessionState State => _state;
 
     public bool Connected => _gateway.Connected;
+    // Shared native owner for addon/agent endgame commands; never a parallel game state.
+    public IEndgameClient EndgameClientForPlugins => _gateway as IEndgameClient;
 
     internal IPartyCommands PartyCommands => _gateway;
     internal IFamilyCommands FamilyCommands => _gateway;

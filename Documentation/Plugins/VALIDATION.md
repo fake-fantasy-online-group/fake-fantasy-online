@@ -28,3 +28,13 @@
 - Lua 为进程内解释器，单对象与执行预算不等于每插件完整堆内存隔离。
 
 没有通过修改原生状态伪造服务器成功；发送回执与实际游戏结果保持区别。两项未适配动作 `inventory.move`、`ui.open` 在发现结果中明确标为不可用。
+
+## Endgame adapter extension (2026-10-11)
+
+`run-game-actions.sh` now also accepts `FFO_MONO_ROOT` without a Unity installation. It compiles both actual `PluginGameApi.Endgame` partials and all actual Application `Endgame*.cs` sources alongside the existing production action adapter and shared Foundation JSON codec.
+
+Recorded focused run: **186 assertions**, comprising all **38** original native-action regressions and **148** endgame assertions. Coverage includes discovery/schema limits, canonical Int64 string IDs above 2^53, max-int64 ordered rune inputs, retry equality/order conflicts, quote-only versus execution, stale item/revision/quote/run/cursor guards, binding/trade/native slot25 equipment, pending transient and final authoritative receipts, explicit immutable retry, generation reset, wrong-kind receipt rejection, actual-server `cube.result`, late post-deadline receipts, matching published/current revisions, two-chunk publication, 128-response retention and bounded item/catalog/rift projections. Current-server uncorrelated snapshots are separately tested to publish `snapshotId` while refresh remains sent; synthetic/future correlated snapshots complete only after full publication.
+
+The new projection tests substitute only generic observation plumbing and native owners; they execute production endgame mappings and paging. They do not execute the complete generic observation envelope/cache or establish native Unity behavior. The existing **116** endgame model/codec/Go-fixture contracts and **723** shared plugin contracts also passed after integration. No Unity Editor/Player, live server or real gameplay was run.
+
+`GameObservationTests.cs` was updated for **17** discoverable domains, offline endgame fields, exact string UID filters, required catalog discovery, offset/limit schemas and parser guard cases. **This full compiled-Presentation observation suite was blocked in this run:** `run-game-observations.sh` could not compile because `FakeFantasyOnline.Presentation.dll` in the managed output and `Data/Managed/UnityEngine/UnityEngine.CoreModule.dll` in the supplied runtime were missing. It did not execute any assertions. The focused endgame projection checks above do not replace that suite.

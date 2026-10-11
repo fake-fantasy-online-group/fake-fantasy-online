@@ -9,7 +9,7 @@ using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.PluginApi;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
-internal static class GameActionAdapterTests
+internal static partial class GameActionAdapterTests
 {
     private static int checks;
     private static Dictionary<string, object> Map(params object[] pairs)
@@ -146,6 +146,7 @@ internal static class GameActionAdapterTests
             var retained = Act(api, "inventory.sort", Map("tab", 0), "old");
             for (int i = 0; i < 1024; i++) Act(api, "inventory.sort", Map("tab", 0), "new" + i);
             Check(api.GetAction(retained.ActionId).Code == "action.not_found", "settled action retention bounded to 1024");
+            RunEndgameTests();
             Console.WriteLine("Game action adapter passed: " + checks + " assertions (native substitutes; no gameplay executed).");
             return 0;
         }
@@ -172,6 +173,7 @@ namespace FakeFantasyOnline.Application
     public sealed class ClientSessionCoordinator
     {
         public ClientSessionState State = ClientSessionState.InWorld;
+        public IEndgameClient EndgameClientForPlugins;
         public WorldInventoryState InventoryState = new WorldInventoryState();
         public WorldSkillBookState SkillBookState = new WorldSkillBookState();
         public WorldNpcTaskOffersState NpcTaskOffersState = new WorldNpcTaskOffersState();
@@ -201,6 +203,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     public sealed partial class PluginGameApi
     {
+        private readonly string apiInstanceId = Guid.NewGuid().ToString("N");
         public ClientSessionCoordinator TestSession; public long TestScene = 1;
         private ClientSessionCoordinator Session => TestSession;
         private long sceneRevision => TestScene;

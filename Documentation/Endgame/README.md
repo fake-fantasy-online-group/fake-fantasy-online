@@ -11,6 +11,10 @@ The native world host negotiates `endgame.v1` after character admission. Transie
 
 Close/Escape clears selections and quotes but keeps an uncertain mutation. **查询原请求** resends the same immutable request ID and parameters, never a new purchase or reroll. Disconnect/title return clears visible state. A bounded, process-memory retry journal restores only the same endpoint/account/server-issued persistent character ID's uncertain request after a new hello; it never automatically executes it. **The journal does not survive quitting the client process.** Server receipts remain authoritative.
 
+## Addons and external agents
+
+The existing shared Game API now projects this same native owner through `endgame`, `endgame.items`, `endgame.catalog` and `endgame.rift`. Guarded `endgame.*` actions cover refresh/catalog pages, sockets, server quotes and execution, rift entry/claim/leave, exact uncertain-request retry, and native equip/unequip. Decimal UID/revision strings, ordered rune arrays, complete-snapshot publication, current run IDs and server-authoritative receipts retain their native semantics. See [the endgame API guide](../Plugins/ENDGAME.md). The external bridge remains explicit opt-in and loopback-only.
+
 ## Pairing and installation
 
 Use this client branch with the matching server `feature/daoist-endgame` implementation, endgame migration/catalog data and server feature configuration. Existing native packets retain their layouts. The new sidecar is request opcode `0x10d0`, response `0x80d0`, then little-endian U16 schema **1**, U16 UTF-8 byte length and JSON, limited to **60 KiB**. The DTO authority is the paired server's `server/internal/domain/endgame_contract.go`.

@@ -57,6 +57,15 @@ public sealed class EndgameRequest
         EndgameData.ID(data, "expectedRevision"); EndgameData.ID(data, "targetUid"); EndgameData.ID(data, "runeUid");
         Json = BoundedJson.Serialize(data);
     }
+    // Shared correlation contract for native UI state and plugin receipts.
+    public bool MatchesResponse(EndgameResponse response)
+    {
+        if (response == null || response.RequestID != RequestID) return false;
+        if (!response.OK) return response.Kind == Op;
+        if (Op == "cube.execute") return response.Kind == "cube.result";
+        if (Op == "catalog") return (response.Kind == "catalog." + Catalog || response.Kind == "catalog") && response.Cursor == Cursor;
+        return response.Kind == Op;
+    }
     private static void Add(IDictionary<string, object> data, string key, string value)
     {
         if (string.IsNullOrEmpty(value)) return;

@@ -7,6 +7,8 @@ namespace FakeFantasyOnline.Application
 public sealed partial class EndgameClientState
 {
     public bool SnapshotLoading => assembling != null;
+    public string SnapshotID => publishedSnapshotID ?? "";
+    public string SnapshotRevision { get; private set; } = "0";
     private List<EndgameItemView> assembling;
     private IReadOnlyList<EndgameMaterialView> snapshotMaterials;
     private IReadOnlyList<EndgameFormationView> snapshotFormations;
@@ -37,7 +39,7 @@ public sealed partial class EndgameClientState
         nextChunk++;
         if (nextChunk != chunkCount) return;
         Items = new ReadOnlyCollection<EndgameItemView>(assembling); Materials = snapshotMaterials; ActiveFormations = snapshotFormations;
-        Revision = snapshotRevision; HasSnapshot = true; publishedSnapshotID = snapshotID; InvalidateQuote(); DiscardChunks();
+        Revision = SnapshotRevision = snapshotRevision; HasSnapshot = true; publishedSnapshotID = snapshotID; InvalidateQuote(); DiscardChunks();
     }
     private void DiscardChunks()
     {

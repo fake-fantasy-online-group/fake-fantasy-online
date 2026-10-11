@@ -35,9 +35,42 @@ public static class GameObservationTests
     public static int Main()
     {
         var api = new PluginGameApi(() => null);
-        Check(api.GetQueries().Count == 13, "all supported domains are discoverable");
+        Check(api.GetQueries().Count == 17, "all supported domains are discoverable");
         var names = new HashSet<string>();
         foreach (var definition in api.GetQueries()) Check(names.Add(definition.Domain), "domains are unique");
+        var schemas = new Dictionary<string, GameQueryDefinition>();
+        foreach (var definition in api.GetQueries()) schemas.Add(definition.Domain, definition);
+        foreach (string domain in new[] { "endgame", "endgame.items", "endgame.catalog", "endgame.rift" })
+        {
+            Check(names.Contains(domain), "endgame domain discoverable: " + domain);
+            var queryArgs = domain == "endgame.catalog" ? Args("catalog", "recipes") : Args();
+            GameSnapshot offline = api.Observe(new GameQuery(domain, queryArgs));
+            Check(!(bool)offline.Data["available"] && !(bool)offline.Data["negotiated"] && !(bool)offline.Data["inWorld"], "offline endgame state explicit: " + domain);
+            Check((string)offline.Data["expectedRevision"] == "0" && (string)offline.Data["snapshotId"] == "" && (string)offline.Data["snapshotRevision"] == "0", "offline endgame revisions are empty exact strings: " + domain);
+            Check(((string)offline.Data["apiInstanceId"]).Length > 0, "offline endgame exposes adapter restart identity: " + domain);
+        }
+        foreach (string domain in new[] { "endgame.items", "endgame.catalog", "endgame.rift" })
+        {
+            var properties = (IReadOnlyDictionary<string, object>)schemas[domain].Arguments["properties"];
+            var offsetSchema = (IReadOnlyDictionary<string, object>)properties["offset"];
+            Check(Convert.ToInt32(offsetSchema["minimum"]) == 0 && Convert.ToInt32(offsetSchema["maximum"]) == 4096, "endgame offset discovery bounds: " + domain);
+            var limitSchema = (IReadOnlyDictionary<string, object>)properties["limit"];
+            Check(Convert.ToInt32(limitSchema["minimum"]) == 1 && Convert.ToInt32(limitSchema["maximum"]) == 512, "endgame limit discovery bounds: " + domain);
+        }
+        var catalogSchema = schemas["endgame.catalog"].Arguments;
+        Check(((IReadOnlyList<object>)catalogSchema["required"]).Count == 1 && (string)((IReadOnlyList<object>)catalogSchema["required"])[0] == "catalog", "catalog selector is required in discovery");
+        var catalogProperties = (IReadOnlyDictionary<string, object>)catalogSchema["properties"];
+        Check(((IReadOnlyList<object>)((IReadOnlyDictionary<string, object>)catalogProperties["catalog"])["enum"]).Count == 4, "catalog discovery enumerates exact native catalogs");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.catalog")), "catalog selector required before offline fallback");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.catalog", Args("catalog", "invented"))), "unknown catalog rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("offset", -1))), "negative endgame offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("offset", 4097))), "oversized endgame offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("offset", 1.0000000000000002))), "fractional endgame offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("uid", 9007199254740993L))), "numeric UID observation filter rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("uid", "01"))), "noncanonical UID observation filter rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("location", "invented"))), "unknown item location rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.rift", Args("uid", "9007199254740993"))), "unrelated UID filter cannot be ignored by rift");
+        Check(!(bool)api.Observe(new GameQuery("endgame.items", Args("uid", "9223372036854775807", "offset", 4096, "limit", 512))).Data["available"], "valid maximum string UID and pagination bounds reach offline state");
         GameSnapshot world = api.Observe(new GameQuery("world"));
         Check((bool)world.Data["available"], "world/session state remains available while offline");
         Check(!(bool)world.Data["worldReady"], "offline world is not ready");

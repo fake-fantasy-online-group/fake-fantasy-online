@@ -28,7 +28,7 @@ class EndgameUiContract
     static void Receipt(Client c)
     {
         var request = c.Endgame.PendingRequest;
-        Apply(c, "{\"kind\":\"" + request.Op + "\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"revision\":\"2\"}");
+        Apply(c, "{\"kind\":\"" + (request.Op == "cube.execute" ? "cube.result" : request.Op) + "\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"revision\":\"2\"}");
     }
     static void Rift(Client c, string runID, string phase, bool claimable = false, int keys = 0, bool ok = true)
     {

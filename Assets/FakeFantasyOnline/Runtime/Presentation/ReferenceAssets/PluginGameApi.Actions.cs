@@ -35,6 +35,11 @@ public sealed partial class PluginGameApi
         internal int NativeId;
         internal object Target;
         internal float X, Y, Tolerance;
+        internal IEndgameClient EndgameOwner;
+        internal EndgameRequest EndgameRequest;
+        internal long EndgameGeneration;
+        internal bool EndgameWaiting;
+        internal EndgameResponse EndgameResponseSeen;
         internal Task<Result> Pending;
         internal bool PendingSettled;
         internal CancellationTokenSource Cancellation;
@@ -60,7 +65,7 @@ public sealed partial class PluginGameApi
         string worldReason = "An active, built world session is required.";
         string actorReason = "A live native player and combat owner are required.";
         string mobileReason = "The native player is unavailable, dead, immobile, working, or riding another player.";
-        return new List<GameActionDefinition>
+        var definitions = new List<GameActionDefinition>
         {
             ActionDefinition("movement.move", "Navigate through native collision/pathfinding in map pixels. Completion observes local arrival only. Cancelling stops only the owned path. Receipts and request IDs retain the last 1024 settled actions per API instance.", mobile, mobileReason,
                 "x:number", "y:number", "tolerance?:number", "timeoutSeconds?:number"),
@@ -100,7 +105,9 @@ public sealed partial class PluginGameApi
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
                 "entityId:string", "text:string")
-        }.AsReadOnly();
+        };
+        AddEndgameActions(definitions);
+        return definitions.AsReadOnly();
     }
 
     private static GameActionDefinition ActionDefinition(string name, string description, bool available, string reason, params string[] fields)
@@ -137,14 +144,24 @@ public sealed partial class PluginGameApi
             return new GameActionReceipt(previousId, request.RequestId, request.Name, GameActionState.Rejected,
                 "request_id.conflict", "This requestId is already associated with different action content. Nothing was executed.");
         }
-        // Every implemented action takes scalar arguments. Bound retained request bytes as
-        // well as record count so malformed nested/oversized payloads cannot fill the ledger.
+        // Bound retained bytes as well as records. The only compound action input is
+        // the ordered, bounded list of rune identities for a native cube quote.
         int argumentTextSize = 0;
-        if (request.Arguments.Count > 16) return ActionRejected(request, "arguments.invalid", "At most 16 scalar arguments are supported.");
+        if (request.Arguments.Count > 16) return ActionRejected(request, "arguments.invalid", "At most 16 action arguments are supported.");
         foreach (var argument in request.Arguments)
         {
             argumentTextSize += argument.Key.Length;
             if (argument.Value is string) argumentTextSize += ((string)argument.Value).Length;
+            else if (request.Name == "endgame.cube.quote" && argument.Key == "itemUids")
+            {
+                var ids = argument.Value as IReadOnlyList<object>;
+                if (ids == null || ids.Count > 5) return ActionRejected(request, "arguments.invalid", "itemUids must be an array of at most five UID strings.");
+                foreach (object uid in ids)
+                {
+                    if (!(uid is string)) return ActionRejected(request, "arguments.invalid", "itemUids must contain only strings.");
+                    argumentTextSize += ((string)uid).Length;
+                }
+            }
             else if (!(argument.Value is bool) && !ActionIsNumber(argument.Value))
                 return ActionRejected(request, "arguments.invalid", "Action arguments must be strings, booleans, or finite numbers.");
         }
@@ -175,6 +192,7 @@ public sealed partial class PluginGameApi
                     case "number": ActionFloat(request.Arguments, key); break;
                     case "string": ActionString(request.Arguments, key); break;
                     case "boolean": ActionBool(request.Arguments, key, false); break;
+                    case "array": EndgameUIDs(request.Arguments); break;
                 }
             }
             foreach (object key in (IEnumerable)definition.Arguments["required"])
@@ -233,6 +251,7 @@ public sealed partial class PluginGameApi
 
     private void ActionDispatch(PluginAction entry)
     {
+        if (entry.Request.Name.StartsWith("endgame.", StringComparison.Ordinal)) { DispatchEndgame(entry); return; }
         var args = entry.Request.Arguments;
         var session = Session;
         var frame = ActionFrame;
@@ -455,6 +474,7 @@ public sealed partial class PluginGameApi
 
     private void ActionPoll(PluginAction entry)
     {
+        if (entry.EndgameRequest != null) { PollEndgame(entry); return; }
         if (!ActionActive(entry) && (entry.Pending == null || entry.PendingSettled)) return;
         // Observe a native queued pickup/skill's actual gateway task before scene/cancel checks.
         // Sending may already have happened, in which case it cannot be revoked.
@@ -655,10 +675,11 @@ public sealed partial class PluginGameApi
     private GameActionReceipt ActionSet(PluginAction entry, GameActionState state, string code, string message, Dictionary<string, object> data = null)
     {
         data = data ?? new Dictionary<string, object>();
-        data["sceneRevision"] = entry.Scene; data["serverOutcomeKnown"] = false;
+        data["sceneRevision"] = entry.Scene;
+        if (!data.ContainsKey("serverOutcomeKnown")) data["serverOutcomeKnown"] = false;
         entry.Receipt = new GameActionReceipt(entry.Receipt.ActionId, entry.Request.RequestId, entry.Request.Name, state, code, message, data);
         if (!ActionActive(entry)) { entry.Cancellation?.Dispose(); entry.Cancellation = null; }
-        if (ActionActive(entry) || (entry.Pending != null && !entry.PendingSettled)) activeActions.Add(entry);
+        if (ActionActive(entry) || entry.EndgameWaiting || (entry.Pending != null && !entry.PendingSettled)) activeActions.Add(entry);
         else activeActions.Remove(entry);
         Emit("action.changed", new Dictionary<string, object> { { "actionId", entry.Receipt.ActionId }, { "requestId", entry.Request.RequestId },
             { "name", entry.Request.Name }, { "state", state.ToString() }, { "code", code }, { "message", message }, { "data", entry.Receipt.Data } });
@@ -674,7 +695,7 @@ public sealed partial class PluginGameApi
         {
             string id = actionOrder.Dequeue(); PluginAction entry;
             if (!actions.TryGetValue(id, out entry)) continue;
-            if (ActionActive(entry) || (entry.Pending != null && !entry.PendingSettled)) { actionOrder.Enqueue(id); continue; }
+            if (ActionActive(entry) || entry.EndgameWaiting || (entry.Pending != null && !entry.PendingSettled)) { actionOrder.Enqueue(id); continue; }
             actions.Remove(id);
             if (entry.Request.RequestId != null) actionRequests.Remove(entry.Request.RequestId);
         }

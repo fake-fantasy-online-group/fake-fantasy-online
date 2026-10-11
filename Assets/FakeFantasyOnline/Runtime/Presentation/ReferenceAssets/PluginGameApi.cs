@@ -14,6 +14,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// </summary>
 public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IDisposable
 {
+    private readonly string apiInstanceId = Guid.NewGuid().ToString("N");
     private const int EventCapacity = 1024;
     private const int MaximumRows = 512;
     private const int MaximumCachedQueries = 64;
@@ -140,6 +141,12 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
     {
         ClientSessionCoordinator s = Session;
         ReferenceFirstWorldInitialFrame frame = ObservationFrame;
+        var endgame = s?.EndgameClientForPlugins;
+        string endgameToken = Token(endgame?.EndgameInWorld, endgame?.Endgame.Generation, endgame?.Endgame.Version);
+        TrackObservation("endgame", endgameToken);
+        TrackObservation("endgame.items", endgameToken);
+        TrackObservation("endgame.catalog", endgameToken);
+        TrackObservation("endgame.rift", endgameToken);
         TrackObservation("world", Token(s?.State, s?.Connected, GameBootstrap.CurMapId, frame?.Built));
         TrackObservation("dialogue", CurrentDialogueRevision().ToString(CultureInfo.InvariantCulture));
         // Static receipt roots use the native versions. No collection is walked or copied here.
