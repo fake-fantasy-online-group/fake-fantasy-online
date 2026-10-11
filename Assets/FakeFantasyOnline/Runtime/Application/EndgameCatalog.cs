@@ -5,6 +5,7 @@ namespace FakeFantasyOnline.Application
 {
 public sealed class EndgameRuneView
 {
+    public int MinLevel { get; }
     public int ItemID { get; }
     public string Name { get; }
     public string Description { get; }
@@ -13,7 +14,8 @@ public sealed class EndgameRuneView
     public IReadOnlyList<EndgameStatView> Stats { get; }
     internal EndgameRuneView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "itemId", "name", "description", "quadrant", "mansion", "stats");
+        EndgameData.Keys(d, "itemId", "name", "description", "quadrant", "mansion", "stats", "minLevel");
+        MinLevel = EndgameData.Int(d, "minLevel");
         ItemID = EndgameData.Int(d, "itemId"); Name = EndgameData.String(d, "name"); Description = EndgameData.String(d, "description"); Quadrant = EndgameData.String(d, "quadrant"); Mansion = EndgameData.String(d, "mansion");
         Stats = EndgameData.List(d, "stats", 64, v => new EndgameStatView(EndgameData.Object(v)));
     }

@@ -54,6 +54,7 @@
   ],
   "runes": [
     {
+      "minLevel": 12,
       "mansion": "角",
       "itemId": 1900028001,
       "name": "角木蛟",

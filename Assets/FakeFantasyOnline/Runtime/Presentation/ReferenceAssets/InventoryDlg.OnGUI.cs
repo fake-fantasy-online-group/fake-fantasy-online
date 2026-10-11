@@ -322,8 +322,8 @@ internal partial class InventoryDlg
             {
                 if (equipped.id <= 0) continue;
                 if (equipped.slot != it.slot && !(IsWeap(it.slot) && IsWeap(equipped.slot))) continue;
-                comparison = "\u0007\u0006（当前穿戴）\n" + TooltipContent.Fmt(
-                    TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc);
+                comparison = "\u0007\u0006（当前穿戴）\n" + EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(
+                    TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc));
                 break;
             }
         }

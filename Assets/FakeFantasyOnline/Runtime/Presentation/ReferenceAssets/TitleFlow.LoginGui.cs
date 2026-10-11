@@ -349,7 +349,7 @@ internal sealed partial class TitleFlow
 
         GUI.enabled = !loggingIn && !RecoveredTitleLoginSurface.NeedUpdate;
         string loginLabel = RecoveredTitleLoginSurface.NeedUpdate ? "请先更新" : loggingIn ? "登录中…" : "登录游戏";
-        if (ArtworkSkin.Button(new Rect(316f, 482f, ButtonWidth, ButtonHeight), loginLabel, fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(316f, 482f, ButtonWidth, ButtonHeight), loginLabel, fontScale: ButtonLabelScale))
         {
             // Official DrawLogin (06000ee6) evaluates account.Trim() exactly once per click and
             // keeps the result in the closure only — TitleFlow.account (+0x1d8) never receives
@@ -374,17 +374,17 @@ internal sealed partial class TitleFlow
         }
 
         GUI.enabled = true;
-        if (ArtworkSkin.Button(new Rect(644f, 498f, ButtonWidth, ButtonHeight), "退出游戏", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(644f, 498f, ButtonWidth, ButtonHeight), "退出游戏", fontScale: ButtonLabelScale))
         {
             GameBootstrap.QuitGame();
         }
 
-        if (ArtworkSkin.Button(new Rect(644f, 459f, ButtonWidth, ButtonHeight), "申请账号", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(644f, 459f, ButtonWidth, ButtonHeight), "申请账号", fontScale: ButtonLabelScale))
         {
             OpenRegisterForm();
         }
 
-        if (ArtworkSkin.Button(new Rect(644f, 420f, ButtonWidth, ButtonHeight), "找回密码", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(644f, 420f, ButtonWidth, ButtonHeight), "找回密码", fontScale: ButtonLabelScale))
         {
             OpenRecoverForm();
         }
@@ -395,7 +395,7 @@ internal sealed partial class TitleFlow
         // native body, after 退出游戏 (498), 申请账号 (459) and 找回密码 (420), and the click arm
         // writes state (+0x28) = 3, netMsg (+0x250) = "" and then apAcc = account.Trim(),
         // apWhen = "", apReason = "" at this exact button site.
-        if (ArtworkSkin.Button(new Rect(644f, 381f, ButtonWidth, ButtonHeight), "被盗申诉", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(644f, 381f, ButtonWidth, ButtonHeight), "被盗申诉", fontScale: ButtonLabelScale))
         {
             OpenAppealForm(account);
         }
@@ -419,7 +419,7 @@ internal sealed partial class TitleFlow
 
     private void DrawNoticeButton()
     {
-        if (ArtworkSkin.Button(new Rect(640f, 8f, ButtonWidth, ButtonHeight), "更新公告", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(640f, 8f, ButtonWidth, ButtonHeight), "更新公告", fontScale: ButtonLabelScale))
         {
             _noticeOpen = true;
             _noticeScroll = 0f;
@@ -548,7 +548,7 @@ internal sealed partial class TitleFlow
         Rect completeRect = new Rect(388f - completeWidth, y, completeWidth, completeHeight);
         bool completeClicked = _completeButton
             ? RecoveredTitleLoginSurface.DrawImageButton(completeRect, _completeButton)
-            : ArtworkSkin.Button(completeRect, "完成", fontScale: 1.15f);
+            : ArtworkSkin.Button(completeRect, "完成", fontScale: ButtonLabelScale);
         if (completeClicked)
         {
             onComplete();
@@ -557,7 +557,7 @@ internal sealed partial class TitleFlow
         Rect returnRect = new Rect(412f, y, returnWidth, returnHeight);
         bool returnClicked = _returnButton
             ? RecoveredTitleLoginSurface.DrawImageButton(returnRect, _returnButton)
-            : ArtworkSkin.Button(returnRect, "返回", fontScale: 1.15f);
+            : ArtworkSkin.Button(returnRect, "返回", fontScale: ButtonLabelScale);
         if (returnClicked)
         {
             _page = TitlePage.Login;
@@ -838,7 +838,7 @@ internal sealed partial class TitleFlow
 
         (int Width, int Height) selected = GameSettings.ResOpts[_resolutionIndex];
         string label = string.Format("分辨率 {0}×{1}", selected.Width, selected.Height);
-        if (ArtworkSkin.Button(new Rect(8f, 559f, ButtonWidth, ButtonHeight), label, fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(8f, 559f, ButtonWidth, ButtonHeight), label, fontScale: ButtonLabelScale))
         {
             _resolutionListOpen = !_resolutionListOpen;
             if (!_resolutionListOpen)
@@ -900,7 +900,7 @@ internal sealed partial class TitleFlow
     {
         GameSettings.EnsureLoaded();
         string head = "帧率 " + GameSettings.FpsLabel(GameSettings.FrameRateMode);
-        if (ArtworkSkin.Button(new Rect(8f, 522f, ButtonWidth, ButtonHeight), head, fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(8f, 522f, ButtonWidth, ButtonHeight), head, fontScale: ButtonLabelScale))
         {
             _frameRateListOpen = !_frameRateListOpen;
             if (!_frameRateListOpen)

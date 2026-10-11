@@ -7,6 +7,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public sealed partial class EndgamePanel
 {
+    private static readonly Color DarkGoldColor = new Color(183f / 255f, 155f / 255f, 98f / 255f);
+    private static bool IsSpecial(EndgameItemView item) => item.UniqueID > 0 || item.FormationID > 0;
+    private static string DisplayName(EndgameItemView item) => Formation(item.FormationID)?.Name ?? item.Name;
     private EndgameItemView Selected()
     {
         foreach (var item in State.Items) if (item.UID == selectedUID && MatchesNative(item)) return item;
@@ -45,7 +48,7 @@ public sealed partial class EndgamePanel
             EndgameItemView item = rows[i]; Rect row = new Rect(0, i * 57, area.width - 22, 54);
             ArtworkSkin.Row(row, highlighted: item.UID == selectedUID);
             Icon(new Rect(6, row.y + 7, 36, 36), item.ItemID, item.UniqueID > 0);
-            Text(new Rect(47, row.y + 4, row.width - 49, 26), item.Name, small, item.UniqueID > 0 ? (Color?)Gold : null);
+            Text(new Rect(47, row.y + 4, row.width - 49, 26), DisplayName(item), small, IsSpecial(item) ? (Color?)DarkGoldColor : null);
             Text(new Rect(47, row.y + 29, row.width - 49, 20), (item.Location == "equipped" ? "穿戴 " + item.Slot : "背包 " + (item.Slot + 1)) + (item.SocketCount > 0 ? " · " + item.SocketCount + "窍" : "") + (item.Locked ? " · 已锁" : ""), small);
             if (row.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown && Event.current.button == 0) { Select(item); Event.current.Use(); }
         }
@@ -80,7 +83,7 @@ public sealed partial class EndgamePanel
     private void DrawItemDetail(EndgameItemView item, Rect rect)
     {
         Icon(new Rect(rect.x, rect.y, 60, 60), item.ItemID, item.UniqueID > 0);
-        Text(new Rect(rect.x + 73, rect.y, rect.width - 73, 32), item.Name, heading, item.UniqueID > 0 ? Gold : Jade);
+        Text(new Rect(rect.x + 73, rect.y, rect.width - 73, 32), DisplayName(item), heading, IsSpecial(item) ? DarkGoldColor : Jade);
         Text(new Rect(rect.x + 73, rect.y + 36, rect.width - 73, 24), (IsRune(item) ? "星篆 · 可镶入器物空窍" : "需求 " + item.Level + "级 · " + ProfessionNames(item.Profession)) + (item.Bound ? " · 已绑定" : ""), small);
         string detail = ItemDescription(item, false);
         Rect area = new Rect(rect.x, rect.y + 73, rect.width, rect.height - 73);
@@ -98,9 +101,9 @@ public sealed partial class EndgamePanel
         for (int i = 0; i < rows.Count; i++)
         {
             var item = rows[i]; float y = i * 94; ArtworkSkin.Panel(new Rect(0, y, 868, 89)); Icon(new Rect(9, y + 13, 57, 57), item.ItemID, true);
-            Text(new Rect(81, y + 8, 770, 25), item.Name + " · " + ProfessionNames(item.Profession) + " · " + item.Level + "级", label, Gold);
+            Text(new Rect(81, y + 8, 770, 25), item.Name + " · " + ProfessionNames(item.Profession) + " · " + item.Level + "级", label, DarkGoldColor);
             Text(new Rect(81, y + 37, 770, 49), item.Trait.Length > 0 ? item.Trait : item.Description, small);
-            if (new Rect(0, y, 868, 89).Contains(Event.current.mousePosition)) ShowPanelTooltip(item.Name + "\n" + ItemDescription(item, true));
+            if (new Rect(0, y, 868, 89).Contains(Event.current.mousePosition)) ShowPanelTooltip("\u0007" + DarkGold(item.Name) + "\n" + ItemDescription(item, true));
         }
         GUI.EndScrollView(); MoreCatalog("uniques", new Rect(669, 559, 240, 27));
         Text(new Rect(28, 560, 620, 27), "已载 " + State.Uniques.Count + " 件 · 搜索已载名称与职业", small);

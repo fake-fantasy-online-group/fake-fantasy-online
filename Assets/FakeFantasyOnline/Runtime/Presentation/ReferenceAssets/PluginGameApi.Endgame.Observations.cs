@@ -81,7 +81,7 @@ public sealed partial class PluginGameApi
         "sockets", EndgameRows(row.Sockets, ObserveEndgameSocket), "stats", EndgameRows(row.Stats, ObserveEndgameStat),
         "formationId", row.FormationID, "active", row.Active, "inactiveReason", BoundText(row.InactiveReason), "bound", row.Bound, "locked", row.Locked);
     private Dictionary<string, object> ObserveEndgameRune(EndgameRuneView row) => Values("itemId", row.ItemID, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),
-        "quadrant", BoundText(row.Quadrant), "mansion", BoundText(row.Mansion), "stats", EndgameRows(row.Stats, ObserveEndgameStat));
+        "minLevel", row.MinLevel, "quadrant", BoundText(row.Quadrant), "mansion", BoundText(row.Mansion), "stats", EndgameRows(row.Stats, ObserveEndgameStat));
     private Dictionary<string, object> ObserveEndgameFormation(EndgameFormationView row) => Values("id", row.ID, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),
         "channel", BoundText(row.Channel), "runes", CopyNumbers(row.Runes, 5), "stats", EndgameRows(row.Stats, ObserveEndgameStat), "minLevel", row.MinLevel,
         "professions", row.Professions, "slots", CopyNumbers(row.Slots, 32), "active", row.Active, "inactiveReason", BoundText(row.InactiveReason));

@@ -69,7 +69,7 @@ public sealed partial class EndgamePanel
     {
         EndgameItemView item = Selected();
         var text = new StringBuilder(item != null && item.FormationID > 0 ? FormationStatus(item) : "成阵须孔数、宿序与部位完全吻合。穿戴后才判定生效。");
-        text.Append("\n同类宿阵只生效一个；未成阵也保留星篆自身属性。\n当前生效：");
+        text.Append("\n同类宿阵只生效一个；装备满足星篆等级要求后，自身属性生效。\n当前生效：");
         if (State.ActiveFormations.Count == 0) text.Append("无");
         for (int i = 0; i < State.ActiveFormations.Count; i++) text.Append(i == 0 ? "" : "、").Append(State.ActiveFormations[i].Name);
         Rect area = new Rect(rect.x, rect.y, rect.width - 131, rect.height);
@@ -142,7 +142,9 @@ public sealed partial class EndgamePanel
         {
             var rune = State.Runes[i]; Icon(new Rect(0, i * 112 + 8, 42, 42), rune.ItemID);
             Text(new Rect(52, i * 112 + 2, 510, 25), rune.Name + " · " + rune.Quadrant, label, Jade);
-            var description = new StringBuilder(rune.Description);
+            var description = new StringBuilder();
+            if (rune.MinLevel > 0) description.Append("需要等级: ").Append(rune.MinLevel).Append("\n");
+            description.Append(rune.Description);
             foreach (var stat in rune.Stats) description.Append('\n').Append(StatText(stat));
             Text(new Rect(52, i * 112 + 29, 510, 79), description.ToString(), small);
         }

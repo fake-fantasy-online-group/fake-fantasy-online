@@ -57,6 +57,8 @@ class EndgameContracts
         Reject(() => Response("{\"kind\":\"hello\",\"message\":\"\\ud800\"}"), "invalid Unicode");
         Reject(() => Response("{\"kind\":\"hello\",\"message\":\"" + new string('x', 61440) + "\"}"), "payload limit");
         Reject(() => Response("{\"kind\":\"catalog.runes\",\"cursor\":28}"), "numeric cursor");
+        Check(Response("{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028001,\"name\":\"角\",\"minLevel\":12},{\"itemId\":1900028028,\"name\":\"轸\",\"minLevel\":60}]}").Runes[1].MinLevel == 60, "rune minLevel survives wire DTO");
+        Reject(() => Response("{\"kind\":\"catalog.runes\",\"runes\":[{\"itemId\":1900028001,\"minLevel\":\"12\"}]}"), "rune level requires integer");
         var rows = new List<string>(); for (int i = 0; i < 33; i++) rows.Add(Item((i + 1).ToString(), i));
         Reject(() => Response(Snap("a", "1", 0, 1, string.Join(",", rows))), "33 rows"); rows.RemoveAt(32);
         Check(Response(Snap("a", "1", 0, 1, string.Join(",", rows))).Items.Count == 32, "32 rows accepted");

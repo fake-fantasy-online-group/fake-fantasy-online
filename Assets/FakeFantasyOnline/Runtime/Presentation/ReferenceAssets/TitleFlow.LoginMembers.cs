@@ -9,6 +9,9 @@ internal sealed partial class TitleFlow
     private const float VirtualHeight = 600f;
     private const float ButtonWidth = 152f;
     private const float ButtonHeight = 33f;
+    // gbk12 is a point-filtered 12-pixel atlas. Keep title labels on its native
+    // grid rather than enlarging every glyph to 13.8 pixels with uneven strokes.
+    private const float ButtonLabelScale = 1f;
 
     // Official 1.5.8 06000edc: the private three-argument overload fixes only width.
     private bool RegBtn(float x, float y, string label)
@@ -19,7 +22,7 @@ internal sealed partial class TitleFlow
     // Official 1.5.8 06000edd, shared with the existing update-gate buttons.
     private bool RegBtn(float x, float y, float w, string label)
     {
-        return ArtworkSkin.Button(new Rect(x, y, w, 33f), label, fontScale: 1.15f);
+        return ArtworkSkin.Button(new Rect(x, y, w, 33f), label, fontScale: ButtonLabelScale);
     }
 
     internal GUIStyle _fieldStyle;
@@ -112,7 +115,7 @@ internal sealed partial class TitleFlow
             else ArtworkSkin.Input(thumbRect);
         }
 
-        if (ArtworkSkin.Button(new Rect(154f, 384f, ButtonWidth, ButtonHeight), "关 闭", fontScale: 1.15f))
+        if (ArtworkSkin.Button(new Rect(154f, 384f, ButtonWidth, ButtonHeight), "关 闭", fontScale: ButtonLabelScale))
         {
             _noticeOpen = false;
         }

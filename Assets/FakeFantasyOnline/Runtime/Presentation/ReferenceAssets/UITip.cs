@@ -167,6 +167,7 @@ internal static class UITip
             case 1: return new Color32(64, 224, 96, 255);
             case 2: return new Color32(82, 150, 252, 255);
             case 3: return new Color32(210, 90, 255, 255);
+            case 5: return new Color32(183, 155, 98, 255); // Endgame dark gold; ordinary rare quality stays yellow.
             case 4: return GameSettings.ColorWeak ? new Color32(255, 180, 40, 255) : new Color32(238, 222, 70, 255);
             default: return new Color32(247, 245, 245, 255);
         }

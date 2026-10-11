@@ -33,6 +33,9 @@ contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', '妖魔结界守�
          '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes', '"rift.advance"', 'floorIndex: rift.FloorIndex', 'rift.Transitioning', 'RiftDepth', 'aura.Affixes')
 contains('Presentation/ReferenceAssets/EndgamePanel.RiftTelegraphs.cs', 'DrawRiftArea', 'DrawRiftRing', 'DrawRiftLine', 'TelegraphRemainingMS', 'tell.InnerRadius', 'tell.RemainingMS', 'GUI.matrix = matrix', 'Texture2D.whiteTexture')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.BagTooltip(')
+contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(')
+contains('Presentation/ReferenceAssets/UITip.cs', 'case 5: return new Color32(183, 155, 98, 255)', 'case 4: return GameSettings.ColorWeak', 'BitmapFont.Measure', 'BitmapFont.Draw')
+contains('Presentation/ReferenceAssets/EndgamePanel.Tooltips.cs', 'TooltipContent.QualityName(text, 5)', 'lines.InsertRange(anchor, attributes)', '同类宿阵优先级未满足')
 contains('Presentation/ReferenceAssets/EquipDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(')
 for path in runtime.rglob('Endgame*.cs'):
     assert path.with_suffix('.cs.meta').is_file(), f'missing Unity metadata: {path}'

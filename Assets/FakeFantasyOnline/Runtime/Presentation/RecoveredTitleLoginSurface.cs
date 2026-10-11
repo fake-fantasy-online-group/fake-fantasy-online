@@ -66,7 +66,9 @@ internal static partial class RecoveredTitleLoginSurface
     {
         if (texture)
         {
-            GUI.DrawTexture(rect, texture, ScaleMode.StretchToFill, false);
+            bool hover = GUI.enabled && rect.Contains(Event.current.mousePosition);
+            ArtworkSkin.SingleImageFace(rect, texture, hover,
+                hover && Input.GetMouseButton(0));
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);
         }
 

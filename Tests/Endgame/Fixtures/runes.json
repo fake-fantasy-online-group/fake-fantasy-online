@@ -4,6 +4,7 @@
   "catalogVersion": "fixture",
   "runes": [
     {
+      "minLevel": 12,
       "itemId": 1900028001,
       "name": "角木蛟·星篆",
       "quadrant": "东方青龙",

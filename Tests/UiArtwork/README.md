@@ -64,3 +64,20 @@ Inventory/social regression checks compare the baseline action and callback bloc
 - No external resource files were added to Git.
 
 These results cover source and deterministic contracts only, not runtime appearance or a playable client build.
+
+## Title button refinement (2026-10-11)
+
+Title text buttons use the existing `gbk12` bitmap font at native 1× logical
+scale instead of 1.15×. Existing centered, outlined, width-fitted label drawing
+and the title frame's resolution scaling remain unchanged. Single-image title
+buttons retain their baked labels, dimensions, hit targets, and `GUI.Button`
+action timing, with a draw-only hover, pressed, and disabled tint. The new
+single-image draw helper restores the caller's GUI color and does not allocate
+textures or load additional resources.
+
+Validation: 41 deterministic ArtworkSkin contract assertions pass against Unity
+API stubs, including nine new native-size/single-image feedback assertions.
+The previously supplied reference screenshots and external font/button textures
+are unavailable in this workspace. No visual comparison, Unity import, PlayMode,
+or Player build was performed for this refinement. The 12-pixel point-filtered
+font basis comes from `BitmapFont.cs`; it is source evidence, not a screenshot.
