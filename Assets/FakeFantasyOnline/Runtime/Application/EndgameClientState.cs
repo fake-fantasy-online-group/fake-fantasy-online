@@ -7,6 +7,7 @@ namespace FakeFantasyOnline.Application
 public sealed partial class EndgameClientState
 {
     public bool Negotiated { get; private set; }
+    public bool NativeEquipmentStats { get; private set; }
     public bool HelloSent { get; private set; }
     public bool HasSnapshot { get; private set; }
     public string Revision { get; private set; } = "0";
@@ -44,7 +45,7 @@ public sealed partial class EndgameClientState
 
     public void Reset()
     {
-        Negotiated = HelloSent = HasSnapshot = false; Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
+        Negotiated = NativeEquipmentStats = HelloSent = HasSnapshot = false; Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
@@ -110,8 +111,14 @@ public sealed partial class EndgameClientState
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false; foreach (var value in response.Capabilities) if (value == "endgame.v1") capable = true;
+            bool capable = false, nativeStats = false;
+            foreach (var value in response.Capabilities)
+            {
+                if (value == "endgame.v1") capable = true;
+                if (value == "endgame.native-stats.v1") nativeStats = true;
+            }
             Negotiated = response.OK && capable; Error = Negotiated ? "" : response.Error;
+            NativeEquipmentStats = Negotiated && nativeStats;
             helloRetryScheduled = !Negotiated && helloAttempts < 3 && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy");
             if (helloRetryScheduled) helloRetryAt = DateTime.UtcNow.AddSeconds(2);
             Message = Negotiated ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";

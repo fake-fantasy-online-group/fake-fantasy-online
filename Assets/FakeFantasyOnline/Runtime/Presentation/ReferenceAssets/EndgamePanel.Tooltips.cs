@@ -31,6 +31,7 @@ public sealed partial class EndgamePanel
         if (item.FormationID > 0 && formation == null) Current?.LoadFormationForTooltip();
         var lines = new List<string>((original ?? "").Replace("\\n", "\n").Split('\n'));
         var attributes = new List<string>();
+        bool nativeStats = Current?.State?.NativeEquipmentStats == true;
         bool nativeUniqueBlock = false;
         // Old servers put unique details above durability. Move the actual rolled lines,
         // not catalog reference numbers, into the existing attribute section.
@@ -52,17 +53,23 @@ public sealed partial class EndgamePanel
             lines.RemoveRange(i, end - i);
             break;
         }
-        string name = formation != null ? formation.Name : item.Name;
+        string name = formation != null ? FormationName(formation.Name) : item.FormationID > 0 ? FormationName(item.Name) : item.Name;
         string suffix = lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal) ? RefinementSuffix(PlainLine(lines[0])) : "";
         string title = "\u0007" + DarkGold(name + suffix);
-        if (lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal)) lines[0] = title;
+        if (lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal) && !IsNativeSlotLine(lines[0])) lines[0] = title;
         else lines.Insert(0, title);
         // Existing quality markers belong to the native attribute renderer. Preserve all
         // requirement/red/gray markers and the ordinary yellow quality palette.
         for (int i = 1; i < lines.Count; i++)
-            if (IsAttributeLine(PlainLine(lines[i])) && !lines[i].StartsWith("\u0002", StringComparison.Ordinal) && !lines[i].StartsWith("\u0004", StringComparison.Ordinal))
-                lines[i] = DarkGold(PlainLine(lines[i]));
-        if (!nativeUniqueBlock && item.UniqueID > 0)
+        {
+            string plain = PlainLine(lines[i]);
+            bool coloredAttribute = lines[i].StartsWith("\u0003", StringComparison.Ordinal) && !lines[i].StartsWith("\u00030", StringComparison.Ordinal) ||
+                lines[i].StartsWith("\u0001", StringComparison.Ordinal) || lines[i].StartsWith("\u0005", StringComparison.Ordinal) || lines[i].StartsWith("\u0006", StringComparison.Ordinal);
+            if (plain.StartsWith("孔数 ", StringComparison.Ordinal) ||
+                (IsAttributeLine(plain) && coloredAttribute))
+                lines[i] = DarkGold(plain);
+        }
+        if (!nativeStats && !nativeUniqueBlock && item.UniqueID > 0)
         {
             foreach (var stat in item.Stats) attributes.Add(DarkGold(StatText(stat)));
         }
@@ -70,26 +77,44 @@ public sealed partial class EndgamePanel
         // effects. Preserve native rolled effect lines and add each missing one once.
         foreach (string trait in item.Trait.Split('；'))
             if (trait.Length > 0) AddMissingLine(attributes, lines, DarkGold(trait));
-        if (formation != null)
-            // Equal-valued affixes from native gear, uniques and formations are
-            // independent contributions, not duplicate presentation blocks.
+        if (!nativeStats && formation != null)
+            // Legacy servers do not include formation attributes in the native
+            // description. Negotiated servers already merge all actual extras
+            // by attribute/mode/scope, so catalog reference values stay out.
             foreach (var stat in formation.Stats) attributes.Add(DarkGold(StatText(stat)));
         string status = FormationStatus(item);
         if (status.Length > 0) attributes.Add("\u0002" + status);
-        // Socket count is already authoritative in the original description; constituent
-        // runes occupy that same section, immediately after its single count line.
+        // Keep the authoritative socket count and native attribute section intact.
         int sockets = lines.FindIndex(line => PlainLine(line).StartsWith("孔数 ", StringComparison.Ordinal));
         int anchor = sockets >= 0 ? sockets : NativeAttributeAnchor(lines);
         lines.InsertRange(anchor, attributes);
         if (item.FormationID > 0)
         {
-            string runes = SocketNames(item);
-            if (runes.Length > 0) lines.Insert(anchor + attributes.Count + (sockets >= 0 ? 1 : 0), DarkGold(runes));
+            string runes = SocketInitials(item);
+            if (runes.Length > 0) lines.Insert(NativeCompositionAnchor(lines), DarkGold(runes));
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
         return string.Join("\n", lines);
     }
+    private static int NativeCompositionAnchor(List<string> lines)
+    {
+        // Native equipment descriptions begin with a centered "(武器)"/slot row.
+        // Locate that row, rather than assuming all callers include the title.
+        for (int i = 1; i < lines.Count; i++)
+        {
+            if (IsNativeSlotLine(lines[i])) return i + 1;
+        }
+        // Older/incomplete descriptions have no slot heading: keep the composition
+        // under the title without moving requirements, attributes or authored lore.
+        return Math.Min(1, lines.Count);
+    }
+    private static bool IsNativeSlotLine(string line)
+    {
+        string plain = PlainLine(line);
+        return line.StartsWith("\u0007", StringComparison.Ordinal) && plain.StartsWith("(", StringComparison.Ordinal) && plain.EndsWith(")", StringComparison.Ordinal);
+    }
+    private static string FormationName(string name) => name.StartsWith("宿阵·", StringComparison.Ordinal) ? name.Substring(3) : name;
     private static int NativeAttributeAnchor(List<string> lines)
     {
         int end = lines.FindIndex(line => PlainLine(line).StartsWith("套装:", StringComparison.Ordinal) || PlainLine(line).StartsWith("法宝技能:", StringComparison.Ordinal));
@@ -195,23 +220,38 @@ public sealed partial class EndgamePanel
         foreach (var row in Current.State.ActiveFormations) if (row.ID == id) return row;
         return null;
     }
-    private static string SocketNames(EndgameItemView item)
+    private static string SocketInitials(EndgameItemView item)
     {
         var names = new StringBuilder();
         for (int index = 0; index < item.SocketCount; index++)
             foreach (var row in item.Sockets)
                 if (row.Index == index && row.ItemID > 0)
                 {
-                    if (names.Length > 0) names.Append(" · ");
-                    names.Append(row.Name.Length > 0 ? row.Name : Current?.RuneName(row.ItemID) ?? "星篆 " + row.ItemID);
+                    if (names.Length > 0) names.Append("、");
+                    names.Append(RuneInitial(row));
                     break;
                 }
         return names.ToString();
     }
+    private static string RuneInitial(EndgameSocketView socket)
+    {
+        string name = socket.Name;
+        if (Current?.State != null)
+            foreach (var rune in Current.State.Runes)
+                if (rune.ItemID == socket.ItemID)
+                {
+                    if (rune.Mansion.Length > 0) return StringInfo.GetNextTextElement(rune.Mansion);
+                    if (name.Length == 0) name = rune.Name;
+                    break;
+                }
+        if (name.StartsWith("星篆·", StringComparison.Ordinal)) name = name.Substring(3);
+        // Missing metadata is temporary while the requested rune catalog loads.
+        return name.Length > 0 ? StringInfo.GetNextTextElement(name) : "？";
+    }
     internal static string ItemDescription(EndgameItemView item, bool tooltip)
     {
         var text = new StringBuilder();
-        if (item.UniqueID > 0 && item.UniqueRollBP > 0) text.Append(item.UID.Length == 0 ? "图鉴基准 · 道意 " : "仙遗余韵 · 道意 ").Append((item.UniqueRollBP / 100f).ToString("0.##", CultureInfo.InvariantCulture)).Append("%\n");
+        if (item.UniqueID > 0 && item.UniqueRollBP > 0 && Current?.State?.NativeEquipmentStats != true) text.Append(item.UID.Length == 0 ? "图鉴基准 · 道意 " : "仙遗余韵 · 道意 ").Append((item.UniqueRollBP / 100f).ToString("0.##", CultureInfo.InvariantCulture)).Append("%\n");
         if (item.Profession != 0) text.Append("职业要求：").Append(ProfessionNames(item.Profession)).Append('\n');
         foreach (var stat in item.Stats) text.Append(tooltip && IsSpecial(item) ? DarkGold(StatText(stat)) : StatText(stat)).Append('\n');
         if (item.Trait.Length > 0) text.Append(tooltip && IsSpecial(item) ? DarkGold(item.Trait) : item.Trait).Append('\n');

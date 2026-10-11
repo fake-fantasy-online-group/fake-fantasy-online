@@ -34,7 +34,7 @@ public sealed class EndgameRequest
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
-        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1" });
+        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1" });
         if (op == "catalog")
         {
             if (Array.IndexOf(new[] { "uniques", "runes", "formations", "recipes" }, catalog) < 0) throw new ArgumentException("Invalid catalog.");

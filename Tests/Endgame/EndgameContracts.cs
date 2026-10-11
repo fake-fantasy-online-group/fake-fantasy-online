@@ -46,6 +46,30 @@ class EndgameContracts
     static void Main(string[] args)
     {
         var s = State(); Check(s.Negotiated, "hello negotiated");
+        Check(!s.NativeEquipmentStats, "new client with legacy server retains legacy stat overlay");
+        Check(new EndgameRequest("hello").Json.Contains("endgame.native-stats.v1"), "new client explicitly offers native stat capability");
+        var statState = new EndgameClientState(); statState.Begin(new EndgameRequest("hello"));
+        statState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}"));
+        Check(statState.NativeEquipmentStats, "new client and server agree to native aggregated stat ownership");
+        statState.Reset(); Check(!statState.NativeEquipmentStats, "disconnect clears native stat capability");
+        statState.Begin(new EndgameRequest("hello"));
+        statState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.native-stats.v1\"]}"));
+        Check(!statState.Negotiated && !statState.NativeEquipmentStats, "optional stat capability cannot authorize missing base protocol");
+        statState.Apply(Response("{\"kind\":\"hello\",\"ok\":false,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}"));
+        Check(!statState.NativeEquipmentStats, "rejected hello cannot enable native stat ownership");
+        var lateStats = new EndgameClientState(); lateStats.Begin(new EndgameRequest("hello"));
+        Check(!lateStats.Apply(Response(Snap("too-early", "1", 0, 1, Item()))) && !lateStats.HasSnapshot, "pre-hello snapshot cannot publish stale equipment overlays");
+        lateStats.Apply(Response("{\"kind\":\"hello\",\"ok\":false,\"error\":\"busy\"}"));
+        lateStats.Tick(DateTime.UtcNow.AddSeconds(3));
+        Check(!lateStats.HelloSent && !lateStats.NativeEquipmentStats, "failed native refresh keeps overlay disabled and permits hello retry");
+        lateStats.Begin(new EndgameRequest("hello"));
+        lateStats.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}"));
+        Check(lateStats.NativeEquipmentStats && lateStats.Find("bag", 2, 0, 1001) == null, "accepted capability alone cannot overlay before refreshed snapshot");
+        lateStats.Apply(Response(Snap("fresh-native", "2", 0, 1, Item())));
+        Check(lateStats.Find("bag", 2, 0, 1001) != null, "post-hello snapshot enables the negotiated overlay");
+        lateStats.Reset(); lateStats.Begin(new EndgameRequest("hello"));
+        lateStats.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}"));
+        Check(lateStats.Negotiated && !lateStats.NativeEquipmentStats && !lateStats.HasSnapshot, "reconnecting to a legacy server never carries forward native-stat ownership");
         Reject(() => Response("{} {}"), "multiple values"); Reject(() => Response("{\"kind\":\"snapshot\",\"kind\":\"hello\"}"), "duplicates");
         Reject(() => Response("{\"kind\":\"hello\",\"extra\":0}"), "unknown fields"); Reject(() => Response("{\"kind\":\"hello\",\"ok\":1}"), "wrong bool");
         Reject(() => Response("{\"kind\":\"snapshot\",\"chunks\":-1}"), "negative chunks"); Reject(() => Response("{\"kind\":\"snapshot\",\"chunks\":129}"), "chunk limit");

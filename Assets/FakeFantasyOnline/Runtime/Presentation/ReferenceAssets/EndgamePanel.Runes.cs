@@ -68,7 +68,7 @@ public sealed partial class EndgamePanel
         text.Append("\n宿阵须用无原生额外词条的装备；不看颜色，基础攻防与后加星篆、精炼不计。");
         text.Append("\n同类宿阵只生效一个；装备满足星篆等级要求后，自身属性生效。\n当前生效：");
         if (State.ActiveFormations.Count == 0) text.Append("无");
-        for (int i = 0; i < State.ActiveFormations.Count; i++) text.Append(i == 0 ? "" : "、").Append(State.ActiveFormations[i].Name);
+        for (int i = 0; i < State.ActiveFormations.Count; i++) text.Append(i == 0 ? "" : "、").Append(FormationName(State.ActiveFormations[i].Name));
         Rect area = rect;
         float height = Math.Max(area.height, small.CalcHeight(new GUIContent(text.ToString()), area.width - 22));
         detailScroll = GUI.BeginScrollView(area, detailScroll, new Rect(0, 0, area.width - 20, height));

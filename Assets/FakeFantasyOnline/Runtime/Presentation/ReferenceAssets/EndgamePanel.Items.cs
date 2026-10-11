@@ -9,7 +9,7 @@ public sealed partial class EndgamePanel
 {
     private static readonly Color DarkGoldColor = new Color(183f / 255f, 155f / 255f, 98f / 255f);
     private static bool IsSpecial(EndgameItemView item) => item.UniqueID > 0 || item.FormationID > 0;
-    private static string DisplayName(EndgameItemView item) => Formation(item.FormationID)?.Name ?? item.Name;
+    private static string DisplayName(EndgameItemView item) => item.FormationID > 0 ? FormationName(Formation(item.FormationID)?.Name ?? item.Name) : item.Name;
     private EndgameItemView Selected()
     {
         foreach (var item in State.Items) if (item.UID == selectedUID && MatchesNative(item)) return item;
