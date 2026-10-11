@@ -39,9 +39,9 @@ public sealed partial class EndgameClientState
         responses[response.RequestID] = response;
         while (responseOrder.Count > 128) responses.Remove(responseOrder.Dequeue());
     }
-    private DateTime quoteRequestedAt, helloRetryAt;
+    private DateTime quoteRequestedAt, helloRequestedAt, helloRetryAt;
     private int helloAttempts;
-    private bool helloRetryScheduled;
+    private bool helloRetryScheduled, helloAwaitingResponse;
 
     public void Reset()
     {
@@ -49,12 +49,14 @@ public sealed partial class EndgameClientState
         responses.Clear(); responseOrder.Clear();
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
-        helloAttempts = 0; helloRetryScheduled = false;
+        helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
+        helloRequestedAt = helloRetryAt = default(DateTime);
         DiscardChunks(); publishedSnapshotID = null; ResetCatalogs(); Generation++; Version++;
     }
     public bool Begin(EndgameRequest request)
     {
-        if (request.Op == "hello") { HelloSent = true; helloAttempts++; helloRetryScheduled = false; Version++; return true; }
+        if (request.Op == "hello")
+        { HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
         if (request.Mutates)
         {
@@ -78,11 +80,20 @@ public sealed partial class EndgameClientState
     public void NoteTransportFailure(string message, EndgameRequest request = null)
     {
         if (request != null && !request.Mutates) ReleaseReadRequest(request.RequestID);
+        if (request != null && request.Op == "hello") ScheduleHelloRetry(DateTime.UtcNow);
         Error = "pending"; Message = message; Version++;
     }
     public void NoteInvalidResponse(string message) { DiscardChunks(); Error = "invalid_response"; Message = message; Version++; }
     public void Tick(DateTime now)
     {
+        // A read-only hello can disappear during a map transfer or a dropped
+        // send. Release it after a bounded wait, then use the same cooldown as
+        // transient server errors. Never retry each host frame indefinitely.
+        if (!Negotiated && helloAwaitingResponse && (now - helloRequestedAt).TotalSeconds >= 15)
+        {
+            ScheduleHelloRetry(now); Error = "timeout";
+            Message = helloRetryScheduled ? "星图暂未响应，稍后自动重试。" : "星图暂未响应，请重新连接。"; Version++;
+        }
         if (helloRetryScheduled && !Negotiated && now >= helloRetryAt)
         { helloRetryScheduled = false; HelloSent = false; Version++; }
         if (SnapshotLoading && (now - snapshotStartedAt).TotalSeconds >= 15)
@@ -92,6 +103,12 @@ public sealed partial class EndgameClientState
         var expired = new List<string>();
         foreach (var row in catalogRequests) if ((now - row.Value.At).TotalSeconds >= 15) expired.Add(row.Key);
         foreach (string key in expired) { catalogRequests.Remove(key); Version++; }
+    }
+    private void ScheduleHelloRetry(DateTime now)
+    {
+        helloAwaitingResponse = false;
+        helloRetryScheduled = !Negotiated && helloAttempts < 3;
+        if (helloRetryScheduled) helloRetryAt = now.AddSeconds(2);
     }
     private void ReleaseReadRequest(string requestID)
     {
@@ -117,12 +134,17 @@ public sealed partial class EndgameClientState
                 if (value == "endgame.v1") capable = true;
                 if (value == "endgame.native-stats.v1") nativeStats = true;
             }
-            Negotiated = response.OK && capable; Error = Negotiated ? "" : response.Error;
-            NativeEquipmentStats = Negotiated && nativeStats;
-            helloRetryScheduled = !Negotiated && helloAttempts < 3 && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy");
-            if (helloRetryScheduled) helloRetryAt = DateTime.UtcNow.AddSeconds(2);
-            Message = Negotiated ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";
-            Version++; return Negotiated;
+            bool accepted = response.OK && capable;
+            // A failed refresh leaves the server's previously negotiated
+            // renderer intact. Keep its matching client ownership as well.
+            if (accepted || !Negotiated)
+            { Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; }
+            Error = accepted ? "" : response.Error;
+            helloAwaitingResponse = helloRetryScheduled = false;
+            if (!accepted && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy"))
+                ScheduleHelloRetry(DateTime.UtcNow);
+            Message = accepted ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";
+            Version++; return accepted;
         }
         if (!Negotiated) return false;
         if (PendingRequest != null && response.RequestID == PendingRequest.RequestID && !PendingRequest.MatchesResponse(response))

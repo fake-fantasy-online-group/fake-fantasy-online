@@ -91,7 +91,7 @@ public sealed partial class EndgamePanel
         if (item.FormationID > 0)
         {
             string runes = SocketInitials(item);
-            if (runes.Length > 0) lines.Insert(NativeCompositionAnchor(lines), DarkGold(runes));
+            if (runes.Length > 0) lines.Insert(NativeCompositionAnchor(lines), "\u0007" + DarkGold(runes));
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
@@ -227,7 +227,6 @@ public sealed partial class EndgamePanel
             foreach (var row in item.Sockets)
                 if (row.Index == index && row.ItemID > 0)
                 {
-                    if (names.Length > 0) names.Append("、");
                     names.Append(RuneInitial(row));
                     break;
                 }

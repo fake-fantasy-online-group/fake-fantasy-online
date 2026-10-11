@@ -31,7 +31,7 @@ internal static class EndgameLootContextContract
         InventoryDlg.rows[1] = new InventoryDlg.Item { id = 1900028001, bagIdx = 1 };
         string native = "\u0007原名\n\u0007(武器)\n耐久度: 50/50\n需要等级: 20\n需要职业: 剑客\n攻击 20~30\n孔数 1/2\n原装备完整要求";
         string gear = EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], native);
-        Check(gear.Contains("原装备完整要求") && gear.Contains("需要职业: 剑客") && gear.Contains("孔数 1/2") && gear.Contains("\u0007(武器)\n\u00035？\n"), "native requirements and socket count retained while unresolved rune metadata uses a compact placeholder");
+        Check(gear.Contains("原装备完整要求") && gear.Contains("需要职业: 剑客") && gear.Contains("孔数 1/2") && gear.Contains("\u0007(武器)\n\u0007\u00035？\n"), "native requirements and socket count retained while unresolved rune metadata uses a centered compact placeholder");
         Check(!gear.Contains("生效") && !gear.Contains("已成形") && !gear.Contains("宿序"), "bag formation has no activation or duplicate socket commentary");
         Check(!gear.Contains("多一空窍") && !gear.Contains("巧匠或左慈"), "equipment tooltip excludes crafting instructions and explanatory clutter");
         var chooserItem = InventoryDlg.rows[0]; chooserItem.name = "原名"; chooserItem.desc = "原装备完整要求"; InventoryDlg.rows[0] = chooserItem;
@@ -40,7 +40,7 @@ internal static class EndgameLootContextContract
         Check(client.Sent.Exists(r => r.Catalog == "runes") && client.Sent.Exists(r => r.Catalog == "formations"), "formed item requests authoritative names stats and descriptions");
         Apply(client, "{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028001,\"name\":\"角木蛟\",\"quadrant\":\"青龙\",\"mansion\":\"角\",\"minLevel\":12,\"description\":\"实际星篆传说\",\"stats\":[{\"attr\":1,\"value\":3}]}]}");
         string rune = EndgamePanel.BagTooltip(1, InventoryDlg.rows[1], "\u0007角木蛟\n需要等级: 12\n重量 1\n力量 +7\n原星篆说明");
-        Check(EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], native).Contains("\u0007(武器)\n\u00035角\n"), "catalog fills composition initial when older server omits socket name");
+        Check(EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], native).Contains("\u0007(武器)\n\u0007\u00035角\n"), "catalog fills centered composition initial when older server omits socket name");
         Check(rune.StartsWith("\u0007角木蛟\n"), "standalone rune retains its full item name");
         Check(rune.Contains("原星篆说明") && rune.Contains("实际星篆传说") && rune.Contains("力量 +7") && !rune.Contains("力量 +3") && rune.Contains("青龙"), "owned rune tooltip reuses authoritative lore and stats");
         Check(rune.IndexOf("需要等级: 12") == rune.LastIndexOf("需要等级: 12") && rune.IndexOf("力量 +7") == rune.LastIndexOf("力量 +7") && !rune.Contains("选择器物与空窍"), "owned rune preserves instance values and one native requirement without navigation clutter");

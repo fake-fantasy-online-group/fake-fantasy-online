@@ -96,18 +96,18 @@ class EndgameUiContract
         var formation = TooltipItem("\"itemId\":1001,\"formationId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"普通剑\",\"socketCount\":2,\"sockets\":[{\"index\":1,\"itemId\":1900028002,\"name\":\"星篆·亢金龙\"},{\"index\":0,\"itemId\":1900028001,\"name\":\"星篆·角木蛟\"}]");
         tip = EndgamePanel.OverlayTooltip(formation, "\u0007普通剑+12\n\u0007(武器)\n耐久度: 50/50\n需要等级: 20\n攻击 20-30\n孔数 2/2");
         Check(tip.StartsWith("\u0007\u00035青龙归元+12\n\u0007(武器)") && Occurrences(tip, "青龙归元") == 1, "formation uses native title once");
-        Check(tip.Contains("\u0007(武器)\n\u00035角、亢\n耐久度:") && tip.IndexOf("力量 +15") < tip.IndexOf("孔数 2/2") && tip.EndsWith("星宿归元。"), "formation initials immediately follow native slot heading in socket order, with stats and lore in native sections");
-        Check(!tip.Contains("宿阵·") && !tip.Contains("星篆·") && !tip.Contains("角木蛟") && !tip.Contains("亢金龙") && Occurrences(tip, "角、亢") == 1, "equipment composition contains only each rune's first character and no prefixed formation title");
+        Check(tip.Contains("\u0007(武器)\n\u0007\u00035角亢\n耐久度:") && tip.IndexOf("力量 +15") < tip.IndexOf("孔数 2/2") && tip.EndsWith("星宿归元。"), "formation initials form one centered separator-free line below the slot heading in socket order, with stats and lore in native sections");
+        Check(!tip.Contains("宿阵·") && !tip.Contains("星篆·") && !tip.Contains("角木蛟") && !tip.Contains("亢金龙") && Occurrences(tip, "角亢") == 1, "equipment composition contains only each rune's first character and no prefixed formation title");
         Check(tip.Contains("\n攻击 20-30\n") && !tip.Contains("\u00035攻击 20-30") && tip.Contains("\u00035孔数 2/2"), "formation intrinsic base remains white and socket count is dark gold");
         string legacyColors = EndgamePanel.OverlayTooltip(formation, "\u0007普通剑\n\u0007(武器)\n攻击 20-30\n\u0005力量 +3\n\u0001体质 +4\n\u0004需要等级: 60\n\u0002[2件] 防御 +9\n\u0005孔数 2/2");
         Check(legacyColors.Contains("\u00035力量 +3") && legacyColors.Contains("\u00035体质 +4") && legacyColors.Contains("\u0004需要等级: 60") && legacyColors.Contains("\u0002[2件] 防御 +9"), "legacy special affix palette becomes dark gold without recoloring red requirements or disabled set bonuses");
         string absentSlot = EndgamePanel.OverlayTooltip(formation, "\u0007普通剑+12\n耐久度: 50/50\n攻击 20-30\n孔数 2/2");
-        Check(absentSlot.StartsWith("\u0007\u00035青龙归元+12\n\u00035角、亢\n耐久度:"), "legacy tooltip without slot heading keeps composition below title");
+        Check(absentSlot.StartsWith("\u0007\u00035青龙归元+12\n\u0007\u00035角亢\n耐久度:"), "legacy tooltip without slot heading keeps composition below title");
         string absentTitle = EndgamePanel.OverlayTooltip(formation, "\u0007(武器)\n耐久度: 50/50\n孔数 2/2");
-        Check(absentTitle.StartsWith("\u0007\u00035青龙归元\n\u0007(武器)\n\u00035角、亢\n耐久度:"), "slot heading survives an older native description without its title wrapper");
+        Check(absentTitle.StartsWith("\u0007\u00035青龙归元\n\u0007(武器)\n\u0007\u00035角亢\n耐久度:"), "slot heading survives an older native description without its title wrapper");
         var fiveRunes = TooltipItem("\"itemId\":1001,\"formationId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"普通剑\",\"socketCount\":5,\"sockets\":[{\"index\":4,\"itemId\":1900028006,\"name\":\"星篆·尾火虎\"},{\"index\":1,\"itemId\":1900028002,\"name\":\"亢金龙\"},{\"index\":3,\"itemId\":1900028001,\"name\":\"角木蛟\"},{\"index\":0,\"itemId\":1900028001,\"name\":\"星篆·角木蛟\"},{\"index\":2,\"itemId\":1900028005,\"name\":\"星篆·心月狐\"}]");
         string fiveTip = EndgamePanel.OverlayTooltip(fiveRunes, "\u0007普通剑\n\u0007(武器)\n\n耐久度: 50/50\n孔数 5/5");
-        Check(fiveTip.Contains("\u0007(武器)\n\u00035角、亢、心、角、尾\n\n耐久度:"), "five-rune recipe preserves exact socket indexes including repeated runes and native blank spacing");
+        Check(fiveTip.Contains("\u0007(武器)\n\u0007\u00035角亢心角尾\n\n耐久度:"), "five-rune recipe is centered without separators and preserves exact socket indexes including repeated runes and native blank spacing");
         string equalStats = EndgamePanel.OverlayTooltip(formation, "\u0007普通剑\n\u0007(武器)\n耐久度: 50/50\n力量 +15\n孔数 2/2");
         Check(Occurrences(equalStats, "力量 +15") == 2, "equal native and formation values remain independent contributions");
         var combined = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"formationId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"组合器\",\"description\":\"组合传说\"");
@@ -189,8 +189,8 @@ class EndgameUiContract
             Check(bagTip == equippedTip, "bag and equipped/comparison preserve the same authored-only lore for " + special);
             if (!unique)
             {
-                Check(bagTip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u00035角、亢\n"), "bag/equipped/comparison and workbench use prefix-free title and abbreviated composition directly below slot");
-                Check(!bagTip.Contains("宿阵·照夜") && !bagTip.Contains("角木蛟") && !bagTip.Contains("亢金龙") && Occurrences(bagTip, "角、亢") == 1, "all equipment tooltip paths keep one compact ordered composition");
+                Check(bagTip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u0007\u00035角亢\n"), "bag/equipped/comparison and workbench use prefix-free title and abbreviated composition directly below slot");
+                Check(!bagTip.Contains("宿阵·照夜") && !bagTip.Contains("角木蛟") && !bagTip.Contains("亢金龙") && Occurrences(bagTip, "角亢") == 1, "all equipment tooltip paths keep one compact ordered composition");
             }
             Check(bagTip.Contains("\n攻击 20-30\n") && bagTip.Contains("\u00035孔数 2/2"), "all special equipment paths retain white intrinsic base and dark-gold socket count");
             foreach (var item in c.Endgame.Items)
@@ -270,7 +270,7 @@ class EndgameUiContract
                     Check(Occurrences(tip, "力量 +18") == 1 && Occurrences(tip, "攻击 +36%") == 1 && Occurrences(tip, "移动速度 -3%") == 1, "server-merged same-scope flat percentage and negative values display once");
                     Check(Occurrences(tip, "本件基础攻击强化 +180%") == 1 && Occurrences(tip, "连环枪法伤害提高12%") == 1, "local enhancement and real effect lines survive once without merging into global percent");
                     Check(tip.Contains("\n攻击 200-300\n防御 60\n魔法攻击 50\n重量 5\n") && tip.Contains("\u00035孔数 2/2"), "all intrinsic base rows stay white while special socket count is dark gold");
-                    Check(tip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u00035角、亢\n") && Occurrences(tip, "故旗尚温。") == 1, "merged stats preserve compact name composition and authored lore");
+                    Check(tip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u0007\u00035角亢\n") && Occurrences(tip, "故旗尚温。") == 1, "merged stats preserve compact name composition and authored lore");
                 }
                 Check(!bagTip.Contains("不生效") && equippedTip.Contains("不生效") == activation.Contains("同类宿阵"), "potential values remain visible across active broken and suppressed items without false activation claims");
                 foreach (var item in c.Endgame.Items)

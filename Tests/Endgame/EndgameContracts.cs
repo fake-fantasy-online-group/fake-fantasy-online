@@ -154,6 +154,47 @@ class EndgameContracts
             transient.Tick(DateTime.UtcNow.AddSeconds(3)); Check(transient.HelloSent == (attempt == 2), "hello retry bounded to three attempts");
         }
         Check(!transient.Negotiated && !transient.Pending, "hello never creates mutation");
+        foreach (bool sendFailed in new[] { false, true })
+        {
+            var missingHello = new EndgameClientState();
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                var request = new EndgameRequest("hello"); missingHello.Begin(request);
+                DateTime sentAt = DateTime.UtcNow;
+                if (sendFailed) missingHello.NoteTransportFailure("injected send failure", request);
+                DateTime timeoutAt = sentAt.AddSeconds(16);
+                if (!sendFailed)
+                {
+                    missingHello.Tick(sentAt.AddSeconds(14));
+                    Check(missingHello.HelloSent && missingHello.Error != "timeout", "lost/map-transfer hello waits for response deadline");
+                    missingHello.Tick(timeoutAt);
+                    Check(missingHello.HelloSent && missingHello.Error == "timeout", "lost hello enters cooldown without resending each frame");
+                }
+                DateTime retryAt = sendFailed ? sentAt : timeoutAt;
+                missingHello.Tick(retryAt.AddSeconds(1));
+                Check(missingHello.HelloSent, "failed or missing hello observes two-second cooldown");
+                missingHello.Tick(retryAt.AddSeconds(3));
+                Check(missingHello.HelloSent == (attempt == 2), "failed or missing hello stops after three attempts per connection");
+            }
+            missingHello.Tick(DateTime.UtcNow.AddHours(1));
+            Check(missingHello.HelloSent && !missingHello.Negotiated && !missingHello.Pending, "exhausted hello retries never create a mutation or restart later");
+            missingHello.Reset(); missingHello.Tick(DateTime.UtcNow.AddHours(2));
+            Check(!missingHello.HelloSent && !missingHello.NativeEquipmentStats && missingHello.Error == "", "disconnect clears old response deadlines and retry budget");
+            var freshHello = new EndgameRequest("hello"); missingHello.Begin(freshHello);
+            missingHello.NoteTransportFailure("new connection", freshHello); missingHello.Tick(DateTime.UtcNow.AddSeconds(3));
+            Check(!missingHello.HelloSent, "new connection gets a fresh bounded hello retry budget");
+        }
+        var refreshState = new EndgameClientState(); refreshState.Begin(new EndgameRequest("hello"));
+        refreshState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}"));
+        refreshState.Begin(new EndgameRequest("hello"));
+        Check(!refreshState.Apply(Response("{\"kind\":\"hello\",\"ok\":false,\"error\":\"busy\"}")) && refreshState.Negotiated && refreshState.NativeEquipmentStats, "failed rehello preserves the server's previously accepted native renderer");
+        refreshState.Tick(DateTime.UtcNow.AddMinutes(1));
+        Check(refreshState.HelloSent && refreshState.NativeEquipmentStats, "failed refresh cannot switch back to duplicate legacy overlays or start background retry spam");
+        var delayedHello = new EndgameClientState(); delayedHello.Begin(new EndgameRequest("hello"));
+        delayedHello.Tick(DateTime.UtcNow.AddSeconds(16));
+        delayedHello.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}"));
+        delayedHello.Tick(DateTime.UtcNow.AddMinutes(1));
+        Check(delayedHello.HelloSent && delayedHello.NativeEquipmentStats, "late successful hello cancels pending cooldown retry");
         var extended = Response("{\"kind\":\"rift.state\",\"ok\":true,\"rift\":{\"runId\":\"seeded\",\"tier\":150,\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"试炼地图\",\"canAdvance\":true,\"transitioning\":false,\"exitX\":700,\"exitY\":850,\"maxTier\":150,\"unlockedTier\":150,\"auras\":[{\"entityId\":\"4294967295\",\"class\":2,\"affixes\":[\"烈焰\",\"震环\"]}],\"telegraphs\":[{\"id\":\"tell-1\",\"entityId\":\"4294967295\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":100,\"y\":200,\"endX\":300,\"endY\":400,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800}]}}").Rift;
         Check(extended.Tier == 150 && extended.FloorIndex == 3 && extended.Seed == "18446744073709551615" && extended.GeneratorVersion == 1, "difficulty and floor preserve exact unsigned seed independently");
         Check(extended.CanAdvance && !extended.Transitioning && extended.ExitX == 700 && extended.ExitY == 850 && extended.MaxTier == 150 && extended.UnlockedTier == 150, "optional exit and selection metadata types");
