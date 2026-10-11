@@ -153,8 +153,7 @@ public sealed partial class EndgamePanel
         BitmapFont.CenterOutline(new Rect(hud.x + 8 * scale, hud.y + 59 * scale, hud.width - 16 * scale, 18 * scale), RiftObjective(rift), Jade, scale);
         if (ArtworkSkin.Button(new Rect(hud.x + 135 * scale, hud.y + 81 * scale, 180 * scale, 24 * scale), rift.Claimable ? "查看战果 · 领取" : "查看洞天", scale))
         {
-            generation = State.Generation; tab = 3; open = true; detailScroll = Vector2.zero;
-            Refresh(); PlayerController.SuppressWorldClick();
+            TryOpenRiftFromWorld(); PlayerController.SuppressWorldClick();
         }
         if (rift.Phase == "active" && rift.FloorIndex > 0)
         {

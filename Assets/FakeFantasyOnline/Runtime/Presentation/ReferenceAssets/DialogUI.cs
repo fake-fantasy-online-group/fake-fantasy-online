@@ -795,7 +795,10 @@ public sealed partial class DialogUI : MonoBehaviour
                 Win05.OpenLifeLearn();
             }));
             if (EndgamePanel.WorldEntryAvailable)
-                Add(new ReferenceNpcDialogOption("周天鼎 · 问鼎炼化", () => OpenEndgameView(false)));
+            {
+                Add(new ReferenceNpcDialogOption("星篆 · 镶嵌取出", () => OpenEndgameView(EndgameModule.Runes)));
+                Add(new ReferenceNpcDialogOption("周天鼎 · 问鼎炼化", () => OpenEndgameView(EndgameModule.Cube)));
+            }
         }
         // Official 06000234: this separate family-stash row follows life learning.
         if (NpcName.Contains("家族仓库"))
@@ -841,7 +844,7 @@ public sealed partial class DialogUI : MonoBehaviour
         {
             AddTrialOption("进入妖魔结界(试炼)", "trial");
             if (EndgamePanel.WorldEntryAvailable)
-                Add(new ReferenceNpcDialogOption("演劫洞天 · 查看符钥与开境", () => OpenEndgameView(true)));
+                Add(new ReferenceNpcDialogOption("演劫洞天 · 查看符钥与开境", () => OpenEndgameView(EndgameModule.Rift)));
         }
         if (NpcName.Contains("试炼大仙"))
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
@@ -886,11 +889,12 @@ public sealed partial class DialogUI : MonoBehaviour
 
     // These rows only select a view. The existing NPC talk path and server still own
     // location, trial rewards, key spending and every crafting/rift authorization.
-    private void OpenEndgameView(bool rift)
+    private void OpenEndgameView(EndgameModule module)
     {
-        bool opened = rift ? EndgamePanel.TryOpenRiftFromWorld() : EndgamePanel.TryOpenCubeFromWorld();
+        bool opened = module == EndgameModule.Rift ? EndgamePanel.TryOpenRiftFromWorld() :
+            module == EndgameModule.Runes ? EndgamePanel.TryOpenRunesFromWorld() : EndgamePanel.TryOpenCubeFromWorld();
         if (opened) Close();
-        else ShowSay("当前尚不能查看演劫录，请进入世界并等待服务器开放后再试。");
+        else ShowSay("当前功能尚未开放，请进入世界并等待服务器开放后再试。");
     }
 
     private void AddTrialOption(string label, string command)

@@ -36,7 +36,7 @@ class EndgameUiContract
     }
     static void MultiFloorContracts(Client c, EndgamePanel p)
     {
-        Set(p, "open", true); Set(p, "tab", 3); Rift(c, "", "closed", keys: 1);
+        Set(p, "open", true); Set(p, "module", EndgameModule.Rift); Rift(c, "", "closed", keys: 1);
         UnityEngine.GUI.nextText = "151"; int before = c.Sent.Count; Draw(p, "消耗一钥 · 开启洞天");
         Check(c.Sent.Count == before && !ArtworkSkin.enableds["消耗一钥 · 开启洞天"], "out-of-range direct tier input cannot spend a key");
         UnityEngine.GUI.nextText = "150"; Draw(p);
@@ -122,24 +122,104 @@ class EndgameUiContract
         var ordinary = TooltipItem("\"itemId\":1001,\"location\":\"bag\",\"slot\":0");
         Check(EndgamePanel.OverlayTooltip(ordinary, native) == native, "ordinary item tooltip stays byte-for-byte unchanged");
     }
+    static void AuthoredDescriptionContracts(Client c, EndgamePanel p)
+    {
+        c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        var item = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"炉火旧剑\",\"description\":\"旧炉之火。\\n主人已去。\",\"trait\":\"普通攻击伤害提高10%\"");
+        string native = "\u0007旧剑\n\u0007(武器)\n\n仙遗·炉火旧剑\n基底：旧剑\n力量 +12\n普通攻击伤害提高10%\n旧炉之火。\n主人已去。\n\n耐久度: 50/50\n攻击 20-30\n孔数 0/2\n（绑定物品不可交易）";
+        string tip = EndgamePanel.OverlayTooltip(item, native);
+        Check(Occurrences(tip, "旧炉之火。") == 1 && Occurrences(tip, "主人已去。") == 1 && !tip.Contains("\u00035旧炉之火。"), "multiline authored lore remains once in description rather than attributes");
+        Check(Occurrences(tip, "普通攻击伤害提高10%") == 1 && tip.IndexOf("普通攻击伤害提高10%") < tip.IndexOf("孔数") && tip.IndexOf("孔数") < tip.IndexOf("旧炉之火。"), "native unique effect is not repeated by existing owned Trait field");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"effects\",\"chunks\":1,\"items\":[],\"formations\":[{\"id\":1,\"name\":\"枪火宿阵\",\"description\":\"军中旧旗。\",\"stats\":[{\"attr\":1,\"value\":15}]}]}");
+        EquipDlg.Equipped.Add(new EquipDlg.EquippedItem { id = 1001, slot = 0 });
+        foreach (string state in new[] { "\"location\":\"bag\"", "\"location\":\"equipped\",\"active\":true", "\"location\":\"equipped\",\"inactiveReason\":\"同类宿阵优先级未满足\"", "\"location\":\"equipped\",\"inactiveReason\":\"职业、等级或耐久不符合要求\"" })
+        {
+            item = TooltipItem("\"itemId\":1001,\"formationId\":1,\"slot\":0,\"name\":\"旧枪\",\"trait\":\"连环枪法伤害提高12%\"," + state);
+            tip = EndgamePanel.OverlayTooltip(item, "\u0007旧枪\n需要等级: 50\n攻击 20-30\n孔数 2/2");
+            Check(Occurrences(tip, "连环枪法伤害提高12%") == 1 && tip.IndexOf("连环枪法伤害提高12%") < tip.IndexOf("孔数") && Occurrences(tip, "军中旧旗。") == 1, "ordinary formation potential effect remains once in native section for " + state);
+            Check(tip.Contains("不生效") == state.Contains("同类宿阵优先级"), "only authoritative duplicate suppression claims the inactive formation status");
+        }
+        EquipDlg.Equipped.RemoveAll(row => row.id == 1001 && row.slot == 0);
+        var old = EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"items\":[{\"itemId\":1001,\"formationId\":1}]}").Items[0];
+        Check(old.Trait == "", "old payload without optional owned Trait stays accepted");
+        c.Endgame.Begin(new EndgameRequest("catalog", catalog: "runes"));
+        Apply(c, "{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028028,\"name\":\"星篆·轸水蚓\",\"mansion\":\"轸\",\"quadrant\":\"朱雀\",\"minLevel\":60,\"stats\":[{\"attr\":38,\"value\":1,\"mode\":0}]}]}");
+        InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1900028028, bagIdx = 0 };
+        var rune = TooltipItem("\"itemId\":1900028028,\"location\":\"bag\",\"slot\":0,\"name\":\"星篆·轸水蚓\"");
+        tip = EndgamePanel.OverlayTooltip(rune, "\u0007星篆·轸水蚓\n有效穿戴时每2秒恢复7点生命");
+        Check(Occurrences(tip, "每2秒恢复7点生命") == 1 && !tip.Contains("恢复1点生命") && !tip.Contains("生命恢复 +1"), "rune28 actual stored recovery amount suppresses catalog fallback");
+        tip = EndgamePanel.OverlayTooltip(rune, "\u0007星篆·轸水蚓");
+        Check(Occurrences(tip, "每2秒恢复1点生命") == 1, "rune catalog fallback remains available without native properties");
+        InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1001, bagIdx = 0 };
+    }
+    static void SocketRecipeContracts()
+    {
+        // The native client has no capacity/probability model: each target-specific quote is server text.
+        string[] chances = { "100%", "50%", "1/3", "25%", "20%" };
+        for (int capacity = 1; capacity <= 5; capacity++)
+        {
+            var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
+            c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+            string gear = "{\"uid\":\"9007199254740901\",\"itemId\":2001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"无孔装备\",\"socketCount\":0}";
+            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"socket-base\",\"chunks\":1,\"revision\":\"1\",\"items\":[" + gear + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":8}]}");
+            InventoryDlg.rows[0] = new InventoryDlg.Item { id = 2001, bagIdx = 0 };
+            Set(p, "open", true); Set(p, "module", EndgameModule.Cube); Set(p, "recipeID", 1006); Set(p, "selectedUID", "9007199254740901");
+            c.Endgame.Begin(new EndgameRequest("catalog", catalog: "recipes"));
+            string description = "仅限无孔装备，随机开出1至真实容量的孔数，各孔数等概率；已有孔不可重开。";
+            Apply(c, "{\"kind\":\"catalog.recipes\",\"ok\":true,\"recipes\":[{\"id\":1006,\"name\":\"开窍引星\",\"description\":\"" + description + "\",\"operation\":\"socket.open\",\"targetRequired\":true,\"money\":\"5000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":4}]}]}");
+            Draw(p);
+            Check(UnityEngine.GUI.labels.Contains(description) && UnityEngine.GUI.labels.Exists(t => t.Contains("铜币：5000") && t.Contains("持有 8 / 需要 4")) && !UnityEngine.GUI.labels.Exists(t => t.Contains("净煞尘")), "server random socket recipe and marrow-only cost displayed for capacity " + capacity);
+            Draw(p, "问鼎 · 查看完整耗费"); var request = c.Last;
+            Check(request.Op == "cube.quote" && request.Json.Contains("\"recipeId\":1006") && request.Json.Contains("9007199254740901"), "random opening quotes exact target for capacity " + capacity);
+            int sent = c.Sent.Count; Draw(p, "问鼎 · 查看完整耗费");
+            Check(c.Sent.Count == sent && !ArtworkSkin.enableds["照此投料 · 炼化"], "pending quote cannot repeat or execute for capacity " + capacity);
+            string preview = "随机开出1至" + capacity + "孔，每种孔数概率" + chances[capacity - 1] + "；已有孔不可重开。";
+            Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":1006,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":4,\"owned\":8}]}}");
+            Draw(p);
+            Check(UnityEngine.GUI.labels.Exists(t => t.StartsWith(preview) && t.Contains("铜币：5000") && t.Contains("星髓：8 / 4")) && !UnityEngine.GUI.labels.Exists(t => t.Contains("净煞尘")), "target-specific probability and cost stay verbatim for capacity " + capacity);
+            Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "quote never predicts holes or spends materials for capacity " + capacity);
+            Draw(p, "照此投料 · 炼化"); var execute = c.Last;
+            Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && !execute.Json.Contains("socketCount") && !execute.Json.Contains("targetUid"), "execution uses only frozen quote identity for capacity " + capacity);
+            sent = c.Sent.Count; Draw(p, "照此投料 · 炼化");
+            Check(c.Sent.Count == sent, "random opening cannot reroll by double click for capacity " + capacity);
+            Draw(p, "×"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains the exact uncertain random request for capacity " + capacity);
+            Receipt(c);
+            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"opened-base\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + gear.Replace("\"socketCount\":0", "\"socketCount\":1") + "]}");
+            Set(p, "open", true); Set(p, "selectedUID", "9007199254740901");
+            Draw(p, "问鼎 · 查看完整耗费"); request = c.Last;
+            Apply(c, "{\"kind\":\"cube.quote\",\"ok\":false,\"requestId\":\"" + request.RequestID + "\",\"error\":\"requirements\",\"message\":\"已有孔不可重开。\"}");
+            Draw(p);
+            Check(c.Endgame.Quote == null && !ArtworkSkin.enableds["照此投料 · 炼化"] && UnityEngine.GUI.labels.Contains("已有孔不可重开。"), "server rejection of existing holes leaves no executable quote for capacity " + capacity);
+        }
+    }
+    static void ItemizationStatTextContracts()
+    {
+        var format = typeof(EndgamePanel).GetMethod("StatText", BindingFlags.NonPublic | BindingFlags.Static);
+        foreach (var pair in new[] { new KeyValuePair<int, string>(-20, "攻击速度 +20%"), new KeyValuePair<int, string>(15, "攻击速度 -15%") })
+        {
+            var stat = new EndgameStatView(new Dictionary<string, object> { { "attr", 25L }, { "mode", 1L }, { "value", (long)pair.Key } });
+            Check((string)format.Invoke(null, new object[] { stat }) == pair.Value, "attack-speed wording matches actual player percentage: " + pair.Key);
+        }
+    }
     static void Main()
     {
+        ItemizationStatTextContracts();
         var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Draw(p); Check(c.Sent.Count == 0, "unnegotiated UI sends no commands");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}"); Call(p, "Update");
         string items = "{\"uid\":\"9007199254740993\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"飞鹤遗音\",\"uniqueId\":1001,\"uniqueRollBp\":10000,\"socketCount\":2,\"sockets\":[{\"index\":0,\"itemId\":0},{\"index\":1,\"itemId\":0}]}, {\"uid\":\"9007199254740994\",\"itemId\":1900028001,\"location\":\"bag\",\"tab\":1,\"slot\":1,\"name\":\"角木蛟星篆\"}, {\"uid\":\"9007199254740995\",\"itemId\":1002,\"location\":\"equipped\",\"slot\":25,\"name\":\"归元佩\"}";
         Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"ui\",\"chunks\":1,\"revision\":\"1\",\"items\":[" + items + "]}");
         InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1001, bagIdx = 0 }; InventoryDlg.rows[1] = new InventoryDlg.Item { id = 1900028001, bagIdx = 1 };
         EquipDlg.Equipped.Add(new EquipDlg.EquippedItem { id = 1002, slot = 25 });
-        Draw(p, "演劫 · F8"); Check((bool)Get(p, "open"), "toolbar opens panel"); Check(c.Sent.Exists(r => r.Op == "snapshot") && !c.Sent.Exists(r => r.Op == "catalog"), "equipment opens with real state but no unsolicited catalogs");
-        Set(p, "selectedUID", "9007199254740993"); Draw(p, "穿戴器物"); Check(c.Equips == 1, "native equip port");
-        Set(p, "selectedUID", "9007199254740995"); Draw(p, "卸下器物"); Check(c.Unequips == 1, "slot25 native unequip");
+        Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "removed toolbar cannot open any module");
+        Check(EndgamePanel.TryOpenRunesFromWorld(), "artisan opens standalone rune workbench");
+        Check(c.Sent.Exists(r => r.Op == "snapshot") && !c.Sent.Exists(r => r.Catalog == "uniques" || r.Catalog == "formations" || r.Catalog == "recipes"), "rune entry loads owned state without encyclopedia catalogs");
         string tooltip = EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], "legacy details"); Check(tooltip.Contains("\u00035飞鹤遗音") && tooltip.Contains("legacy details") && !tooltip.Contains("宿序"), "dark-gold tooltip retains native description without duplicate socket block");
         Check(EndgamePanel.BagTooltip(0, InventoryDlg.rows[0], "legacy") == "legacy", "wrong tab cannot overlay");
-        Set(p, "selectedUID", "9007199254740993"); Set(p, "tab", 1); Set(p, "selectedRuneUID", "9007199254740994");
+        Set(p, "selectedUID", "9007199254740993"); Set(p, "module", EndgameModule.Runes); Set(p, "selectedRuneUID", "9007199254740994");
         Draw(p, "嵌入所选星篆"); Check(c.Last.Op == "socket.insert" && c.Last.Json.Contains("9007199254740994"), "insert submits exact rune UID");
         int count = c.Sent.Count; Draw(p, "嵌入所选星篆"); Check(c.Sent.Count == count, "double mutation blocked"); Draw(p, "查询原请求"); Check(c.Retries == 1, "retry uses pending request");
         var pending = c.Endgame.PendingRequest; Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending) && WinZ.forgotten > 0, "close retains nonce and removes hit region"); Receipt(c);
-        Set(p, "open", true); Set(p, "tab", 2); Set(p, "recipeID", 11001);
+        Set(p, "open", true); Set(p, "module", EndgameModule.Cube); Set(p, "recipeID", 11001);
         c.Endgame.Begin(new EndgameRequest("catalog", catalog: "recipes"));
         Apply(c, "{\"kind\":\"catalog.recipes\",\"ok\":true,\"recipes\":[{\"id\":11001,\"name\":\"凝髓成篆\",\"description\":\"确定星篆\",\"operation\":\"rune.inscribe\",\"money\":\"30000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":30}]}]}");
         Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"wallet\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + items + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":12}]}");
@@ -147,7 +227,7 @@ class EndgameUiContract
         Check(quoteRequest.Op == "cube.quote" && !quoteRequest.Json.Contains("targetUid"), "inscribe quote needs no target"); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("持有 12 / 需要 30")), "material shortfall visible before quote");
         Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + quoteRequest.RequestID + "\",\"quote\":{\"quoteId\":\"opaque-quote\",\"recipeId\":11001,\"revision\":\"2\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"消耗材料炼制\",\"money\":\"30000\"}}");
         Draw(p, "照此投料 · 炼化"); Check(c.Last.Op == "cube.execute" && c.Last.Json.Contains("opaque-quote") && !c.Last.Json.Contains("itemUids") && !c.Last.Json.Contains("recipeId"), "execute contains only frozen quote identity"); Receipt(c);
-        Set(p, "tab", 3); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
+        Set(p, "module", EndgameModule.Rift); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
         UnityEngine.Time.unscaledTime = 10; Call(p, "Update"); Check(c.Last.Json.Contains("invited-run"), "poll preserves invitation run");
         Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!ArtworkSkin.enableds["领取我的洞天所得"] && !ArtworkSkin.enableds["消耗一钥 · 开启洞天"], "reward saving disables claim and start");
         Rift(c, "old-paid", "interrupted", true, ok: false); Check(c.Endgame.Rift.RunID == "old-paid", "rejected join surfaces prior run");
@@ -167,7 +247,7 @@ class EndgameUiContract
         Rift(c, "stages", "completed", true); Call(p, "Update"); Set(p, "open", false);
         int mutations = c.Sent.FindAll(r => r.Mutates).Count;
         Draw(p, "查看战果 · 领取");
-        Check((bool)Get(p, "open") && (int)Get(p, "tab") == 3 && c.Sent.FindAll(r => r.Mutates).Count == mutations, "HUD opens result review without claiming automatically");
+        Check((bool)Get(p, "open") && (EndgameModule)Get(p, "module") == EndgameModule.Rift && c.Sent.FindAll(r => r.Mutates).Count == mutations, "HUD opens result review without claiming automatically");
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("战果已保存")), "completed panel describes claim instead of new paid entry instructions");
         ArtworkSkin.enableds.Clear(); Draw(p);
         Check(!ArtworkSkin.enableds.ContainsKey("查看战果 · 领取"), "open panel suppresses overlapping HUD controls");
@@ -190,6 +270,8 @@ class EndgameUiContract
         var requirement = EndgameResponse.Parse("{\"kind\":\"catalog.uniques\",\"ok\":true,\"items\":[{\"itemId\":1001,\"uniqueId\":1001,\"profession\":24,\"uniqueRollBp\":10000}]}").Items[0];
         string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");
         TooltipContracts(c, p);
+        AuthoredDescriptionContracts(c, p);
+        SocketRecipeContracts();
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

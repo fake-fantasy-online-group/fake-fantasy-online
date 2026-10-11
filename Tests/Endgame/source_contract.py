@@ -23,10 +23,10 @@ contains('Protocol/PrivateServerGateway.Endgame.cs', 'IEndgameClient', '_host.Is
          '_netClient.UnequipItem(item.Slot)', 'row.ItemId == item.ItemID', 'current.UID != item.UID')
 contains('Protocol/PrivateServerEndgameCodec.cs', '0x10d0', '0x80d0', 'new UTF8Encoding(false, true)')
 contains('Presentation/ReferenceAssets/EndgamePanel.cs', 'NpcChatter.CnFont()', 'ArtworkSkin.Panel(', 'WinZ.Forget(this)',
-         'KeyCode.F8', 'ClearSelection()', 'State?.InvalidateQuote()', 'client.RetryEndgame()',
+         'KeyCode.Escape', 'EndgameModule.Runes', 'EndgameModule.Cube', 'EndgameModule.Rift', 'ClearSelection()', 'State?.InvalidateQuote()', 'client.RetryEndgame()',
          'State.Rift.RunID', 'PlayerController.SuppressWorldClick()')
-contains('Presentation/ReferenceAssets/EndgamePanel.Items.cs', 'EquipEndgameItem(', 'UnequipEndgameItem(', 'NetClient.LoadItemIcon(')
-contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', '"socket.insert"', '"socket.remove"', 'State.ActiveFormations', 'rune.Stats')
+contains('Presentation/ReferenceAssets/EndgamePanel.Items.cs', 'NetClient.LoadItemIcon(', 'MatchesNative(item)', 'bagOnly')
+contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', '"socket.insert"', '"socket.remove"', 'State.ActiveFormations', 'OwnedItemTooltip(rune)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'chosen.Materials', 'wallet.Count', 'salvage.rune', 'socket.reorder',
          'rune.convert', 'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', '妖魔结界守卫', '试炼小仙', 'rift.Claimable', '"reward_pending"',
@@ -43,4 +43,6 @@ for path in runtime.rglob('Endgame*.cs'):
 for name in ('Foundation/BoundedJson.cs', 'Foundation/JsonData.cs', 'Protocol/PrivateServerEndgameCodec.cs', 'Protocol/PrivateServerGateway.Endgame.cs'):
     assert (runtime / (name + '.meta')).is_file(), f'missing Unity metadata: {name}'
     checks += 1
+assert 'KeyCode.F8' not in (runtime / 'Presentation/ReferenceAssets/EndgamePanel.cs').read_text()
+assert 'string[] names' not in (runtime / 'Presentation/ReferenceAssets/EndgamePanel.cs').read_text()
 print(f'PASS {checks} endgame source/metadata integration contracts.')

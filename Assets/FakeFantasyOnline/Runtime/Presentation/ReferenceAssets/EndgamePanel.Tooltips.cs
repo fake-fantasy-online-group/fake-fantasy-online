@@ -45,7 +45,7 @@ public sealed partial class EndgamePanel
                 if (!plain.StartsWith("基底：", StringComparison.Ordinal) &&
                     !plain.StartsWith("底材：", StringComparison.Ordinal) &&
                     plain != "同名仙遗特性取最高值；不同特性按通道上限叠加。" &&
-                    plain != item.Description)
+                    !DescriptionContainsLine(item.Description, plain))
                     attributes.Add(DarkGold(plain));
                 end++;
             }
@@ -65,8 +65,11 @@ public sealed partial class EndgamePanel
         if (!nativeUniqueBlock && item.UniqueID > 0)
         {
             foreach (var stat in item.Stats) attributes.Add(DarkGold(StatText(stat)));
-            if (item.Trait.Length > 0) attributes.Add(DarkGold(item.Trait));
         }
+        // The existing owned-item field includes potential unique and formation
+        // effects. Preserve native rolled effect lines and add each missing one once.
+        foreach (string trait in item.Trait.Split('；'))
+            if (trait.Length > 0) AddMissingLine(attributes, lines, DarkGold(trait));
         if (formation != null)
             // Equal-valued affixes from native gear, uniques and formations are
             // independent contributions, not duplicate presentation blocks.
@@ -100,9 +103,17 @@ public sealed partial class EndgamePanel
     }
     private static void AddDescription(List<string> lines, string description)
     {
-        foreach (string line in lines) if (PlainLine(line) == description) return;
-        int footer = lines.FindIndex(line => PlainLine(line).StartsWith("（绑定物品不可交易", StringComparison.Ordinal));
-        lines.Insert(footer >= 0 ? footer : lines.Count, description);
+        foreach (string part in description.Replace("\\n", "\n").Split('\n'))
+        {
+            if (part.Length == 0 || lines.Exists(line => PlainLine(line) == part)) continue;
+            int footer = lines.FindIndex(line => PlainLine(line).StartsWith("（绑定物品不可交易", StringComparison.Ordinal));
+            lines.Insert(footer >= 0 ? footer : lines.Count, part);
+        }
+    }
+    private static bool DescriptionContainsLine(string description, string plain)
+    {
+        foreach (string part in description.Replace("\\n", "\n").Split('\n')) if (part == plain) return true;
+        return false;
     }
     private void LoadFormationForTooltip()
     {
@@ -130,7 +141,7 @@ public sealed partial class EndgamePanel
             // Native socket-card values are instance data. Never repeat/replace them
             // with reference catalog values when the native description has stats.
             if (!lines.Exists(line => IsAttributeLine(PlainLine(line))))
-                foreach (var stat in rune.Stats) AddMissingLine(lines, lines, StatText(stat));
+                foreach (var stat in rune.Stats) AddMissingLine(lines, lines, RuneStatText(rune.ItemID, stat));
             string mansion = rune.Quadrant + (rune.Mansion.Length > 0 ? (rune.Quadrant.Length > 0 ? " · " : "") + rune.Mansion + "宿" : "");
             if (mansion.Length > 0) AddMissingLine(lines, lines, mansion);
             if (rune.Description.Length > 0) AddMissingLine(lines, lines, rune.Description);
@@ -159,6 +170,7 @@ public sealed partial class EndgamePanel
     }
     private static bool IsAttributeLine(string line)
     {
+        if (line.StartsWith("有效穿戴时每", StringComparison.Ordinal) && line.Contains("秒恢复") && line.EndsWith("点生命", StringComparison.Ordinal)) return true;
         string[] names = { "攻击", "防御", "魔法攻击", "魔法防御", "命中", "负重上限", "力量", "体质", "敏捷", "智慧", "精神", "灵巧",
             "爆击率", "暴击率", "魔法爆击率", "魔法暴击率", "攻击速度", "移动速度", "最小攻击", "最大攻击", "最大生命", "最大法力", "生命恢复", "最大负重", "伤害抗性", "魔法抗性", "不良状态抗性" };
         foreach (string name in names)
@@ -223,7 +235,7 @@ public sealed partial class EndgamePanel
         string status = FormationStatus(item);
         if (status.Length > 0) text.Append('\n').Append(status).Append('\n');
         if (!tooltip && !IsRune(item) && (item.UniqueID > 0 || item.SocketCount > 0))
-            text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n巧匠或左慈 → 周天鼎可问鼎开窍、调序与炼化，先看耗费再投料。\n");
+            text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n打孔炉逐孔开启；巧匠或左慈 → 周天鼎可为无孔器物随机开窍，或调序、炼化。先问鼎查看耗费。\n");
         if (item.Locked) text.Append("\n器物已锁定，须先解除锁定才能加工。\n");
         if (!tooltip && item.UID.Length > 0) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
         return text.ToString();
@@ -233,7 +245,7 @@ public sealed partial class EndgamePanel
         switch (id)
         {
             case 1900028101: return "洞天符钥 · 向妖魔结界守卫问询演劫洞天，开启时消耗。";
-            case 1900028201: return "星髓 · 解器归元所得。巧匠或左慈 → 周天鼎，用于开窍、凝篆与淬器；先问鼎查看完整耗费。";
+            case 1900028201: return "星髓 · 解器归元所得。巧匠或左慈 → 周天鼎，用于随机开窍、凝篆与淬器；先问鼎查看完整耗费。";
             case 1900028202: return "净煞尘 · 演劫洞天所得。巧匠或左慈 → 周天鼎，用于炼化；先问鼎查看完整耗费。";
             case 1900028203: return "八仙余韵 · 仙遗化韵所得。巧匠或左慈 → 周天鼎，用于返本重铸与炼真守一。";
             default: return "";
@@ -252,7 +264,7 @@ public sealed partial class EndgamePanel
             // Older servers carry the mansion in Description and omit Mansion.
             if (rune.Mansion.Length > 0) text.Append(text.Length > 0 ? " · " : "").Append(rune.Mansion).Append("宿");
             if (rune.Description.Length > 0) text.Append('\n').Append(rune.Description);
-            foreach (var stat in rune.Stats) text.Append('\n').Append(StatText(stat));
+            foreach (var stat in rune.Stats) text.Append('\n').Append(RuneStatText(rune.ItemID, stat));
             text.Append('\n'); break;
         }
         return text.ToString();
@@ -277,11 +289,20 @@ public sealed partial class EndgamePanel
         { if (text.Length > 0) text.Append('/'); text.Append(names[i]); }
         return text.Length == 0 ? "依原装备限制" : text.ToString();
     }
+    private static string RuneStatText(int itemID, EndgameStatView stat)
+    {
+        if (itemID == 1900028028 && stat.Attr == 38 && stat.Mode == 0 && stat.Value > 0)
+            return "有效穿戴时每2秒恢复" + stat.Value.ToString(CultureInfo.InvariantCulture) + "点生命";
+        return StatText(stat);
+    }
     private static string StatText(EndgameStatView stat)
     {
         bool basisPoints = stat.Attr == 23 || stat.Attr == 66;
-        string value = basisPoints ? (stat.Value / 100m).ToString("0.##", CultureInfo.InvariantCulture) : stat.Value.ToString(CultureInfo.InvariantCulture);
-        return StatName(stat.Attr) + " " + (stat.Value >= 0 ? "+" : "") + value + (basisPoints || stat.Mode == 1 ? "%" : "");
+        // Native attr25 percentage is stored as a negative interval entry but
+        // consumed as positive player attack-speed points (base / speed).
+        long displayValue = stat.Attr == 25 && stat.Mode == 1 ? -(long)stat.Value : stat.Value;
+        string value = basisPoints ? (displayValue / 100m).ToString("0.##", CultureInfo.InvariantCulture) : displayValue.ToString(CultureInfo.InvariantCulture);
+        return StatName(stat.Attr) + " " + (displayValue >= 0 ? "+" : "") + value + (basisPoints || stat.Mode == 1 ? "%" : "");
     }
     private static string StatName(int id)
     {

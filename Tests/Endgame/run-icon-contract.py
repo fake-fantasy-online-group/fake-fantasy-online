@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run production NetClient.EndgameItemIcons.cs with deterministic Unity API stubs, not Unity/IMGUI."""
+"""Run production item loaders, native icon receipt and ground cache with deterministic Unity/resource IO stubs."""
 from pathlib import Path
 import argparse, os, shutil, subprocess, tempfile
 p=argparse.ArgumentParser(description=__doc__)
@@ -34,3 +34,19 @@ with tempfile.TemporaryDirectory(prefix='endgame-icon-contract-') as folder:
         references += ['-r:System.Core.dll']
     subprocess.run(compiler+references+['-nologo','-target:exe','-out:'+str(exe),str(fixture),str(source)],check=True)
     subprocess.run([str(mono),str(exe)],check=True)
+
+    # Compile the full item loader and native receipt path separately: the original
+    # rune fixture stays focused on bounded semantic fallbacks.
+    equipment_exe=Path(folder)/'EquipmentIconContract.exe'
+    runtime=repo/'Assets/FakeFantasyOnline/Runtime'
+    production=[
+        source, source.parent/'NetClient.ItemIcons.cs', source.parent/'PetForgeIds.cs',
+        source.parent/'GroundItems.Icons.cs',
+        runtime/'Application/IItemIconOverrideReceiveContext.cs',
+        runtime/'Protocol/PrivateServerGateway.IconOverrides.cs',
+        runtime/'Protocol/NetClient.Buf.Read.cs',
+        runtime/'Presentation/ClientRootView.IconOverrides.cs',
+    ]
+    subprocess.run(compiler+references+['-nologo','-target:exe','-out:'+str(equipment_exe),
+        str(Path(__file__).with_name('EquipmentIconContract.cs'))]+[str(p) for p in production],check=True)
+    subprocess.run([str(mono),str(equipment_exe)],check=True)

@@ -9,10 +9,12 @@ public sealed partial class EndgamePanel
     internal static bool WorldEntryAvailable => Current != null && Current.client != null &&
         Current.client.EndgameInWorld && Current.State != null && Current.State.Negotiated;
 
-    internal static bool TryOpenRiftFromWorld() => TryOpenWorldView(3);
-    internal static bool TryOpenCubeFromWorld() => TryOpenWorldView(2);
+    internal static bool TryOpenRiftFromWorld() => TryOpenWorldView(EndgameModule.Rift);
+    internal static bool TryOpenCubeFromWorld() => TryOpenWorldView(EndgameModule.Cube);
 
-    private static bool TryOpenWorldView(int targetTab)
+    internal static bool TryOpenRunesFromWorld() => TryOpenWorldView(EndgameModule.Runes);
+
+    private static bool TryOpenWorldView(EndgameModule targetModule)
     {
         // Recheck on activation: a dialog row may outlive a disconnect or negotiation.
         if (!WorldEntryAvailable) return false;
@@ -24,12 +26,14 @@ public sealed partial class EndgamePanel
             // Synchronize now so that Update cannot immediately close the new view.
             panel.generation = panel.State.Generation;
         }
-        panel.confirmLeave = false;
-        panel.tab = targetTab;
+        // No workbench may inherit another module's selected item or quote.
+        panel.ClearSelection();
+        panel.State.InvalidateQuote();
+        panel.module = targetModule;
         panel.detailScroll = Vector2.zero;
         panel.open = true;
         panel.Refresh();
-        panel.EnsureCatalogs();
+        panel.EnsureModuleData();
         return true;
     }
 }
