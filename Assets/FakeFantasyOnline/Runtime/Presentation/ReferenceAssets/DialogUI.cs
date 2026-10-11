@@ -794,6 +794,8 @@ public sealed partial class DialogUI : MonoBehaviour
                 Visible = false;
                 Win05.OpenLifeLearn();
             }));
+            if (EndgamePanel.WorldEntryAvailable)
+                Add(new ReferenceNpcDialogOption("周天鼎 · 问鼎炼化", () => OpenEndgameView(false)));
         }
         // Official 06000234: this separate family-stash row follows life learning.
         if (NpcName.Contains("家族仓库"))
@@ -836,9 +838,17 @@ public sealed partial class DialogUI : MonoBehaviour
                 AddTrialOption("传送到妖魔结界守卫(5银)", "trialgo");
         }
         if (NpcName.Contains("妖魔结界守卫") || NpcName.Contains("结界使"))
+        {
             AddTrialOption("进入妖魔结界(试炼)", "trial");
+            if (EndgamePanel.WorldEntryAvailable)
+                Add(new ReferenceNpcDialogOption("演劫洞天 · 查看符钥与开境", () => OpenEndgameView(true)));
+        }
         if (NpcName.Contains("试炼大仙"))
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
+        if (EndgamePanel.WorldEntryAvailable &&
+            (NpcName.Contains("试炼小仙") || NpcName.Contains("试炼大仙")))
+            Add(new ReferenceNpcDialogOption("符钥何用？", () => ShowSay(
+                "若试炼奖励中领得演劫符钥，可去寻妖魔结界守卫，选择“演劫洞天”查看符钥与开境。组队时请在守卫附近会合；能否开境、耗费与所得，以服务器确认为准。")));
 
         AddDungeonExitAndHardOptions();
         AddTianshenOptions();
@@ -872,6 +882,15 @@ public sealed partial class DialogUI : MonoBehaviour
             }
         }
         if (optLabels.Count > 0) Add(new ReferenceNpcDialogOption(LeaveLabel, null, true));
+    }
+
+    // These rows only select a view. The existing NPC talk path and server still own
+    // location, trial rewards, key spending and every crafting/rift authorization.
+    private void OpenEndgameView(bool rift)
+    {
+        bool opened = rift ? EndgamePanel.TryOpenRiftFromWorld() : EndgamePanel.TryOpenCubeFromWorld();
+        if (opened) Close();
+        else ShowSay("当前尚不能查看演劫录，请进入世界并等待服务器开放后再试。");
     }
 
     private void AddTrialOption(string label, string command)

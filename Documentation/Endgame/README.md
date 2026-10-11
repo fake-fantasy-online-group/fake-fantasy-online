@@ -2,12 +2,12 @@
 
 ## Play entry
 
-The native world host negotiates `endgame.v1` after character admission. Transient loading/storage hello failures retry at two-second intervals, with at most three attempts per connection; this is separate from manual mutation retries. Press **F8** or select **演劫 · F8** at the right edge of the game. An older server displays a disabled entry rather than sending mutations.
+The native world host negotiates `endgame.v1` after character admission. Transient loading/storage hello failures retry at two-second intervals, with at most three attempts per connection; this is separate from manual mutation retries. The existing **妖魔结界守卫** dialogue opens **演劫洞天**, and **巧匠/左慈** opens **周天鼎**. Trial NPCs offer optional key-use advice. **F8** or **演劫 · F8** remains a portable convenience entry. An older server displays a disabled entry rather than sending mutations.
 
 - **仙遗**: choose a real bag/equipped item; inspect gold name, server trait, rolled stats and ordered sockets. Equip and unequip use existing native commands. Equipped slots **14–25** appear here even though the original paperdoll has only 13 slots. 图鉴 opens the paged unique catalog.
-- **星篆 · 宿阵**: select equipment, a socket and a rune from the bag, then insert or extract. Rune discovery lists the 28 mansions and their real stats. Formation discovery lists ordered runes, level/channel requirements and bonuses. Current active formations are separate from the discovery catalog.
+- **星篆 · 宿阵**: select equipment, a socket and a rune from the bag, then insert or extract. Owned runes appear with real stats/lore on hover. Rune and formation catalogs are explicit opt-in views; formation discovery shows ordered runes, level/channel/slot requirements, bonuses and bag-rune availability. Current active formations are separate from the discovery catalog.
 - **周天鼎**: choose a recipe and real inputs. For rune salvage choose one bag rune; for conversion/array insertion choose ordered bag rune UIDs; for reordering choose the installed runes in the desired order. 问鼎 is a server quote, showing costs and the result/risk description. 照此投料 executes that quote; selection changes or a new inventory snapshot invalidate it. A quote is not a success or an inventory change.
-- **演劫洞天**: 四村试炼小仙接取试炼；完成领钥后，与妖魔结界守卫对话，再在此开境。队友须在队长附近。Choose tier 1–50. Joining an invitation preserves its run ID; fresh entry leaves the run ID empty. The HUD shows server progress, time, elite aura colors and globe markers. Move within 75 pixels of a globe for the server's automatic pickup. Claim is enabled only by the server's `claimable` flag. Interrupted paid runs can expose compensation. Leaving requires a second click.
+- **演劫洞天**: 四村试炼小仙接取试炼；完成领钥后，在妖魔结界守卫对话中选择演劫洞天。队友须在队长附近。Choose tier 1–50. Joining an invitation preserves its run ID; fresh entry leaves the run ID empty. The HUD shows server progress, time, current objectives, elite aura colors and globe markers. Phase changes show a short non-modal notice; restored snapshots do not replay transitions. The HUD opens result review without claiming automatically and yields input to the open panel. Move within 75 pixels of a globe for the server's automatic pickup. Claim is enabled only by the server's `claimable` flag. Interrupted paid runs can expose compensation. Leaving requires a second click.
 
 Close/Escape clears selections and quotes but keeps an uncertain mutation. **查询原请求** resends the same immutable request ID and parameters, never a new purchase or reroll. Disconnect/title return clears visible state. A bounded, process-memory retry journal restores only the same endpoint/account/server-issued persistent character ID's uncertain request after a new hello; it never automatically executes it. **The journal does not survive quitting the client process.** Server receipts remain authoritative.
 
@@ -32,6 +32,8 @@ Run from the repository root:
 ```sh
 FFO_MONO_ROOT=/path/to/MonoBleedingEdge Tests/Endgame/run-contracts.sh
 FFO_MONO_ROOT=/path/to/MonoBleedingEdge Tests/Endgame/run-ui-contract.sh
+FFO_MONO_ROOT=/path/to/MonoBleedingEdge Tests/Endgame/run-world-entry-contract.sh
+FFO_MONO_ROOT=/path/to/MonoBleedingEdge Tests/Endgame/run-loot-context-contract.sh
 ```
 
 Both also accept the existing `UNITY_EDITOR_DIR` convention. These scripts run managed tests only and do not launch Unity or build a Player.
@@ -66,3 +68,7 @@ Recorded final counts: **116** codec/state/production-Go-fixture assertions, **2
 Remaining verification: full Unity-dependent Presentation/Bootstrap/Editor assembly compilation with real Unity references, rendered layout/art/font availability, a live client/server play session and a Player build were **not run**. The panel/host substitutes do not establish those outcomes.
 
 Profession requirements are native bitmasks (1 战士, 2 剑客, 4 刺客, 8 药师, 16 术士), not ordinal class IDs. A zero mask keeps the native-restriction fallback. Unique catalog potency is labeled 图鉴基准 when supplied; owned UID-bearing items show the actual server roll. Snapshot material `count` is the wallet total; quote material `count` is required and `owned` is available.
+
+## World integration pass
+
+See [design, official Diablo references and validation](WORLD-INTEGRATION.md). This pass changes client presentation only; there is no migration or wire schema change. Native tooltip, dialogue and artwork capabilities are reused. Exact tier-unlock and per-run reward summaries are not exposed by the existing DTO, so the UI does not fabricate them.

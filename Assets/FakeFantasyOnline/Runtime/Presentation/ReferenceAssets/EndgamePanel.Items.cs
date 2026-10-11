@@ -23,6 +23,7 @@ public sealed partial class EndgamePanel
     private void Select(EndgameItemView item)
     {
         if (State.Pending) return;
+        if (IsRune(item) || item.SocketCount > 0) LoadCatalog("runes");
         selectedUID = item.UID; socket = 0; selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; State.InvalidateQuote(); detailScroll = Vector2.zero;
     }
     private static void Icon(Rect rect, int itemID, bool unique = false)
@@ -45,10 +46,10 @@ public sealed partial class EndgamePanel
             ArtworkSkin.Row(row, highlighted: item.UID == selectedUID);
             Icon(new Rect(6, row.y + 7, 36, 36), item.ItemID, item.UniqueID > 0);
             Text(new Rect(47, row.y + 4, row.width - 49, 26), item.Name, small, item.UniqueID > 0 ? (Color?)Gold : null);
-            Text(new Rect(47, row.y + 29, row.width - 49, 20), (item.Location == "equipped" ? "穿戴 " + item.Slot : "背包 " + (item.Slot + 1)) + (item.Locked ? " · 已锁" : ""), small);
+            Text(new Rect(47, row.y + 29, row.width - 49, 20), (item.Location == "equipped" ? "穿戴 " + item.Slot : "背包 " + (item.Slot + 1)) + (item.SocketCount > 0 ? " · " + item.SocketCount + "窍" : "") + (item.Locked ? " · 已锁" : ""), small);
             if (row.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown && Event.current.button == 0) { Select(item); Event.current.Use(); }
         }
-        if (rows.Count == 0) Text(new Rect(10, 15, area.width - 25, 85), State.HasSnapshot ? "尚无可用器物。试炼可获得洞天符钥，洞天可寻得仙遗。" : "正在等待服务器器物星图…", small);
+        if (rows.Count == 0) Text(new Rect(10, 15, area.width - 25, 85), State.HasSnapshot ? "尚无可用器物。试炼可获得洞天符钥；向妖魔结界守卫问询演劫洞天。" : "正在等待服务器器物星图…", small);
         GUI.EndScrollView();
     }
     private void DrawEquipment()
@@ -59,19 +60,28 @@ public sealed partial class EndgamePanel
         DrawItemList(new Rect(20, 180, 247, 408), true);
         EndgameItemView item = Selected(); ArtworkSkin.Panel(new Rect(280, 141, 638, 447));
         if (item == null)
-        { Text(new Rect(305, 173, 578, 110), "仙遗\n历劫而存的器物，仍留着不肯散去的仙缘。\n选择左侧器物查看真实特性、有序孔位与宿阵。", label); return; }
+        { Text(new Rect(305, 173, 578, 110), "选择左侧已有器物或星篆，查看特性、孔位与下一步。\n仙遗可由洞天寻得；巧匠或左慈的周天鼎可淬器成真，能否炼化以问鼎预览为准。", label); return; }
         DrawItemDetail(item, new Rect(300, 157, 596, 359));
         bool usable = !State.Pending && !item.Locked;
         if (ArtworkSkin.Button(new Rect(302, 535, 165, 31), item.Location == "equipped" ? "卸下器物" : "穿戴器物", enabled: usable && !IsRune(item)))
         { if (item.Location == "equipped") client.UnequipEndgameItem(item); else client.EquipEndgameItem(item); }
-        if (ArtworkSkin.Button(new Rect(484, 535, 164, 31), "调理星篆", enabled: usable)) tab = 1;
+        if (ArtworkSkin.Button(new Rect(484, 535, 164, 31), "调理星篆", enabled: usable))
+        {
+            tab = 1; showFormationCatalog = showRuneCatalog = false; EnsureCatalogs();
+            if (IsRune(item))
+            {
+                selectedRuneUID = item.UID; selectedUID = ""; socket = 0;
+                foreach (var gear in State.Items)
+                    if (!IsRune(gear) && gear.SocketCount > 0 && !gear.Locked && MatchesNative(gear)) { selectedUID = gear.UID; break; }
+            }
+        }
         if (ArtworkSkin.Button(new Rect(666, 535, 210, 31), "送往周天鼎", enabled: usable && item.Location == "bag")) { tab = 2; EnsureCatalogs(); }
     }
     private void DrawItemDetail(EndgameItemView item, Rect rect)
     {
         Icon(new Rect(rect.x, rect.y, 60, 60), item.ItemID, item.UniqueID > 0);
         Text(new Rect(rect.x + 73, rect.y, rect.width - 73, 32), item.Name, heading, item.UniqueID > 0 ? Gold : Jade);
-        Text(new Rect(rect.x + 73, rect.y + 36, rect.width - 73, 24), "需求 " + item.Level + "级 · " + ProfessionNames(item.Profession) + (item.Bound ? " · 已绑定" : ""), small);
+        Text(new Rect(rect.x + 73, rect.y + 36, rect.width - 73, 24), (IsRune(item) ? "星篆 · 可镶入器物空窍" : "需求 " + item.Level + "级 · " + ProfessionNames(item.Profession)) + (item.Bound ? " · 已绑定" : ""), small);
         string detail = ItemDescription(item, false);
         Rect area = new Rect(rect.x, rect.y + 73, rect.width, rect.height - 73);
         float height = Math.Max(area.height, label.CalcHeight(new GUIContent(detail), area.width - 24) + 12);
@@ -90,7 +100,7 @@ public sealed partial class EndgamePanel
             var item = rows[i]; float y = i * 94; ArtworkSkin.Panel(new Rect(0, y, 868, 89)); Icon(new Rect(9, y + 13, 57, 57), item.ItemID, true);
             Text(new Rect(81, y + 8, 770, 25), item.Name + " · " + ProfessionNames(item.Profession) + " · " + item.Level + "级", label, Gold);
             Text(new Rect(81, y + 37, 770, 49), item.Trait.Length > 0 ? item.Trait : item.Description, small);
-            if (new Rect(0, y, 868, 89).Contains(Event.current.mousePosition)) UITip.Show(item.Name + "\n" + ItemDescription(item, true), 1f);
+            if (new Rect(0, y, 868, 89).Contains(Event.current.mousePosition)) ShowPanelTooltip(item.Name + "\n" + ItemDescription(item, true));
         }
         GUI.EndScrollView(); MoreCatalog("uniques", new Rect(669, 559, 240, 27));
         Text(new Rect(28, 560, 620, 27), "已载 " + State.Uniques.Count + " 件 · 搜索已载名称与职业", small);

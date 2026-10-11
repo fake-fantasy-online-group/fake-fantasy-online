@@ -11,13 +11,13 @@ public sealed partial class EndgamePanel
     {
         ArtworkSkin.Panel(new Rect(20, 142, 898, 444)); EndgameRiftView rift = State.Rift;
         Text(new Rect(44, 160, 835, 37), "演劫洞天", heading);
-        Text(new Rect(45, 204, 827, 54), "四村试炼小仙接取试炼，完成领钥后可传送至妖魔结界守卫。\n先与守卫对话，再在此开境；队友须在队长附近，一钥可为全队开启。", label);
+        Text(new Rect(45, 204, 827, 54), "四村试炼小仙接取试炼，完成领钥后可传送至妖魔结界守卫。\n在守卫对话中选择「演劫洞天」开境；队友须在队长附近，一钥可为全队开启。", label);
         Text(new Rect(45, 267, 423, 29), "洞天符钥：" + (rift == null ? "查询中" : rift.KeyCount.ToString()) + " 把", label, Gold);
-        if (rift != null && (PollRun(rift) || rift.Phase == "interrupted"))
+        if (rift != null && rift.RunID.Length > 0 && (PollRun(rift) || rift.Claimable || rift.Phase == "interrupted"))
         {
             Text(new Rect(45, 313, 826, 34), rift.Name + " · 第 " + rift.Tier + " 重 · " + PhaseName(rift.Phase), heading);
             DrawProgress(new Rect(46, 360, 825, 24), rift.Progress, rift.ProgressMax);
-            Text(new Rect(45, 399, 808, 28), "余时 " + Remaining(rift) + " · " + (rift.Phase == "reserved" ? "队友点击入境后集合" : "靠近镇煞灵珠自动收取进度"), label);
+            Text(new Rect(45, 399, 808, 28), RiftObjective(rift), label);
         }
         else
         {
@@ -32,7 +32,7 @@ public sealed partial class EndgamePanel
             foreach (var member in rift.Members) text.Append(member.Name.Length > 0 ? member.Name : member.CharID).Append('(').Append(member.Level).Append(") ").Append(member.Claimed ? "已领 " : " ");
             Text(new Rect(45, 441, 825, 40), text.ToString(), small);
         }
-        bool reenter = CanReenter(rift), waiting = rift != null && (rift.Phase == "reward_pending" || rift.Phase == "interrupted");
+        bool reenter = CanReenter(rift), waiting = rift != null && (rift.Phase == "reward_pending" || rift.Phase == "interrupted" || rift.Claimable && !reenter);
         if (ArtworkSkin.Button(new Rect(45, 513, 252, 39), reenter ? "进入已有洞天" : "消耗一钥 · 开启洞天", enabled: !State.Pending && !waiting && rift != null && (reenter || rift.KeyCount > 0)))
             Send(new EndgameRequest("rift.start", State.Revision, runID: reenter ? rift.RunID : "", tier: reenter ? rift.Tier : tier));
         if (ArtworkSkin.Button(new Rect(314, 513, 254, 39), rift != null && rift.Phase == "interrupted" ? "领取补偿符钥" : "领取我的洞天所得", enabled: !State.Pending && rift != null && rift.Claimable))
@@ -65,13 +65,66 @@ public sealed partial class EndgamePanel
         GUI.DrawTexture(new Rect(rect.x + 3, rect.y + 3, (rect.width - 6) * ratio, rect.height - 6), Texture2D.whiteTexture); GUI.color = previous;
         Text(new Rect(rect.x + 8, rect.y, rect.width - 16, rect.height), progress + " / " + target, small);
     }
+    private string observedRun = "", observedPhase = "", announcement = "";
+    private long observedGeneration = -1;
+    private float announcementUntil;
+    // Phase notices are presentation only. A restored snapshot sets the baseline, never replays a victory.
+    private void ObserveRiftPhase()
+    {
+        if (observedGeneration != State.Generation)
+        { observedGeneration = State.Generation; observedRun = observedPhase = announcement = ""; }
+        var rift = State.Rift;
+        if (rift == null || rift.RunID.Length == 0)
+        { observedRun = observedPhase = announcement = ""; return; }
+        if (observedRun != rift.RunID) announcement = "";
+        bool transition = observedRun == rift.RunID && observedPhase.Length > 0 && observedPhase != rift.Phase;
+        observedRun = rift.RunID; observedPhase = rift.Phase;
+        if (!transition) return;
+        announcement = RiftObjective(rift);
+        announcementUntil = Time.unscaledTime + 6f;
+    }
+    private static string RiftObjective(EndgameRiftView rift)
+    {
+        if (rift == null) return "静候开境";
+        switch (rift.Phase)
+        {
+            case "reserved": return "同道集结：队友选择进入已有洞天。";
+            case "active": return "镇煞：击败敌人，靠近灵珠收取进度。";
+            case "boss": return "劫影现身：击败" + (rift.BossName.Length > 0 ? rift.BossName : "镇境劫影") + "。";
+            case "reward_pending": return "劫影已退，战果正在保存；请稍候。";
+            case "completed": return rift.Claimable ? "洞天已成：战果已保存，可领取你的所得。" : "洞天已成：奖励资格与领取状态以服务器为准。";
+            case "interrupted": return rift.Claimable ? "洞天中断：可领取服务器确认的补偿符钥。" : "洞天中断：请查询服务器结算。";
+            case "failed": return rift.Claimable ? "演劫未竟：仍有服务器确认的所得可领取。" : "演劫未竟：本次已结束，可返回守卫再战。";
+            case "closed": return rift.Claimable ? "洞天已闭：战果已保存，仍可领取你的所得。" : "洞天已闭：所得请在背包查看，炼化可拜访巧匠左慈。";
+            case "aborted": return "洞天已中断，请返回守卫查看后续。";
+            default: return "静候开境";
+        }
+    }
+    private void DrawRiftAnnouncement(float scale)
+    {
+        if (announcement.Length == 0 || Time.unscaledTime >= announcementUntil) return;
+        Rect rect = new Rect(Screen.width * .5f - 260 * scale, 171 * scale, 520 * scale, 39 * scale);
+        ArtworkSkin.Panel(rect, scale, true);
+        BitmapFont.CenterOutline(rect, announcement, Gold, scale);
+    }
     private void DrawRiftHud(float scale)
     {
-        var rift = State.Rift; if (rift == null || !PollRun(rift)) return;
-        Rect hud = new Rect(Screen.width * .5f - 190 * scale, 48 * scale, 380 * scale, 78 * scale);
+        if (open) return; // The modal view owns overlapping pointer regions.
+        var rift = State.Rift;
+        if (rift == null || (!PollRun(rift) && !rift.Claimable)) return;
+        Rect hud = new Rect(Screen.width * .5f - 225 * scale, 48 * scale, 450 * scale, 111 * scale);
         ArtworkSkin.Panel(hud, scale, true);
-        BitmapFont.CenterOutline(new Rect(hud.x, hud.y + 8 * scale, hud.width, 18 * scale), "演劫 " + rift.Tier + "重 · " + PhaseName(rift.Phase) + " · " + Remaining(rift), Gold, scale);
-        DrawProgress(new Rect(hud.x + 12 * scale, hud.y + 36 * scale, hud.width - 24 * scale, 22 * scale), rift.Progress, rift.ProgressMax);
+        string clock = ActiveRun(rift) ? " · " + Remaining(rift) : "";
+        BitmapFont.CenterOutline(new Rect(hud.x, hud.y + 8 * scale, hud.width, 18 * scale), "演劫 " + rift.Tier + "重 · " + PhaseName(rift.Phase) + clock, Gold, scale);
+        DrawProgress(new Rect(hud.x + 12 * scale, hud.y + 33 * scale, hud.width - 24 * scale, 20 * scale), rift.Progress, rift.ProgressMax);
+        BitmapFont.CenterOutline(new Rect(hud.x + 8 * scale, hud.y + 59 * scale, hud.width - 16 * scale, 18 * scale), RiftObjective(rift), Jade, scale);
+        if (ArtworkSkin.Button(new Rect(hud.x + 135 * scale, hud.y + 81 * scale, 180 * scale, 24 * scale), rift.Claimable ? "查看战果 · 领取" : "查看洞天", scale))
+        {
+            generation = State.Generation; tab = 3; open = true; detailScroll = Vector2.zero;
+            Refresh(); PlayerController.SuppressWorldClick();
+        }
+        if (Event.current.type == EventType.MouseDown && hud.Contains(Event.current.mousePosition))
+        { Event.current.Use(); PlayerController.SuppressWorldClick(); }
     }
     private void DrawRiftMarkers(float scale)
     {

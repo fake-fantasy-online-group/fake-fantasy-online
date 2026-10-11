@@ -54,6 +54,12 @@ public sealed partial class EndgamePanel
                 costs.Append("\n").Append(material.Name).Append("：持有 ").Append(owned).Append(" / 需要 ").Append(material.Count).Append(owned < material.Count ? "（不足）" : "");
             }
         }
+        if (chosen != null)
+            foreach (var material in chosen.Materials)
+            {
+                string source = MaterialSource(material.ItemID);
+                if (source.Length > 0) costs.Append("\n").Append(material.Name).Append("来源：").Append(source);
+            }
         costs.Append(State.QuotePending ? "\n问鼎中…" : "\n预览不会扣除器物、材料或铜币。");
         string preview = costs.ToString();
         if (quote != null)
@@ -78,6 +84,16 @@ public sealed partial class EndgamePanel
             DateTimeOffset.TryParse(quote.ExpiresAt, out DateTimeOffset expiry) && expiry > DateTimeOffset.UtcNow;
         if (ArtworkSkin.Button(new Rect(591, 542, 300, 30), "照此投料 · 炼化", enabled: fresh && !State.Pending && !State.QuotePending))
             Send(new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID));
+    }
+    private static string MaterialSource(int itemID)
+    {
+        switch (itemID)
+        {
+            case 1900028201: return "周天鼎解器归元或解篆归髓。";
+            case 1900028202: return "演劫洞天结算所得。";
+            case 1900028203: return "周天鼎分解仙遗。";
+            default: return "";
+        }
     }
     private void DrawInstalledOrder(EndgameItemView target, Rect rect)
     {

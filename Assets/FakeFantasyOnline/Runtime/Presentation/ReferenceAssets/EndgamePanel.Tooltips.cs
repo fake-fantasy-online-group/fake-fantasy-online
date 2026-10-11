@@ -8,7 +8,10 @@ public sealed partial class EndgamePanel
 {
     internal static string BagTooltip(int nativeTab, InventoryDlg.Item item, string original)
     {
-        return OverlayTooltip(Current?.State?.Find("bag", nativeTab, item.bagIdx, item.id), original);
+        string result = OverlayTooltip(Current?.State?.Find("bag", nativeTab, item.bagIdx, item.id), original);
+        // Stackable materials have no instance UID and therefore need no snapshot overlay.
+        string use = MaterialUse(item.id);
+        return Current?.State != null && Current.State.Negotiated && use.Length > 0 ? result + "\n\n" + use : result;
     }
     internal static string EquippedTooltip(EquipDlg.EquippedItem item, string original)
     {
@@ -17,6 +20,7 @@ public sealed partial class EndgamePanel
     private static string OverlayTooltip(EndgameItemView item, string original)
     {
         if (item == null || !MatchesNative(item)) return original;
+        if (IsRune(item) || item.SocketCount > 0) Current?.LoadCatalog("runes");
         return (item.UniqueID > 0 ? TooltipContent.QualityName(item.Name, 4) + "\n" : "") + original + "\n" + ItemDescription(item, true);
     }
     internal static string ItemDescription(EndgameItemView item, bool tooltip)
@@ -27,6 +31,11 @@ public sealed partial class EndgamePanel
         if (item.Trait.Length > 0) text.Append('\n').Append(item.Trait).Append('\n');
         if (!tooltip && item.Description.Length > 0) text.Append('\n').Append(item.Description).Append('\n');
         foreach (var stat in item.Stats) text.Append(StatText(stat)).Append('\n');
+        if (IsRune(item))
+        {
+            text.Append(RuneDetails(item.ItemID, false));
+            text.Append("\n在太清演劫录 → 星篆·宿阵，选择器物与空窍后嵌入。\n洞天可寻得星篆；巧匠或左慈的周天鼎可凝髓成篆。\n");
+        }
         if (item.SocketCount > 0)
         {
             text.Append("\n宿序 ");
@@ -36,11 +45,55 @@ public sealed partial class EndgamePanel
                 text.Append(index == 0 ? "" : " → ").Append(index + 1).Append('·');
                 text.Append(found == null || found.ItemID == 0 ? "空窍" : found.Name.Length > 0 ? found.Name : Current != null && Current.State != null ? Current.RuneName(found.ItemID) : "星篆 " + found.ItemID);
             }
-            text.Append('\n');
+            text.Append("\n孔数、从左到右的宿序与装备部位须完全符合宿阵；多一空窍也不能成阵。\n");
         }
-        if (item.FormationID > 0) text.Append(item.Active ? "\n宿阵已生效" : "\n宿阵：" + item.InactiveReason).Append('\n');
-        if (!tooltip) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
+        if (item.FormationID > 0) text.Append('\n').Append(FormationStatus(item)).Append('\n');
+        else if (item.SocketCount > 0) text.Append("宿阵尚未成形；已嵌星篆仍有自身属性。\n");
+        if (!IsRune(item) && (item.UniqueID > 0 || item.SocketCount > 0))
+            text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n巧匠或左慈 → 周天鼎可问鼎开窍、调序与炼化，先看耗费再投料。\n");
+        if (item.Locked) text.Append("\n器物已锁定，须先解除锁定才能加工。\n");
+        if (!tooltip && item.UID.Length > 0) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
         return text.ToString();
+    }
+    private static string MaterialUse(int id)
+    {
+        switch (id)
+        {
+            case 1900028101: return "洞天符钥 · 向妖魔结界守卫问询演劫洞天，开启时消耗。";
+            case 1900028201: return "星髓 · 解器归元所得。巧匠或左慈 → 周天鼎，用于开窍、凝篆与淬器；先问鼎查看完整耗费。";
+            case 1900028202: return "净煞尘 · 演劫洞天所得。巧匠或左慈 → 周天鼎，用于炼化；先问鼎查看完整耗费。";
+            case 1900028203: return "八仙余韵 · 仙遗化韵所得。巧匠或左慈 → 周天鼎，用于返本重铸与炼真守一。";
+            default: return "";
+        }
+    }
+    internal static string RuneDetails(int itemID, bool includeName)
+    {
+        var text = new StringBuilder();
+        if (Current?.State == null) return "";
+        foreach (var rune in Current.State.Runes)
+        {
+            if (rune.ItemID != itemID) continue;
+            if (includeName) text.Append(rune.Name).Append('\n');
+            text.Append(rune.Quadrant);
+            // Older servers carry the mansion in Description and omit Mansion.
+            if (rune.Mansion.Length > 0) text.Append(text.Length > 0 ? " · " : "").Append(rune.Mansion).Append("宿");
+            if (rune.Description.Length > 0) text.Append('\n').Append(rune.Description);
+            foreach (var stat in rune.Stats) text.Append('\n').Append(StatText(stat));
+            text.Append('\n'); break;
+        }
+        return text.ToString();
+    }
+    internal static string FormationStatus(EndgameItemView item)
+    {
+        string name = "宿阵";
+        if (Current?.State != null)
+        {
+            foreach (var row in Current.State.Formations) if (row.ID == item.FormationID) { name = row.Name; break; }
+            foreach (var row in Current.State.ActiveFormations) if (row.ID == item.FormationID) { name = row.Name; break; }
+        }
+        if (item.Active) return name + " · 已生效";
+        if (item.Location == "bag") return name + " · 已成形，穿戴后还须满足职业、等级与耐久要求；同类宿阵只生效一个。";
+        return name + " · 未生效：" + (item.InactiveReason.Length > 0 ? item.InactiveReason : "请核对穿戴、职业、等级、耐久及同类宿阵优先级。");
     }
     private static string ProfessionNames(int mask)
     {

@@ -16,6 +16,8 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private string selectedUID = "", selectedRuneUID = "", search = "";
     private readonly List<string> orderedRunes = new List<string>();
     private Vector2 itemScroll, catalogScroll, detailScroll, runeScroll, recipeScroll;
+    private Vector2 panelScreenMouse;
+    private float panelScale = 1f;
     private GUIStyle label, heading, small, textField;
     private EndgameRequest quotedInputs;
     private long generation = -1;
@@ -27,17 +29,18 @@ public sealed partial class EndgamePanel : MonoBehaviour
 
     public void Bind(IEndgameClient source)
     {
-        if (!ReferenceEquals(client, source)) { client = source; ClearSelection(); open = false; generation = -1; }
+        if (!ReferenceEquals(client, source)) { client = source; ClearSelection(); open = false; generation = -1; observedGeneration = -1; announcement = ""; }
         Current = this;
     }
     public void Unbind(IEndgameClient source)
     {
         if (!ReferenceEquals(client, source)) return;
-        WinZ.Forget(this); client = null; open = false; ClearSelection();
+        WinZ.Forget(this); client = null; open = false; announcement = ""; observedGeneration = -1; ClearSelection();
     }
     private void OnDestroy() { WinZ.Forget(this); if (Current == this) Current = null; }
     private void ClearSelection()
     {
+        showCatalog = showRuneCatalog = showFormationCatalog = false;
         selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; confirmLeave = false;
         itemScroll = catalogScroll = detailScroll = runeScroll = recipeScroll = Vector2.zero;
     }
@@ -50,8 +53,9 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private void Update()
     {
         if (State == null || !client.EndgameInWorld)
-        { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; return; }
+        { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; announcement = ""; observedGeneration = -1; return; }
         if (generation != State.Generation) { generation = State.Generation; ClearSelection(); open = false; }
+        ObserveRiftPhase();
         if (State.Negotiated && Input.GetKeyDown(KeyCode.F8)) Toggle();
         if (open && Input.GetKeyDown(KeyCode.Escape)) Close();
         if (State.Negotiated && State.Rift != null && PollRun(State.Rift) && Time.unscaledTime >= nextRiftRefresh)
@@ -59,10 +63,13 @@ public sealed partial class EndgamePanel : MonoBehaviour
     }
     private bool Send(EndgameRequest request) => client != null && client.SendEndgame(request);
     private void QueryRift() => Send(new EndgameRequest("rift.state", runID: State.Rift == null ? "" : State.Rift.RunID));
-    private void Refresh() { Send(new EndgameRequest("snapshot")); QueryRift(); }
+    private void Refresh() { Send(new EndgameRequest("snapshot")); QueryRift(); if (open) EnsureCatalogs(); }
     private void EnsureCatalogs()
     {
-        LoadCatalog("runes"); LoadCatalog("formations"); LoadCatalog("recipes"); if (showCatalog) LoadCatalog("uniques");
+        if (tab == 1 || tab == 2) LoadCatalog("runes");
+        if (tab == 1 && showFormationCatalog) LoadCatalog("formations");
+        if (tab == 2) LoadCatalog("recipes");
+        if (tab == 0 && showCatalog) LoadCatalog("uniques");
     }
     private void LoadCatalog(string name)
     {
@@ -91,11 +98,12 @@ public sealed partial class EndgamePanel : MonoBehaviour
             return;
         }
         if (ArtworkSkin.Button(launch, "演劫 · F8", scale, selected: open)) Toggle();
-        DrawRiftHud(scale); DrawRiftMarkers(scale);
+        DrawRiftHud(scale); DrawRiftMarkers(scale); DrawRiftAnnouncement(scale);
         if (!open) return;
         Rect window = new Rect((Screen.width - W * scale) * .5f, (Screen.height - H * scale) * .5f, W * scale, H * scale);
         var frame = WinZ.Frame(this, window, 4); GUI.depth = frame.Item1;
         Vector2 oldMouse = Event.current.mousePosition;
+        panelScreenMouse = oldMouse; panelScale = scale;
         if (frame.Item2) Event.current.mousePosition = new Vector2(-9999f, -9999f);
         Matrix4x4 previous = GUI.matrix;
         try
@@ -120,6 +128,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         }
         finally { GUI.matrix = previous; if (frame.Item2) Event.current.mousePosition = oldMouse; }
     }
+    private void ShowPanelTooltip(string text) => UITip.ShowAtForIndependentRuntime(text, panelScale, panelScreenMouse);
     private static void Text(Rect rect, string value, GUIStyle style, Color? color = null)
     {
         Color previous = GUI.color; if (color.HasValue) GUI.color = color.Value;

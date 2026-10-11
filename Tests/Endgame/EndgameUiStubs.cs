@@ -105,7 +105,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static (int, bool) Frame(object owner, Rect r, int depth) => (depth, false);
         public static void Forget(object owner) { forgotten++; }
     }
-    internal static class UITip { public static string last; public static void Show(string text, float scale) { last = text; } }
+    internal static class UITip { public static string last; public static Vector2 mouse; public static float scale; public static void Show(string text, float s) { last = text; scale = s; } public static void ShowAtForIndependentRuntime(string text, float s, Vector2 pointer) { Show(text, s); mouse = pointer; } }
     internal static class TooltipContent { public static string QualityName(string name, int quality) => "gold:" + name; }
     internal static class PlayerController { public static void SuppressWorldClick() { } }
     internal static class InventoryDlg
