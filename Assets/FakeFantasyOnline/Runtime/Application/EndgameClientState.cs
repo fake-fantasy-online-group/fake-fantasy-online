@@ -120,7 +120,7 @@ public sealed partial class EndgameClientState
         if (response.Kind == "snapshot") ApplySnapshot(response);
         string catalog = response.Kind.StartsWith("catalog.", StringComparison.Ordinal) ? response.Kind.Substring(8) : response.Kind == "catalog" ? CatalogForRequest(response.RequestID) : null;
         if (catalog != null) ApplyCatalog(catalog, response);
-        if (response.Quote != null && response.RequestID == QuoteRequestID && CompareRevision(response.Quote.Revision, Revision) >= 0)
+        if (response.Quote != null && response.RequestID.Length > 0 && response.RequestID == QuoteRequestID && CompareRevision(response.Quote.Revision, Revision) >= 0)
         { Quote = response.Quote; Error = ""; Message = "问鼎已成，请核对耗费与所得。"; }
         Version++; return true;
     }
