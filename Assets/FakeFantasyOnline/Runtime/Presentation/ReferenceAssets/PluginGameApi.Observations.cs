@@ -29,6 +29,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("equipment", "Equipped slots, item identities, durability and appearance.", "itemId:integer", "name:string"),
             QueryDefinition("skills", "Learned skills, levels, real HUD cooldown seconds and last cast receipt. Learned-skill metadata gaps are explicit.", "skillId:integer"),
             QueryDefinition("buffs", "Local buffs and durations at authoritative receipt, without consuming native queues.", "skillId:integer", "name:string"),
+            QueryDefinition("party", "Native party name, leader and member receipt with exact expectedPartyRevision, local membership and leadership. offset pages members; no network request is implicit.", "offset:integer"),
             QueryDefinition("target", "Current local selection, live actor position, target vitals and matching status receipt."),
             QueryDefinition("quests", "Active/completed quests and current NPC offers with expectedQuestRevision and expectedOffersRevision.", "taskId:integer"),
             QueryDefinition("dialogue", "Actual NPC dialogue choices, expectedNpcId and dialogueRevision for stale-safe choice dispatch."),
@@ -105,6 +106,7 @@ public sealed partial class PluginGameApi
                     case "equipment": data = ObserveEquipment(s, args); break;
                     case "skills": data = ObserveSkills(s, args); break;
                     case "buffs": data = ObserveBuffs(s, args); break;
+                    case "party": data = ObserveParty(s, args); break;
                     case "target": data = ObserveTarget(s, args); break;
                     case "quests": data = ObserveQuests(s, args); break;
                     case "dialogue": data = ObserveDialogue(args); break;
@@ -577,7 +579,7 @@ public sealed partial class PluginGameApi
         {
             case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
-            case "quests": case "dialogue": case "ui":
+            case "party": case "quests": case "dialogue": case "ui":
             case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": return true;
             default: return false;
         }
@@ -591,6 +593,7 @@ public sealed partial class PluginGameApi
             case "endgame.items": specific = "|uid|location|tab|itemId|name|offset|"; break;
             case "endgame.catalog": specific = "|catalog|offset|"; break;
             case "endgame.rift": specific = "|offset|"; break;
+            case "party": specific = "|offset|"; break;
             case "entities": specific = "|radius|x|y|kind|entityId|name|"; break;
             case "npcs": specific = "|radius|x|y|entityId|name|"; break;
             case "loot": specific = "|radius|x|y|entityId|name|itemId|"; break;

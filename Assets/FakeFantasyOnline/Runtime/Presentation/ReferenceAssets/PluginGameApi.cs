@@ -157,6 +157,8 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
         TrackObservation("entities", Token(s?.WorldEntitiesVersion, s?.RemotePlayersVersion,
             s?.RemotePathsVersion, s?.MonsterPathsVersion));
         TrackObservation("buffs", Token(s?.BuffStateVersion));
+        TrackObservation("party", PartyObservationToken(s?.PartyStateVersion, frame?.Player?.EntityId,
+            CharData.charId, ObservationWorldReady(s)));
         TrackObservation("quests", Token(s?.TaskLogStateVersion, s?.NpcTaskOffersStateVersion));
         var player = frame?.Player;
         TrackObservation("player", Token(s?.PlayerStatusStateVersion, s?.LocalPlayerLifeStateVersion,
@@ -207,6 +209,8 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
     }
 
     private string EntityReference(string kind, int id) => kind + ":" + sceneRevision.ToString(CultureInfo.InvariantCulture) + ":" + id.ToString(CultureInfo.InvariantCulture);
+    private static string PartyObservationToken(long? nativeVersion, int? selfEntityId, long selfCharacterId, bool worldReady) =>
+        Token(nativeVersion, selfEntityId, selfCharacterId, worldReady);
     private static int ObservationFrameNumber
     {
         // Keep Unity's internal call out of the offline observer's JIT body. This accessor

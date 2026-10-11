@@ -14,9 +14,13 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/Result.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Actions.cs" \
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Endgame*.cs \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Actions.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Observations.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PlayerController.PluginActions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/CombatWorld.PluginActions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/NetClient.PluginActions.cs" \
   "$ROOT/Tests/PluginRuntime/GameActionAdapterTests.cs" \
-  "$ROOT/Tests/PluginRuntime/EndgameActionAdapterTests.cs"
+  "$ROOT/Tests/PluginRuntime/EndgameActionAdapterTests.cs" \
+  "$ROOT/Tests/PluginRuntime/PartyActionAdapterTests.cs" \
+  "$ROOT/Tests/PluginRuntime/PartyObservationAdapterTests.cs"
 "$MONO/bin/mono" "$OUT/GameActionAdapterTests.exe"

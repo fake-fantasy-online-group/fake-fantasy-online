@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
+using FakeFantasyOnline.Application;
 using FakeFantasyOnline.PluginApi;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
@@ -32,10 +33,121 @@ public static class GameObservationTests
         typeof(PluginGameApi).GetMethod("Emit", BindingFlags.Instance | BindingFlags.NonPublic)
             .Invoke(api, new object[] { name, data });
     }
-    public static int Main()
+    private static IReadOnlyDictionary<string, object> PartySnapshot(PluginGameApi api, WorldPartyState state,
+        long nativeVersion, int selfEntityId, params object[] fields) =>
+        PartyIdentitySnapshot(api, state, nativeVersion, selfEntityId, 0, fields);
+    private static IReadOnlyDictionary<string, object> PartyIdentitySnapshot(PluginGameApi api, WorldPartyState state,
+        long nativeVersion, int selfEntityId, long selfCharacterId, params object[] fields)
+    {
+        var argumentType = typeof(PluginGameApi).GetNestedType("ObservationArguments", BindingFlags.NonPublic);
+        var arguments = Activator.CreateInstance(argumentType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null, new object[] { Args(fields) }, null);
+        typeof(PluginGameApi).GetField("observationTextBudget", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(api, 65536);
+        var data = (IReadOnlyDictionary<string, object>)typeof(PluginGameApi)
+            .GetMethod("ObservePartySnapshot", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(api, new object[] { state, nativeVersion, selfEntityId, selfCharacterId, arguments });
+        return new GameSnapshot("party", 1, 1, data).Data;
+    }
+    private static IReadOnlyList<object> Members(IReadOnlyDictionary<string, object> data) =>
+        (IReadOnlyList<object>)data["members"];
+    private static IReadOnlyDictionary<string, object> Member(IReadOnlyDictionary<string, object> data, int index) =>
+        (IReadOnlyDictionary<string, object>)Members(data)[index];
+    private static void TestPartySnapshots()
     {
         var api = new PluginGameApi(() => null);
-        Check(api.GetQueries().Count == 17, "all supported domains are discoverable");
+        const long exactRevision = 9007199254740993L;
+        var scene = typeof(PluginGameApi).GetField("sceneRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        scene.SetValue(api, 27L);
+        var members = new List<WorldPartyMemberState>
+        {
+            new WorldPartyMemberState(41, "Leader", 30, 350, 400, 1, 8, 9, true),
+            new WorldPartyMemberState(42, "Away", 20, 0, 250, 0, 3, 4, false),
+            new WorldPartyMemberState(43, "Member", 10, 110, 120, 1, 5, 6, true)
+        };
+        var characterIds = new List<long> { long.MaxValue, exactRevision };
+        var professions = new List<byte> { 4 };
+        var native = new WorldPartyState(41, "Native party", members, characterIds, professions);
+        var data = PartySnapshot(api, native, exactRevision, 41);
+        Check((bool)data["available"] && (bool)data["inParty"] && (bool)data["isLeader"], "native leader membership is observed");
+        Check((string)data["name"] == "Native party" && (long)data["nativeVersion"] == exactRevision, "native party name and version are copied");
+        Check((string)data["expectedPartyRevision"] == "9007199254740993", "party revision preserves exact integer above Lua double range as string");
+        Check((string)data["leaderEntityId"] == "player:27:41" && (string)data["selfEntityId"] == "player:27:41", "party leader and self references are scene qualified");
+        Check((int)data["leaderNativeId"] == 41 && (int)data["selfNativeId"] == 41, "party native identities are explicit");
+        Check((int)data["count"] == 3 && (int)data["total"] == 3 && (int)data["offset"] == 0 && (int)data["limit"] == 128, "party default bounded page counts are explicit");
+        Check(!(bool)data["truncated"] && data["nextOffset"] == null, "complete party page has no continuation");
+        var leader = Member(data, 0);
+        Check((string)leader["entityId"] == "player:27:41" && (int)leader["nativeId"] == 41, "member references preserve scene and native identity");
+        Check((string)leader["name"] == "Leader" && (int)leader["level"] == 30 && (int)leader["hp"] == 350 && (int)leader["maxHp"] == 400, "native member name level and vitals are retained");
+        Check((bool)leader["isSelf"] && (bool)leader["isLeader"] && (bool)leader["online"], "member self leadership and online flags are explicit");
+        Check((int)leader["gender"] == 1 && (int)leader["hairId"] == 8 && (int)leader["hairColor"] == 9, "native member appearance fields are retained");
+        Check((string)leader["characterId"] == "9223372036854775807" && (int)leader["profession"] == 4, "optional persistent identity stays exact and profession retains native value");
+        Check(!(bool)Member(data, 1)["online"] && (int)Member(data, 1)["hp"] == 0, "offline members remain in native receipt order with received vitals");
+        Check(Member(data, 1)["profession"] == null && Member(data, 2)["characterId"] == null, "missing native compatibility tails remain unknown");
+        Check(!leader.ContainsKey("mp") && !leader.ContainsKey("x"), "party does not invent absent mana or position fields");
+
+        var page = PartySnapshot(api, native, exactRevision, 42, "offset", 1, "limit", 1);
+        Check((bool)page["inParty"] && !(bool)page["isLeader"] && (bool)Member(page, 0)["isSelf"], "nonleader self membership is independent of page offset");
+        Check((int)page["total"] == 3 && (int)page["count"] == 1 && (int)page["offset"] == 1 && (int)page["limit"] == 1, "party offset selects a bounded page");
+        Check((string)Member(page, 0)["name"] == "Away" && (string)Member(page, 0)["characterId"] == "9007199254740993", "native optional tail indices follow absolute member position");
+        Check((bool)page["truncated"] && (int)page["nextOffset"] == 2, "party page provides exact next offset");
+        var last = PartySnapshot(api, native, exactRevision, 41, "offset", 2, "limit", 1);
+        Check((bool)last["inParty"] && (bool)last["isLeader"] && !(bool)last["truncated"] && last["nextOffset"] == null, "membership and leadership cover full native state even when self is outside page");
+        var beyond = PartySnapshot(api, native, exactRevision, 41, "offset", 4096, "limit", 512);
+        Check(Members(beyond).Count == 0 && (int)beyond["total"] == 3 && !(bool)beyond["truncated"] && beyond["nextOffset"] == null, "offset beyond native members returns empty terminal page");
+        var outsider = PartySnapshot(api, native, exactRevision, 99);
+        Check(!(bool)outsider["inParty"] && !(bool)outsider["isLeader"], "unlisted local player is not a party member or leader");
+        var recycled = PartyIdentitySnapshot(api, native, exactRevision, 41, 99);
+        Check(!(bool)recycled["inParty"] && !(bool)recycled["isLeader"] && !(bool)Member(recycled, 0)["isSelf"], "persistent character mismatch rejects a recycled equal entity ID");
+        var sameCharacter = PartyIdentitySnapshot(api, native, exactRevision, 99, long.MaxValue);
+        Check((bool)sameCharacter["inParty"] && (bool)sameCharacter["isLeader"] && (bool)Member(sameCharacter, 0)["isSelf"], "persistent character match wins over a changed entity ID");
+        var absentTail = PartyIdentitySnapshot(api, native, exactRevision, 43, 99);
+        Check((bool)absentTail["inParty"] && (bool)Member(absentTail, 2)["isSelf"], "missing persistent identity tail falls back to native entity ID");
+        var unknownSelf = PartySnapshot(api, native, exactRevision, 0);
+        Check(unknownSelf["selfEntityId"] == null && !(bool)unknownSelf["inParty"] && !(bool)unknownSelf["isLeader"], "missing local player never acquires party membership");
+        var empty = PartySnapshot(api, WorldPartyState.Empty, 0, 41);
+        Check((bool)empty["available"] && Members(empty).Count == 0 && empty["leaderEntityId"] == null && !(bool)empty["inParty"] && !(bool)empty["isLeader"], "received empty party remains available and explicitly out of party");
+        Check((string)empty["expectedPartyRevision"] == "0", "empty native revision is an exact string");
+        var staleLeader = PartySnapshot(api, new WorldPartyState(41, "", new WorldPartyMemberState[0], new long[0]), 1, 41);
+        Check(!(bool)staleLeader["inParty"] && !(bool)staleLeader["isLeader"], "leader ID alone cannot imply membership");
+        var noLeader = PartyIdentitySnapshot(api, new WorldPartyState(0, "",
+            new[] { new WorldPartyMemberState(0, "Self", 1, 1, 1, 0, 0, 0, true) }, new long[] { 99 }), 1, 41, 99);
+        Check((bool)noLeader["inParty"] && !(bool)noLeader["isLeader"] && !(bool)Member(noLeader, 0)["isLeader"], "zero leader sentinel never confers leadership on persistent self member");
+        var missing = PartySnapshot(api, null, 0, 41);
+        Check(!(bool)missing["available"] && (string)missing["code"] == "not_received", "unpublished party differs from received empty party");
+
+        members.Clear(); characterIds.Clear(); professions.Clear();
+        Check(native.Members.Count == 3 && native.CharacterIds.Count == 2 && native.Professions.Count == 1, "native party snapshot owns immutable membership and optional tails");
+        Check(Members(data).Count == 3 && (string)Member(data, 0)["characterId"] == "9223372036854775807", "returned party snapshot survives source replacement independently");
+        Throws<NotSupportedException>(() => ((IList<object>)Members(data)).Clear(), "returned member page is immutable");
+        Throws<NotSupportedException>(() => ((IDictionary<string, object>)leader)["name"] = "changed", "returned member fields are immutable");
+        scene.SetValue(api, 28L);
+        var newScene = PartySnapshot(api, native, exactRevision, 41);
+        Check((string)newScene["leaderEntityId"] == "player:28:41" && (string)Member(newScene, 0)["entityId"] == "player:28:41", "new scene replaces party entity references");
+        Check((string)data["leaderEntityId"] == "player:27:41", "prior party snapshot retains its original scene identity");
+        var largeMembers = new List<WorldPartyMemberState>();
+        for (int i = 0; i < 600; i++) largeMembers.Add(new WorldPartyMemberState(i + 1, new string('n', 600), 1, 1, 1, 0, 0, 0, true));
+        var large = PartySnapshot(api, new WorldPartyState(1, new string('p', 600), largeMembers, null), long.MaxValue, 1, "limit", 10000);
+        Check(Members(large).Count == 512 && (int)large["total"] == 600 && (int)large["nextOffset"] == 512, "party hard row bound applies to oversized native input and requested limit");
+        Check((string)large["expectedPartyRevision"] == "9223372036854775807", "maximum signed native party version remains exact");
+        int textLength = ((string)large["name"]).Length;
+        foreach (object item in Members(large)) textLength += ((string)((IReadOnlyDictionary<string, object>)item)["name"]).Length;
+        Check(textLength <= 65536 && ((string)Member(large, 0)["name"]).Length == 256, "party projection honors per-name and aggregate text budgets");
+        Check((int)PartySnapshot(api, native, 1, 41, "limit", 0)["count"] == 1, "party shares minimum normalized page size");
+
+        var token = typeof(PluginGameApi).GetMethod("PartyObservationToken", BindingFlags.Static | BindingFlags.NonPublic);
+        string original = (string)token.Invoke(null, new object[] { exactRevision, 41, 99L, true });
+        Check(original == (string)token.Invoke(null, new object[] { exactRevision, 41, 99L, true }), "unchanged party native version and self retain cache token");
+        Check(original != (string)token.Invoke(null, new object[] { exactRevision + 1, 41, 99L, true }), "native party receipt invalidates observation cache token");
+        Check(original != (string)token.Invoke(null, new object[] { exactRevision, 42, 99L, true }), "local entity change invalidates membership and leadership cache token");
+        Check(original != (string)token.Invoke(null, new object[] { exactRevision, 41, 100L, true }), "local persistent character change invalidates membership and leadership cache token");
+        Check(original != (string)token.Invoke(null, new object[] { exactRevision, 41, 99L, false }), "same-frame world readiness change invalidates cached party unavailability");
+        api.Dispose();
+    }
+    public static int Main()
+    {
+        TestPartySnapshots();
+        var api = new PluginGameApi(() => null);
+        Check(api.GetQueries().Count == 18, "all supported domains are discoverable");
         var names = new HashSet<string>();
         foreach (var definition in api.GetQueries()) Check(names.Add(definition.Domain), "domains are unique");
         var schemas = new Dictionary<string, GameQueryDefinition>();
@@ -49,7 +161,7 @@ public static class GameObservationTests
             Check((string)offline.Data["expectedRevision"] == "0" && (string)offline.Data["snapshotId"] == "" && (string)offline.Data["snapshotRevision"] == "0", "offline endgame revisions are empty exact strings: " + domain);
             Check(((string)offline.Data["apiInstanceId"]).Length > 0, "offline endgame exposes adapter restart identity: " + domain);
         }
-        foreach (string domain in new[] { "endgame.items", "endgame.catalog", "endgame.rift" })
+        foreach (string domain in new[] { "endgame.items", "endgame.catalog", "endgame.rift", "party" })
         {
             var properties = (IReadOnlyDictionary<string, object>)schemas[domain].Arguments["properties"];
             var offsetSchema = (IReadOnlyDictionary<string, object>)properties["offset"];
@@ -71,6 +183,16 @@ public static class GameObservationTests
         Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.items", Args("location", "invented"))), "unknown item location rejected");
         Throws<ArgumentException>(() => api.Observe(new GameQuery("endgame.rift", Args("uid", "9007199254740993"))), "unrelated UID filter cannot be ignored by rift");
         Check(!(bool)api.Observe(new GameQuery("endgame.items", Args("uid", "9223372036854775807", "offset", 4096, "limit", 512))).Data["available"], "valid maximum string UID and pagination bounds reach offline state");
+        Check(names.Contains("party"), "native party domain is discoverable");
+        var offlineParty = api.Observe(new GameQuery("party", Args("offset", 4096, "limit", 512)));
+        Check(!(bool)offlineParty.Data["available"] && (string)offlineParty.Data["code"] == "not_in_world", "offline party requires active built native world");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("offset", -1))), "negative party offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("offset", 4097))), "oversized party offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("offset", 1.5))), "fractional party offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("offset", "1"))), "string party offset rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("limit", 1.5))), "fractional party limit rejected");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("entityId", "player:1:41"))), "unadvertised party filters cannot be silently ignored");
+        Throws<ArgumentException>(() => api.Observe(new GameQuery("party", Args("expectedPartyRevision", "1"))), "party mutation guard is not an observation filter");
         GameSnapshot world = api.Observe(new GameQuery("world"));
         Check((bool)world.Data["available"], "world/session state remains available while offline");
         Check(!(bool)world.Data["worldReady"], "offline world is not ready");

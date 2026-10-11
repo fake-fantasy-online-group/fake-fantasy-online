@@ -107,7 +107,7 @@ state changes.
 
 Discover the current schema rather than assuming every domain is ready at login.
 Current domains are `world`, `player`, `entities`, `npcs`, `loot`, `inventory`,
-`equipment`, `skills`, `buffs`, `target`, `quests`, `dialogue`, `ui`, `endgame`,
+`equipment`, `skills`, `buffs`, `target`, `quests`, `dialogue`, `party`, `ui`, `endgame`,
 `endgame.items`, `endgame.catalog`, and `endgame.rift`. Read the
 availability/reason fields inside snapshots when the required native owner or
 world session is missing.
@@ -273,3 +273,36 @@ framing/Unicode, malformed/oversize input, bounded output/queues/clients, dispat
 expiry, disconnect/Stop cancellation and restart. The Python client and its CLI
 also run against a temporary C# fake server. These are transport/contract tests,
 not proof of Unity visual behavior, native gameplay success, or server compatibility.
+
+## Ordinary party operations
+
+Discover `party` observations and the live `party.*` actions before using them.
+`party` exposes the native roster, scene-qualified member and leader identities,
+local membership/leadership, and exact decimal-string `expectedPartyRevision`.
+Use `limit`/`offset` for bounded member pages; do not interpret a truncated page
+as the full roster. No query sends a party request or drains a native UI queue.
+
+Available ordinary adapters are `party.create`, `party.invite`, `party.join`,
+`party.leave`, `party.dismiss`, `party.kick`, and `party.set_leader`.
+All require `expectedPartyRevision` from the current native party snapshot.
+Create accepts `name` with the native UI's maximum of 16 characters (empty is
+allowed; whitespace is trimmed). Create/join require an empty roster. Invite
+requires local membership; leave requires a nonleader, while dismiss/kick/leadership transfer require local
+leadership. Targeted actions require scene-qualified `entityId` and exact
+`expectedName`; invite/join resolve a current remote actor, kick/transfer resolve
+a current roster member, and leadership transfer requires an online member.
+Persistent character identity takes precedence over recycled scene IDs, matching
+the native social UI. Self-targeting is rejected. Before enqueueing a write, the
+adapter rechecks the captured party root, revision, local identity and role.
+The native receive owner can still publish a change after enqueueing; the server
+remains authoritative. Existing request-ID, scene, cancellation and retained
+receipt semantics apply unchanged.
+
+These are normal native client commands. A `sent` receipt proves only a successful
+gateway write. Observe `party` again to establish current membership before
+entering a party-gated trial. Do not repeat an uncertain create/join under a new
+request ID. Invitations and join requests can need approval from another player;
+the adapter does not auto-accept requests or bypass server eligibility. There is
+no new party-list matchmaking API, pending invitation/approval adapter, follow
+command, or atomic create-and-invite batch. Create and subsequent invitations are
+separate deliberate decisions using fresh observations.

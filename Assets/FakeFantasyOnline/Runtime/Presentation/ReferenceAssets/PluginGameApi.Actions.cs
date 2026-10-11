@@ -106,6 +106,7 @@ public sealed partial class PluginGameApi
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
                 "entityId:string", "text:string")
         };
+        AddPartyActions(definitions);
         AddEndgameActions(definitions);
         return definitions.AsReadOnly();
     }
@@ -251,6 +252,7 @@ public sealed partial class PluginGameApi
 
     private void ActionDispatch(PluginAction entry)
     {
+        if (entry.Request.Name.StartsWith("party.", StringComparison.Ordinal)) { DispatchParty(entry); return; }
         if (entry.Request.Name.StartsWith("endgame.", StringComparison.Ordinal)) { DispatchEndgame(entry); return; }
         var args = entry.Request.Arguments;
         var session = Session;
