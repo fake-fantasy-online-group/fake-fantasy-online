@@ -9,6 +9,7 @@ trap 'rm -rf "$OUT"' EXIT
 "$MONO/bin/mono" "$MONO/lib/mono/4.5/mcs.exe" -langversion:latest \
   -out:"$OUT/GameActionAdapterTests.exe" \
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/PluginApi/*.cs \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/Result.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Actions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PlayerController.PluginActions.cs" \

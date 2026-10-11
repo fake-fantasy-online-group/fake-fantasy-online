@@ -11,6 +11,8 @@ trap 'rm -rf "$OUT"' EXIT
   -out:"$OUT/AgentTransportContract.exe" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginApi/GameApi.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginApi/GameApiData.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/GameJson.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/MainThreadGameDispatcher.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/GameAgentProtocol.cs" \
