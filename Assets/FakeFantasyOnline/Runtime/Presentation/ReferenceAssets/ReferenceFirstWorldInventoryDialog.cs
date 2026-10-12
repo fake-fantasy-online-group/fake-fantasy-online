@@ -213,8 +213,8 @@ public sealed class ReferenceFirstWorldInventoryDialog : IDisposable
         {
             if (equipped.id <= 0 || (equipped.slot != item.slot &&
                 !((item.slot == 4 || item.slot == 13) && (equipped.slot == 4 || equipped.slot == 13)))) continue;
-            return CurrentEquipmentTooltipPrefix + TooltipContent.Fmt(
-                TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc);
+            return CurrentEquipmentTooltipPrefix + EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(
+                TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc));
         }
         return string.Empty;
     }

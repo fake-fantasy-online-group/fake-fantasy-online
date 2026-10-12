@@ -274,7 +274,7 @@ public sealed partial class ReferenceWorldReceiveOwner : IWorldReceiveOwner, ISk
             new CharData.BuffView
             {
                 skillId = skillId,
-                iconId = iconId,
+                iconId = ResolveBuffIcon(skillId, name, iconId),
                 remainSec = remainingSeconds,
                 name = name,
                 desc = description,

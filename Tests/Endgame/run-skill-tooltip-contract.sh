@@ -30,5 +30,5 @@ fi
 for fixture in "${FIXTURES[@]}"; do
  [[ -f "$fixture" ]] || { echo "Missing required skill tooltip fixture: $fixture" >&2; exit 1; }
 done
-FFO_VARIANT_FIXTURE_DIR="$ROOT/Tests/Endgame/Fixtures/skill-variants-v1" "$FFO_MONO_ROOT/bin/mono" "$OUT/NativeSkillTooltipContract.exe" "${FIXTURES[@]}"
+FFO_SKILL_EFFICIENCY_FIXTURE="$ROOT/Tests/Endgame/Fixtures/skill-efficiency-v6.json" FFO_VARIANT_FIXTURE_DIR="$ROOT/Tests/Endgame/Fixtures/skill-variants-v1" "$FFO_MONO_ROOT/bin/mono" "$OUT/NativeSkillTooltipContract.exe" "${FIXTURES[@]}"
 python3 "$ROOT/Tests/Endgame/skill_tooltip_source_contract.py"

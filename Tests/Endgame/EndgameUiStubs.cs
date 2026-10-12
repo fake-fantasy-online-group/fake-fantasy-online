@@ -109,11 +109,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static void Forget(object owner) { forgotten++; }
     }
     internal static class UITip { public static string last; public static Vector2 mouse; public static float scale; public static void Show(string text, float s) { last = text; scale = s; } public static void ShowAtForIndependentRuntime(string text, float s, Vector2 pointer) { Show(text, s); mouse = pointer; } }
-    internal static class TooltipContent { public static string QualityName(string name, int quality) => "\u0003" + quality + name; public static string Fmt(string name, string desc) => "\u0007" + name + "\n" + desc; }
+    internal static partial class TooltipContent { public static string QualityName(string name, int quality) => "\u0003" + quality + name; public static string Fmt(string name, string desc) => "\u0007" + name + "\n" + desc; }
+    internal static class GameHud { public static string HotSlotTip(int index) => "hotbar:" + index; }
     internal static class PlayerController { public static void SuppressWorldClick() { } }
     internal static class InventoryDlg
     {
         public struct Item { public int id, bagIdx, quality; public string name, desc; }
+        public static IEnumerable<Item>[] Items => new IEnumerable<Item>[] { rows.Values, rows.Values, rows.Values, rows.Values };
         public static Dictionary<int, Item> rows = new Dictionary<int, Item>();
         public static Item ItemAt(int tab, int slot) => rows.TryGetValue(slot, out var value) ? value : default;
     }

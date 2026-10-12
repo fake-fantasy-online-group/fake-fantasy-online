@@ -23,6 +23,19 @@ public partial class MonsterEntity
 
     public void SetStatusIcons(List<StatusIcon> list)
     {
+        if (list != null && sicons != null)
+            for (int i = 0; i < list.Count; i++)
+            {
+                StatusIcon row = list[i];
+                if (row.icon > 0) continue;
+                foreach (StatusIcon previous in sicons)
+                    if (previous.status == row.status && previous.icon > 0)
+                    {
+                        row.icon = previous.icon;
+                        list[i] = row;
+                        break;
+                    }
+            }
         sicons = list;
         if (sicons != null && sicons.Count > 0)
         {
@@ -35,6 +48,19 @@ public partial class MonsterEntity
         ApplyStatusIcons();
     }
 
+    internal static int StatusIconSignature(List<StatusIcon> visible)
+    {
+        int signature = 17;
+        foreach (StatusIcon row in visible)
+        {
+            signature = unchecked(signature * 31 + row.status);
+            signature = unchecked(signature * 31 + row.icon);
+            signature = unchecked(signature * 31 + (row.good ? 1 : 0));
+        }
+        signature = visible.Count == 0 ? 0 : unchecked(signature * 31 + visible.Count);
+        return signature;
+    }
+
     private void ApplyStatusIcons()
     {
         var visible = new List<StatusIcon>(8);
@@ -44,9 +70,7 @@ public partial class MonsterEntity
                 if (siExpire == null || siExpire[i] < 0f || Time.time < siExpire[i])
                     visible.Add(sicons[i]);
         }
-        int signature = 17;
-        foreach (StatusIcon row in visible) signature = unchecked(signature * 31 + row.status);
-        signature = visible.Count == 0 ? 0 : unchecked(signature * 31 + visible.Count);
+        int signature = StatusIconSignature(visible);
         if (signature == siSig && ((siGo == null) == (visible.Count == 0))) return;
         siSig = signature;
         if (visible.Count == 0)

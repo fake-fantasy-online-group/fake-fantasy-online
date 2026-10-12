@@ -556,6 +556,58 @@ internal static class NativeSkillTooltipContract
         Screen.width = 1280; Screen.height = 900; Screen.dpi = 96f;
         Check(failures.Count == 0, fixtureLabel + " skill cards must fit the native viewport:\n" + string.Join("\n", failures));
     }
+    private static void ManaEfficiencyPreservesOriginalBlock()
+    {
+        const string efficiency = "法力效率: +42%";
+        const string nextEfficiency = "法力效率: +44%";
+        string current = CurrentEffects.Substring(0, CurrentEffects.Length - 1) + ",\"" + efficiency + "\"]";
+        string next = NextEffects.Substring(0, NextEffects.Length - 1) + ",\"" + nextEfficiency + "\"]";
+        var state = State(Rank(current: current, upcoming: next));
+        string card = Win05.TestNativeGrowthTip(10401, true, "火焰术");
+        foreach (string line in state.SkillRank(10401).CurrentEffectLines) Check(card.Contains(line), "Efficiency retains every authored current row");
+        foreach (string line in state.SkillRank(10401).NextEffectLines) Check(card.Contains(line), "Efficiency retains every authored next row");
+        Check(Count(card, efficiency) == 1 && Count(card, nextEfficiency) == 1, "Server efficiency rows render once per full block");
+        Check(card.IndexOf("消耗: 12点法力", StringComparison.Ordinal) < card.IndexOf(efficiency, StringComparison.Ordinal) &&
+            card.IndexOf("技能间隔: 2秒", StringComparison.Ordinal) < card.IndexOf(efficiency, StringComparison.Ordinal),
+            "Integer cost gate and original timing lines retain order before efficiency");
+        var rows = Layout(card).Item1;
+        Check(!Row(rows, efficiency).Item3 && !Row(rows, nextEfficiency).Item3, "Efficiency stays in original effect block without changing alignment");
+        CheckRow(rows, "受到以下技能加成", Green);
+        CheckRow(rows, "火焰专精（投入3点）", Green);
+        string hotbar = Win05.TestNativeGrowthTip(10401, false, "火焰术");
+        Check(Count(hotbar, efficiency) == 1 && !hotbar.Contains(nextEfficiency) && hotbar.Contains("消耗: 12点法力"),
+            "Hotbar retains current integer cost and shows only current efficiency");
+        Check(!card.Contains("零头") && !card.Contains("返还"), "No accounting implementation text introduced");
+        foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(card, scale, new Vector2(300, 200));
+        State(Rank());
+        Check(!Win05.TestNativeGrowthTip(10401, true, "火焰术").Contains("法力效率"), "Legacy skills get no invented efficiency line");
+        State(Rank(hard: 0, soft: "0", effective: "0", next: "1", cast: false, current: "[]", upcoming: next));
+        string preview = Win05.TestNativeGrowthTip(10401, true, "火焰术");
+        Check(Count(preview, nextEfficiency) == 1 && !preview.Contains(efficiency), "Unlearned card shows first-rank efficiency preview once");
+    }
+    private static void ServerManaEfficiencyTips(string path)
+    {
+        var cases = (IReadOnlyList<object>)BoundedJson.Parse(File.ReadAllText(path));
+        int previous = int.MaxValue;
+        foreach (var item in cases)
+        {
+            var sample = (IReadOnlyDictionary<string, object>)item;
+            var behavior = new EndgameSkillBehaviorView((IReadOnlyDictionary<string, object>)sample["payload"]);
+            Check(behavior.MPCost > 0 && behavior.MPCost <= previous,
+                "Actual server integer cost remains positive and never rises across sampled ranks");
+            previous = behavior.MPCost;
+            string rank = ((long)sample["rank"]).ToString(CultureInfo.InvariantCulture);
+            string lines = BoundedJson.Serialize(sample["lines"]);
+            State(Rank(hard: 20, effective: rank, next: "", invest: false, current: lines, upcoming: "[]"));
+            string text = Win05.TestNativeGrowthTip(10401, false, "净化术");
+            foreach (string line in (IReadOnlyList<object>)sample["lines"])
+                Check(Count(text, line) == 1, "Actual server prose/cost/timing/efficiency renders exactly once at " + rank);
+            Check(text.Contains("消耗: " + behavior.MPCost + "点法力"), "Server integer admission amount remains original consumption line");
+            Check(!text.Contains("返还") && !text.Contains("零头"), "Actual server tooltip avoids settlement implementation prose");
+            foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(text, scale, new Vector2(300, 200));
+        }
+        Check(cases.Count == 6 && previous == 1, "Real server fixture covers ranks20/21/30/50/100/1000000 including positive one-MP gate");
+    }
     private static void EquipmentVariantTips(string fixtureDirectory)
     {
         foreach (string path in Directory.GetFiles(fixtureDirectory, "*.json"))
@@ -586,8 +638,9 @@ internal static class NativeSkillTooltipContract
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
         CenteringAfterWrapping(); HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
-        PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation();
+        PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation(); ManaEfficiencyPreservesOriginalBlock();
         foreach (string fixture in args) CheckServerFixture(fixture);
+        ServerManaEfficiencyTips(Environment.GetEnvironmentVariable("FFO_SKILL_EFFICIENCY_FIXTURE"));
         string variants = Environment.GetEnvironmentVariable("FFO_VARIANT_FIXTURE_DIR");
         if (!string.IsNullOrEmpty(variants)) EquipmentVariantTips(variants);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");

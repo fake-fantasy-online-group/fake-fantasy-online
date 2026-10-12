@@ -22,7 +22,7 @@ internal static partial class TooltipContent
                 // bagIdx equals the hovered cell; every miss returns null, not the held item.
                 foreach (InventoryDlg.Item item in InventoryDlg.Items[dragType - 1])
                 {
-                    if (item.bagIdx == index) return Fmt(item.name, item.desc);
+                    if (item.bagIdx == index) return EndgamePanel.BagTooltip(dragType - 1, item, Fmt(item.name, item.desc));
                 }
                 return null;
 
@@ -31,7 +31,7 @@ internal static partial class TooltipContent
                 // why the enumerator is interface-dispatched in both native architectures.
                 foreach (EquipDlg.EquippedItem item in EquipDlg.Equipped)
                 {
-                    if (item.slot == index) return Fmt(item.name, item.desc);
+                    if (item.slot == index) return EndgamePanel.EquippedTooltip(item, Fmt(item.name, item.desc));
                 }
                 return null;
 

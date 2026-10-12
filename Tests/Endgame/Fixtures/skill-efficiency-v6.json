@@ -1,0 +1,218 @@
+[
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 50点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.77秒",
+      "法力效率: +30%"
+    ],
+    "payload": {
+      "mpCost": 50,
+      "prepareMs": 0,
+      "cooldownMs": 769,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 20
+  },
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 49点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.76秒",
+      "法力效率: +32%"
+    ],
+    "payload": {
+      "mpCost": 49,
+      "prepareMs": 0,
+      "cooldownMs": 757,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 21
+  },
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 43点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.67秒",
+      "法力效率: +50%"
+    ],
+    "payload": {
+      "mpCost": 43,
+      "prepareMs": 0,
+      "cooldownMs": 666,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 30
+  },
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 34点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.53秒",
+      "法力效率: +90%"
+    ],
+    "payload": {
+      "mpCost": 34,
+      "prepareMs": 0,
+      "cooldownMs": 526,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 50
+  },
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 23点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.34秒",
+      "法力效率: +190%"
+    ],
+    "payload": {
+      "mpCost": 23,
+      "prepareMs": 0,
+      "cooldownMs": 344,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 100
+  },
+  {
+    "lines": [
+      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "消耗: 1点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0秒",
+      "法力效率: +1999990%"
+    ],
+    "payload": {
+      "mpCost": 1,
+      "prepareMs": 0,
+      "cooldownMs": 0,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 1000000
+  }
+]

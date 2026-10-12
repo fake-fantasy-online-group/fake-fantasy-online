@@ -127,7 +127,10 @@ public partial class Win05
     // hotbar-icon time - a second, earlier read point DrawSkill 06001025 does not have.
     public static int SkillIconId(int id)
     {
-        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative)) return authoritative?.icon ?? 0;
+        // Negotiated gameplay can arrive before its optional artwork metadata. A missing
+        // contract/icon must not hide the installed skill art used by buff HUD fallback.
+        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative) &&
+            authoritative != null && authoritative.icon > 0) return authoritative.icon;
         LoadStatic();
         return skInfo != null && skInfo.TryGetValue(id, out SkInfo info) ? info.icon : 0;
     }

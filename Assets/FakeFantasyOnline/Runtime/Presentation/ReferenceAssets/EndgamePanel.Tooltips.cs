@@ -109,11 +109,14 @@ public sealed partial class EndgamePanel
             // by attribute/mode/scope, so catalog reference values stay out.
             foreach (var stat in formation.Stats) attributes.Add(DarkGold(StatText(stat)));
         string status = FormationStatus(item);
-        if (status.Length > 0) AddMissingLine(attributes, lines, "\u0002" + status);
-        // Keep the authoritative socket count and native attribute section intact.
-        int sockets = lines.FindIndex(line => PlainLine(line).StartsWith("孔数 ", StringComparison.Ordinal));
-        int anchor = sockets >= 0 ? sockets : NativeAttributeAnchor(lines);
+        // Effects close the attribute section, immediately after all ordinary
+        // properties. Socket metadata, stories and binding notices are separate
+        // sections and must not split the properties from their special effects.
+        int anchor = NativeAttributeAnchor(lines);
         lines.InsertRange(anchor, attributes);
+        lines.InsertRange(anchor + attributes.Count, effects);
+        if (status.Length > 0 && !lines.Contains("\u0002" + status))
+            lines.Insert(anchor + attributes.Count + effects.Count, "\u0002" + status);
         if (item.FormationID > 0)
         {
             string runes = SocketInitials(item);
@@ -122,9 +125,6 @@ public sealed partial class EndgamePanel
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
-        // Effects are the final block, after native functional sections, lore and
-        // binding notices. Moving native rows preserves their values and ordering.
-        lines.AddRange(effects);
         return string.Join("\n", lines);
     }
     private static int NativeCompositionAnchor(List<string> lines)
@@ -147,12 +147,19 @@ public sealed partial class EndgamePanel
     private static string FormationName(string name) => name.StartsWith("宿阵·", StringComparison.Ordinal) ? name.Substring(3) : name;
     private static int NativeAttributeAnchor(List<string> lines)
     {
-        int end = lines.FindIndex(line => PlainLine(line).StartsWith("套装:", StringComparison.Ordinal) || PlainLine(line).StartsWith("法宝技能:", StringComparison.Ordinal));
+        int end = lines.FindIndex(line => PlainLine(line).StartsWith("孔数 ", StringComparison.Ordinal) || PlainLine(line).StartsWith("套装:", StringComparison.Ordinal) || PlainLine(line).StartsWith("法宝技能:", StringComparison.Ordinal));
         if (end < 0) end = lines.Count;
         for (int i = end - 1; i > 0; i--)
         {
             string plain = PlainLine(lines[i]);
-            if (IsAttributeLine(plain) || lines[i].StartsWith("\u00035", StringComparison.Ordinal) || plain.StartsWith("重量 ", StringComparison.Ordinal) || plain.StartsWith("需要", StringComparison.Ordinal) || plain.StartsWith("耐久度:", StringComparison.Ordinal)) return i + 1;
+            if (IsAttributeLine(plain) || lines[i].StartsWith("\u00035", StringComparison.Ordinal)) return i + 1;
+        }
+        // An incomplete legacy description may contain only requirements. Keep
+        // that fallback, but never let trailing metadata outrank real properties.
+        for (int i = end - 1; i > 0; i--)
+        {
+            string plain = PlainLine(lines[i]);
+            if (plain.StartsWith("重量 ", StringComparison.Ordinal) || plain.StartsWith("需要", StringComparison.Ordinal) || plain.StartsWith("耐久度:", StringComparison.Ordinal)) return i + 1;
         }
         return Math.Min(1, lines.Count);
     }
@@ -349,6 +356,7 @@ public sealed partial class EndgamePanel
             if (tooltip && IsSpecial(item) && !IsAttributeLine(plain)) effects.Add(Orange(plain));
             else text.Append(tooltip && IsSpecial(item) ? DarkGold(plain) : plain).Append('\n');
         }
+        foreach (string effect in effects) text.Append(effect).Append('\n');
         if (item.Description.Length > 0) text.Append('\n').Append(item.Description).Append('\n');
         if (IsRune(item))
         {
@@ -372,7 +380,6 @@ public sealed partial class EndgamePanel
             text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n打孔炉逐孔开启；巧匠或左慈 → 周天鼎可为无孔器物随机开窍，或调序、炼化。先问鼎查看耗费。\n");
         if (item.Locked) text.Append("\n器物已锁定，须先解除锁定才能加工。\n");
         if (!tooltip && item.UID.Length > 0) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
-        foreach (string effect in effects) text.Append(effect).Append('\n');
         return text.ToString();
     }
     private static string MaterialUse(int id)

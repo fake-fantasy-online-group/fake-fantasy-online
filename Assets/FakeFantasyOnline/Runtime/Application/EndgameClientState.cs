@@ -125,7 +125,11 @@ public sealed partial class EndgameClientState
     public EndgameItemView Find(string location, int tab, int slot, int itemID)
     {
         if (!Negotiated || !HasSnapshot) return null;
-        foreach (var item in Items) if (item.Location == location && item.Tab == tab && item.Slot == slot && item.ItemID == itemID) return item;
+        // Tab is a bag address, not part of an equipped-slot address. The server
+        // retains the item's inventory category (often 2) after equipping it.
+        foreach (var item in Items)
+            if (item.Location == location && (location == "equipped" || item.Tab == tab) &&
+                item.Slot == slot && item.ItemID == itemID) return item;
         return null;
     }
     public bool Apply(EndgameResponse response)

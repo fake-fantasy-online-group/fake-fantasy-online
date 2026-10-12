@@ -228,3 +228,7 @@ lossless UID, invalid/bounded fields, same-revision equipment replacement, stale
 revision, and unequip tests. `run-skill-tooltip-contract.sh` additionally renders
 those forms through the existing native tooltip composition with deterministic
 Unity/font substitutes. These are managed contracts, not a Unity/Player run.
+
+Equipped tooltip identity is location + equipment slot + item ID; the snapshot retains the item’s inventory category in `tab`, which is not an equipped-slot address. Bag lookup still requires the exact tab. Character slots (including slots 14–25), comparison, workbench and generic drag previews reuse the same overlay. Managed regressions move the same UID from bag to worn across categories 0–3 and slots 1/13/25, covering legacy/native-stat negotiation, ordinary fallback, missing/stale native rows and disconnect reset. These are deterministic contracts, not rendered Unity acceptance.
+
+Orange special effects end the equipment attribute section immediately after ordinary properties. Native effects are gathered from their prior positions and inserted beside the other attributes; sockets, stories, requirements and binding sections cannot separate the last property from its effects. Authored stories and native functional/binding text remain outside that block. The same rule applies to bag, equipped, comparison and workbench previews; regressions cover scattered native effect rows, intervening story/requirement/durability metadata, missing sockets and repeated overlays.
