@@ -1,0 +1,53 @@
+--- a/ScriptOptions.cs
++++ b/ScriptOptions.cs
+@@ -27,6 +27,8 @@
+ 			this.ScriptLoader = defaults.ScriptLoader;
+ 
+ 			this.CheckThreadAccess = defaults.CheckThreadAccess;
++			this.MaximumStringLength = defaults.MaximumStringLength;
++			this.MaximumTableEntries = defaults.MaximumTableEntries;
+ 		}
+ 
+ 		/// <summary>
+@@ -96,5 +98,11 @@
+ 		/// </summary>
+ 		public bool CheckThreadAccess { get; set; }
+ 
++        // FakeFantasyOnline local safety extension. Zero preserves upstream unlimited behavior.
++        /// <summary>Maximum result length for VM string concatenation; zero means unlimited.</summary>
++        public int MaximumStringLength { get; set; }
++        /// <summary>Maximum allocated entries per Lua table; zero means unlimited.</summary>
++        public int MaximumTableEntries { get; set; }
++
+ 	}
+ }
+--- a/Execution/VM/Processor/Processor_InstructionLoop.cs
++++ b/Execution/VM/Processor/Processor_InstructionLoop.cs
+@@ -1162,6 +1162,10 @@
+ 
+ 			if (rs != null && ls != null)
+ 			{
++                // FakeFantasyOnline: reject before allocating an exponential concatenation result.
++                int maximum = m_Script.Options.MaximumStringLength;
++                if (maximum > 0 && (long)ls.Length + rs.Length > maximum)
++                    throw new ScriptRuntimeException("String concatenation exceeds the configured size limit.");
+ 				m_ValueStack.Push(DynValue.NewString(ls + rs));
+ 				return instructionPtr;
+ 			}
+--- a/DataTypes/Table.cs
++++ b/DataTypes/Table.cs
+@@ -161,6 +161,14 @@
+ 
+ 		private void PerformTableSet<T>(LinkedListIndex<T, TablePair> listIndex, T key, DynValue keyDynValue, DynValue value, bool isNumber, int appendKey)
+ 		{
++            // FakeFantasyOnline: cap a table before allocating another linked-list/index entry.
++            int maximum = m_Owner == null ? 0 : m_Owner.Options.MaximumTableEntries;
++            if (maximum > 0 && m_Values.Count >= maximum && listIndex.Find(key) == null)
++            {
++                if (m_ContainsNilEntries) CollectDeadKeys();
++                if (m_Values.Count >= maximum)
++                    throw new ScriptRuntimeException("Table exceeds the configured entry limit.");
++            }
+ 			TablePair prev = listIndex.Set(key, new TablePair(keyDynValue, value));
+ 
+ 			// If this is an insert, we can invalidate all iterators and collect dead keys

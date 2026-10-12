@@ -122,6 +122,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             (int depth, bool covered) = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
             Vector2 savedMouse = Event.current.mousePosition;
+            Color savedColor = GUI.color;
+            int savedDepth = GUI.depth;
             if (covered) Event.current.mousePosition = new Vector2(-9999f, -9999f);
             try
             {
@@ -188,6 +190,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             finally
             {
+                GUI.color = savedColor;
+                GUI.depth = savedDepth;
                 if (covered) Event.current.mousePosition = savedMouse;
                 FlushFitDescWant();
             }

@@ -15,6 +15,7 @@ public partial class CombatWorld
     {
         if (I != null)
         {
+            I.pluginSkillIntentRevision++;
             I.pendSkillId = 0;
             I.queuedSkillId = 0;
             I.pendGroundSkill = 0;

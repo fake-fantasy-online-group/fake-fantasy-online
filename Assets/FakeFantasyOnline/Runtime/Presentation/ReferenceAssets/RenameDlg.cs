@@ -68,17 +68,12 @@ internal sealed class RenameDlg : MonoBehaviour
         {
             _e = new GUIStyle(GUIStyle.none) { font = NpcChatter.CnFont(), alignment = TextAnchor.MiddleLeft };
             _e.normal.textColor = Color.white;
+            _e.hover.textColor = Color.white;
+            _e.active.textColor = Color.white;
+            _e.focused.textColor = Color.white;
         }
         _e.fontSize = Mathf.RoundToInt(13f * s);
         return _e;
-    }
-
-    // Fill（06000a5e）
-    private void Fill(Rect rect, Color color)
-    {
-        GUI.color = color;
-        GUI.DrawTexture(rect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
     }
 
     // Confirm（06000a5f）: hides first, then sends, so the window closes even when NetClient has no instance.
@@ -94,6 +89,19 @@ internal sealed class RenameDlg : MonoBehaviour
     private void OnGUI()
     {
         if (!visible) return;
+        Color previousColor = GUI.color;
+        int previousDepth = GUI.depth;
+        try { DrawWindow(); }
+        finally
+        {
+            GUI.color = previousColor;
+            GUI.depth = previousDepth;
+        }
+    }
+
+    private void DrawWindow()
+    {
+        if (!visible) return;
         s = UIScale.Factor;
         if (WinDrag.Stale(winX, ref _wdGen))
         {
@@ -102,24 +110,21 @@ internal sealed class RenameDlg : MonoBehaviour
         }
         Vector2 mp = Event.current.mousePosition;
         GUI.depth = 2;
-        PopUI.Panel(L(0, 0, NW, NH));
-        Fill(L(2, 2, 236, 18), new Color(.18f, .15f, .1f, 1f));
+        ArtworkSkin.Panel(L(0, 0, NW, NH), s);
+        ArtworkSkin.Panel(L(2, 2, 236, 18), s, true);
         if (BitmapFont.Ready) BitmapFont.CenterOutline(L(0, 5, NW, 14), "角色改名", new Color(1f, .9f, .55f, 1f), s);
         if (BitmapFont.Ready) BitmapFont.CenterOutline(L(0, 26, NW, 12), "请输入新的角色名字", new Color(.85f, .82f, .72f, 1f), s);
         Rect field = L(20, 42, 200, 20);
-        Fill(new Rect(field.x - 2f, field.y - 2f, field.width + 4f, field.height + 4f), new Color(.62f, .5f, .26f, 1f));
-        Fill(field, new Color(.24f, .22f, .18f, 1f));
+        ArtworkSkin.Input(new Rect(field.x - 2f * s, field.y - 2f * s, field.width + 4f * s, field.height + 4f * s),
+            s, GUI.GetNameOfFocusedControl() == "rename_in");
         GUI.SetNextControlName("rename_in");
-        nm = GUI.TextField(new Rect(field.x + 5f, field.y + 2f, field.width - 10f, field.height - 4f), nm ?? string.Empty, 16, E());
+        nm = GUI.TextField(new Rect(field.x + 5f * s, field.y + 2f * s, field.width - 10f * s, field.height - 4f * s), nm ?? string.Empty, 16, E());
         Rect ok = L(52, 68, 60, 18), cancel = L(128, 68, 60, 18);
         bool overOk = ok.Contains(mp), overCancel = cancel.Contains(mp);
-        Fill(ok, overOk ? new Color(.62f, .5f, .2f, 1f) : new Color(.42f, .34f, .18f, 1f));
-        Fill(cancel, overCancel ? new Color(.55f, .3f, .25f, 1f) : new Color(.38f, .28f, .24f, 1f));
-        if (BitmapFont.Ready)
-        {
-            BitmapFont.CenterOutline(ok, "确定", new Color(1f, .95f, .7f, 1f), s);
-            BitmapFont.CenterOutline(cancel, "取消", new Color(.92f, .86f, .8f, 1f), s);
-        }
+        ArtworkSkin.ButtonFace(ok, "确定", s, selected: overOk,
+            pressed: overOk && Input.GetMouseButton(0));
+        ArtworkSkin.ButtonFace(cancel, "取消", s, selected: overCancel,
+            pressed: overCancel && Input.GetMouseButton(0));
         bool click = Event.current.type == EventType.MouseDown && Event.current.button == 0;
         if (click && overOk)
         { Confirm(); Event.current.Use(); }

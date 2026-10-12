@@ -206,14 +206,8 @@ public partial class ArenaDeathDlg : MonoBehaviour
         float textX = px + 12f * s;
         float textW = pw - 24f * s;
 
-        GUI.color = new Color(0.1f, 0.08f, 0.14f, 0.96f);
-        GUI.DrawTexture(panel, dot);
-        GUI.color = new Color(0.7176f, 0.6078f, 0.3843f, 0.8f);
-        GUI.DrawTexture(Snap(new Rect(px, py, pw, hair)), dot);
-        GUI.DrawTexture(Snap(new Rect(px, py + ph - hair, pw, hair)), dot);
-        GUI.DrawTexture(Snap(new Rect(px, py, hair, ph)), dot);
-        GUI.DrawTexture(Snap(new Rect(px + pw - hair, py, hair, ph)), dot);
         GUI.color = Color.white;
+        ArtworkSkin.Panel(panel, s);
 
         float titleY = py + 10f * s;
         TX(textX, titleY, "你阵亡了", new Color(1f, 120f / 255f, 120f / 255f, 1f), font);
@@ -398,48 +392,10 @@ public partial class ArenaDeathDlg : MonoBehaviour
     private static void DrawBtn(Rect r, string text, bool enabled, float f, float hair,
         Texture2D dot)
     {
-        bool hover = false;
-        Color fill;
-        if (!enabled)
-        {
-            fill = new Color(0.14f, 0.13f, 0.16f, 0.9f);
-        }
-        else
-        {
-            float mx = Input.mousePosition.x;
-            float my = Screen.height - Input.mousePosition.y;
-            hover = r.x <= mx && mx < r.x + r.width && r.y <= my && my < r.y + r.height;
-            fill = hover
-                ? new Color(0.3f, 0.24f, 0.14f, 0.98f)
-                : new Color(0.18f, 0.15f, 0.1f, 0.95f);
-        }
-        GUI.color = fill;
-        GUI.DrawTexture(r, dot);
-
-        if (!enabled)
-        {
-            GUI.color = new Color(0.4f, 0.4f, 0.42f, 0.8f);
-        }
-        else if (hover)
-        {
-            GUI.color = new Color(1f, 0.88f, 0.5f, 1f);
-        }
-        else
-        {
-            GUI.color = new Color(0.7176f, 0.6078f, 0.3843f, 0.8f);
-        }
-        GUI.DrawTexture(new Rect(r.x, r.y, r.width, hair), dot);
-        GUI.DrawTexture(new Rect(r.x, r.y + r.height - hair, r.width, hair), dot);
-        GUI.DrawTexture(new Rect(r.x, r.y, hair, r.height), dot);
-        GUI.DrawTexture(new Rect(r.x + r.width - hair, r.y, hair, r.height), dot);
-        GUI.color = Color.white;
-
-        float tx = Mathf.Round(r.x + (r.width - BitmapFont.Measure(text, f)) * 0.5f);
-        float ty = Mathf.Round(r.y + (r.height - f * 12f) * 0.5f);
-        Color textColor = enabled
-            ? new Color(1f, 238f / 255f, 180f / 255f, 1f)
-            : new Color(120f / 255f, 120f / 255f, 126f / 255f, 1f);
-        BitmapFont.DrawOutline(tx, ty, text, textColor, f);
+        bool hover = enabled && r.Contains(Event.current.mousePosition);
+        float scale = S;
+        ArtworkSkin.ButtonFace(r, text, scale, enabled, hover, f / scale,
+            hover && Input.GetMouseButton(0));
     }
 }
 }

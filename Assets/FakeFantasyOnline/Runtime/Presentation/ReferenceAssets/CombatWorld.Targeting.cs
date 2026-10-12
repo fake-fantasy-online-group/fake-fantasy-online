@@ -19,6 +19,8 @@ public partial class CombatWorld
     public static void SetTarget(MonsterEntity me, bool attack = true)
     {
         Ensure();
+        I.pluginAttackIntentRevision++;
+        I.pluginSkillIntentRevision++;
         I.target = me;
         I.pvpTarget = null;
         I.autoAttacking = attack;
@@ -55,6 +57,8 @@ public partial class CombatWorld
     public static void SetPvpTarget(RemotePlayer rp)
     {
         Ensure();
+        I.pluginAttackIntentRevision++;
+        I.pluginSkillIntentRevision++;
         I.pvpTarget = rp;
         I.target = null;
         I.autoAttacking = true;
@@ -88,6 +92,8 @@ public partial class CombatWorld
     public static void ClearTarget()
     {
         if (!I) return;
+        I.pluginAttackIntentRevision++;
+        I.pluginSkillIntentRevision++;
         I.target = null;
         I.pvpTarget = null;
         I.atkState = AtkState.Idle;

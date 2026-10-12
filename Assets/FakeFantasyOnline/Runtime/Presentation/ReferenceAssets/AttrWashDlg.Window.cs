@@ -16,10 +16,8 @@ internal partial class AttrWashDlg
     private bool Btn(Rect r, string text, Vector2 m)
     {
         bool hover = r.Contains(m);
-        GUI.color = hover ? new Color(0.55f, 0.42f, 0.18f, 0.95f) : new Color(0.32f, 0.27f, 0.16f, 0.9f);
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        if (BitmapFont.Ready) BitmapFont.CenterOutline(r, text, new Color(1f, 0.92f, 0.66f, 1f), s);
+        ArtworkSkin.ButtonFace(r, text, s, !SysMsgBox.Visible,
+            selected: hover, pressed: hover && Input.GetMouseButton(0));
         if (!hover || SysMsgBox.Visible || Event.current.type != EventType.MouseDown || Event.current.button != 0)
             return false;
         Event.current.Use();
@@ -39,6 +37,8 @@ internal partial class AttrWashDlg
         var stacking = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
         Vector2 savedMouse = Event.current.mousePosition;
         if (stacking.Item2) Event.current.mousePosition = new Vector2(-9999f, -9999f);
+        Color savedColor = GUI.color;
+        int savedDepth = GUI.depth;
         try
         {
             Vector2 m = Event.current.mousePosition;
@@ -54,9 +54,7 @@ internal partial class AttrWashDlg
             if (BitmapFont.Ready)
                 BitmapFont.CenterOutlineBold(L(44, 24, 226, 18), "装备洗炼", new Color(1f, 0.92f, 0.66f, 1f), titleScale);
             Rect target = L(153.5f, 66, 36, 36);
-            GUI.color = new Color(0, 0, 0, 0.45f);
-            GUI.DrawTexture(target, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            ArtworkSkin.Input(target, s, tKind < 0);
             if (tIcon != null)
                 ItemIconUI.Draw(new Rect(target.x + 4f * s, target.y + 4f * s, target.width - 8f * s, target.height - 8f * s), tIcon, s);
             if (tKind < 0)
@@ -119,6 +117,8 @@ internal partial class AttrWashDlg
         }
         finally
         {
+            GUI.color = savedColor;
+            GUI.depth = savedDepth;
             if (stacking.Item2) Event.current.mousePosition = savedMouse;
         }
     }

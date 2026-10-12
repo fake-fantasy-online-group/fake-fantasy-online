@@ -250,14 +250,8 @@ public sealed class ArenaResultDlg : MonoBehaviour
         float pw = win.width;
         float ph = win.height;
 
-        GUI.color = new Color(0.1f, 0.08f, 0.14f, 0.98f);
-        GUI.DrawTexture(win, dot);
-        GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.9f);
-        GUI.DrawTexture(Snap(new Rect(x0, y0, pw, font)), dot);
-        GUI.DrawTexture(Snap(new Rect(x0, y0 + ph - font, pw, font)), dot);
-        GUI.DrawTexture(Snap(new Rect(x0, y0, font, ph)), dot);
-        GUI.DrawTexture(Snap(new Rect(x0 + pw - font, y0, font, ph)), dot);
         GUI.color = Color.white;
+        ArtworkSkin.Panel(win, s);
 
         bool won = d.myRank == 1;
         string place = won
@@ -296,9 +290,7 @@ public sealed class ArenaResultDlg : MonoBehaviour
             Row r = d.rows[i];
             if (r.isSelf)
             {
-                GUI.color = new Color(0.24f, 0.2f, 0.1f, 0.85f);
-                GUI.DrawTexture(Snap(new Rect(x0 + font, y - 2f * s, pw - font - font, rowH)), dot);
-                GUI.color = Color.white;
+                ArtworkSkin.Row(Snap(new Rect(x0 + font, y - 2f * s, pw - font - font, rowH)), s, true);
             }
 
             uint packed = 0xffd6c8c8u;
@@ -396,16 +388,8 @@ public sealed class ArenaResultDlg : MonoBehaviour
             && Screen.height - Input.mousePosition.y >= buttonY
             && Screen.height - Input.mousePosition.y < buttonY + buttonH;
 
-        GUI.color = hover
-            ? new Color(0.34f, 0.29f, 0.16f, 0.98f)
-            : new Color(0.2f, 0.17f, 0.26f, 0.95f);
-        GUI.DrawTexture(Snap(buttonRect), dot);
-        GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, hover ? 0.9f : 0.5f);
-        GUI.DrawTexture(Snap(new Rect(buttonX, buttonY, buttonW, font)), dot);
-        GUI.DrawTexture(Snap(new Rect(buttonX, buttonY + buttonH - font, buttonW, font)), dot);
-        GUI.DrawTexture(Snap(new Rect(buttonX, buttonY, font, buttonH)), dot);
-        GUI.DrawTexture(Snap(new Rect(buttonX + buttonW - font, buttonY, font, buttonH)), dot);
-        GUI.color = Color.white;
+        ArtworkSkin.ButtonFace(Snap(buttonRect), null, s, true, hover,
+            font / s, hover && Input.GetMouseButton(0));
 
         uint buttonPacked = hover ? 0xffb4eeffu : 0xffdaceceu;
         Color buttonColor = new Color(

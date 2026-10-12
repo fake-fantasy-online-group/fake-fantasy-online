@@ -70,6 +70,13 @@ public partial class StallDetailDlg
                 edit.font = NpcChatter.CnFont();
                 edit.alignment = TextAnchor.MiddleCenter;
                 edit.fontSize = Mathf.RoundToInt(12f * s);
+                // grocerydetail already contains the gold, silver and quantity slots.
+                // Keep TextField's caret/selection, without painting Unity's focus skin over them.
+                edit.normal.background = edit.hover.background = edit.active.background = edit.focused.background = null;
+                edit.onNormal.background = edit.onHover.background = edit.onActive.background = edit.onFocused.background = null;
+                edit.normal.textColor = edit.hover.textColor = edit.active.textColor = edit.focused.textColor = Color.white;
+                edit.onNormal.textColor = edit.onHover.textColor = edit.onActive.textColor = edit.onFocused.textColor = Color.white;
+                edit.padding = new RectOffset(1, 1, 0, 0);
             }
             edit.fontSize = Mathf.RoundToInt(12f * s);
             gold = GUI.TextField(L(94f, 125f, 26f, 16f), gold, 6, edit);

@@ -294,9 +294,8 @@ public sealed class FamilyDetailDlg : MonoBehaviour
         GUI.DrawTexture(L(328f, 39f, 36f, 36f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(L(24f, 99f, 328f, 84f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(L(24f, 99f, 328f, 84f), s,
+            editPro && GUI.GetNameOfFocusedControl() == "family_proclaim");
 
         if (!editPro)
         {
@@ -319,6 +318,7 @@ public sealed class FamilyDetailDlg : MonoBehaviour
         }
         else
         {
+            GUI.SetNextControlName("family_proclaim");
             proText = GUI.TextArea(L(28f, 102f, 320f, 78f), proText ?? "", 100, ProStyle()) ?? "";
         }
     }
@@ -356,9 +356,7 @@ public sealed class FamilyDetailDlg : MonoBehaviour
     private void DrawMemberList(IReadOnlyList<(string, int, string, string, bool)> members,
         int count, int maxScroll, Vector2 mouse, string self)
     {
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(L(19f, 235f, 336f, 222f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(L(19f, 235f, 336f, 222f), s);
 
         Rect panel = L(19f, 235f, 336f, 222f);
         Event e = Event.current;
@@ -382,18 +380,8 @@ public sealed class FamilyDetailDlg : MonoBehaviour
                 if (row >= count) break;
                 (string memberName, int level, string field3, string field4, bool online) = members[row];
                 Rect rowRect = L(22f, 239f + 16f * i, 316f, 15f);
-                if (row == selMember)
-                {
-                    GUI.color = new Color(0.45f, 0.38f, 0.16f, 0.6f);
-                    GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
-                else if (rowRect.Contains(mouse))
-                {
-                    GUI.color = new Color(0.3f, 0.3f, 0.7f, 0.2f);
-                    GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
+                if (row == selMember) ArtworkSkin.Input(rowRect, s, true);
+                else ArtworkSkin.Row(rowRect, s, rowRect.Contains(mouse));
 
                 float textY = 240f + 16f * i;
                 // Official literals 0x3ee66666, 0x3f733333, 0x3ecccccd, 0x3f800000 = (0.45, 0.95, 0.4, 1);
@@ -502,7 +490,7 @@ public sealed class FamilyDetailDlg : MonoBehaviour
             FamilyDlg.Toggle();
         }
 
-        if (family.CanMail && FamUI.Btn(L(170f, 484f, 56f, 22f), null, "家族邮件", mouse, s))
+        if (family.CanMail && FamUI.Btn(L(170f, 484f, 88f, 22f), null, "家族邮件", mouse, s))
         {
             FamilyMailDlg.Open();
         }

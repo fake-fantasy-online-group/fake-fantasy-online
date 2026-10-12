@@ -65,6 +65,8 @@ internal sealed class PetArousalDlg : MonoBehaviour
         var stacking = WinZ.Frame(this, L(0, 0, NW, NH), 10);
         Vector2 originalMouse = Event.current.mousePosition;
         if (stacking.Item2) Event.current.mousePosition = new Vector2(-9999f, -9999f);
+        Color savedColor = GUI.color;
+        int savedDepth = GUI.depth;
         try
         {
             Vector2 mp = Event.current.mousePosition;
@@ -93,18 +95,21 @@ internal sealed class PetArousalDlg : MonoBehaviour
             }
             Texture2D icon = NetClient.LoadItemIcon(10758);
             if (icon != null) GUI.DrawTexture(L(27, 156, 36, 36), icon);
+            // The original artwork says failure destroys/downgrades the pet. Keep it
+            // fully obscured beneath the unlabelled skin: patchmiddle2 is translucent.
             Color previous = GUI.color;
-            GUI.color = new Color(1f / 15f, 1f / 15f, 1f / 15f, 1f);
+            GUI.color = new Color(.055f, .048f, .041f, 1f);
             GUI.DrawTexture(L(86, 142, 172, 76), Texture2D.whiteTexture);
             GUI.color = previous;
+            ArtworkSkin.Panel(L(80, 140, 184, 84), s);
             if (BitmapFont.Ready)
             {
                 int points = missing || full ? 0 : Step[level + 1];
                 Color red = new Color(200f / 255f, 40f / 255f, 30f / 255f, 1f);
-                Text(88, 146, "成功：宠物觉醒等级提升1级，", red);
-                Text(112, 165, points > 0 ? string.Format("获得{0}点自由属性。", points) : "获得自由属性点。", red);
+                Text(88, 148, "成功：宠物觉醒等级提升1级，", red);
+                Text(112, 166, points > 0 ? string.Format("获得{0}点自由属性。", points) : "获得自由属性点。", red);
                 Text(88, 184, "失败：只消耗道具，觉醒等级", red);
-                Text(112, 203, "不变，不会降级爆掉。", red);
+                Text(112, 202, "不变，不会降级爆掉。", red);
             }
             if (!missing && !full && PopUI.Btn(L(42, 231, 69, 22), okBtn, "觉醒", mp, s))
                 if (NetClient.I != null) NetClient.I.PetAwaken();
@@ -118,6 +123,8 @@ internal sealed class PetArousalDlg : MonoBehaviour
         }
         finally
         {
+            GUI.color = savedColor;
+            GUI.depth = savedDepth;
             if (stacking.Item2) Event.current.mousePosition = originalMouse;
         }
     }

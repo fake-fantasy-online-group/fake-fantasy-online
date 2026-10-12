@@ -8,28 +8,26 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         // Official 0x06000aba.
         private void DrawFittingRoom(Vector2 mouse)
         {
-            GUI.color = new Color(0.1f, 0.09f, 0.13f, 1f);
-            GUI.DrawTexture(L(28f, 65f, 812f, 524f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            FrameBox(L(28f, 65f, 812f, 524f));
             tipText = null;
             FrameBox(L(36f, 73f, 393f, 508f));
             FrameBox(L(439f, 73f, 393f, 508f));
             if (FitSubTab(44f, 79f, "人物", fitSub == 0, mouse)) fitSub = 0;
             if (FitSubTab(118f, 79f, "宠物", fitSub == 1, mouse)) fitSub = 1;
             Rect viewport = L(44f, 105f, 377f, fitSub == 0 ? 300f : 468f);
-            GUI.color = new Color(0f, 0f, 0f, 0.35f);
-            GUI.DrawTexture(viewport, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            FrameBox(viewport);
+            Rect previewArea = new Rect(viewport.x + 7f * s, viewport.y + 7f * s,
+                viewport.width - 14f * s, viewport.height - 14f * s);
             FittingRoomPreview preview = FittingRoomPreview.Ensure();
             RenderTexture rt = preview.RT;
             if (rt != null)
             {
                 float aspect = (float)rt.width / rt.height;
-                float width = viewport.width;
-                float height = viewport.height;
-                if (viewport.width / viewport.height > aspect) width = height * aspect;
+                float width = previewArea.width;
+                float height = previewArea.height;
+                if (previewArea.width / previewArea.height > aspect) width = height * aspect;
                 else height = width / aspect;
-                GUI.DrawTexture(new Rect(viewport.center.x - width * 0.5f, viewport.center.y - height * 0.5f, width, height), rt);
+                GUI.DrawTexture(new Rect(previewArea.center.x - width * 0.5f, previewArea.center.y - height * 0.5f, width, height), rt);
             }
             if (fitSub == 0) DrawFitCharacter(mouse, preview);
             else DrawFitPet(mouse, preview);
@@ -41,13 +39,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private bool FitSubTab(float x, float y, string name, bool selected, Vector2 mouse)
         {
             Rect rect = L(x, y, 70f, 22f);
-            if (selected || rect.Contains(mouse))
-            {
-                GUI.color = new Color(1f, 1f, 1f, selected ? 0.22f : 0.1f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-            LblC(rect, name, selected ? GOLD : Color.white);
+            TextButtonFace(rect, name, mouse, selected);
             return Click(rect, mouse);
         }
 
@@ -56,12 +48,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             string tag, int price, bool selected, Vector2 mouse)
         {
             Rect rect = L(x, y, width, height);
-            if (selected || rect.Contains(mouse))
-            {
-                GUI.color = selected ? new Color(1f, 0.85f, 0.3f, 0.22f) : new Color(1f, 1f, 1f, 0.1f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
+            ArtworkSkin.Row(rect, s, selected || rect.Contains(mouse));
             if (icon != null) ItemIconUI.Draw(L(x + 2f, y + (height - 28f) * 0.5f, 28f, 28f), icon, s);
             if (!string.IsNullOrEmpty(tag)) LblC(L(x + width - 30f, y, 28f, height), tag, GRAY);
             if (price >= 0) LblC(L(x + width - 94f, y, 60f, height), price + "彩玉", YEL);
@@ -72,12 +59,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         // Official 0x06000abe. The server page is consumed in its received order.
         private void DrawFitRightList(Vector2 mouse, float boxX, float boxWidth, float boxTop, float boxHeight)
         {
-            if (_fitSearchSt == null)
-                _fitSearchSt = new GUIStyle(GUI.skin.textField) { font = NpcChatter.CnFont(), alignment = TextAnchor.MiddleLeft,
-                    fontSize = (int)Math.Round(s * 12f) };
-            _fitSearchSt.fontSize = (int)Math.Round(s * 12f);
+            InputStyle(ref _fitSearchSt, 12f, TextAnchor.MiddleLeft);
             float x = boxX + 8f;
             Rect searchRect = L(x, boxTop + 8f, boxWidth - 16f, 22f);
+            ArtworkSkin.Input(searchRect, s, GUI.GetNameOfFocusedControl() == "fitSearch");
             GUI.SetNextControlName("fitSearch");
             string edit = GUI.TextField(searchRect, fitSearch ?? "", _fitSearchSt);
             if (edit != fitSearch) { fitSearch = edit; fitPage = 0; }
@@ -146,10 +131,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (fitPage >= pages) fitPage = pages - 1;
             Rect up = L(x + 20f, y, 44f, 22f);
             Rect down = L(x + width - 78f, y, 44f, 22f);
-            if (pageUp != null && pageUp[0] != null)
-                GUI.DrawTexture(up, pageUp[fitPage <= 0 ? Mathf.Min(3, pageUp.Length - 1) : up.Contains(mouse) && pageUp.Length > 1 ? 1 : 0]);
-            if (pageDn != null && pageDn[0] != null)
-                GUI.DrawTexture(down, pageDn[fitPage >= pages - 1 ? Mathf.Min(3, pageDn.Length - 1) : down.Contains(mouse) && pageDn.Length > 1 ? 1 : 0]);
+            ArtworkSkin.IconFace(up, pageUp, up.Contains(mouse), up.Contains(mouse) && Input.GetMouseButton(0),
+                fitPage > 0 && !SysMsgBox.Visible);
+            ArtworkSkin.IconFace(down, pageDn, down.Contains(mouse), down.Contains(mouse) && Input.GetMouseButton(0),
+                fitPage < pages - 1 && !SysMsgBox.Visible);
             if (Click(up, mouse) && fitPage > 0) fitPage--;
             if (Click(down, mouse) && fitPage < pages - 1) fitPage++;
             LblC(L(x + 66f, y + 2f, width - 150f, 18f), (fitPage + 1) + " / " + pages + "  (共 " + fitTotal + " 件)", GRAY);

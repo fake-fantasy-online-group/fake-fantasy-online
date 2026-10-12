@@ -12,6 +12,32 @@ public partial class Win05
     private static Def HistoryDefinition => Defs["historybar"];
     private static Vector2 histScroll;
     private static Texture2D[] chatTabTex;
+    private static ResLoader chatTabLoader;
+    private static object chatTabPackage;
+    private GUIStyle historyFieldStyle, historyAreaStyle;
+
+    private GUIStyle HistoryInputStyle(bool multiline)
+    {
+        GUIStyle style = multiline ? historyAreaStyle : historyFieldStyle;
+        if (style == null)
+        {
+            style = new GUIStyle(GUIStyle.none)
+            {
+                font = NpcChatter.CnFont(),
+                alignment = multiline ? TextAnchor.UpperLeft : TextAnchor.MiddleLeft,
+                wordWrap = multiline,
+                richText = false
+            };
+            style.normal.textColor = Color.white;
+            style.hover.textColor = Color.white;
+            style.active.textColor = Color.white;
+            style.focused.textColor = Color.white;
+            if (multiline) historyAreaStyle = style;
+            else historyFieldStyle = style;
+        }
+        style.fontSize = Mathf.RoundToInt(s * 12f);
+        return style;
+    }
 
     private static bool MatchTab(string ch, string want)
     {
@@ -24,12 +50,16 @@ public partial class Win05
     {
         if (!BitmapFont.Ready) return;
         Event ev = Event.current;
-        if (chatTabTex == null)
+        ResLoader loader = ResLoader.I;
+        object package = loader != null ? loader.Pkg : null;
+        if (chatTabTex == null || !ReferenceEquals(chatTabLoader, loader) || !ReferenceEquals(chatTabPackage, package))
         {
+            chatTabLoader = loader;
+            chatTabPackage = package;
             chatTabTex = new Texture2D[ChatTabs.Length];
             for (int i = 0; i < ChatTabs.Length; i++)
-                chatTabTex[i] = ResLoader.I != null
-                    ? ResLoader.I.LoadGsa("res/uires/chatbar/" + ChatTabs[i].Item1 + ".gsa") : null;
+                if (loader != null && package != null && !string.IsNullOrEmpty(ChatTabs[i].Item1))
+                    chatTabTex[i] = loader.LoadGsa("res/uires/chatbar/" + ChatTabs[i].Item1 + ".gsa");
         }
         for (int i = 0; i < ChatTabs.Length; i++)
         {
@@ -37,17 +67,15 @@ public partial class Win05
             bool selected = i == chatTab;
             if (chatTabTex[i] != null)
             {
-                float shade = selected ? 1f : .62f;
-                GUI.color = new Color(shade, shade, shade, 1f);
+                float shade = selected ? 1f : tab.Contains(ev.mousePosition) ? .85f : .62f;
+                Color previous = GUI.color;
+                GUI.color = new Color(shade, shade, shade, previous.a);
                 GUI.DrawTexture(tab, chatTabTex[i]);
-                GUI.color = Color.white;
+                GUI.color = previous;
             }
             else
             {
-                GUI.color = selected ? new Color(.5f, .4f, .18f, .95f)
-                    : new Color(.25f, .22f, .14f, .85f);
-                GUI.DrawTexture(tab, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                ArtworkSkin.Panel(tab, s, selected || tab.Contains(ev.mousePosition));
                 BitmapFont.CenterOutline(tab, ChatTabs[i].Item2,
                     selected ? new Color(1f, .9f, .5f, 1f) : new Color(.7f, .68f, .6f, 1f), s);
             }
@@ -57,9 +85,10 @@ public partial class Win05
                 ev.Use();
             }
         }
+        Color tabColor = GUI.color;
         GUI.color = new Color(1f, .85f, .3f, 1f);
         GUI.DrawTexture(L(chatTab * 50 + 17, 62f, 50f, 2f), Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        GUI.color = tabColor;
         if (chatTab == 1) { DrawGmFeedback(L, d, ev); return; }
         if (chatTab == 2) { DrawVote(L, d, ev); return; }
         if (chatTab == 9) { DrawNoticeTab(L, d, ev); return; }

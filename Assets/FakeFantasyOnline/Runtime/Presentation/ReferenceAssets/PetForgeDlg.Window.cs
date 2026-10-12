@@ -18,6 +18,8 @@ internal partial class PetForgeDlg
         var stacking = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
         Vector2 originalMouse = Event.current.mousePosition;
         if (stacking.Item2) Event.current.mousePosition = new Vector2(-9999f, -9999f);
+        Color savedColor = GUI.color;
+        int savedDepth = GUI.depth;
         try
         {
             Vector2 mp = Event.current.mousePosition;
@@ -52,6 +54,8 @@ internal partial class PetForgeDlg
         }
         finally
         {
+            GUI.color = savedColor;
+            GUI.depth = savedDepth;
             if (stacking.Item2) Event.current.mousePosition = originalMouse;
         }
     }

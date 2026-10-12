@@ -18,26 +18,26 @@ internal static class FamUI
     internal static readonly Color Gray = new Color(0.66f, 0.64f, 0.55f, 1f);
     internal static readonly Color Light = new Color(0.95f, 0.95f, 0.92f, 1f);
 
-    /// <summary>Official FamUI.Btn (0x0600035f): draw a texture or tinted fallback rect and report a
-    /// left-button MouseDown inside it. Event.Use + world-click suppression happen on the hit path.</summary>
+    /// <summary>Draw existing artwork or a blank artwork face with the current label. Keep the
+    /// original left-button MouseDown, Event.Use and world-click suppression contract.</summary>
     public static bool Btn(Rect r, Texture2D tex, string fallback, Vector2 mp, float s)
     {
         bool hover = r.Contains(mp);
         if (tex != null)
         {
-            float brightness = hover ? 1.25f : 1f;
-            GUI.color = new Color(brightness, brightness, brightness, 1f);
-            GUI.DrawTexture(r, tex);
-            GUI.color = Color.white;
+            Color oldColor = GUI.color;
+            try
+            {
+                float brightness = hover && !SysMsgBox.Visible ? 1.25f : 1f;
+                GUI.color = oldColor * new Color(brightness, brightness, brightness, 1f);
+                GUI.DrawTexture(r, tex);
+            }
+            finally { GUI.color = oldColor; }
         }
         else
         {
-            GUI.color = hover
-                ? new Color(0.55f, 0.42f, 0.18f, 0.95f)
-                : new Color(0.3f, 0.26f, 0.16f, 0.88f);
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            if (BitmapFont.Ready) BitmapFont.CenterOutline(r, fallback, Gold, s);
+            ArtworkSkin.ButtonFace(r, fallback, s, !SysMsgBox.Visible, hover,
+                pressed: hover && Input.GetMouseButton(0));
         }
         if (!hover || SysMsgBox.Visible) return false;
         Event e = Event.current;

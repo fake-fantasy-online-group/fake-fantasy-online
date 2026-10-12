@@ -1,0 +1,13 @@
+{
+  "id": "hello-world",
+  "name": "你好，世界",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entry": "main.lua",
+  "dependencies": [],
+  "capabilities": [
+    "game.observe",
+    "game.events",
+    "ui.panel"
+  ]
+}

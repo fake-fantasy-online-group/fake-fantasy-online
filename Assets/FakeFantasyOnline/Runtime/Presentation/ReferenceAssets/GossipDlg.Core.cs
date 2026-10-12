@@ -9,7 +9,7 @@ internal sealed partial class GossipDlg : MonoBehaviour
 {
     public static GossipDlg I;
     private const float NW = 237f, NH = 305f, NH_HIST = 401f, BAR_W = 243f, BAR_H = 51f;
-    private const float TabW = 54f, TabH = 14f;
+    private const float TabW = 54f, TabH = 22f, StripH = 26f;
     private static readonly int[] FLASH = { 0, 0, 0, 1, 0, 1, 0, 0 };
     private bool visible, tried;
     private string msg = string.Empty;
@@ -133,8 +133,10 @@ internal sealed partial class GossipDlg : MonoBehaviour
     }
     private Rect ComputeStripRect()
     {
-        float y = winY < 20f * s ? winY + (showHistory ? NH_HIST + 2f : NH + 2f) * s : winY - 20f * s;
-        return new Rect(winX, y, NW * s, 18f * s);
+        float y = winY < (StripH + 2f) * s
+            ? winY + (showHistory ? NH_HIST + 2f : NH + 2f) * s
+            : winY - (StripH + 2f) * s;
+        return new Rect(winX, y, NW * s, StripH * s);
     }
     private float CurH => minimized ? BAR_H : showHistory ? NH_HIST : NH;
     private float CurW => minimized ? BAR_W : NW;

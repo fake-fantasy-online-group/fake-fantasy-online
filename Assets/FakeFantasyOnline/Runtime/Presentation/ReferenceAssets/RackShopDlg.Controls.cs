@@ -63,7 +63,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 style.alignment = TextAnchor.MiddleCenter;
                 style.font = NpcChatter.CnFont();
                 _qtySt = style;
-                _qtySt.normal.textColor = Color.white;
+                _qtySt.normal.textColor = _qtySt.hover.textColor = _qtySt.active.textColor = _qtySt.focused.textColor = Color.white;
+                _qtySt.onNormal.textColor = _qtySt.onHover.textColor = _qtySt.onActive.textColor = _qtySt.onFocused.textColor = Color.white;
             }
             _qtySt.fontSize = (int)Math.Round(s * 11f);
             return _qtySt;
@@ -80,18 +81,54 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (BitmapFont.Ready) BitmapFont.CenterOutline(rect, text, color, s);
         }
 
-        // Official 0x06000ab3.
+        // Shared patch artwork preserves its corners at every shop panel size.
         private void FrameBox(Rect rect)
+            => ArtworkSkin.Panel(rect, s);
+
+        // Draw only: shop controls retain their original MouseDown/Click contract.
+        private void TextButtonFace(Rect rect, string text, Vector2 mouse, bool selected = false, bool enabled = true)
         {
-            float thickness = Mathf.Max(1f, s);
-            GUI.color = new Color(0f, 0f, 0f, 0.12f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = new Color(17f / 255f, 17f / 255f, 17f / 255f, 1f);
-            EdgeRect(rect, thickness);
-            GUI.color = new Color(110f / 255f, 110f / 255f, 110f / 255f, 1f);
-            EdgeRect(new Rect(rect.x + thickness, rect.y + thickness,
-                rect.width - 2f * thickness, rect.height - 2f * thickness), thickness);
-            GUI.color = Color.white;
+            bool usable = enabled && GUI.enabled && !SysMsgBox.Visible;
+            bool pressed = usable && rect.Contains(mouse) && Input.GetMouseButton(0);
+            ArtworkSkin.ButtonFace(rect, text, s, usable, selected || usable && rect.Contains(mouse), 1f, pressed);
+        }
+
+        private void IconButtonFace(Rect rect, string path, string fallback, Vector2 mouse, bool enabled = true)
+        {
+            bool usable = enabled && GUI.enabled && !SysMsgBox.Visible;
+            bool hover = usable && rect.Contains(mouse);
+            Texture2D[] frames = ArtworkSkin.Frames(path);
+            if (frames != null && frames.Length > 0 && frames[0] != null)
+                ArtworkSkin.IconFace(rect, frames, hover, hover && Input.GetMouseButton(0), usable);
+            else TextButtonFace(rect, fallback, mouse, false, enabled);
+        }
+
+        // Keep long dynamic labels inside their allocated region without hiding data.
+        private void FitLabel(Rect rect, string text, Color color)
+        {
+            if (!BitmapFont.Ready || string.IsNullOrEmpty(text)) return;
+            float font = s;
+            float width = BitmapFont.Measure(text, font);
+            if (width > rect.width && width > 0f) font *= rect.width / width;
+            font = Mathf.Min(font, rect.height / 12f);
+            BitmapFont.CenterOutline(rect, text, color, font);
+        }
+
+        // All text-field states stay transparent over the artwork, including focus.
+        private GUIStyle InputStyle(ref GUIStyle style, float fontSize, TextAnchor alignment)
+        {
+            if (style == null)
+            {
+                style = new GUIStyle(GUI.skin.textField) { font = NpcChatter.CnFont(), alignment = alignment };
+                style.normal.background = style.hover.background = style.active.background = style.focused.background = null;
+                style.onNormal.background = style.onHover.background = style.onActive.background = style.onFocused.background = null;
+                style.normal.textColor = style.hover.textColor = style.active.textColor = style.focused.textColor = Color.white;
+                style.onNormal.textColor = style.onHover.textColor = style.onActive.textColor = style.onFocused.textColor = Color.white;
+            }
+            style.fontSize = Mathf.RoundToInt(s * fontSize);
+            style.padding.left = style.padding.right = Mathf.RoundToInt(4f * s);
+            style.padding.top = style.padding.bottom = 0;
+            return style;
         }
 
         // Official 0x06000ab4; uses the caller's colour.
@@ -116,25 +153,24 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 GUI.DrawTexture(rect, texture);
                 GUI.color = Color.white;
             }
-            else LblC(rect, name, selected ? GOLD : GRAY);
+            else TextButtonFace(rect, name, mouse, selected);
             return Click(rect, mouse);
         }
 
         // Official 0x06000ad2: this member Uses but does not suppress the world click.
         private bool StateBtn(Rect rect, Texture2D[] frames, string fallback, Vector2 mouse)
+            => StateBtn(rect, frames, fallback, mouse, false);
+
+        private bool StateBtn(Rect rect, Texture2D[] frames, string fallback, Vector2 mouse, bool selected)
         {
             bool hover = rect.Contains(mouse);
+            bool enabled = GUI.enabled && !SysMsgBox.Visible;
+            int state = !enabled ? 3 : hover && Input.GetMouseButton(0) ? 2 : hover || selected ? 1 : 0;
             Texture2D texture = frames != null && frames.Length > 0
-                ? frames[hover && frames.Length > 1 ? 1 : 0] : null;
+                ? frames[Mathf.Min(state, frames.Length - 1)] ?? frames[0] : null;
             if (texture != null) GUI.DrawTexture(rect, texture);
-            else
-            {
-                GUI.color = hover ? new Color(0.55f, 0.42f, 0.18f, 0.95f) : new Color(0.3f, 0.26f, 0.16f, 0.88f);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                LblC(rect, fallback, GOLD);
-            }
-            if (!hover || SysMsgBox.Visible) return false;
+            else TextButtonFace(rect, fallback, mouse, selected);
+            if (!hover || !enabled) return false;
             Event e = Event.current;
             if (e.type != EventType.MouseDown || e.button != 0) return false;
             e.Use();

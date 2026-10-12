@@ -101,17 +101,20 @@ public sealed class ReferenceCharacterSkillUsePort : ICharacterSkillUsePort, IDi
                 ? shop.StallDealAsync(ownerId, index, count, tab, slot, expectedId, expectedPrice, CancellationToken.None)
                 : Task.FromResult(Result.Failure("shop.unsupported", "Shop commands are unavailable."))));
         core.BindItemUseWritersForIndependentRuntime(
-            (itemId, tab, slot) => ObserveSideEffectWrite(this.writer is IItemUseCommands use
-                ? use.UseItemAsync(itemId, tab, slot, CancellationToken.None)
-                : Task.FromResult(Result.Failure("item.use.unsupported", "Item use is unavailable."))),
-            (targetId, itemId) => ObserveSideEffectWrite(this.writer is ICaptureCommands targeted
-                ? targeted.CaptureAsync(targetId, itemId, CancellationToken.None)
-                : Task.FromResult(Result.Failure("item.targeted.unsupported", "Targeted item use is unavailable."))),
+            (itemId, tab, slot) => ObserveSideEffectWrite(core.ObserveWriteForPlugins("item", itemId,
+                this.writer is IItemUseCommands use
+                    ? use.UseItemAsync(itemId, tab, slot, CancellationToken.None)
+                    : Task.FromResult(Result.Failure("item.use.unsupported", "Item use is unavailable.")))),
+            (targetId, itemId) => ObserveSideEffectWrite(core.ObserveWriteForPlugins("item", itemId,
+                this.writer is ICaptureCommands targeted
+                    ? targeted.CaptureAsync(targetId, itemId, CancellationToken.None)
+                    : Task.FromResult(Result.Failure("item.targeted.unsupported", "Targeted item use is unavailable.")))),
             (text, color) => ChatUI.Add("系统", text, color));
         core.BindCaptureWriterForIndependentRuntime((targetId, itemId) =>
-            ObserveSideEffectWrite(this.writer is ICaptureCommands capture
-                ? capture.CaptureAsync(targetId, itemId, CancellationToken.None)
-                : Task.FromResult(Result.Failure("capture.unsupported", "Capture commands are unavailable."))));
+            ObserveSideEffectWrite(core.ObserveWriteForPlugins("item", itemId,
+                this.writer is ICaptureCommands capture
+                    ? capture.CaptureAsync(targetId, itemId, CancellationToken.None)
+                    : Task.FromResult(Result.Failure("capture.unsupported", "Capture commands are unavailable.")))));
         core.BindWashAffixWriterForIndependentRuntime((kind, tab, slot, index) =>
             ObserveSideEffectWrite(this.writer is IAttributeWashCommands wash
                 ? wash.WashAffixAsync(kind, tab, slot, index, CancellationToken.None)
@@ -129,9 +132,10 @@ public sealed class ReferenceCharacterSkillUsePort : ICharacterSkillUsePort, IDi
                 ? fusion.ApplyAvatarAsync(tab, slot, target, kind, targetKind, targetTab, CancellationToken.None)
                 : Task.FromResult(Result.Failure("avatar.apply.unsupported", "Avatar fusion is unavailable."))));
         core.BindPickItemWriterForIndependentRuntime(groundId =>
-            ObserveSideEffectWrite(this.writer is IGroundPickupCommands pickup
-                ? pickup.PickItemAsync(groundId, CancellationToken.None)
-                : Task.FromResult(Result.Failure("ground-item.pickup.unsupported", "Pickup is unavailable."))));
+            ObserveSideEffectWrite(core.ObserveWriteForPlugins("pickup", groundId,
+                this.writer is IGroundPickupCommands pickup
+                    ? pickup.PickItemAsync(groundId, CancellationToken.None)
+                    : Task.FromResult(Result.Failure("ground-item.pickup.unsupported", "Pickup is unavailable.")))));
         core.BindHistoryWritersForIndependentRuntime(
             text => ObserveSideEffectWrite(this.writer is IHistoryCommands history
                 ? history.SendFeedbackAsync(text, CancellationToken.None)
@@ -371,9 +375,10 @@ public sealed class ReferenceCharacterSkillUsePort : ICharacterSkillUsePort, IDi
             this.session.UsePetSkillAsync(id, CancellationToken.None)));
         core.BindSkillCommandsForIndependentRuntime(
             (text, scale) => this.currentWorld()?.Window?.ShowSkillTipForIndependentRuntime(text, scale),
-            (id, target) => RecordSkillWrite(this.writer.UseCharacterSkillAsync(id, target, SkillWriteCancellation)),
-            (id, x, y, target) => RecordSkillWrite(this.writer.UseCharacterSkillAtAsync(
-                id, x, y, target, SkillWriteCancellation)),
+            (id, target) => RecordSkillWrite(core.ObserveWriteForPlugins("skill", id,
+                this.writer.UseCharacterSkillAsync(id, target, SkillWriteCancellation))),
+            (id, x, y, target) => RecordSkillWrite(core.ObserveWriteForPlugins("skill", id,
+                this.writer.UseCharacterSkillAtAsync(id, x, y, target, SkillWriteCancellation))),
             sitting => ObserveSideEffectWrite(this.writer.SetPlayerSittingAsync(sitting, CancellationToken.None)),
             () => ObserveSideEffectWrite(this.writer.EndCharacterWorkAsync(CancellationToken.None)));
     }

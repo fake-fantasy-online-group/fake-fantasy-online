@@ -56,7 +56,7 @@ public sealed class MailResistDlg : MonoBehaviour
         { winX = (Screen.width - 90 * s) * .5f; winY = (Screen.height - 80 * s) * .5f; }
         Vector2 pointer = Event.current.mousePosition;
         GUI.depth = 2;
-        TmUI.Panel(L(0, 0, 90, 80));
+        ArtworkSkin.Panel(L(0, 0, 90, 80), s);
         for (int i = 0; i < CY.Length; i++)
         {
             TmUI.Box(L(9, CY[i], 14, 13), selected == i ? radioOn : radioOff);

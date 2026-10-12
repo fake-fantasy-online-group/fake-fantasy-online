@@ -137,9 +137,7 @@ public sealed class FamilyRelationDlg : MonoBehaviour
         }
 
         Rect alliesPanel = L(25f, 74f, 242f, 142f);
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(alliesPanel, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Panel(alliesPanel, s);
         Color alliesColor = FamUI.Gray;
         if (BitmapFont.Ready)
         {
@@ -147,9 +145,7 @@ public sealed class FamilyRelationDlg : MonoBehaviour
         }
 
         Rect enemiesPanel = L(25f, 272f, 242f, 142f);
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(enemiesPanel, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Panel(enemiesPanel, s);
         Color enemiesColor = FamUI.Gray;
         if (BitmapFont.Ready)
         {

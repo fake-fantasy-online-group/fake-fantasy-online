@@ -203,6 +203,7 @@ internal sealed partial class TitleFlow
             if (entering && Time.realtimeSinceStartup - enterAtMs > 15f)
             {
                 entering = false;
+                PublishPluginTitleResult("enter_timeout");
                 setMessage("进入游戏超时, 请重试");
             }
             GUI.enabled = !entering;

@@ -114,11 +114,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             float checkY = 486f + Mathf.Max(1, (SoulPartOrder.Length + 4) / 5) * 38f + 6f;
             Rect check = L(46f, checkY, 16f, 16f);
-            GUI.color = new Color(0f, 0f, 0f, 0.4f);
-            GUI.DrawTexture(check, Texture2D.whiteTexture);
-            GUI.color = new Color(110f / 255f, 110f / 255f, 110f / 255f, 1f);
-            EdgeRect(check, Mathf.Max(1f, s));
-            GUI.color = Color.white;
+            ArtworkSkin.Input(check, s, fitShow);
             if (fitShow) LblC(check, "√", GOLD);
             Lbl(68f, checkY + 1f, "在纸娃娃上展示试穿效果", Color.white);
             if (Click(L(46f, checkY, 220f, 18f), mouse)) fitShow = !fitShow;

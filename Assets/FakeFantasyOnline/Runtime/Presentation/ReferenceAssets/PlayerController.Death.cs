@@ -17,6 +17,7 @@ public partial class PlayerController
 
     public void StopMove()
     {
+        pluginNavigationRevision++;
         path.Clear();
         pathIdx = 0;
         moveToTarget = false;

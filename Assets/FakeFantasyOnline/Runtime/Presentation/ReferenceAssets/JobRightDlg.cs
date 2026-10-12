@@ -192,9 +192,7 @@ public sealed class JobRightDlg : MonoBehaviour
         }
 
         Rect titleRect = L(29f, 60f, 214f, 12f);
-        GUI.color = new Color(0f, 0f, 0f, 0.3f);
-        GUI.DrawTexture(titleRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(L(26f, 55f, 220f, 22f), s);
         // The title and its color are evaluated before the font-ready gate.
         string title = string.IsNullOrEmpty(target) ? "（未选成员）" : "指派: " + target;
         Color titleColor = JobUI.GOLD;
@@ -204,9 +202,7 @@ public sealed class JobRightDlg : MonoBehaviour
         }
 
         Rect listRect = L(29f, 99f, 194f, 100f);
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(listRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(listRect, s);
 
         IReadOnlyList<(int Id, string Name, string Note)> rows = Positions;
         if (rows.Count == 0)
@@ -220,10 +216,13 @@ public sealed class JobRightDlg : MonoBehaviour
         }
         else
         {
+            Rect listView = L(32f, 102f, 188f, 94f);
             float contentHeight = rows.Count * 16f * s;
-            float contentWidth = listRect.width - 16f * s;
-            listScroll = GUI.BeginScrollView(listRect, listScroll,
-                new Rect(0f, 0f, contentWidth, contentHeight));
+            float contentWidth = listView.width - 18f * s;
+            listScroll.y = Mathf.Clamp(listScroll.y, 0f, Mathf.Max(0f, contentHeight - listView.height));
+            listScroll.x = 0f;
+            listScroll = GUI.BeginScrollView(listView, listScroll,
+                new Rect(0f, 0f, contentWidth, contentHeight), GUIStyle.none, GUIStyle.none);
             for (int i = 0; i < rows.Count; i++)
             {
                 // The official reads Event.mousePosition inside the scroll view, so the hover test
@@ -235,22 +234,14 @@ public sealed class JobRightDlg : MonoBehaviour
                     rowMouse.y >= rowY && rowMouse.y < rowY + rowH;
                 bool selected = i == sel;
 
-                if (selected)
-                {
-                    GUI.color = new Color(0.45f, 0.38f, 0.16f, 0.65f);
-                    GUI.DrawTexture(new Rect(0f, rowY, contentWidth, rowH), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
-                else if (hover)
-                {
-                    GUI.color = new Color(0.3f, 0.3f, 0.7f, 0.2f);
-                    GUI.DrawTexture(new Rect(0f, rowY, contentWidth, rowH), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
+                Rect rowRect = new Rect(0f, rowY, contentWidth, rowH);
+                if (selected) ArtworkSkin.Input(rowRect, s, true);
+                else ArtworkSkin.Row(rowRect, s, hover);
 
                 if (BitmapFont.Ready)
                 {
-                    BitmapFont.DrawOutline(6f * s, rowY + 2f * s, rows[i].Name,
+                    BitmapFont.DrawOutline(6f * s, rowY + 2f * s,
+                        BitmapFont.Elide(rows[i].Name, contentWidth - 12f * s, s),
                         i == sel ? JobUI.GOLD : FamUI.Light, s);
                 }
 
@@ -262,12 +253,11 @@ public sealed class JobRightDlg : MonoBehaviour
                 }
             }
             GUI.EndScrollView();
+            NativeScroll.Bar(this, listView, contentHeight, ref listScroll);
         }
 
         Rect detailRect = L(26f, 225f, 218f, 74f);
-        GUI.color = new Color(0f, 0f, 0f, 0.16f);
-        GUI.DrawTexture(detailRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
+        ArtworkSkin.Input(detailRect, s);
 
         if (sel >= 0 && sel < rows.Count && BitmapFont.Ready)
         {

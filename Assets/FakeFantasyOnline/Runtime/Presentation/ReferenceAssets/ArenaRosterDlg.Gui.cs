@@ -91,16 +91,8 @@ public partial class ArenaRosterDlg
         Color originalColor = GUI.color;
         Rect panel = PanelRect();
 
-        GUI.color = new Color(0.1f, 0.08f, 0.14f, 0.97f);
-        GUI.DrawTexture(panel, dot);
-        GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.85f);
-        GUI.DrawTexture(Snap(new Rect(panel.x, panel.y, panel.width, border)), dot);
-        GUI.DrawTexture(Snap(new Rect(panel.x, panel.y + panel.height - border,
-            panel.width, border)), dot);
-        GUI.DrawTexture(Snap(new Rect(panel.x, panel.y, border, panel.height)), dot);
-        GUI.DrawTexture(Snap(new Rect(panel.x + panel.width - border, panel.y,
-            border, panel.height)), dot);
         GUI.color = Color.white;
+        ArtworkSkin.Panel(panel, s);
 
         float titleX = panel.x + 12f * s;
         float titleY = panel.y + 9f * s;
@@ -142,10 +134,8 @@ public partial class ArenaRosterDlg
                 bool local = row.entityId == NetClient.SelfEntityId;
                 if (local)
                 {
-                    GUI.color = new Color(0.24f, 0.2f, 0.1f, 0.85f);
-                    GUI.DrawTexture(Snap(new Rect(panel.x + border, rowY - 2f * s,
-                        panel.width - 2f * border, rowStep)), dot);
-                    GUI.color = Color.white;
+                    ArtworkSkin.Row(Snap(new Rect(panel.x + border, rowY - 2f * s,
+                        panel.width - 2f * border, rowStep)), s, true);
                 }
 
                 Color32 nameColor = local
@@ -191,14 +181,10 @@ public partial class ArenaRosterDlg
                         hoveredChip = chip;
                     }
 
-                    if (hover)
-                        GUI.color = new Color(0.34f, 0.29f, 0.16f, 0.98f);
-                    else if (row.alive)
-                        GUI.color = new Color(0.2f, 0.17f, 0.26f, 0.95f);
-                    else
-                        GUI.color = new Color(0.14f, 0.13f, 0.16f, 0.9f);
-                    GUI.DrawTexture(chip, dot);
-                    GUI.color = Color.white;
+                    Color chipColor = GUI.color;
+                    if (!row.alive) GUI.color = chipColor * new Color(.65f, .65f, .65f, 1f);
+                    ArtworkSkin.Input(chip, s, hover);
+                    GUI.color = chipColor;
 
                     Color32 cardColor = hover
                         ? new Color32(255, 238, 180, 255)
@@ -226,7 +212,7 @@ public partial class ArenaRosterDlg
                 }
 
                 float tooltipWidth = maxWidth + 16f * s;
-                float tooltipHeight = (lines.Count * 14f + 18f) * s + 8f * s;
+                float tooltipHeight = (lines.Count * 14f + 21f) * s + 8f * s;
                 float margin = 4f * s;
                 float rightBound = (Screen.width - tooltipWidth) - margin;
                 float tooltipX = rightBound <= hoveredChip.x ? rightBound : hoveredChip.x;
@@ -237,22 +223,11 @@ public partial class ArenaRosterDlg
                 Rect tooltip = Snap(new Rect(tooltipX, tooltipY,
                     tooltipWidth, tooltipHeight));
 
-                GUI.color = new Color(0.07f, 0.06f, 0.1f, 0.98f);
-                GUI.DrawTexture(tooltip, dot);
-                GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.9f);
-                GUI.DrawTexture(Snap(new Rect(tooltip.x, tooltip.y,
-                    tooltip.width, border)), dot);
-                GUI.DrawTexture(Snap(new Rect(tooltip.x,
-                    tooltip.y + tooltip.height - border, tooltip.width, border)), dot);
-                GUI.DrawTexture(Snap(new Rect(tooltip.x, tooltip.y,
-                    border, tooltip.height)), dot);
-                GUI.DrawTexture(Snap(new Rect(tooltip.x + tooltip.width - border,
-                    tooltip.y, border, tooltip.height)), dot);
-                GUI.color = Color.white;
+                ArtworkSkin.Panel(tooltip, s);
 
-                TX(tooltip.x + 8f * s, tooltip.y + 5f * s, hoveredName,
+                TX(tooltip.x + 8f * s, tooltip.y + 8f * s, hoveredName,
                     new Color32(255, 226, 138, 255), font);
-                float lineY = tooltip.y + 21f * s;
+                float lineY = tooltip.y + 24f * s;
                 float lineStep = 14f * s;
                 foreach (string line in lines)
                 {

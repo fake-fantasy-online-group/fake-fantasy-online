@@ -18,6 +18,8 @@ public partial class CombatWorld
     {
         if (I != null)
         {
+            I.pluginAttackIntentRevision++;
+            I.pluginSkillIntentRevision++;
             I.autoAttacking = false;
             I.atkState = AtkState.Idle;
             I.atkPhaseT = 0f;

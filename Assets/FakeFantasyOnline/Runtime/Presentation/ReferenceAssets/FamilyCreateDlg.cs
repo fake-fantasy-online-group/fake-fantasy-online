@@ -33,6 +33,7 @@ public sealed class FamilyCreateDlg : MonoBehaviour
     private float winY;
     private int _wdGen = -1;
     private GUIStyle _edit;
+    private GUIStyle _area;
 
     public static void Ensure()
     {
@@ -144,9 +145,9 @@ public sealed class FamilyCreateDlg : MonoBehaviour
 
             GUI.SetNextControlName("fc_name");
             Rect nameBg = L(29f, 60f, 214f, 12f);
-            GUI.color = new Color(0f, 0f, 0f, 0.3f);
-            GUI.DrawTexture(nameBg, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // The native background already contains the name slot; do not double-frame it.
+            if (bg == null) ArtworkSkin.Input(L(26f, 55f, 220f, 22f), s,
+                GUI.GetNameOfFocusedControl() == "fc_name");
             nameField = GUI.TextField(
                 new Rect(nameBg.x + 3f, nameBg.y, nameBg.width - 6f, nameBg.height),
                 nameField ?? "", 16, Edit());
@@ -158,16 +159,16 @@ public sealed class FamilyCreateDlg : MonoBehaviour
             FamUI.Btn(L(70f, 120f, 44f, 22f), icoList, "选择", mouse, s);
 
             Rect declBg = L(27f, 167f, 200f, 180f);
-            GUI.color = new Color(0f, 0f, 0f, 0.3f);
-            GUI.DrawTexture(declBg, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            GUIStyle area = new GUIStyle(Edit());
-            area.alignment = TextAnchor.UpperLeft;
-            area.wordWrap = true;
+            // Keep the existing baked declaration frame and its full-resolution texture.
+            if (bg == null) ArtworkSkin.Input(declBg, s,
+                GUI.GetNameOfFocusedControl() == "fc_declaration");
+            if (_area == null)
+                _area = new GUIStyle(Edit()) { alignment = TextAnchor.UpperLeft, wordWrap = true };
+            _area.fontSize = Mathf.RoundToInt(s * 12f);
+            GUI.SetNextControlName("fc_declaration");
             declaration = GUI.TextArea(
                 new Rect(declBg.x + 3f, declBg.y + 2f, declBg.width - 6f, declBg.height - 4f),
-                declaration ?? "", 200, area);
+                declaration ?? "", 200, _area);
 
             if (FamUI.Btn(L(38f, 363f, 70f, 22f), icoAffirm, "确定", mouse, s))
             {

@@ -153,48 +153,10 @@ public partial class ArenaEscDlg : MonoBehaviour
     /// </summary>
     private static void DrawBtn(Rect r, string text, bool enabled, float f, float hair, Texture2D dot)
     {
-        bool hover = false;
-        Color fill;
-        if (!enabled)
-        {
-            fill = new Color(0.14f, 0.13f, 0.16f, 0.9f);
-        }
-        else
-        {
-            float mx = Input.mousePosition.x;
-            float my = Screen.height - Input.mousePosition.y;
-            hover = r.x <= mx && mx < r.x + r.width && r.y <= my && my < r.y + r.height;
-            fill = hover
-                ? new Color(0.3f, 0.24f, 0.14f, 0.98f)
-                : new Color(0.18f, 0.15f, 0.1f, 0.95f);
-        }
-        GUI.color = fill;
-        GUI.DrawTexture(r, dot);
-
-        Color border;
-        if (!enabled)
-        {
-            border = new Color(0.4f, 0.4f, 0.42f, 0.8f);
-        }
-        else
-        {
-            border = hover
-                ? new Color(1f, 0.88f, 0.5f, 1f)
-                : new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.8f);
-        }
-        GUI.color = border;
-        GUI.DrawTexture(new Rect(r.x, r.y, r.width, hair), dot);
-        GUI.DrawTexture(new Rect(r.x, r.y + r.height - hair, r.width, hair), dot);
-        GUI.DrawTexture(new Rect(r.x, r.y, hair, r.height), dot);
-        GUI.DrawTexture(new Rect(r.x + r.width - hair, r.y, hair, r.height), dot);
-        GUI.color = Color.white;
-
-        Color label = enabled
-            ? new Color(1f, 238f / 255f, 180f / 255f, 1f)
-            : new Color(120f / 255f, 120f / 255f, 126f / 255f, 1f);
-        float lx = Mathf.Round(r.x + (r.width - BitmapFont.Measure(text, f)) * 0.5f);
-        float ly = Mathf.Round(r.y + (r.height - f * 12f) * 0.5f);
-        BitmapFont.DrawOutline(lx, ly, text, label, f);
+        bool hover = enabled && r.Contains(Event.current.mousePosition);
+        float scale = S;
+        ArtworkSkin.ButtonFace(r, text, scale, enabled, hover, f / scale,
+            hover && Input.GetMouseButton(0));
     }
 
     /// <summary>
@@ -275,14 +237,8 @@ public partial class ArenaEscDlg : MonoBehaviour
         float w = panel.width;
         float h = panel.height;
 
-        GUI.color = new Color(0.1f, 0.08f, 0.14f, 0.97f);
-        GUI.DrawTexture(panel, dot);
-        GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.85f);
-        GUI.DrawTexture(Snap(new Rect(x, y, w, hair)), dot);
-        GUI.DrawTexture(Snap(new Rect(x, y + h - hair, w, hair)), dot);
-        GUI.DrawTexture(Snap(new Rect(x, y, hair, h)), dot);
-        GUI.DrawTexture(Snap(new Rect(x + w - hair, y, hair, h)), dot);
         GUI.color = Color.white;
+        ArtworkSkin.Panel(panel, s);
 
         float col = x + s * 12f;
         TX(col, y + s * 10f, "吊村大乱斗", new Color(1f, 226f / 255f, 138f / 255f, 1f), font);

@@ -9,12 +9,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         // Official 0x06000ad0.
         private void DrawRecharge(Vector2 mouse)
         {
-            GUI.color = new Color(0f, 0f, 0f, 0.28f);
-            GUI.DrawTexture(L(34f, 65f, 776f, 524f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.color = new Color(0.12f, 0.1f, 0.08f, 0.96f);
-            GUI.DrawTexture(L(112f, 88f, 620f, 478f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            FrameBox(L(34f, 65f, 776f, 524f));
+            FrameBox(L(112f, 88f, 620f, 478f));
             if (BitmapFont.Ready)
                 BitmapFont.CenterOutline(L(112f, 102f, 620f, 22f), "USDT 充值", GOLD,
                     Mathf.Max(1f, (float)Math.Round(s * 1.7f)));
@@ -40,10 +36,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     czLocalWarn = "";
                 }
             }
-            if (_czEdit == null)
-                _czEdit = new GUIStyle(GUI.skin.textField) { font = NpcChatter.CnFont(), alignment = TextAnchor.MiddleCenter };
-            _czEdit.fontSize = (int)Math.Round(s * 14f);
-            string edit = GUI.TextField(L(150f + CzQuick.Length * 96f, 258f, 110f, 32f), czAmount ?? "", 9, _czEdit);
+            InputStyle(ref _czEdit, 14f, TextAnchor.MiddleCenter);
+            Rect amountRect = L(150f + CzQuick.Length * 96f, 258f, 110f, 32f);
+            ArtworkSkin.Input(amountRect, s, GUI.GetNameOfFocusedControl() == "rackRechargeAmount");
+            GUI.SetNextControlName("rackRechargeAmount");
+            string edit = GUI.TextField(amountRect, czAmount ?? "", 9, _czEdit);
             if (edit != czAmount)
             {
                 var digits = new StringBuilder();
@@ -72,10 +69,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             int displayAmount = amount >= 10 ? amount : czRAmount;
             Lbl(150f, 392f, string.Format("请向以下地址转 {0} USDT(仅 {1}):", displayAmount, CzStd(czRChain)), new Color(0.95f, 0.95f, 0.92f, 1f));
-            GUI.color = new Color(0f, 0f, 0f, 0.5f);
-            GUI.DrawTexture(L(150f, 414f, 322f, 26f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            Lbl(156f, 418f, czAddr, GOLD);
+            Rect addressRect = L(150f, 414f, 322f, 26f);
+            ArtworkSkin.Input(addressRect, s);
+            FitLabel(L(156f, 417f, 310f, 20f), czAddr, GOLD);
             if (StateBtn(L(480f, 414f, 56f, 26f), null, "复制", mouse))
             {
                 GUIUtility.systemCopyBuffer = czAddr;

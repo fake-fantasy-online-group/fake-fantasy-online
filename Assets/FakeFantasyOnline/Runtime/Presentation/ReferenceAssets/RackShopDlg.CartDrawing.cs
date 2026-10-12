@@ -41,15 +41,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 if (good.icon != null) ItemIconUI.Draw(L(596f, y + 2f, 30f, 30f), good.icon, s);
                 Lbl(630f, y + 4f, Trunc(good.name, 7), GOLD);
                 int maximum = good.remain > 0 ? Mathf.Min(good.remain, CartQtyMax) : CartQtyMax;
-                Rect background = L(642f, y + 16f, 30f, 14f);
-                Rect minus = L(628f, y + 16f, 13f, 14f);
-                Rect plus = L(673f, y + 16f, 13f, 14f);
-                GUI.color = new Color(0f, 0f, 0f, 0.35f);
-                GUI.DrawTexture(background, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                LblC(minus, "-", minus.Contains(mouse) ? Color.white : YEL);
-                LblC(plus, "+", plus.Contains(mouse) ? Color.white : YEL);
+                // Native 20x19 quantity icons have their own space; text and remove no longer overlap.
+                Rect background = L(649f, y + 16f, 32f, 19f);
+                Rect minus = L(628f, y + 16f, 20f, 19f);
+                Rect plus = L(682f, y + 16f, 20f, 19f);
+                IconButtonFace(minus, "res/uires/common/minusbtn.gsa", "-", mouse, quantity > 1);
+                IconButtonFace(plus, "res/uires/common/plusbtn.gsa", "+", mouse, quantity < maximum);
                 string control = "cartq" + id;
+                ArtworkSkin.Input(background, s, GUI.GetNameOfFocusedControl() == control);
                 GUI.SetNextControlName(control);
                 string text = qtyEdit.TryGetValue(id, out string edited) ? edited : quantity.ToString();
                 if (text.Length == 0 && GUI.GetNameOfFocusedControl() != control)
@@ -77,16 +76,17 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     cart[id] = Mathf.Min(maximum, cart[id] + 1);
                     qtyEdit[id] = cart[id].ToString();
                 }
-                if (gold) GroUI.MoneyInline(winX + 690f * s, winY + (y + 18f) * s, good.price, s);
-                else Lbl(690f, y + 18f, good.price + "彩玉/件", YEL);
-                Rect remove = L(770f, y + 6f, 20f, 20f);
-                if (remove.Contains(mouse))
+                Rect price = L(706f, y + 21f, 84f, 13f);
+                if (gold)
                 {
-                    GUI.color = new Color(0.6f, 0.2f, 0.2f, 0.9f);
-                    GUI.DrawTexture(remove, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    float priceScale = Mathf.Min(s, price.width / Mathf.Max(1f, GroUI.MoneyWidth(good.price, 1f)));
+                    GroUI.MoneyInlineCentered(price.x, price.y + (price.height - 11f * priceScale) * 0.5f,
+                        price.width, good.price, priceScale);
                 }
-                LblC(remove, "×", Color.white);
+                else FitLabel(price, good.price + "彩玉/件", YEL);
+                Rect remove = L(770f, y + 1f, 22f, 19f);
+                IconButtonFace(remove, "res/uires/newcommon/cancelminibtn.gsa", "×", mouse);
+                if (remove.Contains(mouse)) tipText = TooltipContent.Fmt(good.name, "移出购物篮");
                 if (Click(remove, mouse)) removeIndex = index;
             }
             if (removeIndex >= 0)

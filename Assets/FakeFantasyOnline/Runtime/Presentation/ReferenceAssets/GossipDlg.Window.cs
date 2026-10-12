@@ -11,6 +11,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (!tried) Load();
             (int depth, bool covered) = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
             Vector2 saved = Event.current.mousePosition;
+            Color savedColor = GUI.color;
+            int savedDepth = GUI.depth;
             if (covered) Event.current.mousePosition = new Vector2(-9999f, -9999f);
             try
             {
@@ -55,8 +57,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 if (showHistory)
                 {
                     Rect history = L(4f, 305f, 233f, 96f);
-                    PopUI.Panel(history);
-                    DrawLines(Cur, new Rect(history.x + 6f * s, history.y + 6f * s, history.width - 28f * s, history.height - 12f * s));
+                    ArtworkSkin.Panel(history, s);
+                    DrawLines(Cur, new Rect(history.x + 7f * s, history.y + 7f * s, history.width - 29f * s, history.height - 14f * s));
                 }
                 Rect close = L(212f, 17f, 20f, 19f);
                 if (icoClose != null) GUI.DrawTexture(close, icoClose);
@@ -80,6 +82,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             }
             finally
             {
+                GUI.color = savedColor;
+                GUI.depth = savedDepth;
                 if (covered) Event.current.mousePosition = saved;
             }
         }

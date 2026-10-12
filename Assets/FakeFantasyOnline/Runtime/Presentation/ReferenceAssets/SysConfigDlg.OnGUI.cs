@@ -21,6 +21,8 @@ public partial class SysConfigDlg
         }
         var stacking = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
         Vector2 savedMouse = Event.current.mousePosition;
+        Color savedColor = GUI.color;
+        int savedDepth = GUI.depth;
         if (stacking.Item2)
             Event.current.mousePosition = new Vector2(-9999f, -9999f);
         try
@@ -39,9 +41,7 @@ public partial class SysConfigDlg
                 GUI.DrawTexture(L(0f, 0f, NW, NH), Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }
-            GUI.color = new Color32(20, 19, 14, 255);
-            GUI.DrawTexture(L(26f, 360f, 224f, 52f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            DrawExtensionBackground();
 
             uiBlocked = resOpen || pickOpen;
             if (curRes < 0)
@@ -179,6 +179,8 @@ public partial class SysConfigDlg
         }
         finally
         {
+            GUI.color = savedColor;
+            GUI.depth = savedDepth;
             if (stacking.Item2)
                 Event.current.mousePosition = savedMouse;
         }

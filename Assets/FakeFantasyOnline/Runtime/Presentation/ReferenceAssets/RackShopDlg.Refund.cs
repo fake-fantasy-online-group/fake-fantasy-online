@@ -40,30 +40,21 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void DrawRefund(Vector2 mouse)
         {
             Rect background = L(28f, 65f, 812f, 524f);
-            GUI.color = new Color(30f / 255f, 28f / 255f, 22f / 255f, 252f / 255f);
-            GUI.DrawTexture(background, Texture2D.whiteTexture);
-            GUI.color = Color.white;
             FrameBox(background);
             tipText = null;
             Rect header = L(40f, 98f, 786f, 34f);
-            GUI.color = new Color(34f / 255f, 34f / 255f, 17f / 255f, 1f);
-            GUI.DrawTexture(header, Texture2D.whiteTexture);
-            GUI.color = Color.white;
             FrameBox(header);
-            LblC(header, "货架回收 —— 按【购买时实付价】的 " + refundPct + "% 返还彩玉" +
+            FitLabel(L(46f, 104f, 774f, 22f), "货架回收 —— 按【购买时实付价】的 " + refundPct + "% 返还彩玉" +
                 (refundDays > 0 ? "，" + refundDays + " 天内有效" : ""), GOLD);
             string policy = refundUsedOk
                 ? "· 穿过、融合过（用分离卷轴拆回来）的照样可以回收，相当于只花 " + (100 - refundPct) + "% 租用；已上锁 / 已加工（精炼·打孔·镶嵌）的不收"
                 : "· 只回收【还没动过】的东西：穿戴过 / 融合过（哪怕又分离出来）/ 解过绑 / 进过衣橱 / 已上锁 / 已加工的都不能回收";
-            Lbl(46f, 140f, policy, GRAY);
-            Lbl(46f, 156f, "· 一份买几个就要交回几个（如 2 彩玉买 10 个，要交回 10 个才能回收这一份）", GRAY);
-            Lbl(46f, 172f, string.IsNullOrEmpty(refundCats)
+            FitLabel(L(46f, 140f, 774f, 14f), policy, GRAY);
+            FitLabel(L(46f, 156f, 774f, 14f), "· 一份买几个就要交回几个（如 2 彩玉买 10 个，要交回 10 个才能回收这一份）", GRAY);
+            FitLabel(L(46f, 172f, 774f, 14f), string.IsNullOrEmpty(refundCats)
                 ? "· 每日特价、限时抢购（金币购买）与宠物蛋暂不支持回收"
                 : "· 只回收【" + refundCats.Replace(" / ", "、") + "】这几类；每日特价、限时抢购（金币购买）与宠物蛋不支持", GRAY);
             Rect panel = L(40f, 194f, 786f, 364f);
-            GUI.color = new Color(0f, 0f, 0f, 0.25f);
-            GUI.DrawTexture(panel, Texture2D.whiteTexture);
-            GUI.color = Color.white;
             FrameBox(panel);
             if (!refundLoaded)
             {
@@ -87,32 +78,21 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 float y = 196f + i * 30f;
                 Rect rowRect = L(44f, y, 764f, 28f);
                 bool hover = rowRect.Contains(mouse);
-                if (hover)
-                {
-                    GUI.color = new Color(1f, 1f, 1f, 0.08f);
-                    GUI.DrawTexture(rowRect, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
+                ArtworkSkin.Row(rowRect, s, hover);
                 if (row.icon != null) ItemIconUI.Draw(L(48f, y + 2f, 26f, 26f), row.icon, s);
-                Lbl(80f, y + 9f, Trunc(row.name, 10) + (row.bundle > 1 ? "×" + row.bundle : ""), Color.white);
-                Lbl(250f, y + 9f, "实付 " + row.unitPrice + " 彩玉/份", GRAY);
-                Lbl(370f, y + 9f, "可退 " + row.shares + " 份", Color.white);
+                FitLabel(L(80f, y + 7f, 166f, 14f), Trunc(row.name, 10) + (row.bundle > 1 ? "×" + row.bundle : ""), Color.white);
+                FitLabel(L(250f, y + 7f, 116f, 14f), "实付 " + row.unitPrice + " 彩玉/份", GRAY);
+                FitLabel(L(370f, y + 7f, 76f, 14f), "可退 " + row.shares + " 份", Color.white);
                 int required = Mathf.Max(row.bundle, 1);
-                Lbl(450f, y + 9f, "背包 " + row.have + "/" + required,
+                FitLabel(L(450f, y + 7f, 96f, 14f), "背包 " + row.have + "/" + required,
                     row.have >= required ? new Color(0.55f, 1f, 0.55f, 1f) : new Color(1f, 0.45f, 0.45f, 1f));
-                Lbl(550f, y + 9f, "退 " + row.gain + " 彩玉", YEL);
+                FitLabel(L(550f, y + 7f, 86f, 14f), "退 " + row.gain + " 彩玉", YEL);
                 if (row.leftDays >= 0)
-                    Lbl(640f, y + 9f, "剩 " + row.leftDays + " 天",
+                    FitLabel(L(640f, y + 7f, 76f, 14f), "剩 " + row.leftDays + " 天",
                         row.leftDays < 4 ? new Color(1f, 0.6f, 0.35f, 1f) : GRAY);
                 Rect button = L(720f, y + 3f, 86f, 22f);
                 bool available = row.have >= required && row.shares > 0;
-                GUI.color = !available ? new Color(0.35f, 0.35f, 0.35f, 0.6f)
-                    : button.Contains(mouse) ? new Color(0.85f, 0.7f, 0.25f, 0.95f)
-                    : new Color(0.55f, 0.42f, 0.16f, 0.9f);
-                GUI.DrawTexture(button, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                FrameBox(button);
-                LblC(button, "回收 1 份", available ? GOLD : GRAY);
+                TextButtonFace(button, "回收 1 份", mouse, false, available);
                 if (hover)
                 {
                     string description = "购买时实付：" + row.unitPrice + " 彩玉" +

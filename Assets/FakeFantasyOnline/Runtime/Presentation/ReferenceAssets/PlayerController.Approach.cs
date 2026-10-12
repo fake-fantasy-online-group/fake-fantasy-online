@@ -31,6 +31,7 @@ public partial class PlayerController
             if (CombatWorld.TargetWorldPx(out gx, out gy))
             {
                 SetPathTo(gx, gy, 0);
+                ObserveCombatApproachForPlugins();
                 return true;
             }
         }

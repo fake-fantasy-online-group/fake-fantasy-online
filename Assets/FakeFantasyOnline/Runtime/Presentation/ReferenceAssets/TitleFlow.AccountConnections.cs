@@ -70,7 +70,7 @@ internal sealed partial class TitleFlow
         ClearRecoverFields();
     }
 
-    private void BeginLogin(string submittedAccount)
+    private void BeginLogin(string submittedAccount, bool savePreferences = true)
     {
         // Accepted native DrawLogin prefix: latch, clock, message, raw password capture,
         // optional preference save, then the actual ConnectAsync call at the button site.
@@ -79,22 +79,34 @@ internal sealed partial class TitleFlow
         guiHost._loginDiagnosticsActive = true;
         netMsg = "连接服务器...";
         string transientPassword = password;
-        if (_rememberAccount || _rememberPassword) SaveLoginPrefs();
-        NetClient.I.ConnectTitleLoginForIndependentRuntime(ok =>
+        if (savePreferences && (_rememberAccount || _rememberPassword)) SaveLoginPrefs();
+        try
         {
-            if (!ok)
+            NetClient.I.ConnectTitleLoginForIndependentRuntime(ok =>
             {
-                loggingIn = false;
-                return;
-            }
-            // 06000f0d re-reads the current singleton here; it does not retain the connect
-            // receiver or read the later edited credential fields. Managed null still throws.
-            NetClient.I.SendTitleLoginForIndependentRuntime(submittedAccount, transientPassword);
-        });
+                if (!ok)
+                {
+                    loggingIn = false;
+                    PublishPluginTitleResult("connection_failed");
+                    transientPassword = null;
+                    return;
+                }
+                // 06000f0d re-reads the current singleton here; it does not retain the connect
+                // receiver or read the later edited credential fields. Managed null still throws.
+                try { NetClient.I.SendTitleLoginForIndependentRuntime(submittedAccount, transientPassword); }
+                finally { transientPassword = null; }
+            });
+        }
+        catch
+        {
+            transientPassword = null;
+            throw;
+        }
     }
 
     internal void ReceiveNativeTitleLoginResult(int code, string message)
     {
+        PublishPluginTitleResult(code == 0 ? "login_succeeded" : "login_failed", code);
         netMsg = message;
         loggingIn = false;
         if (code == 0) _page = TitlePage.ServerSelection;
@@ -110,6 +122,7 @@ internal sealed partial class TitleFlow
 
     internal void ReceiveNativeNetworkError(string error)
     {
+        PublishPluginTitleResult("network_error");
         netMsg = error;
         loggingIn = false;
         entering = false;

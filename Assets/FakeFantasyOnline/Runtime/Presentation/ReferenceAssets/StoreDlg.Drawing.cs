@@ -61,16 +61,15 @@ internal sealed partial class StoreDlg
                 if (WhUI.Click(r, mouse)) tab = i;
             }
             Rect sort = L(363, 38, 48, 21);
-            Color previous = GUI.color;
-            GUI.color = new Color(64f / 255, 54f / 255, 38f / 255, 235f / 255);
-            GUI.DrawTexture(sort, Texture2D.whiteTexture); GUI.color = previous;
-            if (BitmapFont.Ready) BitmapFont.Draw(sort.x + 6 * s, sort.y + 5 * s, "整理", new Color(235f / 255, 220f / 255, 180f / 255, 1), s);
+            bool sortHover = sort.Contains(mouse);
+            ArtworkSkin.ButtonFace(sort, "整理", s, GUI.enabled, sortHover,
+                pressed: sortHover && Input.GetMouseButton(0));
             if (WhUI.Click(sort, mouse))
             {
                 InventoryDlg.ClearHeld();
                 if (NetClient.I != null) NetClient.I.SortWarehouseForIndependentRuntime(tab);
             }
-            previous = GUI.color;
+            Color previous = GUI.color;
             GUI.color = new Color(20f / 255, 18f / 255, 15f / 255, 1);
             GUI.DrawTexture(L(12, 64, 400, 402), Texture2D.whiteTexture); GUI.color = previous;
             if (slotIdx == null || slotIdx.Length != Slots) slotIdx = new int[Slots];

@@ -1,0 +1,233 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "FFO external agent request (ffo-agent/1)",
+    "$defs": {
+        "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S"
+        },
+        "sequence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+        }
+    },
+    "oneOf": [
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "describe"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "observe"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "domain": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "arguments": {
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "domain"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "act"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "arguments": {
+                            "type": "object"
+                        },
+                        "requestId": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "expectedSceneRevision": {
+                            "$ref": "#/$defs/sequence"
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "requestId"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "status"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "actionId": {
+                            "$ref": "#/$defs/identifier"
+                        }
+                    },
+                    "required": [
+                        "actionId"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "action-status"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "actionId": {
+                            "$ref": "#/$defs/identifier"
+                        }
+                    },
+                    "required": [
+                        "actionId"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "cancel"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "actionId": {
+                            "$ref": "#/$defs/identifier"
+                        }
+                    },
+                    "required": [
+                        "actionId"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "method": {
+                    "const": "events"
+                },
+                "params": {
+                    "type": "object",
+                    "properties": {
+                        "afterSequence": {
+                            "$ref": "#/$defs/sequence"
+                        },
+                        "maxCount": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 512
+                        }
+                    },
+                    "required": [
+                        "afterSequence"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "id",
+                "method",
+                "params"
+            ],
+            "additionalProperties": false
+        }
+    ]
+}

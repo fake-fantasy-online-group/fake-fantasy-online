@@ -1,0 +1,14 @@
+{
+  "id": "character-info",
+  "name": "角色信息",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entry": "main.lua",
+  "dependencies": [],
+  "capabilities": [
+    "game.observe",
+    "game.events",
+    "ui.panel",
+    "storage.local"
+  ]
+}

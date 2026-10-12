@@ -4,7 +4,8 @@
     "references": [
         "FakeFantasyOnline.Foundation",
         "FakeFantasyOnline.Application",
-        "FakeFantasyOnline.PluginApi"
+        "FakeFantasyOnline.PluginApi",
+        "MoonSharp.Interpreter"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

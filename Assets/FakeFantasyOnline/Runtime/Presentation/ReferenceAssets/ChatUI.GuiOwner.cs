@@ -334,12 +334,7 @@ internal partial class ChatUI
     private void DrawChannelPanel(float barY, float scale, Event current)
     {
         Rect panel = ChannelPanelRect(barY, scale);
-        Color previous = GUI.color;
-        GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.94f);
-        GUI.DrawTexture(panel, Texture2D.whiteTexture);
-        GUI.color = new Color(0.4f, 0.7f, 0.4f, 0.7f);
-        DrawBorder(panel);
-        GUI.color = previous;
+        ArtworkSkin.Panel(panel, scale);
 
         for (int index = 0; index < Channels.Length; index++)
         {
@@ -350,12 +345,7 @@ internal partial class ChatUI
                 panel.width - 6f * scale,
                 16f * scale);
             bool hovered = row.Contains(current.mousePosition);
-            if (hovered)
-            {
-                GUI.color = new Color(0.4f, 0.7f, 0.4f, 0.3f);
-                GUI.DrawTexture(row, Texture2D.whiteTexture);
-                GUI.color = previous;
-            }
+            ArtworkSkin.Row(row, scale, hovered || chIdx == index);
 
             if (BitmapFont.Ready)
             {

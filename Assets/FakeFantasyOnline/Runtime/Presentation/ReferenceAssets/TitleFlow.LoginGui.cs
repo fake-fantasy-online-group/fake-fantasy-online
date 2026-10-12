@@ -92,6 +92,7 @@ internal sealed partial class TitleFlow
     {
         guiHost = host ?? throw new ArgumentNullException(nameof(host));
         creationGui = creation;
+        pluginTitleOwner = this;
         _changelogEndpoint = (noticeUri ?? throw new ArgumentNullException(nameof(noticeUri))).AbsoluteUri;
     }
 
@@ -312,8 +313,14 @@ internal sealed partial class TitleFlow
 
         Rect accountField = new Rect(327f, 392f, 134f, 22f);
         Rect passwordField = new Rect(327f, 429f, 134f, 22f);
-        account = GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
-        password = DrawMaskedField(passwordField, password ?? string.Empty);
+        string editedAccount = GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
+        if (!string.Equals(account, editedAccount, StringComparison.Ordinal)) pluginTitleRevision++;
+        account = editedAccount;
+        string editedPassword = DrawMaskedField(passwordField, password ?? string.Empty);
+        // Only an opaque counter leaves this component. Never retain credential values or
+        // their hashes in plugin fingerprints, observations, receipts, or action journals.
+        if (!string.Equals(password, editedPassword, StringComparison.Ordinal)) pluginTitleRevision++;
+        password = editedPassword;
 
         if (string.IsNullOrEmpty(account))
         {

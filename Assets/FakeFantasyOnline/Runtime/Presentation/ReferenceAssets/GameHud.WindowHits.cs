@@ -26,7 +26,8 @@ public partial class GameHud
     private bool WindowHit(HudWindowSlot slot) => windowHits != null &&
         (windowHits[(int)slot]?.Invoke() ?? false);
 
-    public static bool OverUI => I != null && I.MouseOverHud();
+    // Collider OnMouseDown handlers use this gate independently of PlayerController.Update.
+    public static bool OverUI => AddonUiHost.MouseOver() || (I != null && I.MouseOverHud());
     public bool MouseOverHud()
     {
         float scale = uiScale;

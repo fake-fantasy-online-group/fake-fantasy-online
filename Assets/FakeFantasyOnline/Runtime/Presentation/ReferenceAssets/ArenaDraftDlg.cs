@@ -417,14 +417,9 @@ public partial class ArenaDraftDlg : MonoBehaviour
         float pw = panel.width;
         float ph = panel.height;
 
-        GUI.color = new Color(0.02f, 0.02f, 0.04f, 0.62f);
-        GUI.DrawTexture(Snap(new Rect(px - 16f * s, py - 10f * s, pw + 32f * s, ph + 20f * s)), dot);
-        GUI.color = new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.75f);
-        float ruleWidth = Mathf.Max(1f, Mathf.Floor(s));
-        GUI.DrawTexture(Snap(new Rect(px - 16f * s, py - 10f * s, pw + 32f * s, ruleWidth)), dot);
-        GUI.DrawTexture(Snap(new Rect(px - 16f * s, py + ph + 10f * s - ruleWidth, pw + 32f * s, ruleWidth)),
-            dot);
         GUI.color = Color.white;
+        ArtworkSkin.Panel(Snap(new Rect(px - 16f * s, py - 10f * s, pw + 32f * s, ph + 20f * s)), s);
+        float ruleWidth = Mathf.Max(1f, Mathf.Floor(s));
 
         float font = FontBase;
         float titleY = py + 10f * s;
@@ -480,23 +475,8 @@ public partial class ArenaDraftDlg : MonoBehaviour
                 bool hover = rr.x <= mx && mx < rr.x + rr.width && rr.y <= my
                     && my < rr.y + rr.height && _rerollCost >= 0;
 
-                float sc = hover ? 1.45f : 1f;
-                if (_rerollCost < 0)
-                {
-                    sc = 0.55f;
-                }
-                GUI.color = new Color(sc * 0.12f, sc * 0.1f, sc * 0.18f, 0.97f);
-                GUI.DrawTexture(Snap(rr), dot);
-                GUI.color = _rerollCost < 0
-                    ? new Color(0.45f, 0.45f, 0.5f, 0.5f)
-                    : hover
-                        ? new Color(1f, 0.86f, 0.45f, 1f)
-                        : new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.55f);
-                GUI.DrawTexture(Snap(new Rect(rr.x, rr.y, rr.width, ruleWidth)), dot);
-                GUI.DrawTexture(Snap(new Rect(rr.x, rr.y + rr.height - ruleWidth, rr.width, ruleWidth)), dot);
-                GUI.DrawTexture(Snap(new Rect(rr.x, rr.y, ruleWidth, rr.height)), dot);
-                GUI.DrawTexture(Snap(new Rect(rr.x + rr.width - ruleWidth, rr.y, ruleWidth, rr.height)), dot);
-                GUI.color = Color.white;
+                ArtworkSkin.ButtonFace(Snap(rr), null, s, _rerollCost >= 0, hover,
+                    font / s, hover && Input.GetMouseButton(0));
 
                 string rowLabel;
                 Color32 rowColor32;
@@ -579,23 +559,18 @@ public partial class ArenaDraftDlg : MonoBehaviour
             bool cardHover = cx <= mxc && mxc < cx + cw && cy <= myc && myc < cy + ch;
             Card card = _cards[i];
 
+            ArtworkSkin.Panel(cr, s, cardHover);
+            // Retain the two semantic card colour zones inside the artwork border.
             float cardScale = cardHover ? 1.35f : 1f;
-            GUI.color = new Color(cardScale * 0.13f, cardScale * 0.11f, cardScale * 0.2f, 0.97f);
-            GUI.DrawTexture(Snap(new Rect(cx, cy, cw, ch * 0.42f)), dot);
-            GUI.color = new Color(cardScale * 0.09f, cardScale * 0.08f, cardScale * 0.14f, 0.97f);
-            GUI.DrawTexture(Snap(new Rect(cx, cy + ch * 0.42f, cw, ch * 0.58f)), dot);
-            GUI.color = cardHover
-                ? new Color(1f, 0.86f, 0.45f, 1f)
-                : new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.55f);
-            GUI.DrawTexture(Snap(new Rect(cx, cy, cw, ruleWidth)), dot);
-            GUI.DrawTexture(Snap(new Rect(cx, cy + ch - ruleWidth, cw, ruleWidth)), dot);
-            GUI.DrawTexture(Snap(new Rect(cx, cy, ruleWidth, ch)), dot);
-            GUI.DrawTexture(Snap(new Rect(cx + cw - ruleWidth, cy, ruleWidth, ch)), dot);
-            GUI.DrawTexture(Snap(new Rect(cx, cy, 18f * s, 18f * s)), dot);
+            GUI.color = new Color(cardScale * 0.13f, cardScale * 0.11f, cardScale * 0.2f, .65f);
+            GUI.DrawTexture(Snap(new Rect(cx + 7f * s, cy + 7f * s, cw - 14f * s, ch * .42f - 7f * s)), dot);
+            GUI.color = new Color(cardScale * 0.09f, cardScale * 0.08f, cardScale * 0.14f, .65f);
+            GUI.DrawTexture(Snap(new Rect(cx + 7f * s, cy + ch * .42f, cw - 14f * s, ch * .58f - 7f * s)), dot);
             GUI.color = Color.white;
+            ArtworkSkin.Input(Snap(new Rect(cx, cy, 20f * s, 20f * s)), s, cardHover);
 
             TX(cx + 6f * s, cy + 3f * s, n.ToString(),
-                new Color(30f / 255f, 25f / 255f, 40f / 255f, 1f), font);
+                new Color(1f, .94f, .78f, 1f), font);
             float nameFont = FontName;
             TX(cx + (cw - BitmapFont.Measure(card.name, nameFont)) * 0.5f, cy + 22f * s, card.name,
                 new Color(1f, 226f / 255f, 138f / 255f, 1f), nameFont);

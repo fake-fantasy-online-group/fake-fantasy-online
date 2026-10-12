@@ -48,14 +48,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             float height = rowHeight * ITEMS.Length;
             Rect menu = new Rect(x, y, width, height);
 
-            GUI.color = new Color(.09f, .08f, .12f, .97f);
-            GUI.DrawTexture(menu, Texture2D.whiteTexture);
-            GUI.color = new Color(.42f, .36f, .22f, 1f);
-            GUI.DrawTexture(new Rect(x, y, width, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x, y + height - 1f, width, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x, y, 1f, height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x + width - 1f, y, 1f, height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // Draw the frame outside the original hit rectangle so its 7px corners do not
+            // consume the compact 17px command rows. Owner, clipboard and dismissal stay intact.
+            ArtworkSkin.Panel(new Rect(x - 5f * scale, y - 5f * scale,
+                width + 10f * scale, height + 10f * scale), scale);
 
             // Official reads the system clipboard once before the rows are drawn, not inside the
             // click arm: it feeds both the 粘贴 row shading and the paste itself.
@@ -66,9 +62,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 bool hover = row.Contains(e.mousePosition);
                 if (hover)
                 {
-                    GUI.color = new Color(.55f, .42f, .18f, .55f);
-                    GUI.DrawTexture(row, Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    ArtworkSkin.Row(row, scale, true);
                 }
                 string source = index == 1 ? clip : value;
                 int length = source.Length;

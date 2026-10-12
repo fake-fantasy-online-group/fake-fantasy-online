@@ -16,6 +16,8 @@ internal partial class EquipFuseDlg
         var stacking = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
         Vector2 savedMouse = Event.current.mousePosition;
         if (stacking.Item2) Event.current.mousePosition = new Vector2(-9999f, -9999f);
+        Color savedColor = GUI.color;
+        int savedDepth = GUI.depth;
         try
         {
             Vector2 m = Event.current.mousePosition;
@@ -87,13 +89,8 @@ internal partial class EquipFuseDlg
                 UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(subName, subQ), subDesc), s);
             Rect confirm = L(165, 348, 90, 26);
             bool hover = confirm.Contains(m);
-            GUI.color = !ok ? new Color(0.25f, 0.24f, 0.22f, 0.85f)
-                : hover ? new Color(0.5f, 0.4f, 0.16f, 0.95f) : new Color(0.4f, 0.32f, 0.13f, 0.9f);
-            GUI.DrawTexture(confirm, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            if (BitmapFont.Ready)
-                BitmapFont.CenterOutline(new Rect(confirm.x, confirm.y + 7f * s, confirm.width, 12f * s), "融 合",
-                    ok ? (Color)new Color32(255, 230, 150, 255) : new Color32(140, 140, 135, 255), s);
+            ArtworkSkin.ButtonFace(confirm, "融 合", s, ok, selected: hover,
+                pressed: hover && Input.GetMouseButton(0));
             if (ok && Click(confirm, m))
             {
                 byte mt = unchecked((byte)mainTab), st = unchecked((byte)subTab);
@@ -110,6 +107,8 @@ internal partial class EquipFuseDlg
         }
         finally
         {
+            GUI.color = savedColor;
+            GUI.depth = savedDepth;
             if (stacking.Item2) Event.current.mousePosition = savedMouse;
         }
         if (visible && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
