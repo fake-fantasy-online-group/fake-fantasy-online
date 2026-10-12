@@ -16,6 +16,7 @@ public partial class GameHud
                     if (skill.id == hotSkill[index]) return skill.level > 0;
             return false;
         }
+        if (AuthoritativeProfessionSkill.Uses(hotSkill[index])) return AuthoritativeProfessionSkill.LearnedActive(hotSkill[index]);
         return CharData.skills != null &&
             CharData.skills.TryGetValue(hotSkill[index], out int level) && level > 0;
     }

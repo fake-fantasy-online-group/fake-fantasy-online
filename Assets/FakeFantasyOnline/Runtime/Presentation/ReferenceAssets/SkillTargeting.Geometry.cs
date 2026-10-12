@@ -63,8 +63,8 @@ public sealed partial class SkillTargeting
         }
         else
         {
-            float radius = radiusPx > 0f ? radiusPx : DefaultRadius;
-            float halfAngle = fanDeg > 0f ? fanDeg * Mathf.Deg2Rad * 0.5f : 1.0471976f;
+            float radius = AuthoritativeProfessionSkill.Uses(skillId) ? radiusPx : radiusPx > 0f ? radiusPx : DefaultRadius;
+            float halfAngle = AuthoritativeProfessionSkill.Uses(skillId) ? fanDeg * Mathf.Deg2Rad * 0.5f : fanDeg > 0f ? fanDeg * Mathf.Deg2Rad * 0.5f : 1.0471976f;
             positions.Add(P(0f, 0f));
             for (int index = 0; index <= FanArcSegs; index++)
             {

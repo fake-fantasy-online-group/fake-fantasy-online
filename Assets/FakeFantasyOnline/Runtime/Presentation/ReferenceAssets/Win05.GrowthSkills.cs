@@ -25,6 +25,13 @@ public partial class Win05
             return ComposeTip(rows);
         }
 
+        if (state.SkillBehaviorV1 && info.id != 10212 && rank.Contract == null)
+        {
+            rows.Add((info.name, (char)5, true));
+            rows.Add(("正在等待服务器技能资料", (char)6, false));
+            return ComposeTip(rows);
+        }
+
         AppendGrowthLevelBlock(rows, rank.CanCast ? rank.CurrentEffectLines : rank.NextEffectLines,
             rank.CanCast ? "等级: " + rank.EffectiveRank : "等级: 未学习", info.name, true);
         if (includeNext)
@@ -71,6 +78,16 @@ public partial class Win05
     private static void AppendGrowthRequirement(List<(string, char, bool)> rows, EndgameSkillRankView rank)
     {
         if (rank.NextRequiredLevel > 0) rows.Add(("需要等级: " + rank.NextRequiredLevel, (char)1, false));
+        if (rank.Contract != null)
+        {
+            foreach (int id in rank.Contract.PrerequisiteSkillIDs)
+            {
+                var prerequisite = EndgamePanel.GrowthState.SkillRank(id);
+                if (prerequisite?.HardRank > 0) continue;
+                string name = prerequisite?.Contract?.Name ?? "技能 " + id;
+                rows.Add(("需要技能: " + name, (char)1, false));
+            }
+        }
     }
 
     private static bool IsOriginalDamageBonus(string line) =>

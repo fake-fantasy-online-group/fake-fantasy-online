@@ -36,6 +36,13 @@ internal partial class NetClient : MonoBehaviour
 
     private static bool LocalNotEnoughMp(int skillId)
     {
+        // Growth skills are resolved at effective rank, after server modifiers. Legacy
+        // resource costs must never veto them, including the pre-contract V5 transition.
+        if (EndgamePanel.GrowthState != null && FakeFantasyOnline.Application.EndgameSkillRankView.IsProfessionSkill(skillId))
+        {
+            var behavior = AuthoritativeProfessionSkill.Current(skillId);
+            return behavior != null && behavior.MPCost > 0 && CharData.mp < behavior.MPCost;
+        }
         int level;
         if (CharData.skills == null || !CharData.skills.TryGetValue(skillId, out level) || level <= 0)
         {
@@ -58,6 +65,11 @@ internal partial class NetClient : MonoBehaviour
 
     public void UseSkill(int skillId, int targetId = 0)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); return; }
+        var behavior = AuthoritativeProfessionSkill.Current(skillId);
+        if (behavior != null && behavior.PointRequired)
+        { showTip("请选择技能位置", UIScale.Factor); return; }
         if (LocalNotEnoughMp(skillId))
         {
             showTip("法力不足", UIScale.Factor);
@@ -77,6 +89,8 @@ internal partial class NetClient : MonoBehaviour
 
     public void UseSkillAt(int skillId, int x, int y, int targetId = 0)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); return; }
         if (LocalNotEnoughMp(skillId))
         {
             showTip("法力不足", UIScale.Factor);

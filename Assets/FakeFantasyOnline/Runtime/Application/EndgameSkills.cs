@@ -40,9 +40,10 @@ public sealed class EndgameSkillRankView
     public IReadOnlyList<string> NextEffectLines { get; }
     public IReadOnlyList<string> NextChangeLines { get; }
     public IReadOnlyList<EndgameSkillContribution> Contributions { get; }
+    public EndgameSkillContractView Contract { get; }
     internal EndgameSkillRankView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "hardRank", "grantRank", "softRank", "effectiveRank", "canCast", "canInvest", "blockedReasons", "currentEffectLines", "nextEffectLines", "contributions", "nextEffectiveRank", "trainingSynergies", "nativeModifierLines", "nextRequiredLevel", "nextChangeLines");
+        EndgameData.Keys(d, "id", "hardRank", "grantRank", "softRank", "effectiveRank", "canCast", "canInvest", "blockedReasons", "currentEffectLines", "nextEffectLines", "contributions", "nextEffectiveRank", "trainingSynergies", "nativeModifierLines", "nextRequiredLevel", "nextChangeLines", "contract");
         ID = EndgameData.Int(d, "id"); HardRank = EndgameData.Int(d, "hardRank");
         GrantRank = DecimalRank(EndgameData.String(d, "grantRank", EndgameResponse.MaximumBytes)); SoftRank = DecimalRank(EndgameData.String(d, "softRank", EndgameResponse.MaximumBytes)); EffectiveRank = DecimalRank(EndgameData.String(d, "effectiveRank", EndgameResponse.MaximumBytes));
         string nextRank = EndgameData.String(d, "nextEffectiveRank", EndgameResponse.MaximumBytes);
@@ -62,6 +63,9 @@ public sealed class EndgameSkillRankView
         NextEffectLines = EndgameData.List(d, "nextEffectLines", 32, v => EndgameData.Text(v, "nextEffectLines", 2048));
         NextChangeLines = EndgameData.List(d, "nextChangeLines", 32, v => EndgameData.Text(v, "nextChangeLines", 2048));
         Contributions = EndgameData.List(d, "contributions", 256, v => new EndgameSkillContribution(EndgameData.Object(v)));
+        Contract = EndgameData.Optional(d, "contract", v => new EndgameSkillContractView(EndgameData.Object(v)));
+        if (Contract != null && (EffectiveRank == "0" && Contract.Current != null || NextEffectiveRank.Length == 0 && Contract.Next != null))
+            throw new FormatException("Skill behavior has no matching effective rank.");
         if (ID <= 0 || HardRank < 0 || HardRank > 20 || CanCast != (EffectiveRank != "0") || CanInvest && HardRank >= 20) throw new FormatException("Invalid skill rank state.");
     }
     public static string DecimalRank(string value)
@@ -128,7 +132,10 @@ public sealed partial class EndgameClientState
     public IReadOnlyList<EndgameSkillRankView> SkillRanks { get; private set; } = Array.Empty<EndgameSkillRankView>();
     public EndgameSkillRankView SkillRank(int id)
     { foreach (var row in SkillRanks) if (row.ID == id) return row; return null; }
-    public bool CanInvestSkill(int id) => GrowthV5 && HasSkillRanks && SkillRanksRevision == Revision && !Pending && UnspentSkillPoints > 0 && SkillRank(id)?.CanInvest == true;
+    /// <summary>Behavior is authoritative only for the currently observed server revision.</summary>
+    public EndgameSkillContractView SkillContract(int id) => SkillBehaviorV1 && GrowthV5 && HasSkillRanks && SkillRanksRevision == Revision ? SkillRank(id)?.Contract : null;
+    public EndgameSkillBehaviorView CurrentSkillBehavior(int id) => SkillContract(id)?.Current;
+    public bool CanInvestSkill(int id) => GrowthV5 && HasSkillRanks && SkillRanksRevision == Revision && !Pending && UnspentSkillPoints > 0 && SkillRank(id)?.CanInvest == true && (!SkillBehaviorV1 || id == 10212 || SkillRank(id).Contract != null);
     private void ResetSkillRanks()
     { HasSkillRanks = false; SkillRanksRevision = "0"; SkillHardCap = PlayerLevelCap = PetLevelCap = UnspentSkillPoints = SkillFormulaVersion = 0; SkillRanks = Array.Empty<EndgameSkillRankView>(); }
     private static int SkillResultInt(EndgameResponse response, string key)

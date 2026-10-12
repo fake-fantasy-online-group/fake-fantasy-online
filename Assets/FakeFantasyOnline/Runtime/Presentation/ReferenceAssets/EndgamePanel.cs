@@ -27,6 +27,9 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private EndgameRequest quotedInputs;
     private long generation = -1;
     private float nextRiftRefresh;
+    private float nextSkillBehaviorRefresh;
+    private string skillBehaviorRefreshRevision;
+    private int skillBehaviorRefreshAttempts;
     private string requestedRecipeCursor;
     private const float W = 940f, H = 660f;
     private static readonly Color Gold = new Color(1f, .83f, .39f);
@@ -55,7 +58,23 @@ public sealed partial class EndgamePanel : MonoBehaviour
     {
         if (State == null || !client.EndgameInWorld)
         { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; announcement = ""; observedGeneration = -1; return; }
-        if (generation != State.Generation) { generation = State.Generation; ClearSelection(); open = false; }
+        if (generation != State.Generation)
+        {
+            generation = State.Generation; ClearSelection(); open = false;
+            skillBehaviorRefreshRevision = null; skillBehaviorRefreshAttempts = 0; nextSkillBehaviorRefresh = 0;
+        }
+        if (State.SkillBehaviorV1)
+        {
+            if (skillBehaviorRefreshRevision != State.Revision)
+            { skillBehaviorRefreshRevision = State.Revision; skillBehaviorRefreshAttempts = 0; nextSkillBehaviorRefresh = 0; }
+            if (State.HasSkillRanks && State.SkillRanksRevision == State.Revision) skillBehaviorRefreshAttempts = 0;
+            else if (!State.Pending && skillBehaviorRefreshAttempts < 3 && Time.unscaledTime >= nextSkillBehaviorRefresh)
+            {
+                skillBehaviorRefreshAttempts++;
+                nextSkillBehaviorRefresh = Time.unscaledTime + 5f;
+                RefreshGrowthSkills();
+            }
+        }
         ObserveRiftPhase();
         if (open && module == EndgameModule.Cube) LoadRecipeMetadata();
         if (open && Input.GetKeyDown(KeyCode.Escape)) Close();

@@ -65,17 +65,21 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public sealed partial class SkillTargeting
     {
-        public enum Aim { Instant, Single, Circle, Direction }
+        public enum Aim { Instant, Single, Circle, Direction, Trap, Unavailable }
         private const float DefaultRadius=140f, ServerSingleRangeFallback=600f;
         public static string ValidateTarget(int id,object target) => null;
     }
-    public sealed class RemotePlayer { public bool IsDead; public int id; public UnityEngine.Transform transform=new UnityEngine.Transform(); }
-    public sealed class MonsterEntity { public UnityEngine.Transform transform=new UnityEngine.Transform(); }
-    public static class TargetSelect { public static object Current,CurrentSourceForIndependentRuntime; }
-    public sealed class NetClient { public static NetClient I; public void UseSkill(int skill,int target) { } }
+    public interface ISelectable { }
+    public sealed class ReferenceWorldRemoteSelectable : ISelectable { public RemotePlayer SourceIdentityForIndependentRuntime; }
+    public sealed class RemotePlayer : ISelectable { public bool IsDead; public int id; public UnityEngine.Transform transform=new UnityEngine.Transform(); }
+    public sealed class MonsterEntity : ISelectable { public bool IsDead, NoAttack; public int hp = 100; public UnityEngine.Transform transform=new UnityEngine.Transform(); }
+    public static class TargetSelect { public static ISelectable Current; public static object CurrentSourceForIndependentRuntime; }
+    public static class EndgamePanel { public static FakeFantasyOnline.Application.EndgameClientState GrowthState; }
+    public static class SocialClient { public static int SelectedMemberId; public static bool InParty(int id) => false; }
+    public sealed class NetClient { public static int SelfEntityId; public static NetClient I; public void UseSkill(int skill,int target) { } }
     public static class UITip { public static void Show(string text,float scale) { } }
     public static class UIScale { public static float Factor => 1f; }
-    public static class CharData { public static float atkDist; }
+    public static class CharData { public static float atkDist; public static int race; }
     public static class CombatNumber { public static float Ppu=100f; public static UnityEngine.Transform PlayerTransform=new UnityEngine.Transform(); }
     public partial class CombatWorld
     {
@@ -86,6 +90,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private RemotePlayer pvpTarget;
         private MonsterEntity target;
         private static void Ensure() { if(I==null) I=new CombatWorld(); }
+        private static bool TargetWorldPx(out int x,out int y) { x=y=0; return false; }
+        public static void RequestGroundCast(int id,int x,int y,float range) { }
         private bool PlayerWithinGround(float range) => false;
         internal static void SetAuditTargetDistance(float pixels)
         {

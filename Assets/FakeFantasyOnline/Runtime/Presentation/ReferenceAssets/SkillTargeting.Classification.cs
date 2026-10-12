@@ -22,6 +22,8 @@ public sealed partial class SkillTargeting
         range = radius = angle = rectL = rectW = 0f;
         isTrap = false;
 
+        if (AuthoritativeProfessionSkill.TryResolve(skillId, out Aim authoritative, out range, out radius,
+            out angle, out rectL, out rectW, out isTrap)) return authoritative;
         Win05.SkInfo skill = Win05.SkillInfo(skillId);
         if (skillId == 10211 || skill == null)
         {
@@ -102,6 +104,7 @@ public sealed partial class SkillTargeting
 
     public static bool SelfCenteredCircle(Win05.SkInfo info)
     {
+        if (info != null && AuthoritativeProfessionSkill.Uses(info.id)) return AuthoritativeProfessionSkill.SelfCentered(info.id);
         if (info != null && NativeSwordSkillTargeting.TryGet(info.id, out var original))
             return original.SelfCentered;
         if (info == null || info.shape != 2 || info.id == 10211)

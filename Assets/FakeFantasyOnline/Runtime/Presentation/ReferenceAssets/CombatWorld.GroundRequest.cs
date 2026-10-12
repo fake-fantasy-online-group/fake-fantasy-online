@@ -34,7 +34,7 @@ public partial class CombatWorld
         I.pendGroundSkill = skillId;
         I.pendGroundGx = gx;
         I.pendGroundGy = gy;
-        I.pendGroundRangeU = (rangePx > 0f ? rangePx : 100f) / scale;
+        I.pendGroundRangeU = (rangePx > 0f ? rangePx : AuthoritativeProfessionSkill.Uses(skillId) ? float.PositiveInfinity : 100f) / scale;
         I.pendGroundXU = (gx - I.worldW * 0.5f) / scale;
         I.pendGroundYU = (I.worldH * 0.5f - gy) / scale;
         I.pendGroundUntil = Time.time + 8f;

@@ -5,6 +5,7 @@ public sealed partial class SkillTargeting
 {
     public static string ValidateTarget(int skillId, ISelectable target)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId)) return AuthoritativeProfessionSkill.ValidateTarget(skillId, target);
         if (target == null) return "请选择攻击目标";
         if (target is NpcInteract) return "不能对该目标使用技能";
         if (!target.SelFriendly) return null;

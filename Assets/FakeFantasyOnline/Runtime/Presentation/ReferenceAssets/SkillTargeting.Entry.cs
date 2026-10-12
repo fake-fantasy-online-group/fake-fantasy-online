@@ -22,7 +22,8 @@ public sealed partial class SkillTargeting
 
         I.skillId = skillId;
         I.mode = mode;
-        I.rangePx = range > 0f ? range : DefaultRange;
+        I.rangePx = AuthoritativeProfessionSkill.Uses(skillId)
+            ? (range > 0f ? range : float.PositiveInfinity) : range > 0f ? range : DefaultRange;
         I.radiusPx = radius;
         I.fanDeg = angle;
         I.rectLen = rectL;
@@ -45,6 +46,8 @@ public sealed partial class SkillTargeting
         float radius, float angle, float rectL, float rectW, bool isTrap)
     {
         PlayerController pc = PlayerController.I;
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); return; }
         if (pc == null || Camera.main == null) return;
         if (GameHud.I != null && GameHud.I.MouseOverHud()) return;
 
@@ -54,7 +57,8 @@ public sealed partial class SkillTargeting
         Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         float gx = Mathf.Clamp(pointerWorld.x * ppu + worldW * 0.5f, 0f, worldW);
         float gy = Mathf.Clamp(worldH * 0.5f - pointerWorld.y * ppu, 0f, worldH);
-        float effectiveRange = range > 0f ? range : DefaultRange;
+        float effectiveRange = AuthoritativeProfessionSkill.Uses(skillId)
+            ? (range > 0f ? range : float.PositiveInfinity) : range > 0f ? range : DefaultRange;
         float playerX = pc.worldX;
         float playerY = pc.worldY;
 
@@ -64,6 +68,11 @@ public sealed partial class SkillTargeting
 
         int roundedX = (int)Math.Round((double)gx);
         int roundedY = (int)Math.Round((double)gy);
+        if (mode == Aim.Trap)
+        {
+            CastTrapAtPointer(skillId, roundedX, roundedY);
+            return;
+        }
         bool approach = false;
         if (mode == Aim.Circle)
         {
@@ -88,6 +97,8 @@ public sealed partial class SkillTargeting
     private void Update()
     {
         if (!Active) return;
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); End(); return; }
 
         PlayerController pc = PlayerController.I;
         if (pc == null || Camera.main == null)
@@ -128,6 +139,11 @@ public sealed partial class SkillTargeting
         PlayerController.SuppressWorldClick();
         int roundedX = Mathf.RoundToInt(gx);
         int roundedY = Mathf.RoundToInt(gy);
+        if (mode == Aim.Trap)
+        {
+            if (CastTrapAtPointer(skillId, roundedX, roundedY)) End();
+            return;
+        }
         bool approach = false;
         if (mode == Aim.Circle)
         {

@@ -43,6 +43,11 @@ public partial class CombatWorld
 
     private void CastAtTarget(int skillId)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId))
+        {
+            RequestSkill(skillId, AuthoritativeProfessionSkill.Current(skillId)?.CastDistance ?? 0);
+            return;
+        }
         int gx, gy;
         if (!TargetWorldPx(out gx, out gy)) return;
         if (NetClient.I != null)

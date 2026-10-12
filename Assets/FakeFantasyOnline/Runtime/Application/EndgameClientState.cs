@@ -9,6 +9,7 @@ public sealed partial class EndgameClientState
     public bool Negotiated { get; private set; }
     public bool NativeEquipmentStats { get; private set; }
     public bool GrowthV5 { get; private set; }
+    public bool SkillBehaviorV1 { get; private set; }
     public bool HelloSent { get; private set; }
     public bool HasSnapshot { get; private set; }
     public string Revision { get; private set; } = "0";
@@ -46,7 +47,7 @@ public sealed partial class EndgameClientState
 
     public void Reset()
     {
-        Negotiated = NativeEquipmentStats = GrowthV5 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
+        Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
@@ -131,18 +132,19 @@ public sealed partial class EndgameClientState
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false, nativeStats = false, growth = false;
+            bool capable = false, nativeStats = false, growth = false, skillBehavior = false;
             foreach (var value in response.Capabilities)
             {
                 if (value == "endgame.v1") capable = true;
                 if (value == "endgame.native-stats.v1") nativeStats = true;
                 if (value == "endgame.growth.v5") growth = true;
+                if (value == "endgame.skill-behavior.v1") skillBehavior = true;
             }
             bool accepted = response.OK && capable;
             // A failed refresh leaves the server's previously negotiated
             // renderer intact. Keep its matching client ownership as well.
             if (accepted || !Negotiated)
-            { Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth; if (!GrowthV5) ResetSkillRanks(); }
+            { Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth; SkillBehaviorV1 = GrowthV5 && skillBehavior; if (!GrowthV5) ResetSkillRanks(); }
             Error = accepted ? "" : response.Error;
             helloAwaitingResponse = helloRetryScheduled = false;
             if (!accepted && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy"))

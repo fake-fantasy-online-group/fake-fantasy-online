@@ -633,7 +633,7 @@ public partial class Win05
                 continue;
             }
 
-            skInfo.TryGetValue(slot.id, out SkInfo info);
+            SkInfo info = SkillInfo(slot.id);
             CharData.skills.TryGetValue(slot.id, out int currentLevel);
             int iconId = info == null ? 0 : info.icon;
             Texture2D icon = LoadSkillIcon(iconId);

@@ -443,6 +443,8 @@ public sealed partial class PluginGameApi
             ? EndgameClient.Endgame.SkillRank(skill)?.CanCast != true
             : Session.SkillBookState == null || Session.SkillBookState.LevelOf(skill) <= 0)
             throw new ActionFailure("skill.not_learned", "The skill is not present in the learned-skill snapshot.");
+        if (AuthoritativeProfessionSkill.Uses(skill) && !AuthoritativeProfessionSkill.LearnedActive(skill))
+            throw new ActionFailure("skill.unavailable", "The authoritative active skill behavior is not ready.");
         bool requestSkill = entry.Request.Name == "skill.request";
         bool coordinates = args.ContainsKey("x") || args.ContainsKey("y");
         int x = 0, y = 0;

@@ -15,6 +15,8 @@ public sealed partial class SkillTargeting : MonoBehaviour
         Single,
         Circle,
         Direction,
+        Trap,
+        Unavailable,
     }
 
     private const float ArrowScale = 1f;

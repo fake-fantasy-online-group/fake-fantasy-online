@@ -10,6 +10,8 @@ export MONO_PATH="$FFO_FRAMEWORK_DIR/Facades${MONO_PATH:+:$MONO_PATH}"
 find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$OUT/framework.rsp"
 "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -noconfig -nostdlib+ @"$OUT/framework.rsp" -nologo -langversion:9.0 -out:"$OUT/SwordTargeting.exe" \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Foundation/{JsonData,BoundedJson}.cs \
+ "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
+ "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/AuthoritativeProfessionSkill.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/NativeSwordSkillTargeting.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/Win05.SkillData.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/SkillTargeting.Classification.cs" \

@@ -127,12 +127,14 @@ public partial class Win05
     // hotbar-icon time - a second, earlier read point DrawSkill 06001025 does not have.
     public static int SkillIconId(int id)
     {
+        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative)) return authoritative?.icon ?? 0;
         LoadStatic();
         return skInfo != null && skInfo.TryGetValue(id, out SkInfo info) ? info.icon : 0;
     }
 
     public static SkInfo SkillInfo(int id)
     {
+        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative)) return authoritative;
         LoadSkillData();
         SkInfo result;
         return skInfo.TryGetValue(id, out result) ? result : null;

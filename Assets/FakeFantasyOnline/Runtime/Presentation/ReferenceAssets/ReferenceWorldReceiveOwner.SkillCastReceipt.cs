@@ -45,7 +45,7 @@ public sealed partial class ReferenceWorldReceiveOwner : ISkillCastReceiveOwnerP
                     ? NetClient.PendingCastGround : null;
                 if (info != null)
                 {
-                    bool centeredShape = info.shape == 2 && info.dist < 1;
+                    bool centeredShape = AuthoritativeProfessionSkill.Uses(state.SkillId) ? AuthoritativeProfessionSkill.SelfCentered(state.SkillId) : info.shape == 2 && info.dist < 1;
                     if (!ground.HasValue && !centeredShape && info.canEnemy != 0 &&
                         (info.tgt == 1 || info.castkind == 1) && CombatWorld.HasTarget)
                         ground = CombatWorld.TargetCenterPos;
@@ -73,7 +73,7 @@ public sealed partial class ReferenceWorldReceiveOwner : ISkillCastReceiveOwnerP
                 ? NetClient.PendingCastGround : null;
             if (releaseInfo != null)
             {
-                bool centeredShape = releaseInfo.shape == 2 && releaseInfo.dist < 1;
+                bool centeredShape = AuthoritativeProfessionSkill.Uses(state.SkillId) ? AuthoritativeProfessionSkill.SelfCentered(state.SkillId) : releaseInfo.shape == 2 && releaseInfo.dist < 1;
                 if (SkillTargeting.SelfCenteredCircle(releaseInfo) && caster != null)
                     SkillRangeRing.Show(caster.position, releaseInfo.radius, CombatNumber.Ppu);
                 if (!releaseGround.HasValue && !centeredShape && releaseInfo.canEnemy != 0 &&
