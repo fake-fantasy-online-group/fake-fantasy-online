@@ -86,6 +86,12 @@ public sealed partial class PrivateServerGateway
         lock (_worldStateSync)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // 0x800a is a character-scoped observation, including its entity-0 alias.
+            // The next 0x8003 supplies fresh appearance before its world build; carrying
+            // this snapshot across a roster handoff can reject the new entity or reuse
+            // the previous character's look. Ordinary map transitions do not enter here.
+            if (Interlocked.Exchange(ref _playerAppearanceState, null) != null)
+                Interlocked.Increment(ref _playerAppearanceStateVersion);
             if (Interlocked.Exchange(ref _localPlayerLifeState, null) != null)
                 Interlocked.Increment(ref _localPlayerLifeStateVersion);
             if (Interlocked.Exchange(ref _localRidingState, null) != null)
