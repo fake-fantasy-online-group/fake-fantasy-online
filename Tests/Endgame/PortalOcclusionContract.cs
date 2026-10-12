@@ -6,10 +6,10 @@ using FakeFantasyOnline.Presentation.ReferenceAssets;
 class PortalOcclusionContract {
  static int checks;
  static void Check(bool x,string s){checks++;if(!x)throw new Exception(s);}
- static byte[] Mask(){using(var m=new MemoryStream())using(var w=new BinaryWriter(m)){w.Write(-1);w.Write(0x10002);w.Write(new byte[50]);w.Write(22);for(int x=0;x<22;x++){w.Write(x*10+5);w.Write(245+(x/4)*10);}w.Write(new byte[22]);var b=m.ToArray();for(int i=b.Length-22;i<b.Length;i++)b[i]=0x81;return b;}}
- static void Coverage(int id,string path,int height,int scale,int nleft=0,int ntop=0){
+ static byte[] Mask(int columns=22,int firstY=245){using(var m=new MemoryStream())using(var w=new BinaryWriter(m)){w.Write(-1);w.Write(0x10002);w.Write(new byte[50]);w.Write(columns);for(int x=0;x<columns;x++){w.Write(x*10+5);w.Write(firstY+(x/4)*10);}w.Write(new byte[columns]);var b=m.ToArray();for(int i=b.Length-columns;i<b.Length;i++)b[i]=0x81;return b;}}
+ static void Coverage(int id,string path,int height,int scale,int nleft=0,int ntop=0,int sourceWidth=220){
   Check(ReferencePortalApertureProfile.TryGet(id,path,out var poly),"profile");
-  var tex=new Texture2D((220-nleft)*scale,(height-ntop)*scale);var im=new ResLoader.ObjSprite{tex=tex,hdScale=scale,nLeft=nleft,nTop=ntop};
+  var tex=new Texture2D((sourceWidth-nleft)*scale,(height-ntop)*scale);var im=new ResLoader.ObjSprite{tex=tex,hdScale=scale,nLeft=nleft,nTop=ntop};
   // Exercise original strip rects at nonzero texture x, independently of PPU.
   for(int left=0;left<tex.width;left+=10*scale){int width=Math.Min(10*scale,tex.width-left);var cover=new byte[width*tex.height];
    foreach(bool rear in new[]{false,true}){var mesh=ReferenceLegacyMapObjectRenderer.Mesh(im,left,width,123,poly,rear);if(mesh==null)continue;
@@ -21,8 +21,44 @@ class PortalOcclusionContract {
    foreach(var n in cover)if(n!=1)throw new Exception("partition missing or duplicate pixel");checks++;
   }
  }
+ static void ArchPair(int id,int ox,int oy,int oz,int px,int py,int pz){
+  string path="object/JZ/JZ_DXWG_"+(id==0x182d01f5?"0501":"0502")+".gso";
+  Check(ReferencePortalApertureProfile.TryGet(id,path,out var poly,out int width,out int height)&&width==427&&height==452,"arch identity and logical bounds");
+  var r=new ResLoader();ResLoader.I=r;r.Portal=new ResLoader.ObjSprite{tex=new Texture2D(106,193),frames=20,clipBy=179};
+  var renderer=new ReferenceLegacyMapObjectRenderer(r);var mask=Mask(43,395);r.Pkg.Files[path.Replace(".gso",".mask")]=mask;var originalMask=(byte[])mask.Clone();
+  var value=new ReferenceGsmObject{Id=id,SourceX=ox,SourceY=oy,PivotZ=oz,Width=width,Height=height};
+  var image=new ResLoader.ObjSprite{path=path,tex=new Texture2D(426,451),frames=1,hdScale=1};
+  var gate=new GsmMap.Obj{id=ReferencePortalApertureProfile.PortalId,sx=px,sy=py,pz=pz,xl=109,yl=205};var map=new GsmMap();map.libObjs.Add(gate);renderer.Prepare(map);
+  Check(renderer.Place(value,image),"actual arch/portal pair with original PZ admitted");
+  int lowered=0;foreach(var p in renderer.Results){
+   var sprite=p.Sprite;Check(sprite.texture==image.tex,"arch borrows source pixels");
+   for(int q=0;q<sprite.vertices.Length;q+=4){
+    float x=sprite.rect.x+sprite.vertices[q].x+.5f;int top=451-(int)sprite.vertices[q].y,bottom=451-(int)sprite.vertices[q+2].y;
+    bool aperture=ReferencePortalApertureProfile.Column(poly,x,out float a,out float b);int originalOrder=oy+400+((int)x/10/4)*10;
+    for(int y=top;y<bottom;y++){
+     bool rear=aperture&&y>=Math.Ceiling(a)&&y<Math.Ceiling(b);
+     Check(p.Order==(rear?Math.Min(originalOrder,py+178):originalOrder),"every arch pixel retains front depth or only lowers rear");
+     if(p.Order<originalOrder)lowered++;
+    }
+   }
+  }
+  Check(lowered>0,"arch rear pixels actually lowered");for(int i=0;i<mask.Length;i++)Check(mask[i]==originalMask[i],"collision mask remains byte-identical");
+  gate.pz+=600;map.libObjs[0]=gate;renderer.Prepare(map);Check(!renderer.Place(value,image),"vertically displaced portal cannot pair");gate.pz=pz;
+  gate.sx=ox+(id==0x182d01f5?20:365);map.libObjs[0]=gate;renderer.Prepare(map);Check(!renderer.Place(value,image),"portal in front-pillar column cannot pair");gate.sx=px;map.libObjs[0]=gate;renderer.Prepare(map);
+  image.path="object/JZ/JZ_DXWG_"+(id==0x182d01f5?"0502":"0501")+".gso";Check(!renderer.Place(value,image),"mirrored asset identity cannot be substituted");image.path=path;
+  value.Width=221;Check(!renderer.Place(value,image),"stair dimensions cannot admit arch");value.Width=427;value.Height=451;Check(!renderer.Place(value,image),"unexpected logical height rejected");value.Height=452;
+  map.libObjs.Add(gate);renderer.Prepare(map);Check(!renderer.Place(value,image),"ambiguous arch portal pair rejected");map.libObjs.Clear();renderer.Prepare(map);Check(!renderer.Place(value,image),"unpaired arch keeps old ordering");
+  map.libObjs.Add(gate);renderer.Prepare(map);image.clipArr=new[]{395};Check(!renderer.Place(value,image),"authored arch depth preserved");image.clipArr=null;GameBootstrap.UseIsoY=true;Check(!renderer.Place(value,image),"alternate depth mode excluded for arches");GameBootstrap.UseIsoY=false;Check(!renderer.Place(value,image,ReferenceMapObjectKind.Tile),"arch tile cannot use library profile");renderer.Clean();
+ }
  static void Main(){
   foreach(int scale in new[]{1,2,4}){Coverage(0x182d012d,"object/JZ/JZ_DXWG_0301.gso",304,scale);Coverage(0x182d0c1e,"object/JZ/JZ_DXWG_3102.gso",305,scale);Coverage(0x182d012d,"object/JZ/JZ_DXWG_0301.gso",304,scale,3,7);}
+  foreach(int scale in new[]{1,2,4})foreach(int id in new[]{0x182d01f5,0x182d01f6}){string path="object/JZ/JZ_DXWG_"+(id==0x182d01f5?"0501":"0502")+".gso";Coverage(id,path,451,scale,0,0,426);Coverage(id,path,451,scale,3,7,426);}
+  // Actual library-object coordinates for both directions and the raised 923 gate.
+  ArchPair(0x182d01f5,1822,2848,0,1919,3005,0);
+  ArchPair(0x182d01f6,12718,3078,0,12883,3214,0);
+  ArchPair(0x182d01f6,12927,2697,0,13156,2850,0);
+  ArchPair(0x182d01f5,1249,2827,0,1414,2946,0);
+  ArchPair(0x182d01f5,1217,3253,170,1312,3350,100);
   Check(!ReferencePortalApertureProfile.TryGet(0x182d012f,"object/JZ/JZ_DXWG_0301.gso",out _),"other object excluded");
   Check(!ReferencePortalApertureProfile.TryGet(0x182d012d,"other.gso",out _),"other asset excluded");
   foreach(bool left in new[]{false,true}){

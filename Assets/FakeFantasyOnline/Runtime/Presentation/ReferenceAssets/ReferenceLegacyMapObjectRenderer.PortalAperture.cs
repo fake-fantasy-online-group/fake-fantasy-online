@@ -43,11 +43,11 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
         if (GameBootstrap.UseIsoY || image.frames != 1 ||
             kind != ReferenceMapObjectKind.Library ||
             (image.clipArr != null && image.clipArr.Length != 0) ||
-            !ReferencePortalApertureProfile.TryGet(value.Id, image.path, out int[] polygon))
+            !ReferencePortalApertureProfile.TryGet(value.Id, image.path, out int[] polygon,
+                out int expectedWidth, out int expectedHeight))
             return false;
         int scale = Math.Max(image.hdScale, 1);
-        int expectedHeight = value.Id == 0x182d012d ? 305 : 306;
-        if (value.Width != 221 || value.Height != expectedHeight ||
+        if (value.Width != expectedWidth || value.Height != expectedHeight ||
             image.nLeft < 0 || image.nTop < 0 ||
             image.nLeft + image.tex.width / (float)scale > value.Width ||
             image.nTop + image.tex.height / (float)scale > value.Height)
