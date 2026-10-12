@@ -129,38 +129,48 @@ PlayMode, rendered screenshot comparison, Mac operation, Player build or externa
 resource modification was performed. Source restoration is established; runtime
 visual acceptance remains unverified.
 
-## Unlearned skill icon double-image correction (2026-10-12)
+## Current skill icon identity correction (2026-10-12)
 
-Original tree resources already contain complete grayscale inactive skill icons.
-The extra live item icon drawn at alpha 0.38 can be different artwork, not just a
-colored version of the background: confirmed for assassin 10213 (`othertree3`,
-slot 37,11, item7049) and 10204 (`maintree3`, slot 9,8, item5023). Both live icons
-are 30×30, expanded into a 36×36 slot; the first combines a green orb with the
-background's explosion picture. All pixels of these two live icons are opaque.
+Original tree resources contain grayscale pictures that can differ from the
+current skill icon. User runtime feedback clarified that the current dynamic
+icon must be retained, rather than the baked picture. The earlier change that
+skipped the dynamic overlay for unlearned nodes was therefore the wrong layer
+choice and is superseded here.
 
-`DrawSkillIcon` now leaves the original inactive node intact when the tree loaded.
-Learned nodes retain the existing live overlay and level label. Missing trees
-retain the existing dim live-icon fallback. No black backing, texture mutation,
-layout, hit area, upgrade, tooltip, or gameplay changes are included. The V5
+Confirmed resource/contract mappings: assassin 10213 (`othertree3`, slot 37,11,
+item7049, 陷阱：爆弹) and 10204 (`maintree3`, slot 9,8, item5023, 暗器修炼).
+Both live resources are 30×30 and fully opaque, but the renderer does not assume
+this for all icons. `DrawSkillIcon` preserves the outer 2 logical pixels of the
+36-pixel original tree node and replaces only its inner 32×32 well. A neutral
+#111 opaque inner backing prevents obsolete artwork leaking through transparent
+pixels, aspect-fit margins, or a missing texture. The current icon is fitted
+inside that well at identical positions in both states: RGB brightness 55% with
+alpha 1 when unlearned, full color when learned. Missing icons leave an empty
+inner well instead of presenting a different skill. Missing trees retain the
+36×36 fallback area because there is no authored rim to preserve.
+
+No original resources are changed. Arrow/outer-rim pixels, node hit areas,
+coordinates, upgrade commands, tooltips, and gameplay stay unchanged. The V5
 `CanCast` field used here is validated as effective rank > 0, including passives;
-it is distinct from the active-cast admission check.
+it is distinct from active-cast admission.
 
-Reproduce the standalone regression with the cloud C# toolchain environment set:
+Reproduce with the cloud C# toolchain environment set:
 
 ```sh
 python3 Tests/UiArtwork/run-skill-icon-contract.py
 ```
 
-87 assertions execute extracted production `Fit` and `DrawSkillIcon` methods:
+403 assertions execute extracted production `Fit` and `DrawSkillIcon` methods:
 missing/present trees and icons, learned/unlearned transitions, 0.5–2× scales,
-scroll offsets, aspect ratios, and original restored apothecary node positions
-10316/10318/10321. Source guards protect the caller and passive rank semantics.
-Removing the new inactive-node branch makes this contract fail.
+scroll offsets, square/wide/tall images, opaque/half/fully transparent pixels,
+old-background isolation, four original rim edges and the connecting arrow,
+and restored apothecary nodes 10316/10318/10321. Source guards protect caller
+wiring and passive rank semantics.
 
-Evidence was decoded with the repository's actual GSA/DIMG decoders against
-texture-upload substitutes, and all four assassin/apothecary tree PNGs were
-visually inspected. The evidence archive SHA-256 is
+Evidence was decoded using actual repository GSA/DIMG sources against texture
+upload substitutes; four assassin/apothecary tree images and both current item
+icons were inspected. Archive SHA-256:
 `9025faeb1d1ccc4e5976c1105d6041a3319a556b72f20d9451bae110a186f408`.
-External resources and decoded images remain outside the repository. A source
-pixel composite reproduces the reported overlay but is not a game screenshot.
-No Unity import, PlayMode, Player build, or Mac UI operation was performed.
+External resources and decoded images remain outside the repository. The
+before/unlearned/learned preview is a source pixel composite, not a game
+screenshot. No Unity import, PlayMode, Player build, or Mac UI operation was run.

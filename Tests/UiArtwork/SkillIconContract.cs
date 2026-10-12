@@ -21,6 +21,7 @@ namespace UnityEngine
     public class Texture2D
     {
         public int width, height;
+        public Color texel = Color.white;
         public static readonly Texture2D whiteTexture = new Texture2D(1, 1);
         public Texture2D(int width, int height) { this.width=width; this.height=height; }
     }
@@ -70,45 +71,76 @@ static class SkillIconContract
         foreach (bool learned in new[] { false, true })
         foreach (Texture2D texture in new[] { icon, null })
         {
-            GUI.calls.Clear();
-            GUI.color = new Color(.2f,.3f,.4f,.5f);
+            GUI.calls.Clear(); GUI.color = new Color(.2f,.3f,.4f,.5f);
             Win05.TestIcon(area, texture, learned, tree);
-            bool bakedOnly = tree && !learned;
-            Check(GUI.calls.Count == (bakedOnly ? 0 : 1), "single authored inactive image; learned/fallback draw preserved");
+            Check(GUI.calls.Count == (texture == null ? 1 : 2), "clean inner well then current icon, regardless of learned state");
             Check(GUI.color.r == 1 && GUI.color.g == 1 && GUI.color.b == 1 && GUI.color.a == 1, "GUI color reset on every branch");
-            if (bakedOnly) continue;
-            var call = GUI.calls[0];
-            Check(ReferenceEquals(call.texture, texture ?? Texture2D.whiteTexture), "original live/fallback texture used");
-            Check(Near(call.area.x,area.x) && Near(call.area.y,area.y) && Near(call.area.width,36) && Near(call.area.height,36), "no node geometry or frame changes");
-            if (texture == null)
-                Check(call.tint.r == 0 && call.tint.g == 0 && call.tint.b == 0 && Near(call.tint.a,.25f), "missing icon fallback unchanged");
-            else if (!learned)
-                Check(call.tint.r == 1 && call.tint.g == 1 && call.tint.b == 1 && Near(call.tint.a,.38f), "missing tree retains dimmed live fallback");
+            var backing = GUI.calls[0];
+            float inset = tree ? 2 : 0;
+            Check(ReferenceEquals(backing.texture,Texture2D.whiteTexture) && backing.tint.a == 1, "opaque inner backing prevents missing/transparent icon leak");
+            Check(Near(backing.area.x,area.x+inset) && Near(backing.area.y,area.y+inset) && Near(backing.area.width,36-2*inset) && Near(backing.area.height,36-2*inset), "only inner icon well is covered; original rim survives");
+            if (texture == null) continue;
+            var call = GUI.calls[1];
+            Check(ReferenceEquals(call.texture, texture), "current contract icon used, never baked artwork");
+            Check(Near(call.area.x,backing.area.x) && Near(call.area.y,backing.area.y) && Near(call.area.width,backing.area.width) && Near(call.area.height,backing.area.height), "same inner geometry when learned and unlearned");
+            Check(call.tint.a == 1 && Near(call.tint.r,learned ? 1 : .55f) && Near(call.tint.g,call.tint.r) && Near(call.tint.b,call.tint.r), "unlearned dims RGB only, never alpha");
         }
-        // Recovered apothecary nodes already exist in maintree4's authored art.
-        // Server metadata supplies the learned image without a new inactive layer.
         foreach (var node in new[] { new[] { 10316,39,181 }, new[] { 10318,39,267 }, new[] { 10321,155,10 } })
-        foreach (bool tree in new[] { false,true })
+        foreach (float scale in new[] { .5f,1f,1.5f,2f })
         foreach (bool learned in new[] { false,true })
         {
             GUI.calls.Clear(); GUI.color = Color.white;
-            var rect = new Rect(node[1],node[2]-23,36,36);
-            Win05.TestIcon(rect,icon,learned,tree);
-            Check(GUI.calls.Count == (tree && !learned ? 0 : 1), "restored apothecary node " + node[0] + " retains exactly one inactive/live image");
+            var rect = new Rect(node[1]*scale,(node[2]-23)*scale,36*scale,36*scale);
+            Win05.TestIcon(rect,icon,learned,true);
+            Check(GUI.calls.Count == 2 && ReferenceEquals(GUI.calls[1].texture,icon), "restored apothecary node " + node[0] + " retains current identity at both ranks");
+            Check(Near(GUI.calls[0].area.x,rect.x+2*scale) && Near(GUI.calls[0].area.width,32*scale), "inner rim scales with original viewport");
         }
-        // A transition must not carry a stale live draw across future GUI passes.
         foreach (bool learned in new[] { false, true, false, true, false })
         {
             GUI.calls.Clear(); GUI.color = Color.white;
             Win05.TestIcon(area, icon, learned, true);
-            Check(GUI.calls.Count == (learned ? 1 : 0), "learn/unlearn/reopen repaint has no stale overlay");
-            if (learned) Check(GUI.calls[0].tint.a == 1 && GUI.calls[0].tint.r == 1, "learned image stays full color");
+            Check(GUI.calls.Count == 2 && ReferenceEquals(GUI.calls[1].texture,icon), "learn/unlearn/reopen never switches to a different baked icon");
+        }
+    }
+    private static Color Composite(float x, float y, Color background)
+    {
+        foreach (var draw in GUI.calls)
+        {
+            var r=draw.area;
+            if (x<r.x || y<r.y || x>=r.x+r.width || y>=r.y+r.height) continue;
+            var t=draw.texture.texel;
+            float alpha=t.a*draw.tint.a;
+            background=new Color(t.r*draw.tint.r*alpha+background.r*(1-alpha),
+                t.g*draw.tint.g*alpha+background.g*(1-alpha),
+                t.b*draw.tint.b*alpha+background.b*(1-alpha),1);
+        }
+        return background;
+    }
+    private static bool Same(Color a, Color b) => Near(a.r,b.r) && Near(a.g,b.g) && Near(a.b,b.b) && Near(a.a,b.a);
+    private static void PixelIsolation()
+    {
+        var oldRed=new Color(1,0,0,1); var oldBlue=new Color(0,0,1,1);
+        foreach (float scale in new[] { .5f,1f,2f })
+        foreach (bool learned in new[] { false,true })
+        foreach (float alpha in new[] { 0f,.5f,1f })
+        foreach (var size in new[] { new[] { 30,30 },new[] { 60,30 },new[] { 30,60 } })
+        {
+            var area=new Rect(37*scale,(11-23)*scale,36*scale,36*scale);
+            var icon=new Texture2D(size[0],size[1]) { texel=new Color(.8f,.6f,.4f,alpha) };
+            GUI.calls.Clear(); Win05.TestIcon(area,icon,learned,true);
+            float cx=area.x+18*scale,cy=area.y+18*scale;
+            Check(Same(Composite(cx,cy,oldRed),Composite(cx,cy,oldBlue)), "current image/transparent pixel cannot expose old baked identity");
+            Check(Same(Composite(area.x+3*scale,area.y+3*scale,oldRed),Composite(area.x+3*scale,area.y+3*scale,oldBlue)), "non-square fit margin cannot expose baked identity");
+            Check(Same(Composite(area.x+scale,cy,oldRed),oldRed) && Same(Composite(area.x+35*scale,cy,oldBlue),oldBlue), "left/right original rim pixels unchanged");
+            Check(Same(Composite(cx,area.y+scale,oldRed),oldRed) && Same(Composite(cx,area.y+35*scale,oldBlue),oldBlue), "top/bottom original rim pixels unchanged");
+            Check(Same(Composite(cx,area.y+40*scale,oldRed),oldRed), "connecting arrow below node unchanged");
         }
     }
     public static void Main()
     {
         Geometry();
         Rendering();
+        PixelIsolation();
         Console.WriteLine("PASS SkillIconContract: " + assertions + " production-method geometry/render assertions (not Unity visual acceptance)");
     }
 }
