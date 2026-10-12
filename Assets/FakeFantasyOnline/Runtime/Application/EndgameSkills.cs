@@ -29,21 +29,38 @@ public sealed class EndgameSkillRankView
     public string GrantRank { get; }
     public string SoftRank { get; }
     public string EffectiveRank { get; }
+    public string NextEffectiveRank { get; }
+    public int NextRequiredLevel { get; }
+    public IReadOnlyList<EndgameTrainingSynergyView> TrainingSynergies { get; }
+    public IReadOnlyList<string> NativeModifierLines { get; }
     public bool CanCast { get; }
     public bool CanInvest { get; }
     public IReadOnlyList<string> BlockedReasons { get; }
     public IReadOnlyList<string> CurrentEffectLines { get; }
     public IReadOnlyList<string> NextEffectLines { get; }
+    public IReadOnlyList<string> NextChangeLines { get; }
     public IReadOnlyList<EndgameSkillContribution> Contributions { get; }
     internal EndgameSkillRankView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "hardRank", "grantRank", "softRank", "effectiveRank", "canCast", "canInvest", "blockedReasons", "currentEffectLines", "nextEffectLines", "contributions");
+        EndgameData.Keys(d, "id", "hardRank", "grantRank", "softRank", "effectiveRank", "canCast", "canInvest", "blockedReasons", "currentEffectLines", "nextEffectLines", "contributions", "nextEffectiveRank", "trainingSynergies", "nativeModifierLines", "nextRequiredLevel", "nextChangeLines");
         ID = EndgameData.Int(d, "id"); HardRank = EndgameData.Int(d, "hardRank");
         GrantRank = DecimalRank(EndgameData.String(d, "grantRank", EndgameResponse.MaximumBytes)); SoftRank = DecimalRank(EndgameData.String(d, "softRank", EndgameResponse.MaximumBytes)); EffectiveRank = DecimalRank(EndgameData.String(d, "effectiveRank", EndgameResponse.MaximumBytes));
+        string nextRank = EndgameData.String(d, "nextEffectiveRank", EndgameResponse.MaximumBytes);
+        NextEffectiveRank = nextRank.Length == 0 ? string.Empty : DecimalRank(nextRank);
+        NextRequiredLevel = EndgameData.Int(d, "nextRequiredLevel");
+        if (NextRequiredLevel < 0 || NextRequiredLevel > 100) throw new FormatException("Invalid skill investment requirement.");
+        TrainingSynergies = EndgameData.List(d, "trainingSynergies", 16, v => new EndgameTrainingSynergyView(EndgameData.Object(v)));
+        NativeModifierLines = EndgameData.List(d, "nativeModifierLines", 16, v => EndgameData.Text(v, "nativeModifierLines", 512));
+        var synergyKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var synergy in TrainingSynergies)
+            if (synergy.SourceID == ID || !synergyKeys.Add(synergy.SourceID.ToString(CultureInfo.InvariantCulture) + ":" + synergy.Effect))
+                throw new FormatException("Invalid repeated/self training synergy.");
+        if (NextEffectiveRank == "0") throw new FormatException("Invalid next skill rank.");
         CanCast = EndgameData.Bool(d, "canCast"); CanInvest = EndgameData.Bool(d, "canInvest");
         BlockedReasons = EndgameData.List(d, "blockedReasons", 16, v => EndgameData.Text(v, "blockedReasons", 512));
         CurrentEffectLines = EndgameData.List(d, "currentEffectLines", 32, v => EndgameData.Text(v, "currentEffectLines", 2048));
         NextEffectLines = EndgameData.List(d, "nextEffectLines", 32, v => EndgameData.Text(v, "nextEffectLines", 2048));
+        NextChangeLines = EndgameData.List(d, "nextChangeLines", 32, v => EndgameData.Text(v, "nextChangeLines", 2048));
         Contributions = EndgameData.List(d, "contributions", 256, v => new EndgameSkillContribution(EndgameData.Object(v)));
         if (ID <= 0 || HardRank < 0 || HardRank > 20 || CanCast != (EffectiveRank != "0") || CanInvest && HardRank >= 20) throw new FormatException("Invalid skill rank state.");
     }
@@ -53,6 +70,32 @@ public sealed class EndgameSkillRankView
         if (string.IsNullOrEmpty(value) || value.Length > EndgameResponse.MaximumBytes || value.Length > 1 && value[0] == '0') throw new FormatException("Invalid decimal skill rank.");
         foreach (char c in value) if (c < '0' || c > '9') throw new FormatException("Invalid decimal skill rank.");
         return value;
+    }
+}
+/// <summary>Server-defined hard-point synergy. Equipment ranks never feed this view.</summary>
+public sealed class EndgameTrainingSynergyView
+{
+    public int SourceID { get; }
+    public string SourceName { get; }
+    public string Effect { get; }
+    public string EffectLabel { get; }
+    public int PerPointValue { get; }
+    public string Unit { get; }
+    public int InvestedHardPoints { get; }
+    public int ContributionValue { get; }
+    public bool EquipmentApplies { get; }
+    internal EndgameTrainingSynergyView(IReadOnlyDictionary<string, object> d)
+    {
+        EndgameData.Keys(d, "sourceId", "sourceName", "effect", "effectLabel", "perPointValue", "unit", "investedHardPoints", "contributionValue", "equipmentApplies");
+        SourceID = EndgameData.Int(d, "sourceId"); SourceName = EndgameData.String(d, "sourceName", 128);
+        Effect = EndgameData.String(d, "effect", 64); EffectLabel = EndgameData.String(d, "effectLabel", 128);
+        PerPointValue = EndgameData.Int(d, "perPointValue"); Unit = EndgameData.String(d, "unit", 32);
+        InvestedHardPoints = EndgameData.Int(d, "investedHardPoints"); ContributionValue = EndgameData.Int(d, "contributionValue");
+        EquipmentApplies = EndgameData.Bool(d, "equipmentApplies");
+        if (!EndgameSkillRankView.IsProfessionSkill(SourceID) || SourceName.Length == 0 || Effect.Length == 0 || EffectLabel.Length == 0 ||
+            PerPointValue <= 0 || Unit != "percent_bp" && Unit != "flat" || InvestedHardPoints < 0 || InvestedHardPoints > 20 ||
+            EquipmentApplies || ContributionValue < 0 || (long)PerPointValue * InvestedHardPoints != ContributionValue)
+            throw new FormatException("Invalid hard-point training synergy.");
     }
 }
 public sealed class EndgameSkillContribution

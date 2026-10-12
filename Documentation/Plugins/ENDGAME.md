@@ -202,10 +202,26 @@ With negotiated `endgame.growth.v5`, observe `endgame.skills` (optional `skillId
 `formulaVersion`, `hardCap`, `playerCap`, `petCap`, `unspentPoints`, and paged
 `skillRanks`. Each row includes `skillId`, `hardRank`, `grantRank`, `softRank`,
 `effectiveRank`, `canCast`, `canInvest`, `blockedReasons`, `contributions`,
-`currentEffectLines`, and `nextEffectLines`. Keep granted/soft/effective ranks and
+`currentEffectLines`, `nextEffectLines`, `nextEffectiveRank`, `nextRequiredLevel`,
+`trainingSynergies`, `nativeModifierLines`, and `nextChangeLines`. Keep granted/soft/effective ranks and
 contribution levels as strings; no gameplay cap or numeric narrowing is applied.
-Current/next effect text is server-authored. `nextEffectLines` compares one more
-effective rank; it does not mean another hard point is legal at hard rank20.
+Current/next effect text is server-authored. When provided, `nextEffectiveRank`
+identifies the next hard-point investment preview and `nextRequiredLevel` is its
+player-level requirement. The native tooltip hides this investment section at
+hard20; current effective levels still include equipment/grants. Neither preview
+text nor a level requirement replaces `canInvest` and the revision/pending guards.
+`nextEffectLines` always retains the full comparison. Optional `nextChangeLines`
+is a compact, server-authored comparison of changed semantic blocks, preserving
+status/target membership and explicitly noting unchanged effects. The native
+card uses it when supplied; unlearned cards still show the full first investment.
+
+Each `trainingSynergies` row provides `sourceId`, `sourceName`, `effect`,
+`effectLabel`, `perPointValue`, `unit` (`percent_bp` or `flat`),
+`investedHardPoints`, `contributionValue`, and `equipmentApplies` (false). Rows
+include declared sources with zero investment. Percentage values are basis points,
+so 100 means 1%; contribution values describe hard points only.
+`nativeModifierLines` separately describes the target's existing skill modifiers.
+These optional fields default to empty/zero for older V5 server snapshots.
 
 - `endgame.skill.refresh` requests a fresh `skill.ranks` view.
 - `endgame.skill.upgrade` takes `expectedRevision` and `skillId`. Supply a stable

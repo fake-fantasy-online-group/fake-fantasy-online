@@ -85,6 +85,10 @@ public sealed partial class PluginGameApi
         "skillId", row.ID, "hardRank", row.HardRank, "grantRank", row.GrantRank, "softRank", row.SoftRank, "effectiveRank", row.EffectiveRank,
         "canCast", row.CanCast, "canInvest", row.CanInvest, "blockedReasons", new List<string>(row.BlockedReasons),
         "currentEffectLines", new List<string>(row.CurrentEffectLines), "nextEffectLines", new List<string>(row.NextEffectLines),
+        "nextChangeLines", new List<string>(row.NextChangeLines), "nextEffectiveRank", row.NextEffectiveRank, "nextRequiredLevel", row.NextRequiredLevel, "nativeModifierLines", new List<string>(row.NativeModifierLines),
+        "trainingSynergies", EndgameRows(row.TrainingSynergies, synergy => Values("sourceId", synergy.SourceID, "sourceName", synergy.SourceName,
+            "effect", synergy.Effect, "effectLabel", synergy.EffectLabel, "perPointValue", synergy.PerPointValue, "unit", synergy.Unit,
+            "investedHardPoints", synergy.InvestedHardPoints, "contributionValue", synergy.ContributionValue, "equipmentApplies", synergy.EquipmentApplies)),
         "contributions", EndgameRows(row.Contributions, c => Values("sourceId", c.SourceID, "scope", c.Scope, "profession", c.Profession, "branch", c.Branch, "school", c.School, "skillId", c.SkillID, "levels", c.Levels.ToString(CultureInfo.InvariantCulture))));
     private static Dictionary<string, object> EndgameCatalogStatus(EndgameClientState state, string name) => Values(
         "loaded", state.CatalogLoaded(name), "requested", state.CatalogRequested(name), "hasMore", state.CatalogHasMore(name), "nextCursor", state.NextCatalogCursor(name));

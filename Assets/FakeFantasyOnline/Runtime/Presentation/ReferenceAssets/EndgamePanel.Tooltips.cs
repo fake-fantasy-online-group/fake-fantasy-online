@@ -31,6 +31,7 @@ public sealed partial class EndgamePanel
         if (item.FormationID > 0 && formation == null) Current?.LoadFormationForTooltip();
         var lines = new List<string>((original ?? "").Replace("\\n", "\n").Split('\n'));
         var attributes = new List<string>();
+        var effects = new List<string>();
         bool nativeStats = Current?.State?.NativeEquipmentStats == true;
         bool nativeUniqueBlock = false;
         // Old servers put unique details above durability. Move the actual rolled lines,
@@ -42,12 +43,16 @@ public sealed partial class EndgamePanel
             int end = i + 1;
             while (end < lines.Count && lines[end].Length > 0)
             {
-                string plain = PlainLine(lines[end]);
+                string plain = EquipmentAttributeText(PlainLine(lines[end]));
                 if (!plain.StartsWith("基底：", StringComparison.Ordinal) &&
                     !plain.StartsWith("底材：", StringComparison.Ordinal) &&
                     plain != "同名仙遗特性取最高值；不同特性按通道上限叠加。" &&
                     !DescriptionContainsLine(item.Description, plain))
-                    attributes.Add(DarkGold(plain));
+                {
+                    bool ordinary = IsAttributeLine(plain) || lines[end].StartsWith("\u00035", StringComparison.Ordinal) && !TraitContainsLine(item.Trait, plain);
+                    if (!lines[end].StartsWith("\u0006", StringComparison.Ordinal) && ordinary) attributes.Add(DarkGold(plain));
+                    else effects.Add(Orange(plain));
+                }
                 end++;
             }
             lines.RemoveRange(i, end - i);
@@ -56,34 +61,55 @@ public sealed partial class EndgamePanel
         string name = formation != null ? FormationName(formation.Name) : item.FormationID > 0 ? FormationName(item.Name) : item.Name;
         string suffix = lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal) ? RefinementSuffix(PlainLine(lines[0])) : "";
         string title = "\u0007" + DarkGold(name + suffix);
+        // Native item titles use protocol qualities 0-4. An exact centered
+        // dark-gold title with the legacy block already removed is our own
+        // overlay; do not append independent legacy contributions a second time.
+        bool alreadyOverlaid = !nativeUniqueBlock && lines.Count > 0 && lines[0] == title;
         if (lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal) && !IsNativeSlotLine(lines[0])) lines[0] = title;
         else lines.Insert(0, title);
-        // Existing quality markers belong to the native attribute renderer. Preserve all
-        // requirement/red/gray markers and the ordinary yellow quality palette.
+        // Orange is an authoritative effect marker, including future effect text.
+        // Keep white base stats and requirement/set markers intact. New ordinary
+        // attributes already carry dark gold; legacy text needs a small fallback.
         for (int i = 1; i < lines.Count; i++)
         {
-            string plain = PlainLine(lines[i]);
+            string plain = EquipmentAttributeText(PlainLine(lines[i]));
             bool coloredAttribute = lines[i].StartsWith("\u0003", StringComparison.Ordinal) && !lines[i].StartsWith("\u00030", StringComparison.Ordinal) ||
-                lines[i].StartsWith("\u0001", StringComparison.Ordinal) || lines[i].StartsWith("\u0005", StringComparison.Ordinal) || lines[i].StartsWith("\u0006", StringComparison.Ordinal);
+                lines[i].StartsWith("\u0001", StringComparison.Ordinal) || lines[i].StartsWith("\u0005", StringComparison.Ordinal);
+            bool authored = DescriptionContainsLine(item.Description, plain) || formation != null && DescriptionContainsLine(formation.Description, plain);
+            bool traitEffect = TraitContainsLine(item.Trait, plain);
+            bool legacyEffect = !lines[i].StartsWith("\u00035", StringComparison.Ordinal) || traitEffect;
+            if (lines[i].StartsWith("\u0006", StringComparison.Ordinal) ||
+                !authored && legacyEffect && IsLegacyEquipmentEffect(plain, item.Trait) && (coloredAttribute || traitEffect && lines[i] == PlainLine(lines[i])))
+            {
+                effects.Add(Orange(plain));
+                lines.RemoveAt(i--);
+                continue;
+            }
             if (plain.StartsWith("孔数 ", StringComparison.Ordinal) ||
-                (IsAttributeLine(plain) && coloredAttribute))
+                (IsAttributeLine(plain) && coloredAttribute) || (lines[i] == PlainLine(lines[i]) && IsAdditionalAttributeLine(plain)))
                 lines[i] = DarkGold(plain);
         }
-        if (!nativeStats && !nativeUniqueBlock && item.UniqueID > 0)
+        if (!nativeStats && !alreadyOverlaid && !nativeUniqueBlock && item.UniqueID > 0)
         {
             foreach (var stat in item.Stats) attributes.Add(DarkGold(StatText(stat)));
         }
-        // The existing owned-item field includes potential unique and formation
-        // effects. Preserve native rolled effect lines and add each missing one once.
+        // Older payloads mix additional ordinary attributes and effects in Trait.
+        // Normalize before comparing so the renamed local/MF lines never duplicate
+        // an authoritative native row, and never sum separate attribute scopes here.
         foreach (string trait in item.Trait.Split('；'))
-            if (trait.Length > 0) AddMissingLine(attributes, lines, DarkGold(trait));
-        if (!nativeStats && formation != null)
+        {
+            string plain = EquipmentAttributeText(trait);
+            if (plain.Length == 0) continue;
+            if (IsAttributeLine(plain)) AddMissingLine(attributes, lines, DarkGold(plain));
+            else AddMissingLine(effects, lines, Orange(plain));
+        }
+        if (!nativeStats && !alreadyOverlaid && formation != null)
             // Legacy servers do not include formation attributes in the native
             // description. Negotiated servers already merge all actual extras
             // by attribute/mode/scope, so catalog reference values stay out.
             foreach (var stat in formation.Stats) attributes.Add(DarkGold(StatText(stat)));
         string status = FormationStatus(item);
-        if (status.Length > 0) attributes.Add("\u0002" + status);
+        if (status.Length > 0) AddMissingLine(attributes, lines, "\u0002" + status);
         // Keep the authoritative socket count and native attribute section intact.
         int sockets = lines.FindIndex(line => PlainLine(line).StartsWith("孔数 ", StringComparison.Ordinal));
         int anchor = sockets >= 0 ? sockets : NativeAttributeAnchor(lines);
@@ -91,10 +117,14 @@ public sealed partial class EndgamePanel
         if (item.FormationID > 0)
         {
             string runes = SocketInitials(item);
-            if (runes.Length > 0) lines.Insert(NativeCompositionAnchor(lines), "\u0007" + DarkGold(runes));
+            string composition = "\u0007" + DarkGold(runes);
+            if (runes.Length > 0 && !lines.Contains(composition)) lines.Insert(NativeCompositionAnchor(lines), composition);
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
+        // Effects are the final block, after native functional sections, lore and
+        // binding notices. Moving native rows preserves their values and ordering.
+        lines.AddRange(effects);
         return string.Join("\n", lines);
     }
     private static int NativeCompositionAnchor(List<string> lines)
@@ -122,7 +152,7 @@ public sealed partial class EndgamePanel
         for (int i = end - 1; i > 0; i--)
         {
             string plain = PlainLine(lines[i]);
-            if (IsAttributeLine(plain) || plain.StartsWith("重量 ", StringComparison.Ordinal) || plain.StartsWith("需要", StringComparison.Ordinal) || plain.StartsWith("耐久度:", StringComparison.Ordinal)) return i + 1;
+            if (IsAttributeLine(plain) || lines[i].StartsWith("\u00035", StringComparison.Ordinal) || plain.StartsWith("重量 ", StringComparison.Ordinal) || plain.StartsWith("需要", StringComparison.Ordinal) || plain.StartsWith("耐久度:", StringComparison.Ordinal)) return i + 1;
         }
         return Math.Min(1, lines.Count);
     }
@@ -186,6 +216,7 @@ public sealed partial class EndgamePanel
         return string.Join("\n", lines);
     }
     internal static string DarkGold(string text) => TooltipContent.QualityName(text, 5);
+    private static string Orange(string text) => "\u0006" + text;
     private static string PlainLine(string line)
     {
         if (line.Length > 0 && line[0] == '\u0007') line = line.Substring(1);
@@ -195,6 +226,7 @@ public sealed partial class EndgamePanel
     }
     private static bool IsAttributeLine(string line)
     {
+        if (IsAdditionalAttributeLine(line)) return true;
         if (line.StartsWith("有效穿戴时每", StringComparison.Ordinal) && line.Contains("秒恢复") && line.EndsWith("点生命", StringComparison.Ordinal)) return true;
         string[] names = { "攻击", "防御", "魔法攻击", "魔法防御", "命中", "负重上限", "力量", "体质", "敏捷", "智慧", "精神", "灵巧",
             "爆击率", "暴击率", "魔法爆击率", "魔法暴击率", "攻击速度", "移动速度", "最小攻击", "最大攻击", "最大生命", "最大法力", "生命恢复", "最大负重", "伤害抗性", "魔法抗性", "不良状态抗性" };
@@ -204,6 +236,62 @@ public sealed partial class EndgamePanel
                 char value = line[name.Length + 1];
                 return char.IsDigit(value) || value == '+' || value == '-';
             }
+        return false;
+    }
+    private static string EquipmentAttributeText(string text)
+    {
+        if (text.StartsWith("染色率 ", StringComparison.Ordinal))
+            return "魔法装备获取几率提升" + text.Substring(3);
+        foreach (string name in new[] { "攻击", "魔法攻击", "防御", "魔法防御" })
+        {
+            string oldPrefix = "本件基础" + name + "强化 ";
+            if (text.StartsWith(oldPrefix, StringComparison.Ordinal)) text = text.Substring(4);
+            if (text.StartsWith(name + "强化 ", StringComparison.Ordinal) && text.EndsWith("（本件）", StringComparison.Ordinal))
+                return text.Substring(0, text.Length - 4);
+        }
+        return text;
+    }
+    private static bool IsAdditionalAttributeLine(string line)
+    {
+        string[] names = { "攻击强化", "魔法攻击强化", "防御强化", "魔法防御强化", "魔法装备获取几率提升",
+            "火系伤害", "冰系伤害", "圣系伤害", "暗系伤害", "敌人火系抗性", "敌人冰系抗性", "敌人圣系抗性", "敌人暗系抗性",
+            "火系抗性", "冰系抗性", "圣系抗性", "暗系抗性", "火系伤害减免", "冰系伤害减免", "圣系伤害减免", "暗系伤害减免",
+            "火系伤害吸收", "冰系伤害吸收", "圣系伤害吸收", "暗系伤害吸收" };
+        foreach (string name in names)
+            if (line.StartsWith(name + " ", StringComparison.Ordinal) && IsNumericAttributeValue(line.Substring(name.Length + 1), false)) return true;
+        // A named skill's +N级 is an ordinary rank bonus, regardless of its name.
+        int value = line.LastIndexOf(" +", StringComparison.Ordinal);
+        return value > 0 && line.EndsWith("级", StringComparison.Ordinal) && IsNumericAttributeValue(line.Substring(value + 1, line.Length - value - 2), true);
+    }
+    private static bool IsNumericAttributeValue(string value, bool integer)
+    {
+        if (value.Length == 0) return false;
+        int start = value[0] == '+' || value[0] == '-' ? 1 : 0;
+        int end = !integer && value.EndsWith("%", StringComparison.Ordinal) ? value.Length - 1 : value.Length;
+        bool digit = false;
+        for (int i = start; i < end; i++)
+        {
+            if (value[i] >= '0' && value[i] <= '9') digit = true;
+            else if (integer || value[i] != '.') return false;
+        }
+        return digit;
+    }
+    private static bool IsLegacyEquipmentEffect(string plain, string traits)
+    {
+        if (IsAttributeLine(plain)) return false;
+        if (TraitContainsLine(traits, plain)) return true;
+        // Compatibility for native legacy/V5 text predating the orange marker.
+        // Ordinary element percentages and skill ranks have distinct numeric forms.
+        return plain.Contains("光环：") || plain.Contains("概率") && plain.Contains("释放") ||
+            plain.Contains("伤害提高") || plain.Contains("受到伤害降低") || plain.Contains("直接治疗提高") ||
+            plain.Contains("技能法力消耗降低") || plain.Contains("技能吟唱时间缩短") ||
+            plain.Contains("技能尺寸扩大") || plain.Contains("陷阱触发半径扩大") ||
+            plain.Contains("击杀怪物恢复最大");
+    }
+    private static bool TraitContainsLine(string traits, string plain)
+    {
+        foreach (string trait in traits.Split('；'))
+            if (plain.Length > 0 && EquipmentAttributeText(trait) == plain) return true;
         return false;
     }
     private static void AddMissingLine(List<string> target, List<string> native, string line)
@@ -250,10 +338,17 @@ public sealed partial class EndgamePanel
     internal static string ItemDescription(EndgameItemView item, bool tooltip)
     {
         var text = new StringBuilder();
+        var effects = new List<string>();
         if (item.UniqueID > 0 && item.UniqueRollBP > 0 && Current?.State?.NativeEquipmentStats != true) text.Append(item.UID.Length == 0 ? "图鉴基准 · 道意 " : "仙遗余韵 · 道意 ").Append((item.UniqueRollBP / 100f).ToString("0.##", CultureInfo.InvariantCulture)).Append("%\n");
         if (item.Profession != 0) text.Append("职业要求：").Append(ProfessionNames(item.Profession)).Append('\n');
         foreach (var stat in item.Stats) text.Append(tooltip && IsSpecial(item) ? DarkGold(StatText(stat)) : StatText(stat)).Append('\n');
-        if (item.Trait.Length > 0) text.Append(tooltip && IsSpecial(item) ? DarkGold(item.Trait) : item.Trait).Append('\n');
+        foreach (string trait in item.Trait.Split('；'))
+        {
+            string plain = EquipmentAttributeText(trait);
+            if (plain.Length == 0) continue;
+            if (tooltip && IsSpecial(item) && !IsAttributeLine(plain)) effects.Add(Orange(plain));
+            else text.Append(tooltip && IsSpecial(item) ? DarkGold(plain) : plain).Append('\n');
+        }
         if (item.Description.Length > 0) text.Append('\n').Append(item.Description).Append('\n');
         if (IsRune(item))
         {
@@ -277,6 +372,7 @@ public sealed partial class EndgamePanel
             text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n打孔炉逐孔开启；巧匠或左慈 → 周天鼎可为无孔器物随机开窍，或调序、炼化。先问鼎查看耗费。\n");
         if (item.Locked) text.Append("\n器物已锁定，须先解除锁定才能加工。\n");
         if (!tooltip && item.UID.Length > 0) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
+        foreach (string effect in effects) text.Append(effect).Append('\n');
         return text.ToString();
     }
     private static string MaterialUse(int id)

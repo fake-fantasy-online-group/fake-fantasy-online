@@ -86,7 +86,7 @@ class EndgameUiContract
         Check(!tip.Contains("仙遗·") && !tip.Contains("基底") && !tip.Contains("同名仙遗") && !tip.Contains("宿序") && !tip.Contains("职业要求"), "unique removes redundant header and explanatory overlay");
         Check(Occurrences(tip, "力量 +12") == 1 && Occurrences(tip, "仙人遗音。") == 1 && Occurrences(tip, "孔数") == 1 && Occurrences(tip, "需要职业") == 1, "unique native attributes lore sockets and requirements appear once");
         Check(tip.IndexOf("攻击 20-30") < tip.IndexOf("力量 +12") && tip.IndexOf("力量 +12") < tip.IndexOf("孔数") && tip.IndexOf("孔数") < tip.IndexOf("仙人遗音。"), "unique uses native intrinsic attribute socket description order");
-        Check(tip.Contains("\u00035力量 +12") && tip.Contains("\u00035暴击时") && tip.Contains("\u00035命中 +5") && tip.Contains("需要等级: 42"), "unique attributes and traits use dark gold and existing level row is updated");
+        Check(tip.Contains("\u00035力量 +12") && tip.Contains("\u0006暴击时") && tip.Contains("\u00035命中 +5") && tip.Contains("需要等级: 42"), "unique attributes use dark gold, effects orange and existing level row is updated");
         string noSockets = native.Replace("\u00034孔数 0/2\n", "").Replace("原有描述。", "\u00032套装: 原生套装 (1/2)\n\u0002[2件] 力量 +4\n法宝技能: 原生技能\n原有描述。\n（绑定物品不可交易/摆摊/邮寄, 可卖NPC）");
         string noSocketTip = EndgamePanel.OverlayTooltip(unique, noSockets);
         Check(noSocketTip.IndexOf("力量 +12") < noSocketTip.IndexOf("套装:") && noSocketTip.IndexOf("力量 +12") < noSocketTip.IndexOf("原有描述。"), "socketless unique attributes remain before native suit skill and description sections");
@@ -110,9 +110,11 @@ class EndgameUiContract
         Check(fiveTip.Contains("\u0007(武器)\n\u0007\u00035角亢心角尾\n\n耐久度:"), "five-rune recipe is centered without separators and preserves exact socket indexes including repeated runes and native blank spacing");
         string equalStats = EndgamePanel.OverlayTooltip(formation, "\u0007普通剑\n\u0007(武器)\n耐久度: 50/50\n力量 +15\n孔数 2/2");
         Check(Occurrences(equalStats, "力量 +15") == 2, "equal native and formation values remain independent contributions");
+        Check(EndgamePanel.OverlayTooltip(formation, equalStats) == equalStats, "repeated legacy formation overlay retains both equal independent contributions once");
         var combined = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"formationId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"组合器\",\"description\":\"组合传说\"");
         string combinedTip = EndgamePanel.OverlayTooltip(combined, "\u0007组合器\n\u0007(武器)\n\n\u00034仙遗·组合器\n基底：普通剑\n\u00034力量 +15\n组合传说\n\n耐久度: 50/50\n力量 +15\n孔数 2/2");
         Check(Occurrences(combinedTip, "力量 +15") == 3, "equal native unique and formation bonuses each retain their real contribution");
+        Check(EndgamePanel.OverlayTooltip(combined, combinedTip) == combinedTip, "repeated combined legacy overlay retains all three equal independent contributions once");
         Check(!tip.Contains("生效") && !tip.Contains("未成形") && Occurrences(tip, "孔数") == 1, "bag formation has no activation commentary or duplicated sockets");
         var inactive = TooltipItem("\"itemId\":1002,\"formationId\":1,\"location\":\"equipped\",\"slot\":25,\"inactiveReason\":\"职业、等级、耐久或同类宿阵优先级未满足\"");
         Check(EndgamePanel.FormationStatus(inactive) == "", "generic server inactivity does not prove duplicate suppression");
@@ -140,14 +142,14 @@ class EndgameUiContract
         string native = "\u0007旧剑\n\u0007(武器)\n\n仙遗·炉火旧剑\n基底：旧剑\n力量 +12\n普通攻击伤害提高10%\n旧炉之火。\n主人已去。\n\n耐久度: 50/50\n攻击 20-30\n孔数 0/2\n（绑定物品不可交易）";
         string tip = EndgamePanel.OverlayTooltip(item, native);
         Check(Occurrences(tip, "旧炉之火。") == 1 && Occurrences(tip, "主人已去。") == 1 && !tip.Contains("\u00035旧炉之火。"), "multiline authored lore remains once in description rather than attributes");
-        Check(Occurrences(tip, "普通攻击伤害提高10%") == 1 && tip.IndexOf("普通攻击伤害提高10%") < tip.IndexOf("孔数") && tip.IndexOf("孔数") < tip.IndexOf("旧炉之火。"), "native unique effect is not repeated by existing owned Trait field");
+        Check(Occurrences(tip, "普通攻击伤害提高10%") == 1 && tip.IndexOf("孔数") < tip.IndexOf("旧炉之火。") && tip.EndsWith("\u0006普通攻击伤害提高10%"), "native unique effect is not repeated by existing owned Trait field");
         Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"effects\",\"chunks\":1,\"items\":[],\"formations\":[{\"id\":1,\"name\":\"枪火宿阵\",\"description\":\"军中旧旗。\",\"stats\":[{\"attr\":1,\"value\":15}]}]}");
         EquipDlg.Equipped.Add(new EquipDlg.EquippedItem { id = 1001, slot = 0 });
         foreach (string state in new[] { "\"location\":\"bag\"", "\"location\":\"equipped\",\"active\":true", "\"location\":\"equipped\",\"inactiveReason\":\"同类宿阵优先级未满足\"", "\"location\":\"equipped\",\"inactiveReason\":\"职业、等级或耐久不符合要求\"" })
         {
             item = TooltipItem("\"itemId\":1001,\"formationId\":1,\"slot\":0,\"name\":\"旧枪\",\"trait\":\"连环枪法伤害提高12%\"," + state);
             tip = EndgamePanel.OverlayTooltip(item, "\u0007旧枪\n需要等级: 50\n攻击 20-30\n孔数 2/2");
-            Check(Occurrences(tip, "连环枪法伤害提高12%") == 1 && tip.IndexOf("连环枪法伤害提高12%") < tip.IndexOf("孔数") && Occurrences(tip, "军中旧旗。") == 1, "ordinary formation potential effect remains once in native section for " + state);
+            Check(Occurrences(tip, "连环枪法伤害提高12%") == 1 && tip.EndsWith("\u0006连环枪法伤害提高12%") && Occurrences(tip, "军中旧旗。") == 1, "ordinary formation potential effect remains once as the final orange block for " + state);
             Check(tip.Contains("不生效") == state.Contains("同类宿阵优先级"), "only authoritative duplicate suppression claims the inactive formation status");
         }
         EquipDlg.Equipped.RemoveAll(row => row.id == 1001 && row.slot == 0);
@@ -199,7 +201,7 @@ class EndgameUiContract
                 Check(Occurrences(bagTip, lore) == 1 && bagTip.IndexOf("技能效果:") < bagTip.IndexOf(lore) && bagTip.IndexOf(lore) < bagTip.IndexOf(footer), "authored lore remains once after functional sections and before binding footer: " + lore);
             foreach (string preserved in new[] { "（绑定）（可用天工剪解除绑定）", "\u00034变装: 原生外观", "耐久度: 0/50", "\u0004需要等级: 60", "需要职业: 剑客", "攻击 20-30", "重量 5", "孔数 2/2", "法宝技能: 原生技能", "技能效果: 原生技能效果。", footer })
                 Check(bagTip.Contains(preserved), "native functional section and status survives authored-only lore: " + preserved);
-            Check(!bagTip.Contains("旧底材的来历") && bagTip.EndsWith(footer), "authored overlay never reintroduces template lore or displaces binding footer");
+            Check(!bagTip.Contains("旧底材的来历") && bagTip.IndexOf(footer) < bagTip.LastIndexOf("\u0006"), "authored overlay keeps binding footer before the final effect block without reintroducing template lore");
         }
         c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
         Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"ordinary-lore\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0}]}");
@@ -268,7 +270,7 @@ class EndgameUiContract
                 {
                     Check(tip.Contains("力量 +15") != nativeStats && tip.Contains("攻击 +30%") != nativeStats, "negotiated native extras suppress catalog duplication; old servers retain fallback");
                     Check(Occurrences(tip, "力量 +18") == 1 && Occurrences(tip, "攻击 +36%") == 1 && Occurrences(tip, "移动速度 -3%") == 1, "server-merged same-scope flat percentage and negative values display once");
-                    Check(Occurrences(tip, "本件基础攻击强化 +180%") == 1 && Occurrences(tip, "连环枪法伤害提高12%") == 1, "local enhancement and real effect lines survive once without merging into global percent");
+                    Check(Occurrences(tip, "攻击强化 +180%") == 1 && !tip.Contains("本件") && Occurrences(tip, "连环枪法伤害提高12%") == 1, "local enhancement and real effect lines survive once without merging into global percent");
                     Check(tip.Contains("\n攻击 200-300\n防御 60\n魔法攻击 50\n重量 5\n") && tip.Contains("\u00035孔数 2/2"), "all intrinsic base rows stay white while special socket count is dark gold");
                     Check(tip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u0007\u00035角亢\n") && Occurrences(tip, "故旗尚温。") == 1, "merged stats preserve compact name composition and authored lore");
                 }
@@ -288,6 +290,70 @@ class EndgameUiContract
             string ordinary = "\u0007普通剑\n\u0007(武器)\n攻击 20-30\n\u00032力量 +3\n\u00032孔数 1/2";
             Check(EndgamePanel.OverlayTooltip(unformed, ordinary) == ordinary, "unformed rune gear preserves original colors and values");
         }
+    }
+    static void EquipmentPresentationContracts(Client c, EndgamePanel p)
+    {
+        const string footer = "（绑定物品不可交易/摆摊/邮寄, 可卖NPC）";
+        string[] ordinary = { "力量 +18", "攻击 +36%", "移动速度 -3%", "攻击强化 +180%", "防御强化 +25%", "魔法装备获取几率提升 +15%",
+            "所有战斗技能 +2级", "战士左系主修技能 +1级", "连环枪法 +3级", "火系伤害 +10%", "敌人冰系抗性 -12.5%", "圣系抗性 +7%", "暗系伤害减免 8%", "火系伤害吸收 9%" };
+        string[] effects = { "普通攻击伤害提高10%", "攻击命中时有5%概率释放3级天雷（冷却6秒）", "赋予2级护身光环：物理伤害减免 4%（范围300，含自身最多4人）", "攻击 +999", "生命恢复 +2" };
+        foreach (int identity in new[] { 1, 2, 3 }) // unique, formation, combined
+        foreach (bool nativeStats in new[] { false, true })
+        foreach (bool legacyText in new[] { false, true })
+        {
+            c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
+            Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"" + (nativeStats ? ",\"endgame.native-stats.v1\"" : "") + "]}");
+            string fields = "\"name\":\"旧器\",\"socketCount\":2,\"level\":60,\"description\":\"旧事记载着伤害提高。\",\"trait\":\"本件基础攻击强化 +180%；防御强化 +25%（本件）；染色率 +15%；所有战斗技能 +2级；火系伤害 +10%；魔法攻击强化 +33%（本件）；普通攻击伤害提高10%\",\"stats\":[{\"attr\":1,\"value\":99}],\"sockets\":[{\"index\":0,\"itemId\":1900028001,\"name\":\"星篆·角木蛟\"},{\"index\":1,\"itemId\":1900028002,\"name\":\"星篆·亢金龙\"}]";
+            if ((identity & 1) != 0) fields += ",\"uniqueId\":1";
+            if ((identity & 2) != 0) fields += ",\"formationId\":1,\"inactiveReason\":\"同类宿阵优先级未满足\"";
+            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"equipment-presentation\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0," + fields + "},{\"uid\":\"82\",\"itemId\":1002,\"location\":\"equipped\",\"slot\":25," + fields + "}],\"formations\":[{\"id\":1,\"name\":\"宿阵·照夜\",\"description\":\"星河长明。\",\"stats\":[{\"attr\":1,\"value\":77}]}]}");
+            string native = "\u0007(武器)\n\u00034变装: 原生外观\n耐久度: 0/50\n\u0004需要等级: 60\n需要职业: 剑客\n\u00030攻击 200-300\n\u00030魔法防御 -20\n防御 60\n重量 5\n";
+            foreach (string row in ordinary)
+            {
+                string value = row;
+                if (legacyText) value = value.Replace("攻击强化 +180%", "本件基础攻击强化 +180%").Replace("防御强化 +25%", "防御强化 +25%（本件）").Replace("魔法装备获取几率提升", "染色率");
+                native += (legacyText ? "\u00034" : "\u00035") + value + "\n";
+            }
+            native += "\u00035未来属性 余韵一重\n\u00035未来伤害提高系数 +3%\n";
+            string finalEffects = "";
+            for (int i = 0; i < effects.Length; i++)
+                finalEffects += (i == 0 ? "" : "\n") + "\u0006" + effects[i];
+            if (legacyText)
+                for (int i = 0; i < effects.Length; i++) native += (i < 3 ? "\u00034" : "\u0006") + effects[i] + "\n";
+            native += "\u00034孔数 2/2\n\u00032套装: 原生套装 (1/2)\n\u0002[2件] 防御 +9\n法宝技能: 原生技能\n技能效果: 伤害提高5%\n" + footer;
+            if (!legacyText) native += "\n" + finalEffects;
+            var bag = new InventoryDlg.Item { id = 1001, bagIdx = 0, quality = 4, name = "旧器+7", desc = native };
+            var equipped = new EquipDlg.EquippedItem { id = 1002, slot = 25, quality = 4, name = "旧器+7", desc = native };
+            InventoryDlg.rows[0] = bag; EquipDlg.Equipped.RemoveAll(row => row.slot == 25); EquipDlg.Equipped.Add(equipped);
+            string original = TooltipContent.Fmt(TooltipContent.QualityName(bag.name, bag.quality), native);
+            string bagTip = EndgamePanel.BagTooltip(2, bag, original), equippedTip = EndgamePanel.EquippedTooltip(equipped, original);
+            var ownedTooltip = typeof(EndgamePanel).GetMethod("OwnedItemTooltip", BindingFlags.Static | BindingFlags.NonPublic);
+            foreach (var item in c.Endgame.Items)
+            {
+                string tip = item.Location == "bag" ? bagTip : equippedTip;
+                foreach (string row in ordinary)
+                    Check(tip.Contains("\u00035" + row) && Occurrences(tip, row) == 1 && tip.IndexOf(row) < tip.IndexOf("孔数"), "ordinary/new attribute retains one darkgold native-section row: " + row);
+                Check(tip.Contains("\u00035魔法攻击强化 +33%") && Occurrences(tip, "魔法攻击强化 +33%") == 1 && tip.IndexOf("魔法攻击强化 +33%") < tip.IndexOf("孔数"), "mixed Trait's absent local ordinary attribute fills in once");
+                Check(!tip.Contains("本件") && !tip.Contains("染色率") && !tip.Contains("MF"), "legacy local and MF labels normalize everywhere");
+                Check(tip.Contains("\u00035未来属性 余韵一重") && tip.Contains("\u00035未来伤害提高系数 +3%") && tip.IndexOf("未来伤害提高系数 +3%") < tip.IndexOf("孔数") && tip.Contains("\u00034变装: 原生外观"), "future semantic darkgold attribute and unrelated native quality marker survive");
+                Check(tip.Contains("\u00030攻击 200-300\n\u00030魔法防御 -20\n防御 60\n重量 5") && tip.Contains("\u0004需要等级: 60") && tip.Contains("\u0002[2件] 防御 +9"), "white bases red requirements and gray set bonuses remain unchanged");
+                foreach (string row in effects) Check(Occurrences(tip, row) == 1 && tip.Contains("\u0006" + row), "effect preserved once and orange including attribute-like future effects: " + row);
+                Check(tip.EndsWith(finalEffects) && tip.IndexOf(footer) < tip.IndexOf("\u0006"), "native and legacy effects keep their order at the literal end after binding and lore: " + tip.Replace("\u0003", "[quality]").Replace("\u0006", "[orange]"));
+                Check(tip.Contains("技能效果: 伤害提高5%") && tip.Contains("\n旧事记载着伤害提高。\n"), "functional prose and authored lore are not classified as effect attributes");
+                Check(tip.Contains("力量 +99") == (!nativeStats && (identity & 1) != 0) && tip.Contains("力量 +77") == (!nativeStats && (identity & 2) != 0), "negotiated native stats suppress unique/formation reference numbers");
+                Check(tip.Contains("\u0002不生效") == (item.Location == "equipped" && (identity & 2) != 0), "inactive formation status remains gray and authoritative");
+                Check(EndgamePanel.OverlayTooltip(item, tip) == tip, "repeated overlay preserves native/legacy values colors final-effect order and composition");
+                Check((string)ownedTooltip.Invoke(null, new object[] { item }) == tip, "workbench uses exact bag/equipped/comparison presentation");
+                string title = (identity & 2) != 0 ? "照夜" : "旧器";
+                Check(tip.StartsWith("\u0007\u00035" + title + "+7\n\u0007(武器)\n") && Occurrences(tip, "角亢") == ((identity & 2) != 0 ? 1 : 0), "name refinement slot and runeword composition stay compact");
+            }
+            string description = EndgamePanel.ItemDescription(c.Endgame.Items[0], true);
+            Check(description.Contains("\u00035魔法装备获取几率提升 +15%") && description.Contains("\u00035攻击强化 +180%") && description.EndsWith("\u0006普通攻击伤害提高10%\n"), "catalog-style fallback also separates mixed traits and ends in orange effects");
+        }
+        var legacyUnique = TooltipItem("\"itemId\":1001,\"location\":\"bag\",\"slot\":0,\"uniqueId\":1,\"name\":\"旧器\"");
+        string legacyBlock = "\u0007旧器\n\u0007(武器)\n仙遗·旧器\n基底：旧剑\n\u00035未来属性 余韵一重\n\u0006攻击 +999\n\u00034染色率 +15%\n\n攻击 20-30\n孔数 0/2\n" + footer;
+        string blockTip = EndgamePanel.OverlayTooltip(legacyUnique, legacyBlock);
+        Check(blockTip.Contains("\u00035未来属性 余韵一重") && blockTip.Contains("\u00035魔法装备获取几率提升 +15%") && blockTip.EndsWith("\u0006攻击 +999"), "legacy unique header extraction respects authoritative gold/orange markers before text heuristics");
     }
     static void FormationLevelTooltipContracts(Client c, EndgamePanel p)
     {
@@ -394,6 +460,7 @@ class EndgameUiContract
         AuthoredDescriptionContracts(c, p);
         SpecialLoreTooltipPathContracts(c, p);
         NativeStatTooltipContracts(c, p);
+        EquipmentPresentationContracts(c, p);
         FormationLevelTooltipContracts(c, p);
         SocketRecipeContracts();
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");

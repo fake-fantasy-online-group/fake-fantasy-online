@@ -142,3 +142,49 @@ aura membership and proc readiness, without tooltip parsing or local caps. Compl
 snapshot publication and a combat observation version protect against stale or
 interleaved updates. Tests cover Int64 numeric fields, uint32 entity IDs, decimal
 source UIDs, partial snapshots, same-revision pushes, reset and read-only projection.
+
+### V5 skill tooltip readability and training sources
+
+Profession skills use the original `ComposeTip` / `UITip` hierarchy again: one
+blue name, white current level, readable server effects and separate cost/cast/
+interval rows, followed by the white next-level section and orange point/footer text.
+Pending/stale feedback shares the compact point row rather than extending the card.
+The next-investment section disappears at hard20; current effective ranks
+continue to include equipment and granted levels without a soft cap. Unlearned
+skills show the server's first-investment preview once, rather than a missing-
+current-effect warning. Optional `nextRequiredLevel` restores the numeric native
+level-requirement row without consulting the obsolete five-rank table. Optional
+`nextChangeLines` keeps changed semantic effect blocks and their target/status
+context, with an explicit unchanged-effects note; the full next effects remain
+in `nextEffectLines`. This prevents current/next duplication from overflowing the
+original fixed-width card at normal high-DPI scaling.
+
+The separate green training block lists each declared source skill, including
+zero-invested sources, its invested points and bonus per hard point. Percent
+coefficients use exact basis-point formatting; flat bonuses remain whole values.
+Equipment ranks do not enter these contributions. Target-specific existing
+skill modifiers remain a separate section. No equipment source IDs, raw internal
+effect identifiers, or legacy rank-five numbers are substituted into the card.
+The same typed data is available through `endgame.skills`. Missing optional
+fields from older V5 servers remain valid.
+
+`Tests/Endgame/run-skill-tooltip-contract.sh` compiles the actual growth card,
+`ComposeTip`, and native `UITip` layout/render code using documented deterministic
+Unity/art/font substitutes. It checks emitted rows, palette, wrapping and draw
+coordinates, supplemented by starter/life routing source guards. This is a
+production rendering-code contract, not a Unity screenshot, installed-font test
+or Player build. `run-growth-contract.sh` covers strict additive DTO validation;
+`run-game-actions.sh` covers the read-only agent projection and existing upgrade/
+retry semantics.
+
+The synthetic `skill-tooltip-all149-v5.json` fixture comes from the paired server's
+actual `skillRanksForDisplay` for all 149 profession skills; the adjacent names
+map comes from its verified skill catalog. The harness executes production
+`UIScale` at 1280×900/96-DPI (1×) and 1920×1080/unknown-DPI (2×), then checks actual
+native draw-box bounds, full-current-effect retention, pending/stale states and
+a separately labeled soft-rank layout stress case. It does not weaken the scale
+to make cards fit. The `skill-ranks-synergies-v5` JSON/hex pair is emitted through
+production `protocol.EncodeEndgame` and also reaches the actual client wire codec.
+The server test export options are `SKILL_ALL_VIEWS_FIXTURE_PATH` with
+`TestV5All149ReadableSkillViewsFixture`, and `SKILL_SYNERGY_FIXTURE_PATH` with
+`TestV5TrainingSynergyRowsAreAuthoritativeIncludingUnlearnedSources`.

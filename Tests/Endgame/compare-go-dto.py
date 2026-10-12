@@ -12,6 +12,7 @@ for file in ('skill_progression_v5.go', 'equipment_views_v5.go'):
     companion = Path(sys.argv[1]).with_name(file)
     if companion.exists(): go += '\n' + companion.read_text()
 renames = {'SkillRankView': 'EndgameSkillRankView', 'SkillRankBonus': 'EndgameSkillContribution',
+    'SkillTrainingSynergyView': 'EndgameTrainingSynergyView',
     'EndgameCombatStatsV5': 'EndgameCombatStatsView', 'EndgameElementStatsV5': 'EndgameElementCombatView',
     'EquipmentAuraView': 'EndgameEquipmentAuraView', 'EquipmentProcReadinessView': 'EndgameProcReadinessView'}
 cs = '\n'.join(p.read_text() for p in (root/'Assets/FakeFantasyOnline/Runtime/Application').glob('Endgame*.cs'))

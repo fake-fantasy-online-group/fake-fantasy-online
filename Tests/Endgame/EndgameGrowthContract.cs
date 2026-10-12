@@ -38,9 +38,37 @@ class EndgameGrowthContract
         Check(state.CombatStats == null, "complete snapshot with no combat stats clears old authority");
         state.Reset(); Check(state.CombatStats == null && state.CombatStatsRevision == "0", "disconnect clears combat observation");
     }
+    static void SynergyChecks()
+    {
+        string legacy = Rank(3, "7", "10");
+        var old = Parse(Ranks(legacy)).SkillRanks[0];
+        Check(old.NextEffectiveRank == "" && old.NextRequiredLevel == 0 && old.NextChangeLines.Count == 0 && old.TrainingSynergies.Count == 0 && old.NativeModifierLines.Count == 0, "older V5 snapshot remains compatible");
+        string source = "{\"sourceId\":10402,\"sourceName\":\"爆炎术\",\"effect\":\"damage\",\"effectLabel\":\"伤害倍率\",\"perPointValue\":25,\"unit\":\"percent_bp\",\"investedHardPoints\":3,\"contributionValue\":75,\"equipmentApplies\":false}";
+        string updated = legacy.Substring(0, legacy.Length - 1) + ",\"nextEffectiveRank\":\"11\",\"nextRequiredLevel\":8,\"nextChangeLines\":[\"伤害倍率180%\",\"其余效果不变\"],\"trainingSynergies\":[" + source + "],\"nativeModifierLines\":[\"火焰精通：伤害倍率 +10%\"]}";
+        var view = Parse(Ranks(updated)).SkillRanks[0];
+        Check(view.NextEffectiveRank == "11" && view.NextRequiredLevel == 8 && view.NextChangeLines.Count == 2 && view.TrainingSynergies[0].SourceName == "爆炎术" && view.TrainingSynergies[0].ContributionValue == 75 && view.NativeModifierLines.Count == 1, "typed source per-hard-point and native modifier projection");
+        Check(Parse(Ranks(updated.Replace("\"investedHardPoints\":3", "\"investedHardPoints\":0").Replace("\"contributionValue\":75", "\"contributionValue\":0"))).SkillRanks[0].TrainingSynergies.Count == 1, "zero-invested synergy remains visible");
+        Check(Parse(Ranks(updated.Replace("\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":\"184467440737095516170000001\""))).SkillRanks[0].NextEffectiveRank == "184467440737095516170000001", "next effective rank never narrows");
+        foreach (var pair in new[] {
+            new[] { "\"nextRequiredLevel\":8", "\"nextRequiredLevel\":101" },
+            new[] { "\"nextRequiredLevel\":8", "\"nextRequiredLevel\":-1" },
+            new[] { "\"sourceId\":10402", "\"sourceId\":10401" },
+            new[] { "\"sourceId\":10402", "\"sourceId\":13601" },
+            new[] { "\"perPointValue\":25", "\"perPointValue\":0" },
+            new[] { "\"unit\":\"percent_bp\"", "\"unit\":\"percent\"" },
+            new[] { "\"investedHardPoints\":3", "\"investedHardPoints\":21" },
+            new[] { "\"contributionValue\":75", "\"contributionValue\":76" },
+            new[] { "\"equipmentApplies\":false", "\"equipmentApplies\":true" },
+            new[] { "\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":\"01\"" },
+            new[] { "\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":11" },
+            new[] { "\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":\"0\"" },
+        }) Reject(() => Parse(Ranks(updated.Replace(pair[0], pair[1]))), "reject malformed synergy " + pair[1]);
+        Reject(() => Parse(Ranks(updated.Replace("[" + source + "]", "[" + source + "," + source + "]"))), "duplicate source effect rejected");
+    }
     static void Main()
     {
         CombatChecks();
+        SynergyChecks();
         var state = new EndgameClientState();
         Check(EndgameSkillRankView.IsProfessionSkill(10001) && EndgameSkillRankView.IsProfessionSkill(10435), "frozen profession membership includes edge skills");
         Check(!EndgameSkillRankView.IsProfessionSkill(13601) && !EndgameSkillRankView.IsProfessionSkill(13602) && !EndgameSkillRankView.IsProfessionSkill(11005) && !EndgameSkillRankView.IsProfessionSkill(10403), "starter life and undefined IDs retain native paths");
@@ -69,9 +97,9 @@ class EndgameGrowthContract
         Check(!state.SkillRank(10401).CanCast && state.CanInvestSkill(10401), "soft levels do not grant casting");
         EndgamePanel.GrowthState = state;
         string tip = Win05.TestGrowthTip(10401);
-        Check(tip.Contains("投入 0/20") && tip.Contains("装备与状态 +7") && tip.Contains("有效等级: 0"), "native tooltip exact hard soft effective display");
-        Check(tip.Contains("服务端当前参数 123.45%") && tip.Contains("服务端下一参数 125.45%") && !tip.Contains("旧五级"), "native tooltip uses only authoritative effect lines");
-        Check(tip.Contains("需先投入1点") && tip.Contains("剩余技能点 3"), "native eligibility and point explanation");
+        Check(tip.Contains("投入点数: 0/20") && tip.Contains("装备与状态: +7级") && tip.Contains("等级: 未学习"), "native tooltip exact hard soft effective display");
+        Check(!tip.Contains("服务端当前参数 123.45%") && tip.Contains("服务端下一参数 125.45%") && !tip.Contains("旧五级"), "native tooltip uses only authoritative effect lines");
+        Check(tip.Contains("投入1点后:") && tip.Contains("剩余技能点: 3"), "native eligibility and point explanation");
         var request = new EndgameRequest("skill.upgrade", "3", skillID: 10401);
         Check(request.Mutates && request.Json.Contains("\"skillId\":10401") && request.Json.Contains("\"expectedRevision\":\"3\""), "idempotent skill command fields");
         Reject(() => new EndgameRequest("skill.upgrade", skillID: 10401), "revision required");

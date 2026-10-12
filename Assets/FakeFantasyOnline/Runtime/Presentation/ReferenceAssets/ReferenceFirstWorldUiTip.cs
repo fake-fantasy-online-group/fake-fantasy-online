@@ -210,7 +210,7 @@ public sealed class ReferenceFirstWorldUiTip : IDisposable
 
             Color color;
             if (line.Length >= 2 && line[0] == '\u0003' &&
-                line[1] >= '1' && line[1] <= '4')
+                line[1] >= '0' && line[1] <= '5')
             {
                 color = QualityColor(line[1] - '0');
                 line = line.Substring(2);
@@ -308,6 +308,8 @@ public sealed class ReferenceFirstWorldUiTip : IDisposable
                 return new Color32(210, 90, 255, 255);
             case 4:
                 return new Color32(255, 180, 40, 255);
+            case 5:
+                return new Color32(183, 155, 98, 255);
             default:
                 return new Color32(247, 245, 245, 255);
         }

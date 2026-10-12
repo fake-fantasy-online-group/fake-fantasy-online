@@ -224,6 +224,24 @@ class EndgameContracts
         Check(advancedState.Pending, "wrong-kind floor receipt cannot complete transition");
         advancedState.Apply(Response("{\"kind\":\"rift.advance\",\"requestId\":\"" + advance.RequestID + "\",\"ok\":true}"));
         Check(!advancedState.Pending, "correlated advance receipt completes transition");
+        var skillFixture = Fixture(args[0], "skill-ranks-synergies-v5");
+        Check(skillFixture.Kind == "skill.ranks" && skillFixture.SkillRanks.Count == 2, "Go production skill projection reaches actual wire decoder");
+        var actualSkill = skillFixture.SkillRanks[0];
+        Check(actualSkill.ID == 10401 && actualSkill.HardRank == 1 && actualSkill.NextEffectiveRank == "2" && actualSkill.NextRequiredLevel == 11,
+            "Go next-investment rank and player-level requirement remain exact");
+        var actualSynergy = actualSkill.TrainingSynergies[0];
+        Check(actualSynergy.SourceID == 10402 && actualSynergy.SourceName == "火球术" && actualSynergy.PerPointValue == 100 &&
+            actualSynergy.InvestedHardPoints == 3 && actualSynergy.ContributionValue == 300 && !actualSynergy.EquipmentApplies,
+            "Go active attack source hard points and per-point damage coefficient survive encoding");
+        Check(actualSkill.NativeModifierLines.Count == 1 && actualSkill.CurrentEffectLines.Count == 4 &&
+            !string.Join("", actualSkill.CurrentEffectLines).Contains("毫秒"), "Go compact effects and separate native modifiers decode");
+        var unlearnedSkill = skillFixture.SkillRanks[1];
+        Check(!unlearnedSkill.CanCast && unlearnedSkill.CurrentEffectLines.Count == 0 && unlearnedSkill.NextEffectLines.Count > 0 &&
+            unlearnedSkill.TrainingSynergies[0].InvestedHardPoints == 0, "Go unlearned source remains in first-investment planning view");
+        var skillState = new EndgameClientState(); skillState.Begin(new EndgameRequest("hello"));
+        skillState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\"]}"));
+        Check(skillState.Apply(skillFixture) && skillState.SkillRanksRevision == "1" && skillState.UnspentSkillPoints == 93 &&
+            skillState.CanInvestSkill(10401) && !skillState.CanInvestSkill(10410), "complete Go wire fixture publishes authoritative investment guards");
         Console.WriteLine("PASS " + assertions + " endgame contracts including real Go-produced wire fixtures.");
     }
 }

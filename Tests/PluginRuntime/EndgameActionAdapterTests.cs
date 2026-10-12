@@ -62,13 +62,20 @@ internal static partial class GameActionAdapterTests
         string enormous = "184467440737095516170000001";
         Apply(native, Map("kind", "skill.ranks", "ok", true, "revision", TestRevision,
             "skillRanks", new object[] { Map("id", 10401, "hardRank", 19, "grantRank", "0", "softRank", "184467440737095516169999982", "effectiveRank", enormous, "canCast", true, "canInvest", true,
-                "currentEffectLines", new object[] { "真实服务器效果" }, "nextEffectLines", new object[] { "下一真实效果" }) },
+                "currentEffectLines", new object[] { "真实服务器效果" }, "nextEffectLines", new object[] { "下一真实效果" },
+                "nextEffectiveRank", "184467440737095516170000002", "nextRequiredLevel", 20, "nextChangeLines", new object[] { "变化后的真实效果", "其余效果不变" }, "nativeModifierLines", new object[] { "原生加成" },
+                "trainingSynergies", new object[] { Map("sourceId", 10402, "sourceName", "爆炎术", "effect", "damage", "effectLabel", "伤害倍率",
+                    "perPointValue", 100, "unit", "percent_bp", "investedHardPoints", 3, "contributionValue", 300, "equipmentApplies", false) }) },
             "result", Map("hardCap", "20", "playerCap", "100", "petCap", "80", "unspentPoints", "2", "formulaVersion", "5")));
         var observed = api.TestObserveEndgame("endgame.skills");
         Check((bool)observed["available"] && (int)observed["unspentPoints"] == 2, "growth observation publishes authoritative points");
         var row = Object(Rows(observed["skillRanks"])[0]);
         Check((string)row["effectiveRank"] == enormous && (int)row["hardRank"] == 19, "agent exact arbitrary integral rank and hard split");
         Check(Rows(row["currentEffectLines"]).Count == 1 && Rows(row["nextEffectLines"]).Count == 1, "agent exposes server effect comparisons");
+        var synergy = Object(Rows(row["trainingSynergies"])[0]);
+        Check((string)row["nextEffectiveRank"] == "184467440737095516170000002" && (int)row["nextRequiredLevel"] == 20 && Rows(row["nextChangeLines"]).Count == 2 && Rows(row["nativeModifierLines"]).Count == 1, "agent receives exact next rank and separate native modifiers");
+        Check((int)synergy["sourceId"] == 10402 && (string)synergy["sourceName"] == "爆炎术" && (int)synergy["perPointValue"] == 100 &&
+            (int)synergy["investedHardPoints"] == 3 && (int)synergy["contributionValue"] == 300 && !(bool)synergy["equipmentApplies"], "agent receives typed hard-only synergy source and contribution");
         Check(EndAct(api, "skill.upgrade", Map("expectedRevision", "1", "skillId", 10401)).Code == "endgame.stale_revision", "skill investment requires observed revision");
         Check(EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10402)).Code == "skill.upgrade.unavailable", "unobserved rank cannot invest");
         var receipt = EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10401), "stable-skill-point");

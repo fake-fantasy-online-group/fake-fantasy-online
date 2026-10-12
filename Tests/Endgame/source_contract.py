@@ -36,6 +36,12 @@ contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.Bag
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(')
 contains('Presentation/ReferenceAssets/UITip.cs', 'case 5: return new Color32(183, 155, 98, 255)', 'case 4: return GameSettings.ColorWeak', 'BitmapFont.Measure', 'BitmapFont.Draw')
 contains('Presentation/ReferenceAssets/EndgamePanel.Tooltips.cs', 'TooltipContent.QualityName(text, 5)', 'lines.InsertRange(anchor, attributes)', '同类宿阵优先级未满足')
+contains('Presentation/ReferenceAssets/EndgamePanel.Tooltips.cs', 'private static string Orange(string text) => "\\u0006" + text;',
+         'EquipmentAttributeText(PlainLine(lines[i]))', '魔法装备获取几率提升', 'IsAdditionalAttributeLine',
+         'lines.AddRange(effects)', '!alreadyOverlaid', '!lines.Contains(composition)')
+tooltip_overlay = (runtime / 'Presentation/ReferenceAssets/EndgamePanel.Tooltips.cs').read_text(encoding='utf-8')
+assert tooltip_overlay.index('lines.AddRange(effects)') > tooltip_overlay.index('AddDescription(lines, formation.Description)'), 'Effects must follow authored descriptions and native binding footer'
+checks += 1
 contains('Presentation/ReferenceAssets/EquipDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(')
 for path in runtime.rglob('Endgame*.cs'):
     assert path.with_suffix('.cs.meta').is_file(), f'missing Unity metadata: {path}'
