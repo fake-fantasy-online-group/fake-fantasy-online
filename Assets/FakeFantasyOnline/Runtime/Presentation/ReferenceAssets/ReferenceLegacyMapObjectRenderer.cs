@@ -197,6 +197,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
             if (parent != null) objectParent.parent = parent;
         }
 
+        PreparePortalAnchors(sourceMap);
         HashSet<int> blocked = receiver?.CreateObjectBlockListForIndependentRuntime();
         int tileOrder = FirstTileSortingOrder;
         int index = 0;
@@ -271,6 +272,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
 
         foreach (Sprite sprite in embeddedSprites) DestroyOwned(sprite);
         foreach (Texture2D texture in embeddedTextures) DestroyOwned(texture);
+        DisposePortalApertures();
         DisposeFootprintStrips();
         embeddedSprites.Clear();
         embeddedTextures.Clear();
@@ -314,6 +316,14 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
             image.clipArr != null && image.clipArr.Length > 1 && image.clipWidth > 0)
         {
             PlaceSlices(receiver, value, parent, pixelsPerUnit, worldWidth, worldHeight, kind, objectIndex, path, image);
+            receiver?.NoteMapObjectForIndependentRuntime(value.Id);
+            return;
+        }
+
+        if (requestedSortingOrder == int.MinValue &&
+            TryPlacePortalAperture(receiver, value, parent, pixelsPerUnit, worldWidth,
+                worldHeight, kind, objectIndex, image))
+        {
             receiver?.NoteMapObjectForIndependentRuntime(value.Id);
             return;
         }
