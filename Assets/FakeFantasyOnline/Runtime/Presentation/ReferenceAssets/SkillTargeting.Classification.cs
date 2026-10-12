@@ -28,6 +28,17 @@ public sealed partial class SkillTargeting
             return Aim.Instant;
         }
 
+        // The original sword contract takes precedence over descriptions/shapes
+        // supplied by later resource variants, including false ground-target AoEs.
+        if (NativeSwordSkillTargeting.TryGet(skillId, out var original))
+        {
+            range = original.CanEnemy != 0 && !original.SelfCentered
+                ? original.Distance : skill.dist;
+            radius = original.SelfCentered ? skill.radius : 0f;
+            return original.CanEnemy != 0 && !original.SelfCentered
+                ? Aim.Single : Aim.Instant;
+        }
+
         isTrap = IsTrapSkill(skill);
         if (isTrap)
         {
@@ -91,6 +102,8 @@ public sealed partial class SkillTargeting
 
     public static bool SelfCenteredCircle(Win05.SkInfo info)
     {
+        if (info != null && NativeSwordSkillTargeting.TryGet(info.id, out var original))
+            return original.SelfCentered;
         if (info == null || info.shape != 2 || info.id == 10211)
         {
             return false;

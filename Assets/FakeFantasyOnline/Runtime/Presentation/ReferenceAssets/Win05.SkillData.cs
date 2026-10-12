@@ -58,6 +58,7 @@ public partial class Win05
                     // never emits a null element, but the `if (skill != null)` guard that used to
                     // stand here translated an official throw into a silent skip.
                     SkInfo skill = database.skills[index];
+                    NativeSwordSkillTargeting.Apply(skill);
                     skInfo[skill.id] = skill;
                 }
             }
@@ -110,6 +111,7 @@ public partial class Win05
                 for (int index = 0; index < database.skills.Length; index++)
                 {
                     SkInfo skill = database.skills[index];
+                    NativeSwordSkillTargeting.Apply(skill);
                     skInfo[skill.id] = skill;
                 }
             }

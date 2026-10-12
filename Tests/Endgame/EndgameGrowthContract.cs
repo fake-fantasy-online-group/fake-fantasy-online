@@ -97,9 +97,9 @@ class EndgameGrowthContract
         Check(!state.SkillRank(10401).CanCast && state.CanInvestSkill(10401), "soft levels do not grant casting");
         EndgamePanel.GrowthState = state;
         string tip = Win05.TestGrowthTip(10401);
-        Check(tip.Contains("投入点数: 0/20") && tip.Contains("装备与状态: +7级") && tip.Contains("等级: 未学习"), "native tooltip exact hard soft effective display");
+        Check(!tip.Contains("投入点数:") && !tip.Contains("装备与状态:") && tip.Contains("等级: 未学习"), "native tooltip restores original single level heading without diagnostic rows");
         Check(!tip.Contains("服务端当前参数 123.45%") && tip.Contains("服务端下一参数 125.45%") && !tip.Contains("旧五级"), "native tooltip uses only authoritative effect lines");
-        Check(tip.Contains("投入1点后:") && tip.Contains("剩余技能点: 3"), "native eligibility and point explanation");
+        Check(!tip.Contains("投入1点后:") && tip.Contains("您现在的剩余技能点数为3"), "original unlearned and point explanation");
         var request = new EndgameRequest("skill.upgrade", "3", skillID: 10401);
         Check(request.Mutates && request.Json.Contains("\"skillId\":10401") && request.Json.Contains("\"expectedRevision\":\"3\""), "idempotent skill command fields");
         Reject(() => new EndgameRequest("skill.upgrade", skillID: 10401), "revision required");

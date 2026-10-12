@@ -16,6 +16,7 @@ find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/Win05.GrowthSkills.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/Win05.SkillTipText.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/UITip.cs" \
+ "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/UITip.SkillScroll.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/UIScale.cs" \
  "$ROOT/Tests/Endgame/NativeSkillTooltipStubs.cs" \
  "$ROOT/Tests/Endgame/NativeSkillTooltipContract.cs"

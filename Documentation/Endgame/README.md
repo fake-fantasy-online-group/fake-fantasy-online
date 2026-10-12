@@ -114,10 +114,12 @@ blocked reasons, and exact current/next effect lines. The rank strings remain
 canonical decimal text, including values beyond Int64; malformed/numeric ranks
 are rejected, never capped. Only complete, non-stale rank snapshots replace the
 view. The original skill window, artwork and life-skill behavior remain in place.
-Its number is the effective rank, and hover details separate hard points (maximum
-20), granted ranks and equipment/state ranks. Very long icon labels are shortened
-with an ellipsis; the tooltip and agent observation preserve all digits. Effects
-come from the server; V5 never substitutes legacy rank-5 prose or client formulas.
+Its number and original tooltip level heading use the exact effective rank.
+Hard-point, granted-rank and equipment-rank diagnostics remain available through
+the agent API without adding replacement rows to the original card. Very long
+icon labels are shortened with an ellipsis; the tooltip and agent observation
+preserve all digits. Descriptions retain the original authored sentences, with
+the server supplying their current numeric values instead of stale rank-5 values.
 
 The plus control uses the authoritative investment flag, remaining point balance,
 revision, and pending-operation guard. Native UI and session-coordinator upgrades
@@ -145,28 +147,40 @@ source UIDs, partial snapshots, same-revision pushes, reset and read-only projec
 
 ### V5 skill tooltip readability and training sources
 
-Profession skills use the original `ComposeTip` / `UITip` hierarchy again: one
-blue name, white current level, readable server effects and separate cost/cast/
-interval rows, followed by the white next-level section and orange point/footer text.
-Pending/stale feedback shares the compact point row rather than extending the card.
-The next-investment section disappears at hard20; current effective ranks
-continue to include equipment and granted levels without a soft cap. Unlearned
-skills show the server's first-investment preview once, rather than a missing-
-current-effect warning. Optional `nextRequiredLevel` restores the numeric native
-level-requirement row without consulting the obsolete five-rank table. Optional
-`nextChangeLines` keeps changed semantic effect blocks and their target/status
-context, with an explicit unchanged-effects note; the full next effects remain
-in `nextEffectLines`. This prevents current/next duplication from overflowing the
-original fixed-width card at normal high-DPI scaling.
+The restoration baseline is client `ababca5` (before V5), specifically
+`Win05.SkillDialog.BuildSkillTip`, `SkillTipText`, `Win05.SkillLevelBlock`,
+`Win05.SkillDamageBonus` and `Win05.SkillTipText`. The original description block,
+not just the headings, is the foundation: blue name, centered current level, full
+authored prose, and active-skill `消耗:`, `技能吟唱:`, `技能间隔:` lines. The next
+investment repeats its complete description and all three detail rows beneath
+`下一等级`, followed by the native green requirement/passive lines, blank row,
+original orange remaining-points/eligibility footer and active-skill hotbar hint.
+No hard/soft/granted-rank diagnostic rows replace or precede the original prose.
+Pending/stale feedback appends to the original remaining-points line.
 
-The separate green training block lists each declared source skill, including
-zero-invested sources, its invested points and bonus per hard point. Percent
-coefficients use exact basis-point formatting; flat bonuses remain whole values.
-Equipment ranks do not enter these contributions. Target-specific existing
-skill modifiers remain a separate section. No equipment source IDs, raw internal
-effect identifiers, or legacy rank-five numbers are substituted into the card.
-The same typed data is available through `endgame.skills`. Missing optional
-fields from older V5 servers remain valid.
+The full current and next blocks are server-authoritative, including ranks above
+20. The next-investment section disappears at hard20. An unlearned skill shows
+the complete first-investment preview once under `等级: 未学习`, matching the
+original layout. `nextRequiredLevel` supplies the native requirement row.
+`nextChangeLines` remains accepted for protocol compatibility but is never used
+by the card: unchanged effects and costs are not deleted from the next block.
+
+One green incoming-training section is appended after the complete original card.
+Only the recipient lists each source skill, its invested hard points and its
+per-point bonus, including zero-invested planning sources. Equipment ranks do
+not increase these contributions. No generated outgoing-target list is added to
+the source skill. Its original authored passive description remains intact.
+The same typed data is available through `endgame.skills`; older optional metadata
+remains compatible. No equipment tooltip composition is changed by this fix.
+
+Cards that fit the viewport use the original native renderer without any layout
+or scale change. Oversized profession cards retain the same width, font, colors,
+row order and frame, with a gray `滚轮查看` affordance and row scrolling. Scrolling
+while hovering the skill reveals every original row instead of truncating the
+text or shrinking the font. It takes priority over tree scrolling only when that
+hovered card actually overflows. Leaving the hover, closing it, switching to a
+different card or showing an item resets the scroll. Native equipment/comparison
+`Render`, `Layout` and `DrawBox` bodies are byte-identical to the prior build.
 
 `Tests/Endgame/run-skill-tooltip-contract.sh` compiles the actual growth card,
 `ComposeTip`, and native `UITip` layout/render code using documented deterministic
@@ -179,9 +193,11 @@ retry semantics.
 
 The synthetic `skill-tooltip-all149-v5.json` fixture comes from the paired server's
 actual `skillRanksForDisplay` for all 149 profession skills; the adjacent names
-map comes from its verified skill catalog. The harness executes production
+map comes from its verified skill catalog. `skill-tooltip-usable-v5.json` records
+active/passive hint admission from the original skill inventory, rather than
+pretending that all 149 skills are active. The harness executes production
 `UIScale` at 1280×900/96-DPI (1×) and 1920×1080/unknown-DPI (2×), then checks actual
-native draw-box bounds, full-current-effect retention, pending/stale states and
+native draw-box bounds, complete current/next prose/detail retention, pending/stale states and
 a separately labeled soft-rank layout stress case. It does not weaken the scale
 to make cards fit. The `skill-ranks-synergies-v5` JSON/hex pair is emitted through
 production `protocol.EncodeEndgame` and also reaches the actual client wire codec.

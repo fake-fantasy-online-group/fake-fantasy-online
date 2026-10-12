@@ -697,7 +697,10 @@ public sealed class ReferenceFirstWorldHotbar : IDisposable
                 // Official accelerator dragType 0 resolves the current slot and content at
                 // the hover read, sharing the same live roots as count and availability.
                 HoverTooltip = TooltipContent.Get(0, slotIndex);
-                UITip.Show(HoverTooltip, scale);
+                bool growthSkill = GameHud.hotKind[slotIndex] != 1 && GameHud.hotKind[slotIndex] != 2 &&
+                    EndgamePanel.GrowthState != null && EndgameSkillRankView.IsProfessionSkill(GameHud.hotSkill[slotIndex]);
+                if (growthSkill) UITip.ShowSkill(HoverTooltip, scale);
+                else UITip.Show(HoverTooltip, scale);
             }
 
             if (hit.Contains(pointer))

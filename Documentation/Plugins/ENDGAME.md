@@ -205,15 +205,17 @@ With negotiated `endgame.growth.v5`, observe `endgame.skills` (optional `skillId
 `currentEffectLines`, `nextEffectLines`, `nextEffectiveRank`, `nextRequiredLevel`,
 `trainingSynergies`, `nativeModifierLines`, and `nextChangeLines`. Keep granted/soft/effective ranks and
 contribution levels as strings; no gameplay cap or numeric narrowing is applied.
-Current/next effect text is server-authored. When provided, `nextEffectiveRank`
+Current/next effect text retains the complete original authored prose and native
+cost/cast/interval labels, with server-authoritative numeric values. When provided, `nextEffectiveRank`
 identifies the next hard-point investment preview and `nextRequiredLevel` is its
 player-level requirement. The native tooltip hides this investment section at
 hard20; current effective levels still include equipment/grants. Neither preview
 text nor a level requirement replaces `canInvest` and the revision/pending guards.
-`nextEffectLines` always retains the full comparison. Optional `nextChangeLines`
-is a compact, server-authored comparison of changed semantic blocks, preserving
-status/target membership and explicitly noting unchanged effects. The native
-card uses it when supplied; unlearned cards still show the full first investment.
+`nextEffectLines` always retains the full next-rank block, including unchanged
+prose and detail rows. Optional `nextChangeLines` remains protocol-compatible
+metadata; the native card ignores it and never substitutes changed-only summaries.
+Unlearned cards show the complete first-investment block once. Incoming training
+sources are appended after the original card only on the receiving skill.
 
 Each `trainingSynergies` row provides `sourceId`, `sourceName`, `effect`,
 `effectLabel`, `perPointValue`, `unit` (`percent_bp` or `flat`),

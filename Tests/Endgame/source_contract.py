@@ -54,7 +54,7 @@ assert 'string[] names' not in (runtime / 'Presentation/ReferenceAssets/EndgameP
 contains('Protocol/PrivateServerGateway.Endgame.cs', 'Endgame.CanInvestSkill(skillID)', 'new EndgameRequest("skill.upgrade", Endgame.Revision, skillID: skillID)', 'await SendAsync(')
 contains('Protocol/PrivateServerGateway.cs', 'if (Endgame.GrowthV5 && EndgameSkillRankView.IsProfessionSkill(skillId)) return UpgradeGrowthSkillAsync(skillId, cancellationToken);')
 contains('Presentation/ReferenceAssets/Win05.SkillDialog.cs', 'if (UsesGrowthSkill(skillId)) return EndgamePanel.GrowthState.CanInvestSkill(skillId);', 'rank.EffectiveRank', 'BuildGrowthSkillTip(info, true)', 'DisplayedSkillPoints', 'EndgamePanel.RetryGrowthRequest()', 'EndgamePanel.RefreshGrowthSkills()')
-contains('Presentation/ReferenceAssets/Win05.GrowthSkills.cs', 'rank.CurrentEffectLines', 'rank.NextEffectLines', 'rank.HardRank', 'rank.SoftRank', 'rank.GrantRank')
+contains('Presentation/ReferenceAssets/Win05.GrowthSkills.cs', 'rank.CurrentEffectLines', 'rank.NextEffectLines', 'rank.HardRank', 'rank.EffectiveRank', 'AppendGrowthLevelBlock', '您现在的剩余技能点数为')
 contains('Presentation/ReferenceAssets/PluginGameApi.Observations.cs', 'case "endgame.skills":', '"metadataAvailable"', 'row["ranks"] = rank == null ? null : ObserveEndgameSkill(rank)')
 contains('Presentation/ReferenceAssets/PluginGameApi.Endgame.Actions.cs', '"endgame.skill.upgrade"', 'state.CanInvestSkill(skill)', 'EndgameWireID(entry.Request.RequestId), floor, skill')
 contains('Application/EndgameClientState.Snapshots.cs', 'snapshotCombatStatsVersion == CombatStatsVersion', 'PublishCombatStats(snapshotCombatStats, snapshotRevision)', 'CompareRevision(response.Revision, CombatStatsRevision)')

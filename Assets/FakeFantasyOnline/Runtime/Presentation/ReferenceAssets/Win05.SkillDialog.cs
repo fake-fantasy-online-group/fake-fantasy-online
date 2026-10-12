@@ -566,10 +566,22 @@ public partial class Win05
             visibleWidth * s, visibleHeight * s);
         if (viewport.Contains(current.mousePosition) && current.type == EventType.ScrollWheel)
         {
-            skillScroll = Mathf.Clamp(
-                skillScroll + current.delta.y * 12f,
-                0f,
-                maximumScroll);
+            // An oversized hovered growth card owns its wheel input. Short cards
+            // keep the original tree scrolling behavior and exact native layout.
+            bool tipScrolled = false;
+            foreach (SkSlot slot in page.slots)
+            {
+                Rect icon = new Rect(viewport.x + slot.x * s,
+                    viewport.y + (slot.y - skillScroll) * s, 36f * s, 36f * s);
+                if (icon.Contains(current.mousePosition) && UsesGrowthSkill(slot.id) &&
+                    skInfo.TryGetValue(slot.id, out SkInfo scrollInfo))
+                {
+                    tipScrolled = UITip.ScrollSkill(BuildGrowthSkillTip(scrollInfo, true), s, current.delta.y);
+                    if (tipScrolled) break;
+                }
+            }
+            if (!tipScrolled)
+                skillScroll = Mathf.Clamp(skillScroll + current.delta.y * 12f, 0f, maximumScroll);
             current.Use();
         }
         skillScroll = Mathf.Clamp(skillScroll, 0f, maximumScroll);
@@ -682,7 +694,9 @@ public partial class Win05
         if (requestedUpgrade != 0 && NetClient.I != null) NetClient.I.UpgradeSkillForIndependentRuntime(requestedUpgrade);
         if (hoveredInfo != null)
         {
-            RequestSkillTipForIndependentRuntime(BuildSkillTip(hoveredInfo, hoveredLevel), s);
+            string text = BuildSkillTip(hoveredInfo, hoveredLevel);
+            if (UsesGrowthSkill(hoveredInfo.id)) UITip.ShowSkill(text, s);
+            else RequestSkillTipForIndependentRuntime(text, s);
         }
     }
 

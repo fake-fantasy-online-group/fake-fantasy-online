@@ -19,14 +19,14 @@ internal static class NativeSkillTooltipContract
     private static readonly Color Green = new Color32(120, 220, 120, 255);
     private static readonly Color Gray = new Color32(128, 128, 128, 255);
     private static readonly Color Orange = new Color32(255, 136, 48, 255);
-    private const string CurrentEffects = "[\"造成123.45%法术伤害\",\"法力消耗: 12\",\"冷却时间: 2秒\"]";
-    private const string NextEffects = "[\"造成125.45%法术伤害\",\"法力消耗: 13\",\"冷却时间: 1.8秒\"]";
+    private const string CurrentEffects = "[\"凝聚火焰之力，对敌人造成123.45%的魔法伤害。\",\"消耗: 12点法力\",\"技能吟唱: 瞬发\",\"技能间隔: 2秒\"]";
+    private const string NextEffects = "[\"凝聚火焰之力，对敌人造成125.45%的魔法伤害。\",\"消耗: 13点法力\",\"技能吟唱: 瞬发\",\"技能间隔: 1.8秒\"]";
     private const string Extra = ",\"nextRequiredLevel\":45,\"trainingSynergies\":[" +
         "{\"sourceId\":10402,\"sourceName\":\"火焰专精\",\"effect\":\"damage\",\"effectLabel\":\"伤害\",\"perPointValue\":100,\"unit\":\"percent_bp\",\"investedHardPoints\":3,\"contributionValue\":300,\"equipmentApplies\":false}," +
         "{\"sourceId\":10402,\"sourceName\":\"火焰专精\",\"effect\":\"targets\",\"effectLabel\":\"目标\",\"perPointValue\":2,\"unit\":\"flat\",\"investedHardPoints\":3,\"contributionValue\":6,\"equipmentApplies\":false}," +
         "{\"sourceId\":10405,\"sourceName\":\"余烬\",\"effect\":\"duration\",\"effectLabel\":\"持续时间\",\"perPointValue\":50,\"unit\":\"percent_bp\",\"investedHardPoints\":0,\"contributionValue\":0,\"equipmentApplies\":false}," +
         "{\"sourceId\":10408,\"sourceName\":\"寒冰专精\",\"effect\":\"damage\",\"effectLabel\":\"伤害\",\"perPointValue\":200,\"unit\":\"percent_bp\",\"investedHardPoints\":2,\"contributionValue\":400,\"equipmentApplies\":false}]," +
-        "\"nativeModifierLines\":[\"天赋伤害加成: 5%\"]";
+        "\"nativeModifierLines\":[\"已学被动使本技能伤害提升5%\"]";
 
     private static void Check(bool condition, string message)
     { checks++; if (!condition) throw new Exception(message); }
@@ -104,6 +104,93 @@ internal static class NativeSkillTooltipContract
         Check(Near(layout.Item2, 12f * scale + layout.Item1.Max(row => BitmapFont.Measure(row.Item1, scale))) &&
             Near(layout.Item3, 8f * scale + 16f * scale * layout.Item1.Count), "Native padding and row-height dimensions");
     }
+    private static void RenderSkill(string text, float scale, Vector2 mouse)
+    {
+        BitmapFont.Draws.Clear(); GUI.Draws.Clear();
+        typeof(UITip).GetMethod("RenderSkill", HiddenStatic).Invoke(null, new object[] { text, scale, mouse });
+    }
+    private static void ResetSkillScroll() => typeof(UITip).GetMethod("ResetSkillScroll", HiddenStatic).Invoke(null, null);
+    private static int FirstSkillRow => (int)typeof(UITip).GetField("skillFirstRow", HiddenStatic).GetValue(null);
+    private static void CheckSkillRender(string text, float scale, Vector2 mouse)
+    {
+        ResetSkillScroll();
+        var full = Layout(text, scale);
+        var reached = new HashSet<int>();
+        bool overflow = full.Item3 > Screen.height;
+        int prior = -1;
+        do
+        {
+            RenderSkill(text, scale, mouse);
+            int first = FirstSkillRow;
+            int count = BitmapFont.Draws.Count - (overflow ? 1 : 0);
+            Rect box = GUI.Draws[0].Area;
+            Check(box.x >= 0f && box.y >= 0f && box.xMax <= Screen.width && box.yMax <= Screen.height,
+                "Skill viewport fits screen at exact native scale " + scale);
+            Check(GUI.Draws.Count == 9, "Skill overflow reuses original one-box art");
+            for (int i = 0; i < count; i++)
+            {
+                var actual = BitmapFont.Draws[i]; var expected = full.Item1[first + i];
+                Check(actual.Text == expected.Item1 && Same(actual.Color, expected.Item2), "Full original row survives viewport scrolling " + (first + i));
+                Check(Near(actual.Scale, scale) && actual.Y >= box.y && actual.Y + 12f * scale <= box.yMax,
+                    "Native-size glyphs are fully inside skill viewport " + (first + i));
+                reached.Add(first + i);
+            }
+            if (!overflow)
+            {
+                Check(count == full.Item1.Count && Near(box.width, full.Item2) && Near(box.height, full.Item3),
+                    "Fitting skills retain exact original dimensions and all rows");
+                Check(!UITip.ScrollSkill(text, scale, 1f), "Fitting skill does not intercept tree wheel input");
+                break;
+            }
+            var hint = BitmapFont.Draws.Last();
+            Check(hint.Text.StartsWith("滚轮查看 ", StringComparison.Ordinal) && Same(hint.Color, Gray) && Near(hint.Scale, scale),
+                "Only overflowing cards have native gray wheel affordance");
+            Check(hint.Y + 12f * scale <= Screen.height, "Overflow hint itself is not clipped");
+            if (first == prior) break;
+            prior = first;
+            Check(UITip.ScrollSkill(text, scale, 1f), "Oversized skill consumes wheel input");
+        } while (true);
+        Check(reached.Count == full.Item1.Count, "Every description, next-rank detail, footer and incoming source remains reachable");
+    }
+    private static void SkillScrollingAndIsolation()
+    {
+        Screen.width = 1920; Screen.height = 1080;
+        State(Rank()); string text = Win05.TestNativeGrowthTip();
+        CheckSkillRender(text, 2f, new Vector2(1900f, 1060f));
+        CheckSkillRender(text, 2f, new Vector2(2f, 2f));
+        CheckSkillRender(text, 1f, new Vector2(1900f, 1060f));
+        string longText = text + string.Concat(Enumerable.Repeat("\n完整原始说明与全部效果不可省略", 40));
+        CheckSkillRender(longText, 2f, new Vector2(120f, 120f));
+        ResetSkillScroll();
+        Event.current = new Event { type = EventType.ScrollWheel, delta = new Vector2(0f, 1f) };
+        UITip.ShowSkill(longText, 2f);
+        Check(Event.current.type == EventType.Used && FirstSkillRow > 0, "Hovered skill wheel is consumed once");
+        int first = FirstSkillRow;
+        UITip.ShowSkill(longText, 2f);
+        Check(FirstSkillRow == first, "Already consumed wheel is not replayed on repeated hover");
+        UITip.ScrollSkill(longText, 2f, -1f);
+        Check(FirstSkillRow == 0, "Wheel up reaches first original row");
+        UITip.ScrollSkill(longText, 2f, -1f);
+        Check(FirstSkillRow == 0, "Wheel up clamps without losing original header");
+        UITip.ScrollSkill(longText, 2f, 1f);
+        RenderSkill(longText + "新技能", 2f, new Vector2(1f, 1f));
+        Check(FirstSkillRow == 0, "Tooltip identity/content change resets scroll");
+        UITip.ScrollSkill(longText, 2f, 1f);
+        UITip.ShowSkill(longText, 2f);
+        object renderer = typeof(UITip).GetField("renderer", HiddenStatic).GetValue(null);
+        MethodInfo onGui = renderer.GetType().GetMethod("OnGUI", BindingFlags.Instance | BindingFlags.NonPublic);
+        Event.current.type = EventType.Repaint;
+        onGui.Invoke(renderer, null); // consume current skill request
+        onGui.Invoke(renderer, null); // hover ended / window closed: no request
+        Check(FirstSkillRow == 0, "Hover leave or cancel clears old scroll before reentry");
+        UITip.ShowSkill(longText, 2f); UITip.ScrollSkill(longText, 2f, 1f);
+        const string equipment = "\u00035原装备\n完整原装备属性\n原装备要求";
+        UITip.Show(equipment, 2f); BitmapFont.Draws.Clear(); GUI.Draws.Clear(); onGui.Invoke(renderer, null);
+        Check(FirstSkillRow == 0 && BitmapFont.Draws.Select(row => row.Text).SequenceEqual(Layout(equipment, 2f).Item1.Select(row => row.Item1)),
+            "Equipment request clears skill scrolling and uses unchanged native rows");
+        CheckRender(equipment, 2f, new Vector2(15f, 15f));
+        Event.current = null; Screen.width = 1280; Screen.height = 900;
+    }
     private static void HierarchyAndDrawing()
     {
         var state = State(Rank());
@@ -112,10 +199,8 @@ internal static class NativeSkillTooltipContract
         var rows = Layout(text).Item1;
         CheckRow(rows, "火弹术", Blue, 13);
         CheckRow(rows, "等级: 26", Color.white, 12);
-        CheckRow(rows, "下一等级: 27", Color.white, 10);
+        CheckRow(rows, "下一等级", Color.white, 12);
         CheckRow(rows, "需要等级: 45", Green);
-        CheckRow(rows, "投入点数: 19/20", Color.white);
-        CheckRow(rows, "装备与状态: +7级", new Color32(96, 230, 230, 255));
         CheckRow(rows, "受到以下技能加成", Green, 8);
         CheckRow(rows, "火焰专精（投入3点）", Green);
         CheckRow(rows, "每点: 伤害 +1%", Green);
@@ -123,85 +208,83 @@ internal static class NativeSkillTooltipContract
         CheckRow(rows, "余烬（投入0点）", Green);
         CheckRow(rows, "每点: 持续时间 +0.5%", Green);
         CheckRow(rows, "装备加级不增加协同", Gray);
-        CheckRow(rows, "天赋伤害加成: 5%", Green);
-        Check(Count(text, "火焰专精（投入3点）") == 1, "Multiple effects for one contiguous source share the source heading");
-        Check(text.Contains("装备与状态: +7级") && !text.Contains("item:equipment-only") && !text.Contains("+300%"), "Equipment source IDs and aggregate contribution are not rendered as per-hard-point training");
-        Check(text.IndexOf("造成123.45%法术伤害", StringComparison.Ordinal) < text.IndexOf("下一等级", StringComparison.Ordinal) &&
-            text.IndexOf("造成125.45%法术伤害", StringComparison.Ordinal) < text.IndexOf("受到以下技能加成", StringComparison.Ordinal), "Current, next and synergy sections stay separate and ordered");
-        foreach (string effect in new[] { "造成123.45%法术伤害", "法力消耗: 12", "冷却时间: 2秒", "造成125.45%法术伤害", "法力消耗: 13", "冷却时间: 1.8秒" })
-            CheckRow(rows, effect, Color.white);
-        CheckRow(rows, "剩余技能点: 3", Orange);
-        Check(text.Contains("\n\n"), "Native blank separator rows remain");
+        Check(text.Contains("\u0001已学被动使本技能伤害提升5%"), "Original green passive-damage aggregate preserved before footer");
+        Check(Count(text, "火焰专精（投入3点）") == 1, "One source heading for multiple incoming effects");
+        Check(!text.Contains("投入点数:") && !text.Contains("装备与状态:") && !text.Contains("授予等级:") && !text.Contains("投入1点后:"),
+            "Original card is not replaced by investment, gear or granted-rank diagnostic rows");
+        Check(!text.Contains("item:equipment-only") && !text.Contains("+300%"), "No equipment IDs or aggregate training value mislabelled as per-point");
+        string prefix = "\u0005             火弹术\n            等级: 26\n" +
+            "凝聚火焰之力，对敌人造成123.45%的魔法伤害。\n消耗: 12点法力\n技能吟唱: 瞬发\n技能间隔: 2秒\n\n" +
+            "            下一等级\n凝聚火焰之力，对敌人造成125.45%的魔法伤害。\n消耗: 13点法力\n技能吟唱: 瞬发\n技能间隔: 1.8秒\n" +
+            "\u0001需要等级: 45\n\u0001已学被动使本技能伤害提升5%\n\n\u0006您现在的剩余技能点数为3\n\u0006双击或拖曳至快捷栏以使用这个技能";
+        Check(text.StartsWith(prefix + "\n\n\u0001", StringComparison.Ordinal),
+            "Pre-V5 original complete current/next prose, detail labels, blank rows and footer are a byte-exact prefix; incoming synergy is append-only");
         CheckRender(text, 1f, new Vector2(30f, 40f));
-        Check(GUI.Draws[0].Area.xMax <= 1280f && GUI.Draws[0].Area.yMax <= 900f,
-            "Representative current/next card with three training sources fits 1280x900 at scale one");
-        Console.WriteLine("INFO representative three-source card: " + rows.Count + " rendered rows, " + Layout(text).Item3 + "px at 1280x900 scale 1 (deterministic font).");
         Screen.width = 1920; Screen.height = 1080;
         CheckRender(text, 2f, new Vector2(80f, 90f));
         Screen.width = 1280; Screen.height = 900;
         CheckRender(text, 1f, new Vector2(Screen.width - 2f, Screen.height - 2f));
-        Check(ResLoader.Paths.Count == 8 && ResLoader.Paths.All(path => path.StartsWith("ui/equipdlg05/", StringComparison.Ordinal)), "Production Ensure loads and reuses native tooltip chrome");
-        var training = rows.Where(row => Same(row.Item2, Green) || Same(row.Item2, Gray)).Select(row => row.Item1).ToArray();
+        Check(ResLoader.Paths.Count == 8 && ResLoader.Paths.All(path => path.StartsWith("ui/equipdlg05/", StringComparison.Ordinal)), "Native tooltip art reused");
+        var training = text.Substring(text.IndexOf("受到以下技能加成", StringComparison.Ordinal));
         State(Rank(soft: "184467440737095516170000001", effective: "184467440737095516170000020"));
-        var moreEquipment = Layout(Win05.TestNativeGrowthTip()).Item1.Where(row => Same(row.Item2, Green) || Same(row.Item2, Gray)).Select(row => row.Item1).ToArray();
-        Check(training.SequenceEqual(moreEquipment), "Increasing equipment ranks does not alter training-source or per-point rows");
+        string equipped = Win05.TestNativeGrowthTip();
+        Check(training == equipped.Substring(equipped.IndexOf("受到以下技能加成", StringComparison.Ordinal)), "Equipment ranks never inflate incoming training rows");
     }
     private static void CapUnlearnedAndHotbar()
     {
         var capped = State(Rank(hard: 20, effective: "27", next: "28", invest: false));
         string text = Win05.TestNativeGrowthTip();
-        Check(text.Contains("投入点数: 20/20") && text.Contains("等级: 27") && !capped.CanInvestSkill(10401), "Hard20 retains soft effective rank and blocks investment");
-        Check(!text.Contains("下一等级") && !text.Contains("造成125.45%") && !text.Contains("需要等级: 45"), "Hard20 hides next investment effects and requirement even if server supplies them");
-        CheckRow(Layout(text).Item1, "受到以下技能加成", Green, 8);
+        Check(text.Contains("等级: 27") && !capped.CanInvestSkill(10401), "Hard20 retains exact effective rank");
+        Check(!text.Contains("下一等级") && !text.Contains("125.45%") && !text.Contains("需要等级: 45"), "Hard20 hides next investment block");
+        Check(text.Contains("您现在还无法升级这个技能"), "Capped card restores original orange cannot-upgrade line");
         State(Rank(hard: 0, effective: "0", next: "8", cast: false));
         text = Win05.TestNativeGrowthTip();
-        Check(text.Contains("等级: 未学习") && text.Contains("投入1点后: 等级 8") && text.Contains("装备与状态: +7级"), "Unlearned preview includes server's next effective rank and soft contribution");
-        Check(!text.Contains("造成123.45%") && Count(text, "造成125.45%") == 1 && !text.Contains("下一等级"), "Unlearned first-investment preview appears once, never as current effects");
-        Check(!text.Contains("双击或拖曳") && text.Contains("需要等级: 45"), "Unlearned card has requirement, no cast invitation");
+        Check(text.Contains("等级: 未学习") && !text.Contains("投入1点后:"), "Original unlearned heading and layout");
+        Check(!text.Contains("123.45%") && Count(text, "125.45%") == 1 && !text.Contains("下一等级"), "Unlearned shows complete first-investment preview once");
+        Check(text.Contains("双击或拖曳") && text.Contains("需要等级: 45"), "Original active-skill hint and requirement remain for unlearned skill");
         CheckRender(text, 1f, new Vector2(25f, 25f));
-        State(Rank());
-        text = Win05.TestNativeGrowthTip(includeNext: false);
-        Check(text.Contains("造成123.45%") && !text.Contains("造成125.45%") && !text.Contains("下一等级"), "Hotbar shows only current effects");
-        Check(!text.Contains("剩余技能点:") && !text.Contains("需要完成职业任务") && !text.Contains("需要等级: 45"), "Hotbar omits investment footer, blocked reasons and next requirement");
-        Check(text.Contains("受到以下技能加成") && text.Contains("余烬（投入0点）"), "Hotbar retains actual training source disclosure");
-        CheckRender(text, 1f, new Vector2(40f, 40f));
+        State(Rank()); text = Win05.TestNativeGrowthTip(includeNext: false);
+        Check(text.Contains("123.45%") && !text.Contains("125.45%") && !text.Contains("下一等级"), "Hotbar shows complete current block only");
+        Check(!text.Contains("剩余技能点数") && !text.Contains("需要等级: 45") && !text.Contains("需要完成职业任务"), "Hotbar has no investment footer or requirement");
+        Check(text.Contains("受到以下技能加成") && text.Contains("余烬（投入0点）"), "Hotbar includes incoming sources");
         State(Rank(hard: 0, soft: "0", effective: "3", next: "4", grant: "3"));
         text = Win05.TestNativeGrowthTip();
-        Check(text.Contains("授予等级: 3") && !text.Contains("装备与状态:"), "Granted casting rank is separate and zero equipment summary is omitted");
+        Check(text.Contains("等级: 3") && !text.Contains("授予等级:"), "Granted rank uses original single level heading");
     }
-    private static void SemanticNextPreview()
+    private static void FullNextPreview()
     {
-        const string current = "[\"造成123.45%法术伤害\",\"对目标：寒冷持续2秒\",\"移动速度降低10%\",\"法力消耗: 12\",\"冷却时间: 2秒\"]";
-        const string next = "[\"造成123.45%法术伤害\",\"对目标：寒冷持续3秒\",\"移动速度降低10%\",\"法力消耗: 12\",\"冷却时间: 2秒\"]";
-        const string changes = "[\"对目标：寒冷持续3秒\",\"移动速度降低10%\",\"其余效果不变\"]";
+        const string current = "[\"冻结敌人的行动，使其移动速度降低10%，持续2秒。\",\"消耗: 12点法力\",\"技能吟唱: 瞬发\",\"技能间隔: 2秒\"]";
+        const string next = "[\"冻结敌人的行动，使其移动速度降低10%，持续3秒。\",\"消耗: 12点法力\",\"技能吟唱: 瞬发\",\"技能间隔: 2秒\"]";
+        const string changes = "[\"持续3秒\",\"其余效果不变\"]";
         var state = State(Rank(current: current, upcoming: next, changes: changes));
         var rank = state.SkillRank(10401);
-        Check(rank.CurrentEffectLines.Count == 5 && rank.NextEffectLines.Count == 5 && rank.NextChangeLines.Count == 3,
-            "DTO keeps full current/next API effects separately from compact next-change preview");
+        Check(rank.CurrentEffectLines.Count == 4 && rank.NextEffectLines.Count == 4 && rank.NextChangeLines.Count == 2, "Compatibility DTO retains all supplied arrays");
         string text = Win05.TestNativeGrowthTip();
-        Check(text.Contains("对目标：寒冷持续2秒") && text.Contains("对目标：寒冷持续3秒") &&
-            Count(text, "移动速度降低10%") == 2, "Compact next preview preserves supplied target/status semantic block and child effect");
-        Check(Count(text, "造成123.45%法术伤害") == 1 && Count(text, "法力消耗: 12") == 1 &&
-            Count(text, "冷却时间: 2秒") == 1 && text.Contains("其余效果不变"), "Learned preview uses server changes with explicit unchanged message, full current retained");
-        Check(rank.NextEffectLines.Contains("法力消耗: 12") && rank.NextEffectLines.Contains("冷却时间: 2秒"),
-            "Compact presentation cannot discard full server next-effect API data");
+        Check(Count(text, "冻结敌人的行动，使其移动速度降低10%") == 2 && text.Contains("持续2秒。") && text.Contains("持续3秒。"), "Both original full descriptions, including unchanged semantics, survive");
+        foreach (string line in new[] { "消耗: 12点法力", "技能吟唱: 瞬发", "技能间隔: 2秒" })
+            Check(Count(text, line) == 2, "Next rank repeats original complete detail row: " + line);
+        Check(!text.Contains("其余效果不变"), "Changed-only summary must never replace full next-rank block");
+        var incomingState = State(Rank().Replace("已学被动使本技能伤害提升5%", "火焰专精：附加燃烧效果"));
+        string incomingOnly = Win05.TestNativeGrowthTip();
+        Check(incomingOnly.IndexOf("火焰专精：附加燃烧效果", StringComparison.Ordinal) >
+            incomingOnly.IndexOf("双击或拖曳至快捷栏以使用这个技能", StringComparison.Ordinal),
+            "Additional native passive incoming details are appended after the entire original card too");
+        string onlyNative = Rank(additive: false);
+        onlyNative = onlyNative.Substring(0, onlyNative.Length - 1) + ",\"nativeModifierLines\":[\"火焰专精：附加燃烧效果\"]}";
+        State(onlyNative);
+        incomingOnly = Win05.TestNativeGrowthTip();
+        Check(incomingOnly.Contains("受到以下技能加成") && incomingOnly.Contains("火焰专精：附加燃烧效果") &&
+            !incomingOnly.Contains("装备加级不增加协同"), "Native-only incoming bonus remains append-only without a misleading hard-point note");
+        State(Rank(current: current, upcoming: next, changes: changes));
         CheckRender(text, 1f, new Vector2(20f, 30f));
         string hotbar = Win05.TestNativeGrowthTip(includeNext: false);
-        Check(!hotbar.Contains("寒冷持续3秒") && !hotbar.Contains("其余效果不变"), "Hotbar never leaks compact next preview");
+        Check(!hotbar.Contains("持续3秒") && Count(hotbar, "消耗: 12点法力") == 1, "Hotbar contains one full current block");
         State(Rank(hard: 0, effective: "0", cast: false, current: current, upcoming: next, changes: changes));
         text = Win05.TestNativeGrowthTip();
-        Check(text.Contains("寒冷持续3秒") && text.Contains("法力消耗: 12") && text.Contains("冷却时间: 2秒") &&
-            !text.Contains("其余效果不变") && !text.Contains("寒冷持续2秒"), "Unlearned first investment uses full next effects even when a compact change field is supplied");
-        foreach (string optionalChanges in new string[] { null, "[]" })
-        {
-            State(Rank(current: current, upcoming: next, changes: optionalChanges));
-            text = Win05.TestNativeGrowthTip();
-            Check(Count(text, "法力消耗: 12") == 2 && text.Contains("寒冷持续3秒") && !text.Contains("其余效果不变"),
-                "Missing or empty optional compact preview preserves full-next fallback");
-        }
+        Check(text.Contains("持续3秒") && text.Contains("消耗: 12点法力") && !text.Contains("其余效果不变") && !text.Contains("持续2秒"), "Unlearned preview uses complete first-investment prose");
         State(Rank(hard: 20, invest: false, current: current, upcoming: next, changes: changes));
-        Check(!Win05.TestNativeGrowthTip().Contains("寒冷持续3秒"), "Hard20 hides compact next-investment section too");
-        Reject(Ranks(Rank(changes: "[42]")), "Compact next-preview rows must be strings");
+        Check(!Win05.TestNativeGrowthTip().Contains("持续3秒"), "Hard20 has no next preview");
+        Reject(Ranks(Rank(changes: "[42]")), "Legacy changed-only API metadata is still validated");
     }
     private static void ExactRanksAndCompatibility()
     {
@@ -210,24 +293,21 @@ internal static class NativeSkillTooltipContract
             const string next = "184467440737095516170000002";
             var state = State(Rank(effective: rank, next: next));
             string text = Win05.TestNativeGrowthTip();
-            Check(text.Contains("等级: " + rank) && text.Contains("下一等级: " + next), "Exact decimal current and server next rank: " + rank);
-            Check(state.SkillRank(10401).EffectiveRank == rank && state.SkillRank(10401).NextEffectiveRank == next, "DTO strings never narrow: " + rank);
+            Check(text.Contains("等级: " + rank) && text.Contains("下一等级"), "Exact decimal rank and original next heading: " + rank);
+            Check(state.SkillRank(10401).EffectiveRank == rank && state.SkillRank(10401).NextEffectiveRank == next, "DTO ranks never narrow: " + rank);
             Render(text, 1f, new Vector2(0f, 0f));
-            string drawn = string.Concat(BitmapFont.Draws.Select(draw => draw.Text));
-            Check(drawn.Contains("等级: " + rank) && drawn.Contains("下一等级: " + next), "All exact digits survive actual wrap and render: " + rank);
+            Check(string.Concat(BitmapFont.Draws.Select(draw => draw.Text)).Contains("等级: " + rank), "All rank digits survive wrapping: " + rank);
         }
-        var old = State(Rank(additive: false));
-        string legacy = Win05.TestNativeGrowthTip();
-        Check(old.SkillRank(10401).NextEffectiveRank == "" && old.SkillRank(10401).NextChangeLines.Count == 0 && old.SkillRank(10401).TrainingSynergies.Count == 0 && old.SkillRank(10401).NativeModifierLines.Count == 0, "Older V5 payload can omit all additive tooltip fields");
-        Check(legacy.Contains("下一等级") && legacy.Contains("造成125.45%") && !legacy.Contains("等级: 27") && !legacy.Contains("受到以下技能加成"), "Older snapshot shows supplied effects without inventing next rank or synergies");
+        var old = State(Rank(additive: false)); string legacy = Win05.TestNativeGrowthTip();
+        Check(old.SkillRank(10401).NextEffectiveRank == "" && old.SkillRank(10401).TrainingSynergies.Count == 0, "Older V5 may omit additive metadata");
+        Check(legacy.Contains("下一等级") && legacy.Contains("125.45%") && !legacy.Contains("受到以下技能加成"), "Older payload keeps complete supplied blocks without invented sources");
         State(Rank(current: "[]", upcoming: "[]"));
-        string missingEffects = Win05.TestNativeGrowthTip();
-        Check(missingEffects.Contains("服务器尚未提供技能效果") && !missingEffects.Contains("下一等级"), "Missing authoritative effects are explicit and never replaced by native rank-five prose");
+        Check(Win05.TestNativeGrowthTip().Contains("服务器尚未提供技能效果"), "Absent authoritative block is explicit");
         string valid = Ranks(Rank());
-        Reject(valid.Replace("\"equipmentApplies\":false", "\"equipmentApplies\":true"), "Training DTO must reject equipment-derived synergy");
-        Reject(valid.Replace("\"contributionValue\":300", "\"contributionValue\":1000"), "Training DTO must reject contribution not equal to hard points times rate");
-        Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":11005"), "Life skill cannot be a training source");
-        Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":10401"), "Self synergy cannot become a source");
+        Reject(valid.Replace("\"equipmentApplies\":false", "\"equipmentApplies\":true"), "Training rejects equipment-derived synergy");
+        Reject(valid.Replace("\"contributionValue\":300", "\"contributionValue\":1000"), "Training validates hard points times rate");
+        Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":11005"), "Life skill cannot be training source");
+        Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":10401"), "Self-source rejected");
     }
     private static void PendingStaleAndRouting()
     {
@@ -278,6 +358,11 @@ internal static class NativeSkillTooltipContract
     {
         object fixture = BoundedJson.Parse(File.ReadAllText(path));
         var names = new Dictionary<int, string>();
+        var usable = new Dictionary<int, bool>();
+        string usablePath = Path.Combine(Path.GetDirectoryName(path), "skill-tooltip-usable-v5.json");
+        foreach (var entry in (IReadOnlyDictionary<string, object>)BoundedJson.Parse(File.ReadAllText(usablePath)))
+            usable.Add(int.Parse(entry.Key, CultureInfo.InvariantCulture), (bool)entry.Value);
+        Check(usable.Count == 149, "Original 149-skill kinds determine real active/passive hint admission");
         IReadOnlyList<object> ranks;
         var document = fixture as IReadOnlyDictionary<string, object>;
         if (document != null)
@@ -345,27 +430,27 @@ internal static class NativeSkillTooltipContract
                     Check(training.SourceID == (rank.ID == 10405 ? 10402 : 10409) && training.InvestedHardPoints == 10 &&
                         training.PerPointValue == 100 && training.ContributionValue == 1000 && !training.EquipmentApplies,
                         "Actual equipped gear does not inflate source10 hard-point synergy " + rank.ID);
-                    Check(rank.CurrentEffectLines.Count == (rank.ID == 10405 ? 7 : 8) && rank.NextEffectLines.Count == rank.CurrentEffectLines.Count && rank.NextChangeLines.Count == 2,
-                        "Real high-rank current/full-next effect API remains complete beside compact preview " + rank.ID);
+                    Check(rank.CurrentEffectLines.Count >= 4 && rank.NextEffectLines.Count >= 4,
+                        "Real high-rank original prose and native three-row details remain complete " + rank.ID);
                 }
                 string name;
                 if (!names.TryGetValue(rank.ID, out name)) { name = "技能 " + rank.ID; unnamed++; }
-                string text = Win05.TestNativeGrowthTip(rank.ID, true, name);
+                string text = Win05.TestNativeGrowthTip(rank.ID, true, name, usable[rank.ID]);
                 Check(text.Contains(name), "Fixture uses verified native skill name " + rank.ID);
+                Check(text.Contains("双击或拖曳") == usable[rank.ID], "Native active/passive skill hint matches original type " + rank.ID);
                 foreach (var equipment in rank.Contributions)
                     Check(!text.Contains(equipment.SourceID), "Equipment identity does not leak into training section " + rank.ID);
                 foreach (string effect in rank.CurrentEffectLines)
                     Check(text.Contains(effect), "Every authoritative current effect is preserved " + rank.ID + ": " + effect);
-                foreach (string change in rank.NextChangeLines)
-                    Check(text.Contains(change), "Every authoritative semantic next-change block is preserved " + rank.ID + ": " + change);
+                foreach (string effect in rank.NextEffectLines)
+                    Check(text.Contains(effect), "Every complete next-rank description/detail is preserved " + rank.ID + ": " + effect);
+                Check(!text.Contains("其余效果不变"), "No compact-summary substitution in actual fixture " + rank.ID);
                 foreach (var synergy in rank.TrainingSynergies)
                     Check(text.Contains(synergy.SourceName + "（投入" + synergy.InvestedHardPoints + "点）"), "Every fixture training source remains visible " + rank.ID);
                 var layout = Layout(text, scale);
                 if (Environment.GetEnvironmentVariable("FFO_SKILL_TOOLTIP_DUMP_ID") == rank.ID.ToString(CultureInfo.InvariantCulture) && Screen.width == 1920)
                     for (int row = 0; row < layout.Item1.Count; row++) Console.WriteLine("ROW " + rank.ID + " " + row + ": " + layout.Item1[row].Item1);
-                Render(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
-                Check(BitmapFont.Draws.Count == layout.Item1.Count, "Actual Render draws every fixture row " + rank.ID);
-                Check(BitmapFont.Draws.Select(row => row.Text).SequenceEqual(layout.Item1.Select(row => row.Item1)), "Fixture render drops no effect or wrapped row " + rank.ID);
+                CheckSkillRender(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
                 if (layout.Item3 > worst) { worst = layout.Item3; worstID = rank.ID; worstName = name; worstRows = layout.Item1.Count; worstValue = value; }
                 Rect box = GUI.Draws[0].Area;
                 if (box.x < 0f || box.y < 0f || box.xMax > Screen.width || box.yMax > Screen.height)
@@ -381,10 +466,10 @@ internal static class NativeSkillTooltipContract
             {
                 if (phase == "stale")
                     Check(worstState.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"requestId\":\"" + upgrade.RequestID + "\",\"ok\":true,\"revision\":\"2\"}")), "Worst-card stale fixture applies actual receipt");
-                string text = Win05.TestNativeGrowthTip(worstID, true, worstName);
+                string text = Win05.TestNativeGrowthTip(worstID, true, worstName, usable[worstID]);
                 Check(text.Contains(phase == "pending" ? "（确认中）" : "（更新中）"), "Worst-card shows correct " + phase + " state");
                 var layout = Layout(text, scale);
-                Render(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
+                CheckSkillRender(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
                 Rect box = GUI.Draws[0].Area;
                 if (box.x < 0f || box.y < 0f || box.xMax > Screen.width || box.yMax > Screen.height)
                     failures.Add(worstID + " " + worstName + " " + phase + ": " + layout.Item1.Count + " rows, " + layout.Item3 + "px exceeds " + Screen.width + "x" + Screen.height + " scale " + scale);
@@ -405,10 +490,10 @@ internal static class NativeSkillTooltipContract
                 {
                     if (phase == "pending") Check(softState.Begin(softUpgrade), "Synthetic soft-rank stress starts actual pending state");
                     if (phase == "stale") Check(softState.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"requestId\":\"" + softUpgrade.RequestID + "\",\"ok\":true,\"revision\":\"2\"}")), "Synthetic soft-rank stress applies actual stale receipt");
-                    string text = Win05.TestNativeGrowthTip(worstID, true, worstName);
-                    Check(text.Contains("装备与状态: +7级") && text.Contains("等级: 10") && text.Contains("下一等级: 11"), "Synthetic soft-rank layout displays exact adjusted headers");
+                    string text = Win05.TestNativeGrowthTip(worstID, true, worstName, usable[worstID]);
+                    Check(!text.Contains("装备与状态:") && text.Contains("等级: 10") && text.Contains("下一等级"), "Synthetic soft-rank layout displays exact adjusted headers");
                     var layout = Layout(text, scale);
-                    Render(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
+                    CheckSkillRender(text, scale, new Vector2(Screen.width / 2f, Screen.height / 2f));
                     Rect box = GUI.Draws[0].Area;
                     if (box.x < 0f || box.y < 0f || box.xMax > Screen.width || box.yMax > Screen.height)
                         failures.Add(worstID + " " + worstName + " synthetic soft7 " + phase + ": " + layout.Item1.Count + " rows, " + layout.Item3 + "px exceeds " + Screen.width + "x" + Screen.height + " scale " + scale);
@@ -423,8 +508,8 @@ internal static class NativeSkillTooltipContract
     public static int Main(string[] args)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-        HierarchyAndDrawing(); CapUnlearnedAndHotbar(); SemanticNextPreview(); ExactRanksAndCompatibility();
-        PendingStaleAndRouting(); RequestAndComparisonRendering();
+        HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
+        PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation();
         foreach (string fixture in args) CheckServerFixture(fixture);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");
         return 0;

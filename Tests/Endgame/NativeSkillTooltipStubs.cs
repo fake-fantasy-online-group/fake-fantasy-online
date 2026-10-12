@@ -52,8 +52,8 @@ namespace UnityEngine
         public static void SetFloat(string key, float value) { }
         public static void Save() { }
     }
-    public enum EventType { Layout, Repaint }
-    public class Event { public static Event current; public Vector2 mousePosition; public EventType type; }
+    public enum EventType { Layout, Repaint, ScrollWheel, Used }
+    public class Event { public static Event current; public Vector2 mousePosition, delta; public EventType type; public void Use() { type = EventType.Used; } }
     public class MonoBehaviour { }
     public class GameObject
     {
@@ -120,10 +120,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public partial class Win05
     {
-        public class SkInfo { public int id; public string name; }
-        private static bool SkillUsableForHotbar(SkInfo info) => info != null;
-        public static string TestNativeGrowthTip(int id = 10401, bool includeNext = true, string name = "火弹术") =>
-            BuildGrowthSkillTip(new SkInfo { id = id, name = name }, includeNext);
+        public class SkInfo { public int id; public string name; public bool usable = true; }
+        private static bool SkillUsableForHotbar(SkInfo info) => info != null && info.usable;
+        public static string TestNativeGrowthTip(int id = 10401, bool includeNext = true, string name = "火弹术", bool usable = true) =>
+            BuildGrowthSkillTip(new SkInfo { id = id, name = name, usable = usable }, includeNext);
         public static bool TestUsesGrowthSkill(int id) => UsesGrowthSkill(id);
         public static int TestDisplayedSkillPoints => DisplayedSkillPoints;
     }

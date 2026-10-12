@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 
-internal static class UITip
+internal static partial class UITip
 {
     private static Texture2D pUL, pUM, pUR, pLM, pRM, pDL, pDM, pDR;
     private static bool tried;
@@ -19,6 +19,7 @@ internal static class UITip
         if (string.IsNullOrEmpty(text)) return;
         reqText = text;
         reqCmp = null;
+        reqIsSkill = false;
         reqS = s;
         reqMouse = Event.current != null ? Event.current.mousePosition :
             new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
@@ -56,13 +57,20 @@ internal static class UITip
             GUI.depth = 1;
             if (reqText != null)
             {
-                Render(reqText, reqCmp, reqS, reqMouse);
+                if (reqIsSkill) RenderSkill(reqText, reqS, reqMouse);
+                else
+                {
+                    ResetSkillScroll();
+                    Render(reqText, reqCmp, reqS, reqMouse);
+                }
                 if (Event.current.type == EventType.Repaint)
                 {
                     reqText = null;
                     reqCmp = null;
+                    reqIsSkill = false;
                 }
             }
+            else if (Event.current.type == EventType.Repaint) ResetSkillScroll();
         }
     }
 
