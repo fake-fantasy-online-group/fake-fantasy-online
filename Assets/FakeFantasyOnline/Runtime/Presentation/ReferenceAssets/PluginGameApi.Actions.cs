@@ -439,7 +439,9 @@ public sealed partial class PluginGameApi
     {
         var args = entry.Request.Arguments;
         int skill = ActionInt(args, "skillId", 1, int.MaxValue);
-        if (Session.SkillBookState == null || Session.SkillBookState.LevelOf(skill) <= 0)
+        if (EndgameClient?.Endgame.GrowthV5 == true && EndgameSkillRankView.IsProfessionSkill(skill)
+            ? EndgameClient.Endgame.SkillRank(skill)?.CanCast != true
+            : Session.SkillBookState == null || Session.SkillBookState.LevelOf(skill) <= 0)
             throw new ActionFailure("skill.not_learned", "The skill is not present in the learned-skill snapshot.");
         bool requestSkill = entry.Request.Name == "skill.request";
         bool coordinates = args.ContainsKey("x") || args.ContainsKey("y");

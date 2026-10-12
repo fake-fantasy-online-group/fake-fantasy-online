@@ -13,7 +13,7 @@ These managed tests do not establish a live server or Unity playthrough.
 
 ## Observe first
 
-The four observation domains are:
+The observation domains are:
 
 - `endgame`: availability, API instance ID, connection generation, exact inventory
   `expectedRevision`, published `snapshotId`/`snapshotRevision`, snapshot state,
@@ -194,3 +194,47 @@ established by these substitutes.
 The suite preserves the 38 native action assertions and adds focused endgame
 regressions. See [VALIDATION.md](VALIDATION.md) for the recorded run and limitations.
 No Unity/Player, external server, account login or live gameplay is started.
+
+## V5 skill progression
+
+With negotiated `endgame.growth.v5`, observe `endgame.skills` (optional `skillId`,
+`offset`, `limit`). It returns `skillRanksRevision`, `expectedRevision`,
+`formulaVersion`, `hardCap`, `playerCap`, `petCap`, `unspentPoints`, and paged
+`skillRanks`. Each row includes `skillId`, `hardRank`, `grantRank`, `softRank`,
+`effectiveRank`, `canCast`, `canInvest`, `blockedReasons`, `contributions`,
+`currentEffectLines`, and `nextEffectLines`. Keep granted/soft/effective ranks and
+contribution levels as strings; no gameplay cap or numeric narrowing is applied.
+Current/next effect text is server-authored. `nextEffectLines` compares one more
+effective rank; it does not mean another hard point is legal at hard rank20.
+
+- `endgame.skill.refresh` requests a fresh `skill.ranks` view.
+- `endgame.skill.upgrade` takes `expectedRevision` and `skillId`. Supply a stable
+  caller `requestId` as for other endgame mutations. The adapter checks the current
+  rank view and the server's `canInvest` before sending.
+- `endgame.retry` queries the exact pending investment after an uncertain result.
+  Never replace it with a new request ID to spend another point.
+
+The ordinary `skills` observation retains its native learned rows and cast details,
+including starter/life skills. V5 profession rows add `rankAuthority: endgame.skills`
+and the complete authoritative `ranks` object. Treat the old numeric `level` as
+compatibility data only; `ranks.effectiveRank` is the V5 rank authority. Native
+hotbar pickup and agent cast admission use authoritative `canCast` for these profession skills.
+
+### Authoritative equipment combat observation
+
+`endgame.combatStats` (inside the `endgame` observation) contains the server's
+`magicFind`, `physicalMitigationBP`, elemental damage/resistance/penetration/
+mitigation/absorption channels, `equipmentAuras` and `procReadiness`. These are
+raw aggregate equipment channels, including current friendly aura grants, before
+per-enemy penetration, conditional caps and PvP damage calculations. The client
+does not parse tooltips, recompute them or clamp them. Source UIDs stay decimal
+strings; unsigned entity IDs and Int64 values keep their wire precision.
+
+`combatStatsRevision`, `combatStatsVersion` and `combatStatsReceivedUtc` identify
+the observed update. Aura rows include their source, rank, visual asset and lease;
+proc rows include fixed rank, chance, ICD, remaining personal/global cooldown and
+server `ready`. Readiness is a sampled server fact, not a local cast guarantee.
+A changed `combat.stats` push refreshes this observation without requiring an
+inventory change. Inventory chunk0 may also supply the view, but it publishes
+only with the complete snapshot and cannot overwrite a newer runtime push.
+Legacy snapshots may omit it; missing data is reported as null.

@@ -3273,6 +3273,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     public Task<Result> UpgradeSkillAsync(int skillId, CancellationToken cancellationToken)
     {
+        if (Endgame.GrowthV5 && EndgameSkillRankView.IsProfessionSkill(skillId)) return UpgradeGrowthSkillAsync(skillId, cancellationToken);
         if (!cancellationToken.CanBeCanceled && _host.IsHostThread)
         {
             _netClient.UpgradeSkill(skillId);

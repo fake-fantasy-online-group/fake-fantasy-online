@@ -9,6 +9,24 @@ public sealed partial class EndgameClientState
     public bool SnapshotLoading => assembling != null;
     public string SnapshotID => publishedSnapshotID ?? "";
     public string SnapshotRevision { get; private set; } = "0";
+    public EndgameCombatStatsView CombatStats { get; private set; }
+    public DateTime CombatStatsReceivedUtc { get; private set; }
+    public long CombatStatsVersion { get; private set; }
+    public string CombatStatsRevision { get; private set; } = "0";
+    private long snapshotCombatStatsVersion;
+    private bool ApplyCombatStats(EndgameResponse response)
+    {
+        if (response.CombatStats == null || response.Revision.Length == 0) throw new FormatException("Invalid combat stats update.");
+        if (CompareRevision(response.Revision, Revision) < 0 || CompareRevision(response.Revision, CombatStatsRevision) < 0) return false;
+        PublishCombatStats(response.CombatStats, response.Revision);
+        return true;
+    }
+    private void PublishCombatStats(EndgameCombatStatsView stats, string revision)
+    {
+        CombatStats = stats; CombatStatsRevision = revision;
+        CombatStatsReceivedUtc = stats == null ? default(DateTime) : DateTime.UtcNow; CombatStatsVersion++;
+    }
+    private EndgameCombatStatsView snapshotCombatStats;
     private List<EndgameItemView> assembling;
     private IReadOnlyList<EndgameMaterialView> snapshotMaterials;
     private IReadOnlyList<EndgameFormationView> snapshotFormations;
@@ -25,7 +43,7 @@ public sealed partial class EndgameClientState
             if (assembling != null && snapshotID == r.SnapshotID) { DiscardChunks(); throw new FormatException("Repeated snapshot chunk."); }
             DiscardChunks(); snapshotStartedAt = DateTime.UtcNow; assembling = new List<EndgameItemView>();
             snapshotID = r.SnapshotID; snapshotRevision = r.Revision; chunkCount = r.Chunks;
-            snapshotMaterials = r.Materials; snapshotFormations = r.Formations;
+            snapshotMaterials = r.Materials; snapshotFormations = r.Formations; snapshotCombatStats = r.CombatStats; snapshotCombatStatsVersion = CombatStatsVersion;
         }
         if (assembling == null || snapshotID != r.SnapshotID || snapshotRevision != r.Revision || chunkCount != r.Chunks || r.Chunk != nextChunk)
         { DiscardChunks(); throw new FormatException("Interrupted or out-of-order snapshot."); }
@@ -39,11 +57,15 @@ public sealed partial class EndgameClientState
         nextChunk++;
         if (nextChunk != chunkCount) return;
         Items = new ReadOnlyCollection<EndgameItemView>(assembling); Materials = snapshotMaterials; ActiveFormations = snapshotFormations;
+        // A same-revision aura/proc push may arrive while the inventory chunks assemble.
+        // Its newer runtime state must survive publication of the older chunk-zero view.
+        if (snapshotCombatStatsVersion == CombatStatsVersion && CompareRevision(snapshotRevision, CombatStatsRevision) >= 0)
+            PublishCombatStats(snapshotCombatStats, snapshotRevision);
         Revision = SnapshotRevision = snapshotRevision; HasSnapshot = true; publishedSnapshotID = snapshotID; InvalidateQuote(); DiscardChunks();
     }
     private void DiscardChunks()
     {
-        assembling = null; snapshotMaterials = null; snapshotFormations = null; snapshotID = snapshotRevision = null; nextChunk = chunkCount = 0; seenUIDs.Clear();
+        assembling = null; snapshotCombatStats = null; snapshotMaterials = null; snapshotFormations = null; snapshotID = snapshotRevision = null; nextChunk = chunkCount = 0; seenUIDs.Clear();
     }
 }
 }

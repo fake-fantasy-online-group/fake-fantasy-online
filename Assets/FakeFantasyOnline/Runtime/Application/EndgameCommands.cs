@@ -21,12 +21,12 @@ public sealed class EndgameRequest
     public string Json { get; }
     public string Catalog { get; }
     public string Cursor { get; }
-    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance";
+    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade";
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
-        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0)
+        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0)
     {
-        if (Array.IndexOf(new[] { "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
+        if (Array.IndexOf(new[] { "skill.ranks", "skill.upgrade", "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
         if (RequestID.Length < 16 || RequestID.Length > 64) throw new ArgumentException("Invalid request ID.");
         foreach (char c in RequestID) if (c < 33 || c > 126) throw new ArgumentException("Invalid request ID.");
@@ -34,7 +34,13 @@ public sealed class EndgameRequest
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
-        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1" });
+        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5" });
+        if (op == "skill.upgrade")
+        {
+            if (skillID <= 0 || string.IsNullOrEmpty(revision)) throw new ArgumentException("Skill investment requires skillId and expectedRevision.");
+            data.Add("skillId", skillID);
+        }
+        else if (skillID != 0) throw new ArgumentException("skillId is only valid for skill.upgrade.");
         if (op == "catalog")
         {
             if (Array.IndexOf(new[] { "uniques", "runes", "formations", "recipes" }, catalog) < 0) throw new ArgumentException("Invalid catalog.");

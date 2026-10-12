@@ -20,6 +20,8 @@ public sealed partial class PluginGameApi
         bool writable = ready && state.HasSnapshot && !state.SnapshotLoading && state.SnapshotRevision == state.Revision && !state.Pending;
         const string unavailable = "The native world must negotiate endgame.v1 before this operation.";
         const string mutation = "A complete server snapshot and no uncertain mutation are required. Observe endgame; use endgame.retry only for the exact pending request.";
+        definitions.Add(EndgameDefinition("endgame.skill.refresh", "Request authoritative hard, granted, soft and effective skill ranks, effects and unspent points.", ready && state.GrowthV5, "The server must negotiate endgame.growth.v5."));
+        definitions.Add(EndgameDefinition("endgame.skill.upgrade", "Invest one hard skill point using the observed revision. Completion requires the correlated server receipt; effective ranks include soft levels and never authorize hard points.", ready && state.GrowthV5 && state.HasSkillRanks && state.SkillRanksRevision == state.Revision && !state.Pending && state.UnspentSkillPoints > 0, "Observe current endgame.skills and resolve any pending mutation first.", "expectedRevision:string", "skillId:integer"));
         definitions.Add(EndgameDefinition("endgame.refresh", "Request an authoritative inventory/material/active-formation snapshot through the native endgame owner.", ready, unavailable));
         definitions.Add(EndgameDefinition("endgame.catalog.request", "Request one server catalog page. Omitted cursor uses the observed next cursor. Observe endgame.catalog for page/load state.", ready, unavailable, "catalog:string", "cursor?:string"));
         definitions.Add(EndgameDefinition("endgame.socket.insert", "Insert an observed bag rune into an observed empty socket; only the correlated server receipt establishes the outcome.", writable, mutation, "expectedRevision:string", "targetUid:string", "runeUid:string", "socket:integer"));
@@ -50,6 +52,7 @@ public sealed partial class PluginGameApi
             if (key == "socket") { schema["minimum"] = 0; schema["maximum"] = 4; }
             if (key == "tier") { schema["minimum"] = 1; schema["maximum"] = 150; }
             if (key == "floorIndex") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
+            if (key == "skillId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
             if (key == "recipeId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
             if (key == "catalog") schema["enum"] = new object[] { "uniques", "runes", "formations", "recipes" };
             if (key == "confirmLeave") schema["const"] = true;
@@ -120,7 +123,7 @@ public sealed partial class PluginGameApi
         IEndgameClient owner = EndgameClient; EndgameClientState state = owner.Endgame;
         var args = entry.Request.Arguments; string op = entry.Request.Name.Substring("endgame.".Length);
         string revision = "", uid = "", rune = "", quote = "", run = "", catalog = "", cursor = "";
-        int socket = 0, recipe = 0, tier = 0, floor = 0; List<string> itemUIDs = null;
+        int socket = 0, recipe = 0, tier = 0, floor = 0, skill = 0; List<string> itemUIDs = null;
         if (args.ContainsKey("expectedRevision"))
         {
             revision = EndgameIdentity(ActionString(args, "expectedRevision"), "expectedRevision", true);
@@ -148,6 +151,11 @@ public sealed partial class PluginGameApi
         switch (op)
         {
             case "refresh": op = "snapshot"; break;
+            case "skill.refresh": op = "skill.ranks"; break;
+            case "skill.upgrade":
+                skill = ActionInt(args, "skillId", 1);
+                if (!state.CanInvestSkill(skill)) throw new ActionFailure("skill.upgrade.unavailable", "The server does not currently permit investing in this skill; inspect blockedReasons in endgame.skills.");
+                break;
             case "rift.refresh": op = "rift.state"; run = state.Rift?.RunID ?? ""; break;
             case "catalog.request":
                 op = "catalog"; catalog = EndgameCatalogName(EndgameString(args, "catalog"));
@@ -214,7 +222,7 @@ public sealed partial class PluginGameApi
                 break;
             default: throw new ArgumentException("Unknown endgame operation.");
         }
-        var command = new EndgameRequest(op, revision, uid, rune, socket, recipe, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor);
+        var command = new EndgameRequest(op, revision, uid, rune, socket, recipe, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor, skill);
         TrackEndgame(entry, owner, command);
         bool submitted = owner.SendEndgame(command);
         if (!submitted && !ReferenceEquals(state.PendingRequest, command))

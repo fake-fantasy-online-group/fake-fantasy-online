@@ -143,11 +143,12 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
         TrackTitleObservation();
         ReferenceFirstWorldInitialFrame frame = ObservationFrame;
         var endgame = s?.EndgameClientForPlugins;
-        string endgameToken = Token(endgame?.EndgameInWorld, endgame?.Endgame.Generation, endgame?.Endgame.Version);
+        string endgameToken = Token(endgame?.EndgameInWorld, endgame?.Endgame.Generation, endgame?.Endgame.Version, endgame?.Endgame.CombatStatsVersion);
         TrackObservation("endgame", endgameToken);
         TrackObservation("endgame.items", endgameToken);
         TrackObservation("endgame.catalog", endgameToken);
         TrackObservation("endgame.rift", endgameToken);
+        TrackObservation("endgame.skills", endgameToken);
         TrackObservation("world", Token(s?.State, s?.Connected, GameBootstrap.CurMapId, frame?.Built));
         TrackObservation("dialogue", CurrentDialogueRevision().ToString(CultureInfo.InvariantCulture));
         // Static receipt roots use the native versions. No collection is walked or copied here.
@@ -172,7 +173,7 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
             selection?.Current?.WorldX, selection?.Current?.WorldY,
             selection?.CurrentSelf?.worldX, selection?.CurrentSelf?.worldY));
         // Cooldown seconds and visible UI geometry are sampled only when requested, once per frame.
-        TrackObservation("skills", Token(s?.SkillBookStateVersion, s?.SkillCastStateVersion,
+        TrackObservation("skills", Token(endgameToken, s?.SkillBookStateVersion, s?.SkillCastStateVersion,
             GameHud.SkillCooldownCountForIndependentRuntime > 0 ? ObservationFrameNumber : 0));
     }
 

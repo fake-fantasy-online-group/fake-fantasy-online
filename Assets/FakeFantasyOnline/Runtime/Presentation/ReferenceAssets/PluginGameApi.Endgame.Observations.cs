@@ -14,7 +14,7 @@ public sealed partial class PluginGameApi
         EndgameClientState state = owner?.Endgame;
         var data = Values("available", owner != null && owner.EndgameInWorld && state.Negotiated,
             "apiInstanceId", apiInstanceId, "inWorld", owner != null && owner.EndgameInWorld,
-            "negotiated", state != null && state.Negotiated, "generation", state?.Generation ?? 0,
+            "growthV5", state != null && state.GrowthV5, "negotiated", state != null && state.Negotiated, "generation", state?.Generation ?? 0,
             "expectedRevision", state?.Revision ?? "0", "snapshotRevision", state?.SnapshotRevision ?? "0", "hasSnapshot", state != null && state.HasSnapshot,
             "snapshotLoading", state != null && state.SnapshotLoading, "snapshotId", state?.SnapshotID ?? "",
             "catalogVersion", state?.CatalogVersion ?? "", "error", state?.Error ?? "",
@@ -24,6 +24,9 @@ public sealed partial class PluginGameApi
         switch (domain)
         {
             case "endgame":
+                data["combatStats"] = ObserveEndgameCombatStats(state.CombatStats);
+                data["combatStatsVersion"] = state.CombatStatsVersion; data["combatStatsRevision"] = state.CombatStatsRevision;
+                data["combatStatsReceivedUtc"] = state.CombatStatsReceivedUtc.ToString("o", CultureInfo.InvariantCulture);
                 data["pending"] = state.Pending;
                 data["pendingRequest"] = state.PendingRequest == null ? null : Values("requestId", state.PendingRequest.RequestID, "op", state.PendingRequest.Op,
                     "arguments", BoundedJson.Parse(state.PendingRequest.Json), "sinceUtc", state.PendingSinceUtc.ToString("o", CultureInfo.InvariantCulture));
@@ -58,9 +61,31 @@ public sealed partial class PluginGameApi
                 if (catalog == "recipes") { total = state.Recipes.Count; EndgamePageRows(rows, state.Recipes, args, ObserveEndgameRecipe); }
                 EndgamePage(data, "rows", rows, total, args); break;
             case "endgame.rift": data["rift"] = ObserveEndgameRift(state, args, true); break;
+            case "endgame.skills":
+                data["available"] = state.GrowthV5 && state.HasSkillRanks;
+                data["skillRanksRevision"] = state.SkillRanksRevision; data["formulaVersion"] = state.SkillFormulaVersion;
+                data["hardCap"] = state.SkillHardCap; data["playerCap"] = state.PlayerLevelCap; data["petCap"] = state.PetLevelCap; data["unspentPoints"] = state.UnspentSkillPoints;
+                var ranks = new List<object>(); int count = 0;
+                foreach (var rank in state.SkillRanks)
+                {
+                    if (args.SkillId.HasValue && args.SkillId.Value != rank.ID) continue;
+                    if (count++ < args.Offset || ranks.Count >= args.Limit) continue;
+                    ranks.Add(ObserveEndgameSkill(rank));
+                }
+                EndgamePage(data, "skillRanks", ranks, count, args); break;
         }
         return data;
     }
+    private static Dictionary<string, object> ObserveEndgameCombatStats(EndgameCombatStatsView row) => row == null ? null : Values(
+        "magicFind", row.MagicFind, "physicalMitigationBP", row.PhysicalMitigationBP,
+        "elements", EndgameRows(row.Elements, e => Values("element", e.Element, "damageBP", e.DamageBP, "resistBP", e.ResistBP, "pierceBP", e.PierceBP, "mitigationBP", e.MitigationBP, "absorbBP", e.AbsorbBP)),
+        "equipmentAuras", EndgameRows(row.EquipmentAuras, a => Values("auraId", a.AuraID, "family", a.Family, "sourceEntityId", a.SourceEntityID, "sourceUID", a.SourceUID, "rank", a.Rank, "assetKey", a.AssetKey, "modifier", a.Modifier, "element", a.Element, "value", a.Value, "leaseMs", a.LeaseMS)),
+        "procReadiness", EndgameRows(row.ProcReadiness, p => Values("effectId", p.EffectID, "sourceUID", p.SourceUID, "trigger", p.Trigger, "skillId", p.SkillID, "fixedRank", p.FixedRank, "chanceBP", p.ChanceBP, "icdMs", p.ICDMS, "remainingMs", p.RemainingMS, "globalRemainingMs", p.GlobalRemainingMS, "ready", p.Ready)));
+    private static Dictionary<string, object> ObserveEndgameSkill(EndgameSkillRankView row) => Values(
+        "skillId", row.ID, "hardRank", row.HardRank, "grantRank", row.GrantRank, "softRank", row.SoftRank, "effectiveRank", row.EffectiveRank,
+        "canCast", row.CanCast, "canInvest", row.CanInvest, "blockedReasons", new List<string>(row.BlockedReasons),
+        "currentEffectLines", new List<string>(row.CurrentEffectLines), "nextEffectLines", new List<string>(row.NextEffectLines),
+        "contributions", EndgameRows(row.Contributions, c => Values("sourceId", c.SourceID, "scope", c.Scope, "profession", c.Profession, "branch", c.Branch, "school", c.School, "skillId", c.SkillID, "levels", c.Levels.ToString(CultureInfo.InvariantCulture))));
     private static Dictionary<string, object> EndgameCatalogStatus(EndgameClientState state, string name) => Values(
         "loaded", state.CatalogLoaded(name), "requested", state.CatalogRequested(name), "hasMore", state.CatalogHasMore(name), "nextCursor", state.NextCatalogCursor(name));
     private static void EndgamePage(Dictionary<string, object> data, string key, List<object> rows, int total, ObservationArguments args)

@@ -69,6 +69,26 @@ class EndgameHostContract
    Receipt(gateway,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");Check(ReferenceEquals(gateway.Endgame.PendingRequest,request),"same character restores original nonce");
    Check(queue.Count==2,"reconnect queries only; mutation never autoexecutes");Drain(queue);
    Receipt(gateway,"{\"kind\":\"socket.insert\",\"requestId\":\""+request.RequestID+"\",\"ok\":true,\"revision\":\"1\"}");Check(!gateway.Endgame.Pending,"real terminal receipt resolves pending");
+   Check(gateway.SendEndgame(new EndgameRequest("hello")),"V5 refresh hello sends");Drain(queue);
+   Receipt(gateway,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\"]}");
+   Check(gateway.Endgame.GrowthV5,"actual dispatch negotiates growth V5");
+   Receipt(gateway,"{\"kind\":\"skill.ranks\",\"ok\":true,\"revision\":\"1\",\"skillRanks\":[{\"id\":10401,\"hardRank\":19,\"grantRank\":\"0\",\"softRank\":\"7\",\"effectiveRank\":\"26\",\"canCast\":true,\"canInvest\":true}],\"result\":{\"hardCap\":\"20\",\"playerCap\":\"100\",\"petCap\":\"80\",\"unspentPoints\":\"2\",\"formulaVersion\":\"5\"}}");
+   Check(gateway.UpgradeSkillAsync(10401,CancellationToken.None).GetAwaiter().GetResult().IsSuccess,"actual upgrade routes through V5 sidecar");
+   var skillRequest=gateway.Endgame.PendingRequest;string skillWire=Json(Take(queue,key));
+   Check(skillRequest!=null && skillWire.Contains("\"op\":\"skill.upgrade\"") && skillWire.Contains("\"skillId\":10401") && skillWire.Contains("\"expectedRevision\":\"1\""),"actual skill wire contains guarded immutable command");
+   Check(!gateway.UpgradeSkillAsync(10401,CancellationToken.None).GetAwaiter().GetResult().IsSuccess && queue.Count==0,"actual duplicate upgrade never sends");
+   Check(gateway.RetryEndgame() && Json(Take(queue,key))==skillWire,"actual skill retry keeps same request bytes");
+   Receipt(gateway,"{\"kind\":\"skill.upgrade\",\"requestId\":\""+skillRequest.RequestID+"\",\"ok\":true,\"revision\":\"2\"}");
+   Check(!gateway.Endgame.Pending && !gateway.Endgame.CanInvestSkill(10401),"receipt waits for new rank revision");
+   long combatVersion=gateway.Endgame.CombatStatsVersion;
+   Receipt(gateway,"{\"kind\":\"combat.stats\",\"ok\":true,\"revision\":\"2\",\"combatStats\":{\"magicFind\":2147483648,\"physicalMitigationBP\":600,\"elements\":[{\"element\":\"fire\",\"resistBP\":15000}]}}");
+   Check(gateway.Endgame.CombatStats.MagicFind==2147483648L && gateway.Endgame.CombatStatsVersion>combatVersion,"actual dispatch accepts independent Int64 combat observation");
+   Check(gateway.Endgame.CombatStats.Elements[0].ResistBP==15000 && queue.Count==0,"combat push preserves overcap values without sending mutations");
+   foreach(int starter in new[]{13601,13602,11005})
+   {
+    Check(gateway.UpgradeSkillAsync(starter,CancellationToken.None).GetAwaiter().GetResult().IsSuccess,"starter or life route remains available "+starter);
+    byte[] native=Take(queue,key);Check(native[8]==0x12 && native[9]==0x10,"starter or life keeps original native opcode "+starter);
+   }
    Set(gateway,"endgameWorldEntered",false);gateway.Endgame.Reset();gateway.TickEndgameForIndependentRuntime();Check(!gateway.Endgame.HelloSent && queue.Count==0,"title fence blocks hello even with stale native stage");
   }
   finally { Call(host,"CloseAndRelease");peer.Close();tcp.Close();queue.Dispose(); }

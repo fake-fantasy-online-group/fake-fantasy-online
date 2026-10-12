@@ -12,6 +12,9 @@ public sealed partial class EndgamePanel : MonoBehaviour
     internal static EndgamePanel Current { get; private set; }
     private IEndgameClient client;
     private EndgameClientState State => client?.Endgame;
+    internal static EndgameClientState GrowthState => WorldEntryAvailable && Current.State.GrowthV5 ? Current.State : null;
+    internal static bool RetryGrowthRequest() => GrowthState?.PendingRequest?.Op == "skill.upgrade" && Current.client.RetryEndgame();
+    internal static bool RefreshGrowthSkills() => GrowthState != null && Current.client.SendEndgame(new EndgameRequest("skill.ranks"));
     private bool open, confirmLeave;
     private EndgameModule module;
     private int socket, recipeID = 1010, tier = 1;

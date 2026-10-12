@@ -362,7 +362,7 @@ public partial class Win05
     public bool PickupCharacterSkill(int skillId, Texture2D heldIcon)
     {
         SkInfo info = SkillInfo(skillId);
-        if (!skillDialogReady || SkillBook.LevelOf(skillId) < 1 ||
+        if (!skillDialogReady || !(UsesGrowthSkill(skillId) ? EndgamePanel.GrowthState.SkillRank(skillId)?.CanCast == true : SkillBook.LevelOf(skillId) > 0) ||
             !SkillUsableForHotbar(info))
         {
             return false;
@@ -414,6 +414,7 @@ public partial class Win05
     {
         SkInfo info = SkillInfo(skillId);
         if (info == null) return null;
+        if (UsesGrowthSkill(info.id)) return BuildGrowthSkillTip(info, false);
         var rows = new List<(string, char, bool)>();
         AppendLevelBlock(rows, info, Mathf.Max(1, currentLevel),
             currentLevel > 0 ? string.Format("等级: {0}", currentLevel) : "等级: 未学习", info.name);
@@ -425,6 +426,7 @@ public partial class Win05
     public bool CanShowUpgrade(int skillId)
     {
         SkInfo info = SkillInfo(skillId);
+        if (UsesGrowthSkill(skillId)) return EndgamePanel.GrowthState.CanInvestSkill(skillId);
         if (info == null || CharData.skillPoints <= 0) return false;
         CharData.skills.TryGetValue(skillId, out int currentLevel);
         if (currentLevel >= info.maxlv) return false;
@@ -623,13 +625,17 @@ public partial class Win05
             CharData.skills.TryGetValue(slot.id, out int currentLevel);
             int iconId = info == null ? 0 : info.icon;
             Texture2D icon = LoadSkillIcon(iconId);
-            DrawSkillIcon(iconRect, icon, currentLevel > 0);
-            if (currentLevel > 0 && BitmapFont.Ready)
+            EndgameSkillRankView rank = UsesGrowthSkill(slot.id) ? EndgamePanel.GrowthState.SkillRank(slot.id) : null;
+            bool canUse = UsesGrowthSkill(slot.id) ? rank?.CanCast == true : currentLevel > 0;
+            string levelLabel = rank == null ? currentLevel.ToString(CultureInfo.CurrentCulture) : rank.EffectiveRank;
+            if (levelLabel.Length > 5) levelLabel = levelLabel.Substring(0, 4) + "…";
+            DrawSkillIcon(iconRect, icon, canUse);
+            if (canUse && BitmapFont.Ready)
             {
                 BitmapFont.DrawOutline(
                     iconRect.xMax - 12f * s,
                     iconRect.yMax - 12f * s,
-                    currentLevel.ToString(CultureInfo.CurrentCulture),
+                    levelLabel,
                     new Color32(255, 230, 120, 255),
                     s);
             }
@@ -662,7 +668,7 @@ public partial class Win05
             }
 
             if (current != null && current.type == EventType.MouseDown &&
-                current.button == 0 && currentLevel > 0 && SkillUsableForHotbar(info))
+                current.button == 0 && canUse && SkillUsableForHotbar(info))
             {
                 GameHud.PickupSkill(slot.id, icon, false);
                 heldSkillIconId = iconId;
@@ -689,7 +695,7 @@ public partial class Win05
     // x86_64 DAT_0111cdb0 + DAT_01119140).
     private void DrawSkillPointFeedback(Func<float, float, float, float, Rect> L)
     {
-        if (CharData.skillPoints > 0)
+        if (DisplayedSkillPoints > 0)
         {
             UiFrame(SkillFirePath, 0);
             uiFrameCache.TryGetValue(SkillFirePath, out Texture2D[] frames);
@@ -701,9 +707,21 @@ public partial class Win05
             }
         }
         if (skLayout.pointlabel != null && skLayout.pointlabel.Length > 1 && BitmapFont.Ready)
+        {
+            var growth = EndgamePanel.GrowthState;
+            bool retry = growth?.PendingRequest?.Op == "skill.upgrade";
+            bool refresh = growth != null && !growth.Pending && (!growth.HasSkillRanks || growth.SkillRanksRevision != growth.Revision);
+            string text = retry ? "查询原请求" : refresh ? "刷新技能" : "技能点 " + DisplayedSkillPoints;
             BitmapFont.DrawOutline(winX + skLayout.pointlabel[0] * s,
-                winY + skLayout.pointlabel[1] * s, "技能点 " + CharData.skillPoints,
-                new Color32(255, 240, 160, 255), s);
+                winY + skLayout.pointlabel[1] * s, text, new Color32(255, 240, 160, 255), s);
+            Event current = Event.current;
+            if ((retry || refresh) && current != null && current.type == EventType.MouseDown && current.button == 0 &&
+                L(skLayout.pointlabel[0], skLayout.pointlabel[1], 80f, 12f).Contains(current.mousePosition))
+            {
+                if (retry) EndgamePanel.RetryGrowthRequest(); else EndgamePanel.RefreshGrowthSkills();
+                current.Use();
+            }
+        }
     }
 
     // Official Win05.DrawSkill 06001025, arm64 :114-127 / x86_64 :159-171: a null skLayout is a
@@ -842,6 +860,7 @@ public partial class Win05
     // Original ShowSkillTip row construction (06001028); existing caller owns UITip request.
     private string BuildSkillTip(SkInfo info, int currentLevel)
     {
+        if (UsesGrowthSkill(info.id)) return BuildGrowthSkillTip(info, true);
         var rows = new List<(string, char, bool)>();
         AppendLevelBlock(rows, info, Mathf.Max(1, currentLevel),
             currentLevel > 0 ? string.Format("等级: {0}", currentLevel) : "等级: 未学习", info.name);

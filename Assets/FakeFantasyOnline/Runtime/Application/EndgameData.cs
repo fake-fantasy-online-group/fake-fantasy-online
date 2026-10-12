@@ -48,6 +48,12 @@ internal static class EndgameData
     {
         return value.TryGetValue(key, out object item) ? Integer(item, key) : 0;
     }
+    public static long Long(IReadOnlyDictionary<string, object> value, string key)
+    {
+        if (!value.TryGetValue(key, out object item)) return 0;
+        if (!(item is long n)) throw new FormatException("Invalid int64: " + key);
+        return n;
+    }
     public static uint UInt(IReadOnlyDictionary<string, object> value, string key)
     {
         if (!value.TryGetValue(key, out object item)) return 0;

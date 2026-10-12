@@ -28,14 +28,70 @@ internal static partial class GameActionAdapterTests
         EndgameRiftRouting();
         EndgameRiftAdvance();
         EndgameProjectionContracts();
+        EndgameGrowthContracts();
+        EndgameCombatProjectionContracts();
         Console.WriteLine("Endgame adapter passed: " + (checks - initial) + " assertions (real DTO/state/actions/projections; native substitutes).");
+    }
+    private static void EndgameCombatProjectionContracts()
+    {
+        EndgameNative native; var api = SetupEndgame(out native);
+        Check(api.TestObserveEndgame("endgame")["combatStats"] == null, "legacy snapshot has no invented combat stats");
+        Apply(native, Map("kind", "combat.stats", "ok", true, "revision", TestRevision, "combatStats", Map(
+            "magicFind", 9223372036854775807L, "physicalMitigationBP", 500,
+            "elements", new object[] { Map("element", "fire", "damageBP", 350, "resistBP", 15000, "pierceBP", -30, "mitigationBP", 450, "absorbBP", 250) },
+            "equipmentAuras", new object[] { Map("auraId", "jade", "family", "guard", "sourceEntityId", 4294967295L, "sourceUID", EquipmentUID, "rank", 12, "assetKey", "jade_aura", "modifier", "physical_mitigation_bp", "value", 500, "leaseMs", 1000) },
+            "procReadiness", new object[] { Map("effectId", "flame", "sourceUID", SecondRuneUID, "trigger", "on_attack", "skillId", 10401, "fixedRank", 15, "chanceBP", 500, "icdMs", 1500, "remainingMs", 2147483648L, "globalRemainingMs", 9223372036854775807L, "ready", false) })));
+        var observation = api.TestObserveEndgame("endgame"); var stats = Object(observation["combatStats"]);
+        Check(Convert.ToInt64(stats["magicFind"]) == long.MaxValue && (int)stats["physicalMitigationBP"] == 500, "combat projection preserves Int64 magic find and physical channel");
+        var element = Object(Rows(stats["elements"])[0]);
+        Check((int)element["resistBP"] == 15000 && (int)element["pierceBP"] == -30, "agent sees raw overcap and signed equipment channels");
+        var aura = Object(Rows(stats["equipmentAuras"])[0]);
+        Check(Convert.ToUInt32(aura["sourceEntityId"]) == uint.MaxValue && (string)aura["sourceUID"] == EquipmentUID && (string)aura["assetKey"] == "jade_aura", "aura observation preserves uint entity and decimal UID");
+        var proc = Object(Rows(stats["procReadiness"])[0]);
+        Check(Convert.ToInt64(proc["remainingMs"]) == 2147483648L && Convert.ToInt64(proc["globalRemainingMs"]) == long.MaxValue && !(bool)proc["ready"], "agent proc readiness keeps Int64 delays and server readiness");
+        Check((string)observation["combatStatsRevision"] == TestRevision && Convert.ToInt64(observation["combatStatsVersion"]) > 0 && (string)observation["combatStatsReceivedUtc"] != "", "combat observation carries refresh identity and timestamp");
+        native.Endgame.Reset(); Check(!(bool)api.TestObserveEndgame("endgame")["available"], "reset removes live combat observations");
+        Check(Convert.ToInt64(stats["magicFind"]) == long.MaxValue, "published combat observation remains immutable after reset");
+    }
+    private static void EndgameGrowthContracts()
+    {
+        EndgameNative native; var api = SetupEndgame(out native);
+        Check(!Definition(api, "endgame.skill.upgrade").Available, "legacy negotiation cannot invest V5 points");
+        native.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1", "endgame.growth.v5" }));
+        string enormous = "184467440737095516170000001";
+        Apply(native, Map("kind", "skill.ranks", "ok", true, "revision", TestRevision,
+            "skillRanks", new object[] { Map("id", 10401, "hardRank", 19, "grantRank", "0", "softRank", "184467440737095516169999982", "effectiveRank", enormous, "canCast", true, "canInvest", true,
+                "currentEffectLines", new object[] { "真实服务器效果" }, "nextEffectLines", new object[] { "下一真实效果" }) },
+            "result", Map("hardCap", "20", "playerCap", "100", "petCap", "80", "unspentPoints", "2", "formulaVersion", "5")));
+        var observed = api.TestObserveEndgame("endgame.skills");
+        Check((bool)observed["available"] && (int)observed["unspentPoints"] == 2, "growth observation publishes authoritative points");
+        var row = Object(Rows(observed["skillRanks"])[0]);
+        Check((string)row["effectiveRank"] == enormous && (int)row["hardRank"] == 19, "agent exact arbitrary integral rank and hard split");
+        Check(Rows(row["currentEffectLines"]).Count == 1 && Rows(row["nextEffectLines"]).Count == 1, "agent exposes server effect comparisons");
+        Check(EndAct(api, "skill.upgrade", Map("expectedRevision", "1", "skillId", 10401)).Code == "endgame.stale_revision", "skill investment requires observed revision");
+        Check(EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10402)).Code == "skill.upgrade.unavailable", "unobserved rank cannot invest");
+        var receipt = EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10401), "stable-skill-point");
+        Check(receipt.State == GameActionState.Sent && native.Last.Op == "skill.upgrade" && native.Last.Mutates, "agent investment uses mutation receipt route");
+        var args = SentArguments(native);
+        Check(Convert.ToInt32(args["skillId"]) == 10401 && (string)args["expectedRevision"] == TestRevision, "skill ID and revision encoded exactly");
+        Check(EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10401)).Code == "action.unavailable", "uncertain skill investment blocks double click");
+        var request = native.Last;
+        ApplyReceipt(native, request, false, "storage");
+        Check(api.GetAction(receipt.ActionId).State == GameActionState.Unknown && native.Endgame.Pending, "skill storage result retains same request");
+        EndAct(api, "retry", Map("expectedRequestId", request.RequestID));
+        Check(native.Last.Json == request.Json && native.Retries == 1, "skill retry preserves nonce and exact fields");
+        ApplyReceipt(native, request);
+        Check(api.GetAction(receipt.ActionId).State == GameActionState.Completed && native.Endgame.UnspentSkillPoints == 2, "receipt settles investment without optimistic point mutation");
+        native.Endgame.Reset();
+        Check(!(bool)api.TestObserveEndgame("endgame.skills")["available"] && !native.Endgame.HasSkillRanks, "disconnect clears all skill rank authority");
     }
     private static void EndgameDiscoveryAndValidation()
     {
         var api = Setup(); int endgameCount = 0;
         foreach (var definition in api.GetActions()) if (definition.Name.StartsWith("endgame.", StringComparison.Ordinal))
         { endgameCount++; Check(!definition.Available && definition.UnavailableReason.Length > 0, "missing owner explicitly disables " + definition.Name); }
-        Check(endgameCount == 14, "all endgame native operations are discoverable without owner");
+        Check(endgameCount == 16, "all endgame native operations are discoverable without owner");
         Check(!(bool)api.TestObserveEndgame("endgame")["available"], "missing endgame owner observes unavailable");
         EndgameNative native; api = SetupEndgame(out native, false);
         Check(EndAct(api, "refresh").Code == "action.unavailable" && native.Sent.Count == 0, "unnegotiated refresh never sends");
@@ -422,7 +478,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         {
             internal int Offset, Limit = 128;
             internal string UID, Location, Catalog, Name;
-            internal int? Tab, ItemId;
+            internal int? Tab, ItemId, SkillId;
         }
         public void TestExpireEndgame(string actionId) { actions[actionId].Deadline = 0; }
         public IReadOnlyDictionary<string, object> TestObserveEndgame(string domain, int offset = 0, int limit = 128,

@@ -27,10 +27,12 @@ public sealed class EndgameResponse
     public IReadOnlyList<EndgameMaterialView> Materials { get; }
     public EndgameQuoteView Quote { get; }
     public EndgameRiftView Rift { get; }
+    public EndgameCombatStatsView CombatStats { get; }
+    public IReadOnlyList<EndgameSkillRankView> SkillRanks { get; }
     public IReadOnlyDictionary<string, string> Result { get; }
     private EndgameResponse(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result");
+        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats");
         Kind = EndgameData.String(d, "kind", 64); RequestID = EndgameData.String(d, "requestId", 64); OK = EndgameData.Bool(d, "ok");
         Error = EndgameData.String(d, "error", 64); Message = EndgameData.String(d, "message"); Revision = EndgameData.ID(d, "revision"); CatalogVersion = EndgameData.String(d, "catalogVersion", 128);
         Capabilities = EndgameData.List(d, "capabilities", 16, v => EndgameData.Text(v, "capabilities", 64));
@@ -43,6 +45,10 @@ public sealed class EndgameResponse
         Materials = EndgameData.List(d, "materials", 64, v => new EndgameMaterialView(EndgameData.Object(v)));
         Quote = EndgameData.Optional(d, "quote", v => new EndgameQuoteView(EndgameData.Object(v)));
         Rift = EndgameData.Optional(d, "rift", v => new EndgameRiftView(EndgameData.Object(v)));
+        CombatStats = EndgameData.Optional(d, "combatStats", v => new EndgameCombatStatsView(EndgameData.Object(v)));
+        SkillRanks = EndgameData.List(d, "skillRanks", 256, v => new EndgameSkillRankView(EndgameData.Object(v)));
+        var skillIDs = new HashSet<int>();
+        foreach (var rank in SkillRanks) if (!skillIDs.Add(rank.ID)) throw new FormatException("Duplicate skill rank.");
         Result = EndgameData.StringMap(d, "result");
         if (Kind.Length == 0 || Chunk < 0 || Chunks < 0 || Chunks > 128) throw new FormatException("Invalid endgame envelope.");
     }

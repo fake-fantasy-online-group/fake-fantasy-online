@@ -105,3 +105,40 @@ Socket choices reuse the independent artisan workbench and authoritative cube qu
 See [the function-by-function entrypoint map](MODULE-ENTRYPOINTS.md). Managed source checks cover the absent F8/global/tab routes; independent NPC windows; all 66 recipe choices through 12 action families; local target/output selection; paginated metadata, failure, close and reopen; and native slots 14–25. `Tests/Endgame/run-additional-equipment-contract.py` executes the actual character-window source with deterministic Unity/network substitutes. These are source/managed contracts, not visual Unity or live-player validation. No original pregame login/selection code, wire operation, functional recipe, plugin test operation or external asset is changed by this correction.
 
 The native-stat negotiation regression enters through the server’s real Session.OnPacket and continues through Router, Scene, eventSink and wire encoding. It checks initial legacy/new-client hellos, capability changes, bag/equipped same-scope sums, separate flat/global-percent/item-local rows, refresh-before-hello ordering, pending/storage/refresh failures, retry and rejection of optional capability without the base protocol. Client managed contracts additionally cover bounded missing-response/send-failure recovery, late success, failed rehello, reconnect reset and the centered separator-free composition. These checks do not replace the local rendered-client acceptance check.
+
+## V5 growth and native skills
+
+The hello advertises `endgame.growth.v5`. When accepted, `skill.ranks` provides
+server-authored hard/granted/soft/effective ranks, point balance, eligibility,
+blocked reasons, and exact current/next effect lines. The rank strings remain
+canonical decimal text, including values beyond Int64; malformed/numeric ranks
+are rejected, never capped. Only complete, non-stale rank snapshots replace the
+view. The original skill window, artwork and life-skill behavior remain in place.
+Its number is the effective rank, and hover details separate hard points (maximum
+20), granted ranks and equipment/state ranks. Very long icon labels are shortened
+with an ellipsis; the tooltip and agent observation preserve all digits. Effects
+come from the server; V5 never substitutes legacy rank-5 prose or client formulas.
+
+The plus control uses the authoritative investment flag, remaining point balance,
+revision, and pending-operation guard. Native UI and session-coordinator upgrades
+send `skill.upgrade` with `skillId`, immutable `requestId` and `expectedRevision`.
+A receipt does not optimistically change rank or points: the following authoritative
+rank push does that. The existing bottom skill-point label becomes “查询原请求” for
+an uncertain skill investment; clicking resends that exact command. Stale or absent
+rank data uses “刷新技能” in that same location. Disconnect clears the rank view,
+while the existing scoped retry journal retains an uncertain investment.
+The frozen 149-skill profession membership selects this behavior. Starter
+13601/13602, life skills and older servers retain their original native routes.
+
+`Tests/Endgame/run-growth-contract.sh` executes production V5 DTO/state and native
+tooltip-helper code with minimal presentation substitutes. The actual host/gateway
+check covers V5 wire routing and no-repeat admission; existing action tests cover
+agent rank observations, investment receipts and exact retry. These checks do not
+establish Unity rendering or a Player build.
+
+The V5 sidecar also decodes typed `combatStats` from snapshot chunk0 and independent
+`combat.stats` pushes. The shared agent API exposes raw server equipment channels,
+aura membership and proc readiness, without tooltip parsing or local caps. Complete
+snapshot publication and a combat observation version protect against stale or
+interleaved updates. Tests cover Int64 numeric fields, uint32 entity IDs, decimal
+source UIDs, partial snapshots, same-revision pushes, reset and read-only projection.

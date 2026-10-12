@@ -1,5 +1,7 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
+using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Application;
 
 namespace FakeFantasyOnline.Protocol
@@ -39,6 +41,29 @@ public sealed partial class PrivateServerGateway : IEndgameClient
         catch (Exception error) when (IsWireFailure(error))
         { Endgame.NoteTransportFailure("连接尚未确认，请稍后重试。"); return false; }
     }
+    private async Task<Result> UpgradeGrowthSkillAsync(int skillID, CancellationToken cancellationToken)
+    {
+        bool submitted = false;
+        EndgameRequest command = null;
+        try
+        {
+            await SendAsync(() =>
+            {
+                if (Endgame.CanInvestSkill(skillID))
+                {
+                    command = new EndgameRequest("skill.upgrade", Endgame.Revision, skillID: skillID);
+                    submitted = SendEndgame(command);
+                }
+            }, cancellationToken).ConfigureAwait(false);
+            if (submitted) return Result.Success();
+            if (command != null && ReferenceEquals(Endgame.PendingRequest, command))
+                return Result.Failure("skill.upgrade.uncertain", "Skill investment was not confirmed; query the original pending request.");
+            return Result.Failure("skill.upgrade.unavailable", "Refresh the authoritative skill ranks and resolve any pending request before investing.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception error) when (error is OperationCanceledException || IsWireFailure(error))
+        { return Result.Failure("skill.upgrade.uncertain", "Skill investment was not confirmed; query the original pending request."); }
+    }
     private bool TryReceiveEndgamePacket(ushort opcode, byte[] payload)
     {
         if (opcode != PrivateServerEndgameCodec.ResponseOpcode) return false;
@@ -54,8 +79,13 @@ public sealed partial class PrivateServerGateway : IEndgameClient
                 Endgame.RestoreUncertainRequest(endgameRetryJournal.Find(EndgameScope));
                 SendEndgame(new EndgameRequest("snapshot"));
                 SendEndgame(new EndgameRequest("rift.state"));
+                if (Endgame.GrowthV5) SendEndgame(new EndgameRequest("skill.ranks"));
             }
-            if (response.Error == "stale_revision") SendEndgame(new EndgameRequest("snapshot"));
+            if (response.Error == "stale_revision")
+            {
+                SendEndgame(new EndgameRequest("snapshot"));
+                if (Endgame.GrowthV5) SendEndgame(new EndgameRequest("skill.ranks"));
+            }
         }
         catch (Exception error) when (error is FormatException || error is ArgumentException)
         {

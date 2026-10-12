@@ -8,6 +8,7 @@ public sealed partial class EndgameClientState
 {
     public bool Negotiated { get; private set; }
     public bool NativeEquipmentStats { get; private set; }
+    public bool GrowthV5 { get; private set; }
     public bool HelloSent { get; private set; }
     public bool HasSnapshot { get; private set; }
     public string Revision { get; private set; } = "0";
@@ -45,8 +46,9 @@ public sealed partial class EndgameClientState
 
     public void Reset()
     {
-        Negotiated = NativeEquipmentStats = HelloSent = HasSnapshot = false; Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
+        Negotiated = NativeEquipmentStats = GrowthV5 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
+        CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
@@ -58,6 +60,7 @@ public sealed partial class EndgameClientState
         if (request.Op == "hello")
         { HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
+        if (request.Op.StartsWith("skill.", StringComparison.Ordinal) && !GrowthV5) return false;
         if (request.Mutates)
         {
             if (Pending) return false;
@@ -128,17 +131,18 @@ public sealed partial class EndgameClientState
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false, nativeStats = false;
+            bool capable = false, nativeStats = false, growth = false;
             foreach (var value in response.Capabilities)
             {
                 if (value == "endgame.v1") capable = true;
                 if (value == "endgame.native-stats.v1") nativeStats = true;
+                if (value == "endgame.growth.v5") growth = true;
             }
             bool accepted = response.OK && capable;
             // A failed refresh leaves the server's previously negotiated
             // renderer intact. Keep its matching client ownership as well.
             if (accepted || !Negotiated)
-            { Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; }
+            { Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth; if (!GrowthV5) ResetSkillRanks(); }
             Error = accepted ? "" : response.Error;
             helloAwaitingResponse = helloRetryScheduled = false;
             if (!accepted && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy"))
@@ -164,6 +168,8 @@ public sealed partial class EndgameClientState
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
             RememberResponse(response); Version++; return false;
         }
+        if (response.Kind == "skill.ranks" && !ApplySkillRanks(response)) return false;
+        if (response.Kind == "combat.stats" && !ApplyCombatStats(response)) return false;
         if (receipt) { PendingRequest = null; InvalidateQuote(); Error = ""; Message = response.Message.Length > 0 ? response.Message : "服务器已确认。"; }
         if (response.Kind != "snapshot" && response.Revision.Length > 0 && CompareRevision(response.Revision, Revision) >= 0) Revision = response.Revision;
         if (response.CatalogVersion.Length > 0 && response.CatalogVersion != CatalogVersion)

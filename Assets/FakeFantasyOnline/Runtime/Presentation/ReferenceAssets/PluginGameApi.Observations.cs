@@ -19,6 +19,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("endgame", "Native endgame negotiation/session/revision, pending immutable request, quote, wallet and active formations."),
             QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
             QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes, formations or recipes. No network request is implicit.", "catalog:string", "offset:integer"),
+            QueryDefinition("endgame.skills", "Authoritative V5 skill hard/granted/soft/effective ranks, contributions, current/next effects and investment eligibility. Rank strings preserve all digits.", "skillId:integer", "offset:integer"),
             QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
             QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
@@ -97,7 +98,7 @@ public sealed partial class PluginGameApi
             {
                 switch (domain)
                 {
-                    case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": data = ObserveEndgame(domain, args); break;
+                    case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": data = ObserveEndgame(domain, args); break;
                     case "title": data = ObserveTitle(args); break;
                     case "world": data = ObserveWorld(s); break;
                     case "player": data = ObservePlayer(s); break;
@@ -316,6 +317,8 @@ public sealed partial class PluginGameApi
 
     private Dictionary<string, object> ObserveSkills(ClientSessionCoordinator s, ObservationArguments args)
     {
+        var growth = s.EndgameClientForPlugins?.Endgame;
+        bool v5 = growth != null && growth.GrowthV5;
         var state = s.SkillBookState;
         if (state == null) return Unavailable("not_received", "The learned skill book has not been published.");
         var rows = new List<object>();
@@ -326,11 +329,20 @@ public sealed partial class PluginGameApi
             matched++;
             if (rows.Count >= args.Limit) continue;
             state.DamageBonuses.TryGetValue(p.Id, out int bonus);
-            rows.Add(Values("skillId", p.Id, "level", p.Level, "damageBonus", bonus,
-                "cooldownSeconds", GameHud.ObserveSkillCooldownSecondsForPlugins(p.Id)));
+            var row = Values("skillId", p.Id, "level", p.Level, "damageBonus", bonus,
+                "cooldownSeconds", GameHud.ObserveSkillCooldownSecondsForPlugins(p.Id));
+            if (v5 && EndgameSkillRankView.IsProfessionSkill(p.Id))
+            {
+                var rank = growth.SkillRank(p.Id);
+                row["rankAuthority"] = "endgame.skills";
+                row["ranks"] = rank == null ? null : ObserveEndgameSkill(rank);
+            }
+            rows.Add(row);
         }
         var data = ListResult("skills", rows, matched, args.Limit);
-        data["skillPoints"] = state.SkillPoints;
+        data["skillPoints"] = v5 ? growth.UnspentSkillPoints : state.SkillPoints;
+        data["growthV5"] = v5;
+        if (v5) { data["skillRanksRevision"] = growth.SkillRanksRevision; data["hasSkillRanks"] = growth.HasSkillRanks; }
         data["metadataAvailable"] = false;
         data["metadataUnavailableReason"] = "Names, range and targeting requirements are not exposed by this learned-skill receipt.";
         var cast = s.SkillCastState;
@@ -582,7 +594,7 @@ public sealed partial class PluginGameApi
             case "title": case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
             case "party": case "quests": case "dialogue": case "ui":
-            case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": return true;
+            case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": return true;
             default: return false;
         }
     }
@@ -595,6 +607,7 @@ public sealed partial class PluginGameApi
             case "endgame.items": specific = "|uid|location|tab|itemId|name|offset|"; break;
             case "endgame.catalog": specific = "|catalog|offset|"; break;
             case "endgame.rift": specific = "|offset|"; break;
+            case "endgame.skills": specific = "|offset|skillId|"; break;
             case "title": case "party": specific = "|offset|"; break;
             case "entities": specific = "|radius|x|y|kind|entityId|name|"; break;
             case "npcs": specific = "|radius|x|y|entityId|name|"; break;
