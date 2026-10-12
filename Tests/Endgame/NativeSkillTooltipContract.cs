@@ -314,6 +314,7 @@ internal static class NativeSkillTooltipContract
         var fixtureIDs = new HashSet<int>(ranks.Select(value => Convert.ToInt32(((IReadOnlyDictionary<string, object>)value)["id"], CultureInfo.InvariantCulture)));
         Check(fullCatalog || ranks.Count == 2 && fixtureIDs.SetEquals(new[] { 10405, 10410 }), "Server fixture must be complete149 catalog or explicit equipped10405/10410 subset");
         string fixtureLabel = fullCatalog ? "all149" : "equipped10405/10410";
+        Check(fixtureIDs.All(id => names.ContainsKey(id)), "Every fixture skill must have a verified server skill name");
         var seen = new HashSet<int>();
         var failures = new List<string>();
         foreach (var viewport in new[] { new[] { 1280, 900, 96 }, new[] { 1920, 1080, 0 } })
@@ -331,10 +332,28 @@ internal static class NativeSkillTooltipContract
                 var rank = state.SkillRanks.Single();
                 if (viewport[0] == 1280) Check(seen.Add(rank.ID), "Unique server fixture skill ID " + rank.ID);
                 Check(EndgameSkillRankView.IsProfessionSkill(rank.ID), "Fixture uses actual profession skill ID " + rank.ID);
+                if (!fullCatalog)
+                {
+                    int soft = rank.ID == 10405 ? 3 : 4;
+                    Check(rank.HardRank == 19 && rank.SoftRank == soft.ToString(CultureInfo.InvariantCulture) &&
+                        rank.EffectiveRank == (19 + soft).ToString(CultureInfo.InvariantCulture) && rank.NextEffectiveRank == (20 + soft).ToString(CultureInfo.InvariantCulture),
+                        "Real equipped fixture preserves hard19 plus legal gear and full next rank " + rank.ID);
+                    Check(rank.CanCast && rank.CanInvest && state.CanInvestSkill(rank.ID), "Real equipped fixture exercises below-cap next investment " + rank.ID);
+                    Check(rank.Contributions.Sum(value => value.Levels) == soft && rank.Contributions.All(value => value.SourceID.StartsWith("item:", StringComparison.Ordinal)),
+                        "Real equipped fixture retains exact independent gear-contribution records " + rank.ID);
+                    var training = rank.TrainingSynergies.Single();
+                    Check(training.SourceID == (rank.ID == 10405 ? 10402 : 10409) && training.InvestedHardPoints == 10 &&
+                        training.PerPointValue == 100 && training.ContributionValue == 1000 && !training.EquipmentApplies,
+                        "Actual equipped gear does not inflate source10 hard-point synergy " + rank.ID);
+                    Check(rank.CurrentEffectLines.Count == (rank.ID == 10405 ? 7 : 8) && rank.NextEffectLines.Count == rank.CurrentEffectLines.Count && rank.NextChangeLines.Count == 2,
+                        "Real high-rank current/full-next effect API remains complete beside compact preview " + rank.ID);
+                }
                 string name;
                 if (!names.TryGetValue(rank.ID, out name)) { name = "技能 " + rank.ID; unnamed++; }
                 string text = Win05.TestNativeGrowthTip(rank.ID, true, name);
                 Check(text.Contains(name), "Fixture uses verified native skill name " + rank.ID);
+                foreach (var equipment in rank.Contributions)
+                    Check(!text.Contains(equipment.SourceID), "Equipment identity does not leak into training section " + rank.ID);
                 foreach (string effect in rank.CurrentEffectLines)
                     Check(text.Contains(effect), "Every authoritative current effect is preserved " + rank.ID + ": " + effect);
                 foreach (string change in rank.NextChangeLines)
