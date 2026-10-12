@@ -33,7 +33,8 @@ namespace UnityEngine
     public static class Debug
     {
         public static readonly List<string> Errors = new List<string>();
-        public static void Log(object value) { }
+        public static readonly List<string> Logs = new List<string>();
+        public static void Log(object value) { Logs.Add(value.ToString()); }
         public static void LogError(object value) { Errors.Add(value.ToString()); }
     }
     public sealed class AsyncOperation { public bool Done; }
@@ -101,6 +102,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public static class ChatUI { public static void Add(string channel, string text, Color color, string who) { } }
     public static class DifficultyBox { public static void Show(string title, string normal, string hard, Action n, Action h) { } }
+    internal static class EndgamePanel { internal static bool TryTransferRiftPortalFromWorld() => false; }
     public class NetClient
     {
         public static NetClient I;
@@ -120,7 +122,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public float MapWidthForIndependentRuntime = 1000, MapHeightForIndependentRuntime = 1000;
         public void ObserveNativeNpcsForIndependentRuntime() { }
     }
-    public sealed class ReferenceFirstWorldWindowOwner
+    public sealed class TestResources { public ResLoader Core; }
+    public sealed class TestMapDescriptor { public string file; }
+    public sealed partial class ReferenceFirstWorldWindowOwner
     {
         readonly GameBootstrap owner;
         readonly WorldEntryRecord projected;
@@ -130,11 +134,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public Frame Frame = new Frame();
         public ReferenceFirstWorldWindowFailure LastFailure;
         internal GameBootstrap.BuildWorldCheckpoints BuildCheckpointsForIndependentRuntime;
+        internal GameBootstrap.PreparedMapSource PreparedMapSourceForIndependentRuntime { get; set; }
         public ReferenceFirstWorldWindowOwner(object session, Transform parent, WorldEntryRecord entry,
             object music, object sound, object names, GameBootstrap boot, object gossip, object deal)
         { owner = boot; projected = entry; }
         public void AdoptConstructionRootForIndependentRuntime(Transform root, bool transition) { WorldRoot = root; }
-        public bool BuildForViewport(int width, int height, float scale) => owner.ConstructForTest(this, projected);
+        public bool BuildForViewport(int width, int height, float scale)
+        {
+            owner.BuildMapBytes.Add(ReadConstructionMapForTest(ResLoader.I, owner.mapName));
+            return owner.ConstructForTest(this, projected);
+        }
         public void SetBuildGenerationForIndependentRuntime(long generation) { }
         public void Dispose() { WorldRoot = null; }
     }
@@ -143,13 +152,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static ResLoader I = new ResLoader();
         public object Pkg;
         public readonly HashSet<string> Missing = new HashSet<string>();
+        public readonly List<string> Reads = new List<string>();
+        public byte[] LastBytes;
         public Action ReadHook;
         public bool ThrowRead;
         public byte[] ReadMap(string name)
         {
+            Reads.Add(name);
             Action hook = ReadHook; ReadHook = null; hook?.Invoke();
             if (ThrowRead) { ThrowRead = false; throw new InvalidOperationException("resource read failed"); }
-            return Missing.Contains(name) ? null : new byte[1];
+            return LastBytes = Missing.Contains(name) ? null : new byte[] { (byte)Reads.Count };
         }
     }
     public static class MapDef
@@ -160,14 +172,20 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public static class LoadTrace
     {
-        public static bool On => false;
+        public static bool On;
         public static bool AutoOnMapSwitch => false;
+        public static readonly List<string> Phases = new List<string>();
         public static void Begin(string value) { }
         public static void Line(string value) { }
-        public static void Phase(string value, float time) { }
+        public static void Phase(string value, float time) { Phases.Add(value); }
     }
     public static class GroundItems { public static void ClearAll() { } }
-    public static class CombatWorld { public static void ClearAll() { } }
+    public static class CombatWorld
+    {
+        public static int Clears;
+        public static readonly HashSet<int> Entities = new HashSet<int>();
+        public static void ClearAll() { Clears++; Entities.Clear(); }
+    }
     public static class StallDlg { public static readonly List<object> Owners = new List<object>(); }
     public static class ArtCaches
     {
@@ -206,6 +224,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         int ObjLoadMs, ObjSliceMs, ObjSpawnMs, ObjFadeMs, ObjN, ObjSliceN, ObjAnimN, ObjPlainN;
         readonly List<CoroutineRun> coroutines = new List<CoroutineRun>();
         public readonly List<WorldEntryRecord> Builds = new List<WorldEntryRecord>();
+        public readonly List<byte[]> BuildMapBytes = new List<byte[]>();
         public readonly List<WorldEntryRecord> Ready = new List<WorldEntryRecord>();
         public readonly Queue<string> BuildOutcomes = new Queue<string>();
         public Action<GameBootstrap> OnReady;
@@ -292,7 +311,9 @@ static class MapTransitionContract
     static GameBootstrap Fresh()
     {
         ResLoader.I = new ResLoader(); MapDef.ThrowLoad = false; ArtCaches.ThrowEvict = false;
-        Resources.StallUnload = false; Resources.FallbackMaps.Clear(); Debug.Errors.Clear();
+        Resources.StallUnload = false; Resources.FallbackMaps.Clear(); Debug.Errors.Clear(); Debug.Logs.Clear();
+        LoadTrace.On = false; LoadTrace.Phases.Clear();
+        CombatWorld.Clears = 0; CombatWorld.Entities.Clear();
         Time.unscaledDeltaTime = .05f;
         return new GameBootstrap();
     }
@@ -309,6 +330,62 @@ static class MapTransitionContract
     }
     static void Main()
     {
+        Scenario("preflight GSM is read once and the exact bytes reach construction", () => {
+            var b = Fresh(); b.SwitchMap(2, 200, 210);
+            byte[] preflight = ResLoader.I.LastBytes;
+            Check(ResLoader.I.Reads.Count == 1 && b.Builds.Count == 0, "preflight completes before the first construction");
+            Settled(b, 2, 200, 210);
+            Check(ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm" }), "construction does not reread the target GSM");
+            Check(ReferenceEquals(preflight, b.BuildMapBytes.Single()), "handoff preserves exact source bytes without copying");
+            Check(Debug.Logs.Count(x => x.StartsWith("[切图耗时]")) == 1, "one completed transition emits one compact timing summary");
+            Check(Debug.Logs.Single(x => x.StartsWith("[切图耗时]")).Contains("预读"), "summary includes the pre-fade read with tracing off");
+        });
+        Scenario("a prepared source is consumed once and cannot become a long-lived map cache", () => {
+            Fresh(); var loader = ResLoader.I;
+            var prepared = new GameBootstrap.PreparedMapSource(loader, "map/qw0002.gsm");
+            byte[] original = loader.LastBytes;
+            Check(ReferenceEquals(prepared.ReadOnce(loader, "map/qw0002.gsm"), original), "first matching read uses preload");
+            Check(!prepared.HasBytes, "consumption releases the retained buffer immediately");
+            Check(!ReferenceEquals(prepared.ReadOnce(loader, "map/qw0002.gsm"), original) && loader.Reads.Count == 2,
+                "second construction reads a new source");
+        });
+        Scenario("loader and exact path mismatches preserve normal resource reads", () => {
+            Fresh(); var oldLoader = ResLoader.I; var newLoader = new ResLoader();
+            var prepared = new GameBootstrap.PreparedMapSource(oldLoader, "map/qw0002.gsm");
+            Check(ReferenceEquals(prepared.ReadOnce(newLoader, "map/qw0002.gsm"), newLoader.LastBytes) &&
+                newLoader.Reads.Count == 1 && !prepared.HasBytes, "loader replacement cannot receive stale bytes");
+            foreach (string path in new[] { "map/qw0001.gsm", "map/qw0002.msk", "map/qw0002.smp" })
+            {
+                prepared = new GameBootstrap.PreparedMapSource(oldLoader, "map/qw0002.gsm");
+                byte[] original = oldLoader.LastBytes;
+                Check(!ReferenceEquals(prepared.ReadOnce(oldLoader, path), original) && oldLoader.Reads.Last() == path && !prepared.HasBytes,
+                    "rollback/mask/minimap path reads independently: " + path);
+            }
+        });
+        Scenario("failed construction and retry cannot reuse a stale target buffer", () => {
+            var b = Fresh(); b.BuildOutcomes.Enqueue("throw"); b.SwitchMap(2, 200, 210);
+            Settled(b, 1, 10, 20);
+            Check(ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm", "map/qw0001.gsm" }), "rollback reads its own source once");
+            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+            Check(ResLoader.I.Reads.Count(x => x == "map/qw0002.gsm") == 2, "retry preflights a new target source");
+            Check(!ReferenceEquals(b.BuildMapBytes.First(), b.BuildMapBytes.Last()), "retry never uses the failed attempt's bytes");
+        });
+        Scenario("missing GSM retains the Resources texture fallback", () => {
+            var b = Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm"); Resources.FallbackMaps.Add("qw0002");
+            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+            Check(b.BuildMapBytes.Single() == null, "null map bytes continue to native texture fallback without inventing a GSM");
+        });
+        Scenario("cancelled preflight cannot leak into a later transition", () => {
+            var b = Fresh(); b.SwitchMap(2, 200, 210); byte[] old = ResLoader.I.LastBytes;
+            b.ExitForTest(); b.SwitchMap(3, 300, 310); Settled(b, 3, 300, 310);
+            Check(!ReferenceEquals(old, b.BuildMapBytes.Single()) && ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm", "map/qw0003.gsm" }),
+                "cancelled source has no bootstrap/global cache slot");
+        });
+        Scenario("detailed trace covers the previously invisible pre-fade read", () => {
+            var b = Fresh(); LoadTrace.On = true; b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+            Check(LoadTrace.Phases.First() == "目标图预读(淡入前)", "preflight is the first measured transition phase");
+            Check(LoadTrace.Phases.Contains("GC.Collect") && LoadTrace.Phases.Contains("UnloadUnusedAssets"), "memory management remains measured and present");
+        });
         Scenario("map-ready reply cannot start a second build/fade", () => {
             var b = Fresh();
             b.OnReady = owner => { if (owner.Ready.Count == 1) owner.SwitchMapAuthoritative(2, 200, 210); };
@@ -320,10 +397,47 @@ static class MapTransitionContract
             Check(b.Builds.Count == 1 && b.Started == 1, "one transfer has exactly one load");
             Check(b.Ready.Count == 2, "queued confirmation receives map-ready acknowledgement");
         });
+        Scenario("entities arriving after map-ready survive the remaining fade-out", () => {
+            var b = Fresh(); int clearsAtReady = -1;
+            b.OnReady = owner => {
+                Check(owner.Built && owner.Receiving, "ready is sent only after the new world is built and its receive gate is open");
+                clearsAtReady = CombatWorld.Clears;
+                CombatWorld.Entities.Add(2001); // Target snapshot arriving after ACK.
+            };
+            b.SwitchMapAuthoritative(2, 200, 210); Settled(b, 2, 200, 210);
+            Check(clearsAtReady > 0 && CombatWorld.Clears == clearsAtReady && CombatWorld.Entities.Contains(2001),
+                "no cleanup runs after ready during the same successful transition");
+        });
+        Scenario("duplicate same-landing confirmation cannot clear already-received target entities", () => {
+            var b = Fresh(); int clearsAtReady = -1;
+            b.OnReady = owner => {
+                if (owner.Ready.Count != 1) return;
+                clearsAtReady = CombatWorld.Clears;
+                CombatWorld.Entities.Add(2002);
+                owner.SwitchMapAuthoritative(2, 200, 210);
+            };
+            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+            Check(b.Ready.Count == 2 && b.Builds.Count == 1, "acknowledge the queued server confirmation without another world build");
+            Check(CombatWorld.Clears == clearsAtReady && CombatWorld.Entities.Contains(2002),
+                "the second ACK is not a native registry reset and target entities survive");
+        });
         Scenario("old-world portal callbacks remain suppressed during fade-in", () => {
             var b = Fresh(); b.SwitchMap(2, 200, 210); b.HitPortalForTest(99, 990, 991);
             Settled(b, 2, 200, 210);
             Check(b.Builds.Count == 1, "retired-world gate cannot overwrite active destination");
+        });
+        Scenario("authoritative rift exit owns the transition before ordinary gates are restored", () => {
+            var b = Fresh(); var oldPlayer = b.Player;
+            b.SwitchMapAuthoritative(2, 200, 210);
+            Check(b.Busy && !b.Receiving && ReferenceEquals(oldPlayer, b.Player), "public-map teleport starts while the old controller still exists");
+            // Rift context has already become false. The default-false EndgamePanel
+            // substitute deliberately enters the actual ordinary portal branch.
+            b.HitPortalForTest(99, 990, 991);
+            Check(oldPlayer.TransferredForIndependentRuntime && b.Started == 1,
+                "old ordinary gate can latch but cannot start another map coroutine");
+            Settled(b, 2, 200, 210);
+            Check(b.Builds.Count == 1 && b.Ready.Count == 1 && b.Started == 1,
+                "old-world portal is neither executed nor replayed after authoritative exit");
         });
         Scenario("new destination portal latch queues a real next transfer during fade-out", () => {
             var b = Fresh(); b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);

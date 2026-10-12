@@ -34,7 +34,7 @@ public sealed class EndgameRequest
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
-        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1" });
+        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1" });
         if (op == "skill.upgrade")
         {
             if (skillID <= 0 || string.IsNullOrEmpty(revision)) throw new ArgumentException("Skill investment requires skillId and expectedRevision.");

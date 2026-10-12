@@ -307,6 +307,37 @@ public partial class GameBootstrap : MonoBehaviour
         }
     }
 
+    // The transition already reads the target GSM to preserve the old world on a
+    // missing/corrupt resource. Hand that exact buffer to its one construction read
+    // instead of allocating/reading/inflating the same map a second time. This is
+    // not a map cache: a different loader/path, rollback or later build reads fresh.
+    internal sealed class PreparedMapSource
+    {
+        private readonly ResLoader loader;
+        private readonly string path;
+        private byte[] bytes;
+
+        internal PreparedMapSource(ResLoader loader, string path)
+        {
+            this.loader = loader;
+            this.path = path;
+            bytes = loader.ReadMap(path);
+        }
+
+        internal bool HasBytes => bytes != null;
+
+        internal byte[] ReadOnce(ResLoader constructionLoader, string constructionPath)
+        {
+            byte[] prepared = bytes;
+            bytes = null;
+            return prepared != null && ReferenceEquals(loader, constructionLoader) &&
+                string.Equals(path, constructionPath, StringComparison.Ordinal)
+                ? prepared : constructionLoader.ReadMap(constructionPath);
+        }
+
+        internal void Clear() => bytes = null;
+    }
+
     /// <summary>
     /// Calls the recovered BuildWorld graph through the independent-runtime window adapter.
     /// The official method is void; a rejected graph is exposed through pcRef/window and the
@@ -314,7 +345,7 @@ public partial class GameBootstrap : MonoBehaviour
     /// </summary>
     public void BuildWorld() => BuildWorldCore(transitionOwnsFailure: false);
 
-    private void BuildWorldCore(bool transitionOwnsFailure)
+    private void BuildWorldCore(bool transitionOwnsFailure, PreparedMapSource preparedMapSource = null)
     {
         switching = false;
         // Ordinary direct-world map rebuilds also observe current native appearance/state.
@@ -360,6 +391,7 @@ public partial class GameBootstrap : MonoBehaviour
         constructingWindow = candidate;
         candidate.AdoptConstructionRootForIndependentRuntime(worldRoot, transitionOwnsFailure);
         candidate.BuildCheckpointsForIndependentRuntime = checkpoints;
+        candidate.PreparedMapSourceForIndependentRuntime = preparedMapSource;
         if (!candidate.BuildForViewport(
                 viewportWidth,
                 viewportHeight,
@@ -567,11 +599,22 @@ public partial class GameBootstrap : MonoBehaviour
         float backX = backPlayer != null ? backPlayer.worldX : spawnX;
         float backY = backPlayer != null ? backPlayer.worldY : spawnY;
 
+        // Include the synchronous preflight, which happens before the first fade
+        // frame. Previously this potentially visible stall was outside the trace.
+        if (LoadTrace.AutoOnMapSwitch) LoadTrace.Begin(backName + "到" + mapName);
+        LoadTrace.Line(string.Format("切图开始 {0}(图{1}) → {2}(图{3}) 落点({4},{5})",
+            backName, backCurMap, mapName, _pendingMapId, (int)spawnX, (int)spawnY));
+        System.Diagnostics.Stopwatch traceClock = System.Diagnostics.Stopwatch.StartNew();
+        long traceMark = 0L;
+
+        PreparedMapSource preparedMapSource = null;
         bool sourceAvailable;
         try
         {
+            if (ResLoader.I != null)
+                preparedMapSource = new PreparedMapSource(ResLoader.I, "map/" + mapName + ".gsm");
             sourceAvailable = ResLoader.I == null ||
-                ResLoader.I.ReadMap("map/" + mapName + ".gsm") != null ||
+                preparedMapSource.HasBytes ||
                 Resources.Load<Texture2D>(mapName) != null;
         }
         catch (Exception exception)
@@ -579,6 +622,9 @@ public partial class GameBootstrap : MonoBehaviour
             Debug.LogError("[切图] 读取目标地图失败 " + mapName + ": " + exception);
             sourceAvailable = false;
         }
+        long sourceReadMs = traceClock.ElapsedMilliseconds;
+        if (LoadTrace.On) LoadTrace.Phase("目标图预读(淡入前)", (float)sourceReadMs);
+        traceMark = traceClock.ElapsedMilliseconds;
         if (!sourceAvailable)
         {
             Debug.LogError(string.Format("[\u5207\u56fe] \u2605\u76ee\u6807\u56fe\u8d44\u6e90\u7f3a\u5931, \u53d6\u6d88\u5207\u56fe: {0}(\u56fe{1}) \u2014\u2014 \u670d\u52a1\u7aef\u53ef\u80fd\u5df2\u6309\u65b0\u56fe\u8bb0\u8d26, \u73b0\u56de\u6eda\u56fe\u540d\u5e76\u8865\u6267\u884c\u6392\u961f\u4e2d\u7684\u670d\u52a1\u7aef\u5f3a\u5207", mapName, _pendingMapId));
@@ -591,19 +637,11 @@ public partial class GameBootstrap : MonoBehaviour
             yield break;
         }
 
-        if (LoadTrace.AutoOnMapSwitch) LoadTrace.Begin(backName + "到" + mapName);
-        LoadTrace.Line(string.Format("切图开始 {0}(图{1}) → {2}(图{3}) 落点({4},{5})",
-            backName, backCurMap, mapName, _pendingMapId, (int)spawnX, (int)spawnY));
-        System.Diagnostics.Stopwatch traceClock = System.Diagnostics.Stopwatch.StartNew();
-        long traceMark = 0L;
-
         _holdSkyBlack = true;
         yield return Fade(0f, 1f, fadeInSec);
-        if (LoadTrace.On)
-        {
-            LoadTrace.Phase("淡入黑屏", (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
-        }
+        long fadeInMs = traceClock.ElapsedMilliseconds - traceMark;
+        if (LoadTrace.On) LoadTrace.Phase("淡入黑屏", (float)fadeInMs);
+        traceMark = traceClock.ElapsedMilliseconds;
 
         if (worldRoot != null)
         {
@@ -614,11 +652,9 @@ public partial class GameBootstrap : MonoBehaviour
         CombatWorld.ClearAll();
         StallDlg.Owners.Clear();
         ReleaseBuiltWorld(sceneRegistriesReleased: true, preservePlayerTransform: true);
-        if (LoadTrace.On)
-        {
-            LoadTrace.Phase("销毁旧图+清怪宠美术", (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
-        }
+        long releaseMs = traceClock.ElapsedMilliseconds - traceMark;
+        if (LoadTrace.On) LoadTrace.Phase("销毁旧图+清怪宠美术", (float)releaseMs);
+        traceMark = traceClock.ElapsedMilliseconds;
         yield return null;
         bool switchedMapForTrace = mapName != backName || _pendingMapId != backCurMap;
         int evictedMapObjects = switchedMapForTrace ? EvictMapObjectsAtSafePoint() : 0;
@@ -627,25 +663,22 @@ public partial class GameBootstrap : MonoBehaviour
                 evictedMapObjects, MapObjBudgetStat()));
         _scanOpaqueCache.Clear();
         ArtCaches.EvictAtSafePoint();
+        long safePointMs = traceClock.ElapsedMilliseconds - traceMark;
         if (LoadTrace.On)
         {
             LoadTrace.Phase(switchedMapForTrace
                 ? "安全点淘汰+扔物件缓存" : "安全点淘汰(同图重进)",
-                (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
+                (float)safePointMs);
         }
+        traceMark = traceClock.ElapsedMilliseconds;
         GC.Collect();
-        if (LoadTrace.On)
-        {
-            LoadTrace.Phase("GC.Collect", (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
-        }
+        long gcMs = traceClock.ElapsedMilliseconds - traceMark;
+        if (LoadTrace.On) LoadTrace.Phase("GC.Collect", (float)gcMs);
+        traceMark = traceClock.ElapsedMilliseconds;
         yield return Resources.UnloadUnusedAssets();
-        if (LoadTrace.On)
-        {
-            LoadTrace.Phase("UnloadUnusedAssets", (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
-        }
+        long unloadMs = traceClock.ElapsedMilliseconds - traceMark;
+        if (LoadTrace.On) LoadTrace.Phase("UnloadUnusedAssets", (float)unloadMs);
+        traceMark = traceClock.ElapsedMilliseconds;
 
         // A server landing correction received while fading/loading the same target
         // can be used for the first build, avoiding a second load just to change spawn.
@@ -660,12 +693,19 @@ public partial class GameBootstrap : MonoBehaviour
         bool built = false;
         try
         {
-            BuildWorldCore(transitionOwnsFailure: true);
+            BuildWorldCore(transitionOwnsFailure: true, preparedMapSource: preparedMapSource);
             built = worldRoot != null && window != null && window.Built;
         }
         catch (Exception exception)
         {
             Debug.LogError("[切图] 建图失败 " + backName + "→" + mapName + ": " + exception);
+        }
+        finally
+        {
+            // Also release the preflight buffer when construction returns/throws
+            // before its map read, rather than retaining it through fade-out.
+            preparedMapSource?.Clear();
+            preparedMapSource = null;
         }
 
         if (built)
@@ -711,20 +751,26 @@ public partial class GameBootstrap : MonoBehaviour
             switching = false;
         }
 
-        if (LoadTrace.On)
-        {
-            LoadTrace.Phase("BuildWorld(含回滚判定)", (float)(traceClock.ElapsedMilliseconds - traceMark));
-            traceMark = traceClock.ElapsedMilliseconds;
-        }
+        long buildMs = traceClock.ElapsedMilliseconds - traceMark;
+        if (LoadTrace.On) LoadTrace.Phase("BuildWorld(含回滚判定)", (float)buildMs);
+        traceMark = traceClock.ElapsedMilliseconds;
         yield return null;
         yield return Fade(1f, 0f, fadeOutSec);
         fadeAlpha = 0f;
         ApplyPendingSky();
+        long fadeOutMs = traceClock.ElapsedMilliseconds - traceMark;
         if (LoadTrace.On)
         {
-            LoadTrace.Phase("淡出", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            LoadTrace.Phase("淡出", (float)fadeOutMs);
             LoadTrace.Line("★黑屏结束, 以下都是玩家看得见的卡顿");
         }
+        // One summary per completed transition, including without the optional
+        // detailed trace. Yielded phases are wall time, not measured CPU stalls.
+        Debug.Log(string.Format("[切图耗时] {0}(图{1})→{2}(图{3}) 总计{4}ms " +
+            "预读{5} 淡入{6} 清旧{7} 安全点(含等帧){8} GC{9} 卸载(含等待){10} " +
+            "建图(含回滚){11} 淡出(含等帧){12}ms 目标建成={13}",
+            backName, backCurMap, mapName, CurMapId, traceClock.ElapsedMilliseconds,
+            sourceReadMs, fadeInMs, releaseMs, safePointMs, gcMs, unloadMs, buildMs, fadeOutMs, built));
     }
 
     private IEnumerator Fade(float from, float to, float dur)

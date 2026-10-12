@@ -226,6 +226,10 @@ internal sealed class ReferenceWorldCombatFeedback : IDisposable
             return false;
         }
 
+        // Experience must remain unacknowledged until a transient map teardown or asset
+        // readiness gap has ended. Other number kinds keep native one-shot/drop semantics.
+        if (state.Type == WorldCombatNumberState.ExperienceType)
+            return CombatNumber.TrySpawnOnForIndependentRuntime(state.Target, state.Value, state.Type);
         CombatNumber.SpawnOn(state.Target, state.Value, state.Type);
         return true;
     }

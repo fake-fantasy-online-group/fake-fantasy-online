@@ -9292,16 +9292,8 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                 Interlocked.Increment(ref _combatResultsVersion);
             }
 
-            if (Volatile.Read(ref _combatNumbers).Count > 0)
-            {
-                Volatile.Write(
-                    ref _combatNumbers,
-                    Array.Empty<WorldCombatNumberState>());
-                Interlocked.Increment(ref _combatNumbersVersion);
-            }
-
+            ClearCombatNumberPresentationJournal();
             _combatResultRevision = 0;
-            _combatNumberRevision = 0;
 
             IReadOnlyDictionary<int, WorldRemotePathState> remotePaths =
                 Volatile.Read(ref _remotePaths);

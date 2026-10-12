@@ -775,6 +775,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
             // Login and the three account operations share the native connection admission.
             // A connected socket is reused; no second EstablishConnection worker is started.
             Interlocked.Exchange(ref _localPlayerStatusEffectConsumedRevision, 0);
+            if (!(_gateway is IWorldCombatNumberStreamSource)) ResetCombatNumberPresentation();
             Result<CancellationToken> connection = await _gateway.ConnectAsync(
                 _directory[_connectedServerIndex].Endpoint,
                 cancellationToken);
@@ -1934,6 +1935,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
 
         _gateway.Dispose();
         Interlocked.Exchange(ref _localPlayerStatusEffectConsumedRevision, 0);
+        ResetCombatNumberPresentation();
         _connectedServerIndex = -1;
         _characters = Array.Empty<ServerCharacterRecord>();
         TransitionTo(ClientSessionState.Offline, string.Empty);
@@ -1949,6 +1951,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
     /// </summary>
     public void NoteTransportDisconnected()
     {
+        ResetCombatNumberPresentation();
         TransitionTo(ClientSessionState.Offline, string.Empty);
     }
 
@@ -1962,6 +1965,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
     /// </summary>
     public void NoteTransportDisconnectedFromWorld()
     {
+        ResetCombatNumberPresentation();
         TransitionTo(ClientSessionState.Offline, string.Empty);
     }
 
@@ -2185,6 +2189,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
     {
         releaseGateway();
         Interlocked.Exchange(ref _localPlayerStatusEffectConsumedRevision, 0);
+        ResetCombatNumberPresentation();
         if (_addressDiscovery is IDisposable disposableDiscovery)
         {
             disposableDiscovery.Dispose();

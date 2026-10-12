@@ -26,6 +26,10 @@ public sealed partial class EndgameClientState
     public bool QuotePending { get; private set; }
     public string QuoteRequestID { get; private set; } = "";
     public EndgameRiftView Rift { get; private set; }
+    public bool RiftPortalsV1 { get; private set; }
+    public bool RiftInInstance { get; private set; }
+    public bool RiftContextKnown { get; private set; }
+    private bool hasRiftSceneContext;
     public DateTime RiftReceivedUtc { get; private set; }
     public IReadOnlyList<EndgameItemView> Items { get; private set; } = Array.Empty<EndgameItemView>();
     public IReadOnlyList<EndgameMaterialView> Materials { get; private set; } = Array.Empty<EndgameMaterialView>();
@@ -51,7 +55,7 @@ public sealed partial class EndgameClientState
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
-        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null;
+        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = false;
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
         helloRequestedAt = helloRetryAt = default(DateTime);
@@ -97,6 +101,7 @@ public sealed partial class EndgameClientState
         if (!Negotiated && helloAwaitingResponse && (now - helloRequestedAt).TotalSeconds >= 15)
         {
             ScheduleHelloRetry(now); Error = "timeout";
+            if (!helloRetryScheduled && !hasRiftSceneContext) RiftContextKnown = true;
             Message = helloRetryScheduled ? "星图暂未响应，稍后自动重试。" : "星图暂未响应，请重新连接。"; Version++;
         }
         if (helloRetryScheduled && !Negotiated && now >= helloRetryAt)
@@ -134,10 +139,22 @@ public sealed partial class EndgameClientState
     }
     public bool Apply(EndgameResponse response)
     {
+        // The scene context precedes native map entry and is safe before hello.
+        // It grants no mutation capability; it only prevents speculative gate loads.
+        if (response.Kind == "rift.context")
+        {
+            if (!RiftPortalsV1) return false;
+            if (!response.OK || !response.Result.TryGetValue("inInstance", out string inside) ||
+                (inside != "true" && inside != "false"))
+                throw new FormatException("Invalid rift scene context.");
+            RiftInInstance = inside == "true";
+            RiftContextKnown = hasRiftSceneContext = true;
+            Version++; return true;
+        }
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false;
+            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false, riftPortals = false;
             foreach (var value in response.Capabilities)
             {
                 if (value == "endgame.v1") capable = true;
@@ -145,6 +162,7 @@ public sealed partial class EndgameClientState
                 if (value == "endgame.growth.v5") growth = true;
                 if (value == "endgame.skill-behavior.v1") skillBehavior = true;
                 if (value == "endgame.skill-variants.v1") skillVariants = true;
+                if (value == "endgame.rift-portals.v1") riftPortals = true;
             }
             bool accepted = response.OK && capable;
             // A failed refresh leaves the server's previously negotiated
@@ -152,6 +170,8 @@ public sealed partial class EndgameClientState
             if (accepted || !Negotiated)
             {
                 bool previousVariants = SkillVariantsV1;
+                RiftPortalsV1 = accepted && riftPortals;
+                if (RiftPortalsV1 && !hasRiftSceneContext) RiftContextKnown = false;
                 Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth;
                 SkillBehaviorV1 = GrowthV5 && skillBehavior; SkillVariantsV1 = SkillBehaviorV1 && skillVariants;
                 if (!GrowthV5 || previousVariants != SkillVariantsV1) ResetSkillRanks();
@@ -161,6 +181,10 @@ public sealed partial class EndgameClientState
             if (!accepted && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy"))
                 ScheduleHelloRetry(DateTime.UtcNow);
             Message = accepted ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";
+            // An old server can negotiate the sidecar without portal ownership.
+            // Never release a previously confirmed private context on a failed refresh.
+            if (!hasRiftSceneContext && (accepted && !riftPortals || !accepted && !helloRetryScheduled))
+                RiftContextKnown = true;
             Version++; return accepted;
         }
         if (!Negotiated) return false;
@@ -173,6 +197,8 @@ public sealed partial class EndgameClientState
         // A rejected admission can still return the authoritative prior run to claim.
         if (response.Rift != null && (Rift == null || Rift.RunID != response.Rift.RunID || CompareRevision(response.Rift.Revision, Rift.Revision) >= 0))
         { Rift = response.Rift; RiftReceivedUtc = DateTime.UtcNow; }
+        // Leave receipts precede the native teleport; do not keep intercepting public gates.
+        if (!hasRiftSceneContext && receipt && response.OK && response.Kind == "rift.leave") RiftInInstance = false;
         if (!response.OK)
         {
             ReleaseReadRequest(response.RequestID); Error = response.Error;

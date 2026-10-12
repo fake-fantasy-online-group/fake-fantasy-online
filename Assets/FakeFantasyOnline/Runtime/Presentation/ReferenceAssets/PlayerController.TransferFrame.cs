@@ -47,6 +47,14 @@ public partial class PlayerController
                     break;
                 }
 
+                // Reused scenery keeps its native gate polygons, but a private rift
+                // owns their meaning. Never begin a speculative public-map load or script.
+                if (EndgamePanel.TryTransferRiftPortalFromWorld())
+                {
+                    wasInsideTransfer = true;
+                    return true;
+                }
+
                 if (string.IsNullOrEmpty(proc.cmd))
                 {
                     // Official order: the latch is written first, then the delegate is invoked.

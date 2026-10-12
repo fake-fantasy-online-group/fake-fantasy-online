@@ -14,6 +14,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--source', type=Path, help='Alternate GameBootstrap.cs for regression proof')
 args = parser.parse_args()
 source = (args.source or root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/GameBootstrap.cs').read_text()
+owner_source = (root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/ReferenceFirstWorldWindowOwner.cs').read_text()
+map_read = owner_source[owner_source.index('            string mapPath = '):owner_source.index('            // BuildWorld consumes the actual returned owner')]
 construction = source[source.index('    internal sealed class BuildWorldCheckpoints'):source.index('    // The real controller is available')]
 transition = source[source.index('    public void SwitchMapAuthoritative'):source.index('    private void ReportPos(')]
 # Execute the actual final-exit prefix, before substituting unrelated UI teardown.
@@ -35,8 +37,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets { public partial class 
 %s
 %s
 public void ExitForTest() { %s worldRoot = null; window = null; pcRef = null; CurMapId = 0; }
+}
+public sealed partial class ReferenceFirstWorldWindowOwner {
+internal byte[] ReadConstructionMapForTest(ResLoader loader, string file) {
+var resources = new TestResources { Core = loader };
+var mapDescriptor = new TestMapDescriptor { file = file };
+%s
+return mapBytes;
+}
 } }
-''' % (construction, transition, exit_prefix))
+''' % (construction, transition, exit_prefix, map_read))
     (path / 'Sky.cs').write_text(sky)
     exe = path / 'Contract.exe'
     compiler = [mono, csc] if csc.lower().endswith('.exe') else [csc]

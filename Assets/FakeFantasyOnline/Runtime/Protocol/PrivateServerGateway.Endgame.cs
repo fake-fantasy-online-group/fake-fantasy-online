@@ -67,10 +67,11 @@ public sealed partial class PrivateServerGateway : IEndgameClient
     private bool TryReceiveEndgamePacket(ushort opcode, byte[] payload)
     {
         if (opcode != PrivateServerEndgameCodec.ResponseOpcode) return false;
-        if (!EndgameInWorld || !Endgame.HelloSent) return true;
         try
         {
             EndgameResponse response = PrivateServerEndgameCodec.Decode(payload);
+            if (response.Kind == "rift.context") { Endgame.Apply(response); return true; }
+            if (!EndgameInWorld || !Endgame.HelloSent) return true;
             bool previouslyNegotiated = Endgame.Negotiated;
             Endgame.Apply(response);
             if (response.RequestID.Length > 0 && !Endgame.Pending) endgameRetryJournal.Complete(EndgameScope, response.RequestID);

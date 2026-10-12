@@ -650,6 +650,7 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
     public Transform WorldRoot => worldRootObject == null ? null : worldRootObject.transform;
 
     internal GameBootstrap.BuildWorldCheckpoints BuildCheckpointsForIndependentRuntime { get; set; }
+    internal GameBootstrap.PreparedMapSource PreparedMapSourceForIndependentRuntime { get; set; }
 
     private bool bootstrapOwnsConstructionRoot;
     private bool transitionOwnsConstructionFailure;
@@ -709,7 +710,12 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
             mapDescriptor.file = ReferenceEquals(gameBootstrap, null)
                 ? GameBootstrap.MapSourceName(character.MapId)
                 : gameBootstrap.mapName;
-            byte[] mapBytes = resources.Core.ReadMap("map/" + mapDescriptor.file + ".gsm");
+            string mapPath = "map/" + mapDescriptor.file + ".gsm";
+            GameBootstrap.PreparedMapSource preparedSource = PreparedMapSourceForIndependentRuntime;
+            PreparedMapSourceForIndependentRuntime = null;
+            byte[] mapBytes = preparedSource != null
+                ? preparedSource.ReadOnce(resources.Core, mapPath)
+                : resources.Core.ReadMap(mapPath);
             // BuildWorld consumes the actual returned owner, including an ordinary
             // partial parse. A parser exception follows the existing owner handler.
             GsmMap sourceMap = GsmMap.Parse(mapBytes);
