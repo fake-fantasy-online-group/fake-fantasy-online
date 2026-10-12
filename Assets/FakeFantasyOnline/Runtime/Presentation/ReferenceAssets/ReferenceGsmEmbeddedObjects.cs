@@ -56,13 +56,15 @@ public partial class GsmMap
                 {
                     xOff = I32(data, cursor), yOff = I32(data, cursor + 4)
                 };
-                if (data.Length < unchecked(cursor + 32)) return false;
+                // The frame is two offsets followed by the four NakedImg fields.
+                // Its pixel payload begins after these six Int32 values (24 bytes).
+                if (data.Length < unchecked(cursor + 24)) return false;
                 frame.img = new NakedImg
                 {
                     w = I32(data, cursor + 8), h = I32(data, cursor + 12),
                     pitch = I32(data, cursor + 16), attrib = I32(data, cursor + 20)
                 };
-                cursor = unchecked(cursor + 32);
+                cursor = unchecked(cursor + 24);
                 if (frame.img.w > 0 && frame.img.h > 0)
                 {
                     if (frame.img.w > 2048 || frame.img.h > 2048) return false;

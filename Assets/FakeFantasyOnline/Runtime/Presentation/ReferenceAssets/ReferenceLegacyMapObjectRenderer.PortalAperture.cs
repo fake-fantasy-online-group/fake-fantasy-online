@@ -8,12 +8,12 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
 {
     private struct PortalAnchor
     {
-        internal int X, ScreenY, Order;
+        internal int Id, X, ScreenY, Order;
     }
     private sealed class ApertureStrip
     {
         internal int Left, Width, FrontY;
-        internal Sprite Front, Rear;
+        internal Sprite Front, Rear, Foreground;
     }
     private readonly List<PortalAnchor> portalAnchors = new List<PortalAnchor>();
     private readonly Dictionary<Texture2D, List<ApertureStrip>> apertureStrips =
@@ -25,15 +25,48 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
         if (ResLoader.I == null) return;
         foreach (GsmMap.Obj item in sourceMap.libObjs)
         {
-            if (item.id != ReferencePortalApertureProfile.PortalId) continue;
+            // Limit loads to the audited FY portal family, not every map animation.
+            if (item.id != ReferencePortalApertureProfile.PortalId && item.id != 0x013000c9 &&
+                item.id != 0x013006a5 && item.id != 0x01300709 && item.id != 0x0130076d) continue;
             ResLoader.ObjSprite image = ResLoader.I.LoadObj(item.id, item.xl, item.yl);
-            if (image.tex == null || image.frames <= 1) continue;
+            if (image.tex == null || image.frames <= 1 ||
+                !ReferencePortalApertureProfile.IsPortal(item.id, image.path, item.xl, item.yl, image.clipBy)) continue;
             portalAnchors.Add(new PortalAnchor {
+                Id = item.id,
                 X = item.sx + item.xl / 2,
                 ScreenY = item.sy + image.clipBy - item.pz,
                 Order = item.sy + image.clipBy
             });
         }
+    }
+
+    // This separately-authored model contains only the wooden doorway's rear
+    // wall/floor. Its stone/wood front jambs are different scene objects. Keep
+    // its native clipArr rectangles and lower only paired rear-plane slices.
+    private int PortalBackplaneOrderLimit(ReferenceGsmObject value,
+        ResLoader.ObjSprite image, ReferenceMapObjectKind kind)
+    {
+        if (GameBootstrap.UseIsoY || kind != ReferenceMapObjectKind.Library ||
+            value.Id != 0x142d1a2d || value.Width != 109 || value.Height != 169 ||
+            image.frames != 1 || image.path == null ||
+            !image.path.EndsWith("/JZ_TTD_6701.gso", StringComparison.OrdinalIgnoreCase) ||
+            image.nLeft != 0 || image.nTop != 0 || image.clipBy != 147 || image.clipWidth != 16 ||
+            image.tex.width != 108 * Math.Max(image.hdScale, 1) ||
+            image.tex.height != 168 * Math.Max(image.hdScale, 1) ||
+            image.clipArr == null || image.clipArr.Length != 7) return int.MaxValue;
+        int[] expected = { -16, -8, 0, 8, 16, 24, 33 };
+        for (int i = 0; i < expected.Length; i++)
+            if (image.clipArr[i] != expected[i]) return int.MaxValue;
+        int matches = 0, limit = int.MaxValue;
+        foreach (PortalAnchor portal in portalAnchors)
+        {
+            if (portal.Id != 0x013000c9) continue;
+            int x = portal.X - value.SourceX;
+            int y = portal.ScreenY - (value.SourceY - value.PivotZ);
+            if (x < 0 || x >= value.Width || y < 0 || y >= value.Height + image.clipWidth) continue;
+            matches++; limit = portal.Order - 1;
+        }
+        return matches == 1 ? limit : int.MaxValue;
     }
 
     private bool TryPlacePortalAperture(GameBootstrap receiver, ReferenceGsmObject value,
@@ -56,6 +89,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
         int matches = 0;
         foreach (PortalAnchor portal in portalAnchors)
         {
+            if (!ReferencePortalApertureProfile.CanPair(value.Id, portal.Id)) continue;
             int localX = portal.X - value.SourceX;
             int localY = portal.ScreenY - (value.SourceY - value.PivotZ);
             // Pair only an actual portal anchored within this doorway image.
@@ -77,7 +111,16 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
                 footprint = CreateFootprintStrips(image, ppu);
                 footprintStrips.Add(image.tex, footprint);
             }
-            if (footprint == null) return false;
+            if (footprint == null)
+            {
+                // SWS4701 has a different mask header and already renders at
+                // its original whole-object pivot depth. Do not reinterpret
+                // that collision format or change the shared mask reader.
+                if (value.Id != 0x172d125d) return false;
+                footprint = new List<FootprintStrip> {
+                    new FootprintStrip { Left = 0, Width = image.tex.width, FrontY = int.MinValue }
+                };
+            }
             strips = new List<ApertureStrip>();
             try
             {
@@ -85,24 +128,33 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
                 {
                     var split = new ApertureStrip { Left = strip.Left, Width = strip.Width, FrontY = strip.FrontY };
                     strips.Add(split);
-                    split.Front = CreateApertureSprite(image, strip.Left, strip.Width, ppu, polygon, false);
+                    bool continuousFront = ReferencePortalApertureProfile.ContinuousForeground(value.Id);
+                    split.Front = CreateApertureSprite(image, strip.Left, strip.Width, ppu, polygon,
+                        false, suppressPreserved: continuousFront);
+                    if (continuousFront)
+                        split.Foreground = CreateApertureSprite(image, strip.Left, strip.Width, ppu, polygon,
+                            false, preservedOnly: true);
                     split.Rear = CreateApertureSprite(image, strip.Left, strip.Width, ppu, polygon, true);
                 }
                 apertureStrips.Add(image.tex, strips);
             }
             catch
             {
-                foreach (ApertureStrip strip in strips) { DestroyOwned(strip.Front); DestroyOwned(strip.Rear); }
+                foreach (ApertureStrip strip in strips) { DestroyOwned(strip.Front); DestroyOwned(strip.Rear); DestroyOwned(strip.Foreground); }
                 throw;
             }
         }
         foreach (ApertureStrip strip in strips)
         {
-            int originalOrder = value.SourceY + strip.FrontY;
+            int originalOrder = strip.FrontY == int.MinValue ? value.PivotY : value.SourceY + strip.FrontY;
             if (strip.Front != null)
                 PlaceSpriteCore(receiver, value, parent, ppu, worldWidth, worldHeight,
                     kind, objectIndex, image.path, image, strip.Left, strip.Width, originalOrder,
                     false, strip.Front, strip.Left / scale);
+            if (strip.Foreground != null)
+                PlaceSpriteCore(receiver, value, parent, ppu, worldWidth, worldHeight,
+                    kind, objectIndex, image.path, image, strip.Left, strip.Width,
+                    Math.Max(originalOrder, portalOrder + 1), false, strip.Foreground, strip.Left / scale);
             if (strip.Rear != null)
                 PlaceSpriteCore(receiver, value, parent, ppu, worldWidth, worldHeight,
                     kind, objectIndex, image.path, image, strip.Left, strip.Width,
@@ -112,25 +164,38 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
     }
 
     private static Sprite CreateApertureSprite(ResLoader.ObjSprite image, int left, int width,
-        float ppu, int[] polygon, bool rear)
+        float ppu, int[] polygon, bool rear, bool preservedOnly = false, bool suppressPreserved = false)
     {
         int scale = Math.Max(image.hdScale, 1);
         int height = image.tex.height;
         var vertices = new List<Vector2>();
         var triangles = new List<ushort>();
-        // Integer texel partition: the two meshes have no overlapping pixel area
+        int[][] preserved = ReferencePortalApertureProfile.PreservedFront(polygon);
+        var boundaries = new List<int>();
+        var intersections = new List<float>();
+        var rearEdges = new List<int>();
+        var frontEdges = new List<int>[preserved.Length];
+        for (int i = 0; i < frontEdges.Length; i++) frontEdges[i] = new List<int>();
+        // Integer texel partition: the complementary meshes have no overlapping pixel area
         // and omit no source pixel. They borrow the original texture and UVs.
         for (int x = left; x < left + width; x++)
         {
-            int top = 0, bottom = 0;
-            if (ReferencePortalApertureProfile.Column(polygon,
-                image.nLeft + (x + 0.5f) / scale, out float logicalTop, out float logicalBottom))
+            float logicalX = image.nLeft + (x + 0.5f) / scale;
+            boundaries.Clear(); boundaries.Add(0); boundaries.Add(height);
+            Sample(polygon, logicalX, rearEdges);
+            for (int i = 0; i < preserved.Length; i++) Sample(preserved[i], logicalX, frontEdges[i]);
+            boundaries.Sort();
+            for (int i = 1; i < boundaries.Count; i++)
             {
-                top = Math.Max(0, Math.Min(height, (int)Math.Ceiling((logicalTop - image.nTop) * scale)));
-                bottom = Math.Max(top, Math.Min(height, (int)Math.Ceiling((logicalBottom - image.nTop) * scale)));
+                int a = boundaries[i - 1], b = boundaries[i];
+                if (a == b) continue;
+                bool inFront = false;
+                for (int j = 0; !inFront && j < frontEdges.Length; j++)
+                    inFront = ContainsSpan(frontEdges[j], a, b);
+                bool isRear = ContainsSpan(rearEdges, a, b) && !inFront;
+                if (preservedOnly ? inFront : (!suppressPreserved || !inFront) && rear == isRear)
+                    Quad(x, a, b);
             }
-            if (rear) Quad(x, top, bottom);
-            else { Quad(x, 0, top); Quad(x, bottom, height); }
         }
         if (vertices.Count == 0) return null;
         Sprite sprite = Sprite.Create(image.tex, new Rect(left, 0, width, height),
@@ -138,6 +203,27 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
         try { sprite.OverrideGeometry(vertices.ToArray(), triangles.ToArray()); }
         catch { DestroyOwned(sprite); throw; }
         return sprite;
+
+        void Sample(int[] outline, float x, List<int> edges)
+        {
+            ReferencePortalApertureProfile.ColumnIntersections(outline, x, intersections);
+            edges.Clear();
+            // Reject a malformed odd crossing count conservatively: no rear
+            // pixels are inferred from an incomplete interval.
+            if (intersections.Count % 2 != 0) return;
+            foreach (float y in intersections)
+            {
+                int edge = Math.Max(0, Math.Min(height, (int)Math.Ceiling((y - image.nTop) * scale)));
+                edges.Add(edge); boundaries.Add(edge);
+            }
+        }
+
+        bool ContainsSpan(List<int> edges, int top, int bottom)
+        {
+            for (int i = 0; i + 1 < edges.Count; i += 2)
+                if (top >= edges[i] && bottom <= edges[i + 1]) return true;
+            return false;
+        }
 
         void Quad(int x, int top, int bottom)
         {
@@ -158,7 +244,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
     private void DisposePortalApertures()
     {
         foreach (List<ApertureStrip> strips in apertureStrips.Values)
-            foreach (ApertureStrip strip in strips) { DestroyOwned(strip.Front); DestroyOwned(strip.Rear); }
+            foreach (ApertureStrip strip in strips) { DestroyOwned(strip.Front); DestroyOwned(strip.Rear); DestroyOwned(strip.Foreground); }
         apertureStrips.Clear();
         portalAnchors.Clear();
     }

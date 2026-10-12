@@ -33,6 +33,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
   private static void DestroyOwned(Sprite s){if(s!=null)s.destroyed=true;}
   private bool PlaceSpriteCore(GameBootstrap receiver,ReferenceGsmObject value,Transform parent,float ppu,float ww,float wh,ReferenceMapObjectKind kind,int idx,string path,ResLoader.ObjSprite image,int left,int width,int order,bool animate,Sprite sprite,int? logicalOffset=null){Results.Add(new Placed{Sprite=sprite,Order=order});return true;}
   public static Sprite Mesh(ResLoader.ObjSprite image,int left,int width,float ppu,int[] poly,bool rear){return CreateApertureSprite(image,left,width,ppu,poly,rear);}
+  public int BackplaneLimit(ReferenceGsmObject v,ResLoader.ObjSprite i,ReferenceMapObjectKind k=ReferenceMapObjectKind.Library){return PortalBackplaneOrderLimit(v,i,k);}
   public void Prepare(GsmMap map){PreparePortalAnchors(map);}
   public bool Place(ReferenceGsmObject v,ResLoader.ObjSprite image,ReferenceMapObjectKind kind=ReferenceMapObjectKind.Library){Results.Clear();return TryPlacePortalAperture(null,v,null,100,14464,7232,kind,0,image);}
   public void Clean(){DisposePortalApertures();DisposeFootprintStrips();}

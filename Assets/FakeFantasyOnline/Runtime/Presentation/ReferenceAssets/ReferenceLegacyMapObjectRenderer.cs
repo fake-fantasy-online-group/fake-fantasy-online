@@ -401,6 +401,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
         string path,
         ResLoader.ObjSprite image)
     {
+        int rearPlaneLimit = PortalBackplaneOrderLimit(value, image, kind);
         if (!ReferenceEquals(receiver, null))
         {
             var group = new List<SpriteRenderer>();
@@ -420,7 +421,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
                 int rectangleX = sprite != null ? (int)sprite.rect.x : 0;
                 int rectangleWidth = sprite != null ? (int)sprite.rect.width : 0;
                 PlaceSpriteCore(receiver, value, parent, pixelsPerUnit, worldWidth, worldHeight, kind, objectIndex, path, image, rectangleX, rectangleWidth,
-                    value.SourceY + slice.Item3, false, sprite, slice.Item2,
+                    Math.Min(value.SourceY + slice.Item3, rearPlaneLimit), false, sprite, slice.Item2,
                     nativePlacement: true);
                 SpriteRenderer renderer = renderers[renderers.Count - 1];
                 group.Add(renderer);
@@ -474,7 +475,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
                     image,
                     rectangleX,
                     rectangleEnd - rectangleX,
-                    value.SourceY + clipY,
+                    Math.Min(value.SourceY + clipY, rearPlaneLimit),
                     false);
             }
 
