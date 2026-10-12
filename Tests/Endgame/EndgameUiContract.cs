@@ -382,13 +382,47 @@ class EndgameUiContract
             }
         }
     }
-    static void ItemizationStatTextContracts()
+    static void ItemizationStatTextContracts(Client c, EndgamePanel p)
     {
         var format = typeof(EndgamePanel).GetMethod("StatText", BindingFlags.NonPublic | BindingFlags.Static);
-        foreach (var pair in new[] { new KeyValuePair<int, string>(-20, "攻击速度 +20%"), new KeyValuePair<int, string>(15, "攻击速度 -15%") })
+        foreach (var row in new[] {
+            new { Value = -20, Mode = 1, Text = "攻击速度 +20%" },
+            new { Value = 15, Mode = 1, Text = "攻击速度 -15%" },
+            new { Value = 0, Mode = 1, Text = "攻击速度 +0%" },
+            new { Value = int.MinValue, Mode = 1, Text = "攻击速度 +2147483648%" },
+            new { Value = int.MaxValue, Mode = 1, Text = "攻击速度 -2147483647%" },
+            new { Value = -200, Mode = 0, Text = "攻击间隔 -200毫秒" },
+            new { Value = 150, Mode = 0, Text = "攻击间隔 +150毫秒" },
+            new { Value = 0, Mode = 0, Text = "攻击间隔 +0毫秒" }
+        })
         {
-            var stat = new EndgameStatView(new Dictionary<string, object> { { "attr", 25L }, { "mode", 1L }, { "value", (long)pair.Key } });
-            Check((string)format.Invoke(null, new object[] { stat }) == pair.Value, "attack-speed wording matches actual player percentage: " + pair.Key);
+            var stat = new EndgameStatView(new Dictionary<string, object> { { "attr", 25L }, { "mode", (long)row.Mode }, { "value", (long)row.Value } });
+            for (int repeat = 0; repeat < 2; repeat++)
+                Check((string)format.Invoke(null, new object[] { stat }) == row.Text && stat.Value == row.Value,
+                    "attack-speed sign/unit does not mutate raw data: " + row.Value + "/" + row.Mode);
+        }
+        foreach (int attr in new[] { 27, 47 })
+        {
+            var stat = new EndgameStatView(new Dictionary<string, object> { { "attr", (long)attr }, { "mode", 1L }, { "value", -20L } });
+            Check(((string)format.Invoke(null, new object[] { stat })).EndsWith(" -20%", StringComparison.Ordinal), "other attribute signs remain unchanged");
+        }
+        // Native text is already human-facing. Only raw DTO values are inverted;
+        // re-opening a native or fallback tooltip must preserve signs and colors.
+        foreach (bool nativeStats in new[] { false, true })
+        {
+            c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
+            Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"" + (nativeStats ? ",\"endgame.native-stats.v1\"" : "") + "]}");
+            var item = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"name\":\"快剑\",\"location\":\"bag\",\"slot\":0,\"stats\":[{\"attr\":25,\"value\":-20,\"mode\":1},{\"attr\":25,\"value\":15,\"mode\":1},{\"attr\":25,\"value\":-200,\"mode\":0}]");
+            string original = "\u0007旧剑\n\u0007(武器)\n\u00030攻击 20~30\n" +
+                (nativeStats ? "\u00035攻击速度 +20%\n\u00035攻击速度 -15%\n\u00035攻击间隔 -200毫秒\n" : "") + "\u0006命中时击退敌人";
+            string tip = EndgamePanel.OverlayTooltip(item, original);
+            for (int repeat = 0; repeat < 2; repeat++)
+            {
+                foreach (string line in new[] { "攻击速度 +20%", "攻击速度 -15%", "攻击间隔 -200毫秒" })
+                    Check(Occurrences(tip, "\u00035" + line) == 1 && !tip.Contains("\u0006" + line), "speed rows retain single gold attribute placement: " + line);
+                Check(tip.Contains("\u00030攻击 20~30") && tip.Contains("\u0006命中时击退敌人"), "speed display preserves white base and orange effects");
+                tip = EndgamePanel.OverlayTooltip(item, tip);
+            }
         }
     }
 
@@ -478,7 +512,6 @@ class EndgameUiContract
     }
     static void Main()
     {
-        ItemizationStatTextContracts();
         var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Draw(p); Check(c.Sent.Count == 0, "unnegotiated UI sends no commands");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}"); Call(p, "Update");
         string items = "{\"uid\":\"9007199254740993\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"飞鹤遗音\",\"uniqueId\":1001,\"uniqueRollBp\":10000,\"socketCount\":2,\"sockets\":[{\"index\":0,\"itemId\":0},{\"index\":1,\"itemId\":0}]}, {\"uid\":\"9007199254740994\",\"itemId\":1900028001,\"location\":\"bag\",\"tab\":1,\"slot\":1,\"name\":\"角木蛟星篆\"}, {\"uid\":\"9007199254740995\",\"itemId\":1002,\"location\":\"equipped\",\"tab\":2,\"slot\":25,\"name\":\"归元佩\"}";
@@ -553,6 +586,7 @@ class EndgameUiContract
         SocketRecipeContracts();
         EquippedCategoryTooltipContracts(c, p);
         AttributeEffectOrderingContracts(c, p);
+        ItemizationStatTextContracts(c, p);
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

@@ -236,7 +236,7 @@ public sealed partial class EndgamePanel
         if (IsAdditionalAttributeLine(line)) return true;
         if (line.StartsWith("有效穿戴时每", StringComparison.Ordinal) && line.Contains("秒恢复") && line.EndsWith("点生命", StringComparison.Ordinal)) return true;
         string[] names = { "攻击", "防御", "魔法攻击", "魔法防御", "命中", "效果命中", "负重上限", "力量", "体质", "敏捷", "智慧", "精神", "灵巧",
-            "爆击率", "暴击率", "魔法爆击率", "魔法暴击率", "攻击速度", "移动速度", "最小攻击", "最大攻击", "最大生命", "最大法力", "生命恢复", "最大负重", "伤害抗性", "魔法抗性", "不良状态抗性" };
+            "爆击率", "暴击率", "魔法爆击率", "魔法暴击率", "攻击速度", "攻击间隔", "移动速度", "最小攻击", "最大攻击", "最大生命", "最大法力", "生命恢复", "最大负重", "伤害抗性", "魔法抗性", "不良状态抗性" };
         foreach (string name in names)
             if (line.StartsWith(name + " ", StringComparison.Ordinal) && line.Length > name.Length + 1)
             {
@@ -444,7 +444,10 @@ public sealed partial class EndgamePanel
         // consumed as positive player attack-speed points (base / speed).
         long displayValue = stat.Attr == 25 && stat.Mode == 1 ? -(long)stat.Value : stat.Value;
         string value = basisPoints ? (displayValue / 100m).ToString("0.##", CultureInfo.InvariantCulture) : displayValue.ToString(CultureInfo.InvariantCulture);
-        return StatName(stat.Attr) + " " + (displayValue >= 0 ? "+" : "") + value + (basisPoints || stat.Mode == 1 ? "%" : "");
+        bool intervalMilliseconds = stat.Attr == 25 && stat.Mode != 1;
+        string name = intervalMilliseconds ? "攻击间隔" : StatName(stat.Attr);
+        string unit = intervalMilliseconds ? "毫秒" : basisPoints || stat.Mode == 1 ? "%" : "";
+        return name + " " + (displayValue >= 0 ? "+" : "") + value + unit;
     }
     private static string StatName(int id)
     {

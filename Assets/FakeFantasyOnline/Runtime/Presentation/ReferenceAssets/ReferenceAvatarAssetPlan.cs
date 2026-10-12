@@ -118,7 +118,8 @@ internal static class ReferenceAvatarAssetPlan
         bool female = gender != 1;
         List<ReferenceAvatarPart> parts = new List<ReferenceAvatarPart>(5);
         AddPart(parts, 6, "weaponr", appearance.RightWeapon, female);
-        AddPart(parts, 5, "weaponl", appearance.LeftWeapon, female);
+        AddPart(parts, 5, "weaponl", ReferenceAvatarWeaponPresentation.LeftModel(
+            appearance.RightWeapon, appearance.LeftWeapon), female);
         AddPart(parts, 4, "backpack", appearance.Backpack, female);
         AddPart(parts, 1, "cap", appearance.Cap, female);
         AddPart(parts, 2, "face", appearance.Face, female);
