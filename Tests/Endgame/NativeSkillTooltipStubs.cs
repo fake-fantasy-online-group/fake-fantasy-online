@@ -107,13 +107,17 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             public Color Color;
         }
         public static readonly List<TextDraw> Draws = new List<TextDraw>();
-        // Six pixels per ASCII cell and twelve per non-ASCII character. This makes
-        // ComposeTip's space padding and UITip's 150-pixel wrapping deterministic.
+        // Deterministic font substitute. Proportional mode deliberately varies
+        // ASCII advances to expose character-count centering; real BitmapFont
+        // obtains glyph advances from gbk12.wid (spaces always advance six).
+        public static bool Proportional;
         public static float Measure(string text, float scale)
         {
-            int cells = 0;
-            foreach (char value in text ?? string.Empty) cells += value > 127 ? 2 : 1;
-            return cells * 6f * scale;
+            float pixels = 0f;
+            foreach (char value in text ?? string.Empty)
+                pixels += value > 127 ? 12f : Proportional && value != ' '
+                    ? (value == 'i' || value == ':' ? 3f : value == 'W' || value == '%' ? 9f : 5f) : 6f;
+            return pixels * scale;
         }
         public static void Draw(float x, float y, string text, Color color, float scale) =>
             Draws.Add(new TextDraw { X = x, Y = y, Text = text, Color = color, Scale = scale });

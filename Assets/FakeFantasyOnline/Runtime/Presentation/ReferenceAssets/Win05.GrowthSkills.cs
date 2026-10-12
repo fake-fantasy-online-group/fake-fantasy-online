@@ -105,16 +105,16 @@ public partial class Win05
         foreach (var synergy in rank.TrainingSynergies)
         {
             if (synergy.SourceID != previousSource)
-                rows.Add((synergy.SourceName + "（投入" + synergy.InvestedHardPoints + "点）", (char)1, false));
+                rows.Add((synergy.SourceName + "（投入" + synergy.InvestedHardPoints + "点）", (char)1, true));
             string value = synergy.Unit == "percent_bp"
                 ? (synergy.PerPointValue / 100m).ToString("0.##", CultureInfo.InvariantCulture) + "%"
                 : synergy.PerPointValue.ToString(CultureInfo.InvariantCulture);
-            rows.Add(("每点: " + synergy.EffectLabel + " +" + value, (char)1, false));
+            rows.Add(("每点: " + synergy.EffectLabel + " +" + value, (char)1, true));
             previousSource = synergy.SourceID;
         }
-        if (rank.TrainingSynergies.Count > 0) rows.Add(("装备加级不增加协同", (char)2, false));
+        if (rank.TrainingSynergies.Count > 0) rows.Add(("装备加级不增加协同", (char)2, true));
         foreach (string line in rank.NativeModifierLines)
-            if (!IsOriginalDamageBonus(line)) rows.Add((line, (char)1, false));
+            if (!IsOriginalDamageBonus(line)) rows.Add((line, (char)1, true));
     }
 }
 }

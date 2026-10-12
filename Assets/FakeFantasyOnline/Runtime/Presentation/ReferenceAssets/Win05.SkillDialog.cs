@@ -641,7 +641,7 @@ public partial class Win05
             bool canUse = UsesGrowthSkill(slot.id) ? rank?.CanCast == true : currentLevel > 0;
             string levelLabel = rank == null ? currentLevel.ToString(CultureInfo.CurrentCulture) : rank.EffectiveRank;
             if (levelLabel.Length > 5) levelLabel = levelLabel.Substring(0, 4) + "…";
-            DrawSkillIcon(iconRect, icon, canUse);
+            DrawSkillIcon(iconRect, icon, canUse, tree != null);
             if (canUse && BitmapFont.Ready)
             {
                 BitmapFont.DrawOutline(
@@ -1015,8 +1015,19 @@ public partial class Win05
     // paints Texture2D.whiteTexture (arm64 :687-688) over the *unfitted* icon rect - the Fit
     // 06001052 call only exists in the non-null arm (arm64 :701, x86_64 :869) - after which both
     // arms share one DrawTexture and one `set_color(1,1,1,1)` (arm64 :708-711).
-    private static void DrawSkillIcon(Rect area, Texture2D icon, bool learned)
+    private static void DrawSkillIcon(Rect area, Texture2D icon, bool learned, bool hasTreeArtwork)
     {
+        // The original tree artwork already contains the grey, unlearned icons.
+        // A translucent item icon over it can be a different picture (e.g. 10213)
+        // and is fitted to a different size, producing two visible skill images.
+        // Keep the authored inactive node; only draw a live icon when learned, or
+        // as the existing fallback when the tree resource could not be loaded.
+        if (hasTreeArtwork && !learned)
+        {
+            GUI.color = Color.white;
+            return;
+        }
+
         if (icon == null)
         {
             GUI.color = new Color(0f, 0f, 0f, 0.25f);

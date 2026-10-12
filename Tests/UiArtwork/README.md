@@ -128,3 +128,39 @@ checks passed. The C# checks use deterministic test substitutes. No Unity import
 PlayMode, rendered screenshot comparison, Mac operation, Player build or external
 resource modification was performed. Source restoration is established; runtime
 visual acceptance remains unverified.
+
+## Unlearned skill icon double-image correction (2026-10-12)
+
+Original tree resources already contain complete grayscale inactive skill icons.
+The extra live item icon drawn at alpha 0.38 can be different artwork, not just a
+colored version of the background: confirmed for assassin 10213 (`othertree3`,
+slot 37,11, item7049) and 10204 (`maintree3`, slot 9,8, item5023). Both live icons
+are 30×30, expanded into a 36×36 slot; the first combines a green orb with the
+background's explosion picture. All pixels of these two live icons are opaque.
+
+`DrawSkillIcon` now leaves the original inactive node intact when the tree loaded.
+Learned nodes retain the existing live overlay and level label. Missing trees
+retain the existing dim live-icon fallback. No black backing, texture mutation,
+layout, hit area, upgrade, tooltip, or gameplay changes are included. The V5
+`CanCast` field used here is validated as effective rank > 0, including passives;
+it is distinct from the active-cast admission check.
+
+Reproduce the standalone regression with the cloud C# toolchain environment set:
+
+```sh
+python3 Tests/UiArtwork/run-skill-icon-contract.py
+```
+
+87 assertions execute extracted production `Fit` and `DrawSkillIcon` methods:
+missing/present trees and icons, learned/unlearned transitions, 0.5–2× scales,
+scroll offsets, aspect ratios, and original restored apothecary node positions
+10316/10318/10321. Source guards protect the caller and passive rank semantics.
+Removing the new inactive-node branch makes this contract fail.
+
+Evidence was decoded with the repository's actual GSA/DIMG decoders against
+texture-upload substitutes, and all four assassin/apothecary tree PNGs were
+visually inspected. The evidence archive SHA-256 is
+`9025faeb1d1ccc4e5976c1105d6041a3319a556b72f20d9451bae110a186f408`.
+External resources and decoded images remain outside the repository. A source
+pixel composite reproduces the reported overlay but is not a game screenshot.
+No Unity import, PlayMode, Player build, or Mac UI operation was performed.

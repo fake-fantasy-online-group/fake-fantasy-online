@@ -1,37 +1,26 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using UnityEngine;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 
 public partial class Win05
 {
-    // Original ComposeTip 0600102d.
+    // Preserve each authored row's alignment until UITip has wrapped the text and
+    // measured its actual bitmap glyphs. Padding to 32 character columns here was
+    // wider than UITip's 150px content limit and shifted short headings right.
     private static string ComposeTip(List<(string, char, bool)> rows)
     {
-        int W(string text)
-        {
-            int width = 0;
-            foreach (char c in text) width += c > 127 ? 2 : 1;
-            return width;
-        }
-        int width = 0;
-        foreach (var row in rows)
-            if (!row.Item3) width = Mathf.Max(width, W(row.Item1));
-        width = Mathf.Min(width, 32);
         var result = new StringBuilder();
         for (int i = 0; i < rows.Count; i++)
         {
             if (i != 0) result.Append('\n');
             var row = rows[i];
+            // UITip already supports center-before-color protocol markers and
+            // centers every wrapped continuation against the final box width.
+            if (row.Item3) result.Append('\u0007');
             if (row.Item2 != 0) result.Append(row.Item2);
-            if (row.Item3)
-            {
-                int padding = (width - W(row.Item1)) / 2;
-                if (padding > 0) result.Append(new string(' ', padding));
-            }
             result.Append(row.Item1);
         }
         return result.ToString();

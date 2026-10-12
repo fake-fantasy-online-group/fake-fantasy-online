@@ -87,8 +87,8 @@ check('您现在的剩余技能点数为' in growth and '您现在还无法升�
       'Original orange footer wording must be preserved')
 check(growth.index('AppendGrowthSynergies(rows, rank);') > growth.index('双击或拖曳至快捷栏以使用这个技能'),
       'Incoming synergy is appended after the complete original card, never replaces its body')
-check('new string(\' \', padding)' in compose and 'width = Mathf.Min(width, 32)' in compose,
-      'Native ComposeTip space-centering and width contract must remain intact')
+check("if (row.Item3) result.Append(\'\\u0007\');" in compose and "new string(\' \', padding)" not in compose,
+      "Skill centering must use native layout markers, never a wider pre-wrap character budget")
 check('private static (List<(string, Color, bool)>, float, float) Layout(' in native and 'private static void Render(' in native,
       'Test must target actual private native layout/render methods without public test hooks')
 for forbidden in ['ComposeTip(', ' Layout(', ' Render(', 'AppendGrowthEffectLines(', 'AppendGrowthSynergies(']:

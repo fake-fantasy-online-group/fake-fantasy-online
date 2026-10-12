@@ -69,12 +69,12 @@ internal static class NativeSkillTooltipContract
     }
     private static (string, Color, bool) Row(List<(string, Color, bool)> rows, string text) =>
         rows.Single(row => row.Item1.Trim() == text);
-    private static void CheckRow(List<(string, Color, bool)> rows, string text, Color color, int padding = -1)
+    private static void CheckRow(List<(string, Color, bool)> rows, string text, Color color, bool centered = true)
     {
         var row = Row(rows, text);
         Check(Same(row.Item2, color), "Actual native row color: " + text);
-        Check(!row.Item3, "ComposeTip uses native space padding, not a new center marker: " + text);
-        if (padding >= 0) Check(row.Item1 == new string(' ', padding) + text, "Native centered padding: " + text);
+        Check(row.Item3 == centered, "Authored row alignment survives composition: " + text);
+        Check(row.Item1 == text, "Centering must not add measured whitespace: " + text);
     }
     private static void CheckRender(string text, float scale, Vector2 mouse)
     {
@@ -131,6 +131,9 @@ internal static class NativeSkillTooltipContract
             {
                 var actual = BitmapFont.Draws[i]; var expected = full.Item1[first + i];
                 Check(actual.Text == expected.Item1 && Same(actual.Color, expected.Item2), "Full original row survives viewport scrolling " + (first + i));
+                if (expected.Item3)
+                    Check(Near(actual.X + BitmapFont.Measure(actual.Text, scale) * 0.5f, box.x + box.width * 0.5f),
+                        "Centered skill row stays on final viewport midpoint, including after scrolling " + (first + i));
                 Check(Near(actual.Scale, scale) && actual.Y >= box.y && actual.Y + 12f * scale <= box.yMax,
                     "Native-size glyphs are fully inside skill viewport " + (first + i));
                 reached.Add(first + i);
@@ -191,17 +194,65 @@ internal static class NativeSkillTooltipContract
         CheckRender(equipment, 2f, new Vector2(15f, 15f));
         Event.current = null; Screen.width = 1280; Screen.height = 900;
     }
+    private static void CenteringAfterWrapping()
+    {
+        // Exercise the actual composition with a mixed-width title, a source that
+        // wraps and colored incoming modifiers. No padding/box formula in this
+        // assertion: every centered draw must share the actual box's midpoint.
+        State(Rank());
+        foreach (bool proportional in new[] { false, true })
+        {
+            BitmapFont.Proportional = proportional;
+            foreach (float scale in new[] { 1f, 2f })
+            {
+                var authored = new List<(string, char, bool)>
+                {
+                    ("Wi:冰爆术", (char)5, true),
+                    ("等级: 26", (char)0, true),
+                    ("完整原技能描述与原来左对齐的细节保留", (char)0, false),
+                    ("受到以下技能加成", (char)1, true),
+                    ("很长的技能来源名称（投入10点）", (char)1, true),
+                    ("每点: 持续时间 +0.5%", (char)1, true),
+                    ("装备加级不增加协同", (char)2, true),
+                };
+                string text = (string)typeof(Win05).GetMethod("ComposeTip", HiddenStatic).Invoke(null, new object[] { authored });
+                Render(text, scale, new Vector2(35f, 45f));
+                Rect box = GUI.Draws[0].Area;
+                var layout = Layout(text, scale);
+                Check(layout.Item1.Count > authored.Count, "Center regression covers wrapped continuations");
+                for (int i = 0; i < layout.Item1.Count; i++)
+                {
+                    var draw = BitmapFont.Draws[i];
+                    if (!authored[2].Item1.Contains(draw.Text))
+                        Check(Near(draw.X + BitmapFont.Measure(draw.Text, scale) / 2f, box.x + box.width / 2f),
+                            "Visible glyph midpoint matches actual card midpoint: " + draw.Text);
+                    else Check(Near(draw.X, box.x + 6f * scale), "Original body remains left aligned");
+                    Check(draw.Text.All(c => !char.IsControl(c)), "Alignment and color tokens never become measured glyphs");
+                }
+                Check(!text.Contains("  "), "Composition never inserts centering spaces");
+                string withoutColor = text.Replace("\u0005", "").Replace("\u0001", "").Replace("\u0002", "");
+                Check(Near(Layout(withoutColor, scale).Item2, layout.Item2), "Color markers do not inflate card width");
+                CheckRender(text, scale, new Vector2(35f, 45f));
+                CheckSkillRender(text + string.Concat(Enumerable.Repeat("\n完整技能说明", 65)), scale, new Vector2(100f, 100f));
+            }
+        }
+        BitmapFont.Proportional = false;
+        var nativeIncoming = Rank().Replace("已学被动使本技能伤害提升5%", "已学被动使本技能伤害提升5%\",\"原生来向技能持续时间加成");
+        State(nativeIncoming);
+        CheckRow(Layout(Win05.TestNativeGrowthTip()).Item1, "原生来向技能持续时间加成", Green);
+    }
+
     private static void HierarchyAndDrawing()
     {
         var state = State(Rank());
         Check(state.CanInvestSkill(10401), "Hard19 can invest with fresh authoritative state");
         string text = Win05.TestNativeGrowthTip();
         var rows = Layout(text).Item1;
-        CheckRow(rows, "火弹术", Blue, 13);
-        CheckRow(rows, "等级: 26", Color.white, 12);
-        CheckRow(rows, "下一等级", Color.white, 12);
-        CheckRow(rows, "需要等级: 45", Green);
-        CheckRow(rows, "受到以下技能加成", Green, 8);
+        CheckRow(rows, "火弹术", Blue);
+        CheckRow(rows, "等级: 26", Color.white);
+        CheckRow(rows, "下一等级", Color.white);
+        CheckRow(rows, "需要等级: 45", Green, false);
+        CheckRow(rows, "受到以下技能加成", Green);
         CheckRow(rows, "火焰专精（投入3点）", Green);
         CheckRow(rows, "每点: 伤害 +1%", Green);
         CheckRow(rows, "每点: 目标 +2", Green);
@@ -213,12 +264,12 @@ internal static class NativeSkillTooltipContract
         Check(!text.Contains("投入点数:") && !text.Contains("装备与状态:") && !text.Contains("授予等级:") && !text.Contains("投入1点后:"),
             "Original card is not replaced by investment, gear or granted-rank diagnostic rows");
         Check(!text.Contains("item:equipment-only") && !text.Contains("+300%"), "No equipment IDs or aggregate training value mislabelled as per-point");
-        string prefix = "\u0005             火弹术\n            等级: 26\n" +
+        string prefix = "\u0007\u0005火弹术\n\u0007等级: 26\n" +
             "凝聚火焰之力，对敌人造成123.45%的魔法伤害。\n消耗: 12点法力\n技能吟唱: 瞬发\n技能间隔: 2秒\n\n" +
-            "            下一等级\n凝聚火焰之力，对敌人造成125.45%的魔法伤害。\n消耗: 13点法力\n技能吟唱: 瞬发\n技能间隔: 1.8秒\n" +
+            "\u0007下一等级\n凝聚火焰之力，对敌人造成125.45%的魔法伤害。\n消耗: 13点法力\n技能吟唱: 瞬发\n技能间隔: 1.8秒\n" +
             "\u0001需要等级: 45\n\u0001已学被动使本技能伤害提升5%\n\n\u0006您现在的剩余技能点数为3\n\u0006双击或拖曳至快捷栏以使用这个技能";
-        Check(text.StartsWith(prefix + "\n\n\u0001", StringComparison.Ordinal),
-            "Pre-V5 original complete current/next prose, detail labels, blank rows and footer are a byte-exact prefix; incoming synergy is append-only");
+        Check(text.StartsWith(prefix + "\n\n\u0007\u0001", StringComparison.Ordinal),
+            "Original complete current/next prose, labels, blank rows and footer are unchanged apart from explicit header alignment; incoming synergy is append-only");
         CheckRender(text, 1f, new Vector2(30f, 40f));
         Screen.width = 1920; Screen.height = 1080;
         CheckRender(text, 2f, new Vector2(80f, 90f));
@@ -508,7 +559,7 @@ internal static class NativeSkillTooltipContract
     public static int Main(string[] args)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-        HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
+        CenteringAfterWrapping(); HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
         PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation();
         foreach (string fixture in args) CheckServerFixture(fixture);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");
