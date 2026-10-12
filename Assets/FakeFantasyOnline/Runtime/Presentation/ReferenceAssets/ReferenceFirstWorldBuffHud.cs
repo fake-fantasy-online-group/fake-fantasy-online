@@ -701,24 +701,14 @@ public sealed class ReferenceFirstWorldBuffHud : IDisposable
     }
 
     /// <summary>
-    /// Official GameHud.DrawBuffBar (0x06000449) resolves a finite row's icon in two steps:
-    /// <c>GameHud.BuffIcon(row.iconId)</c> first and, only when that yields nothing and the row
-    /// carries a positive skill id, <c>GameHud.BuffIcon(Win05.SkillIconId(row.skillId))</c>. arm64
-    /// 0x438d98 is the first lookup and 0x438dc4 its null test; 0x438e18 is
-    /// <c>Win05.SkillIconId</c> (0x0600102f, arm64 rva 0x3b284c) and 0x438e40 the second
-    /// <c>GameHud.BuffIcon</c> (0x06000447, arm64 rva 0x43d4d8); x86_64 0x45017c / 0x4501a3 and
-    /// 0x4501d3 / 0x4501f6. GameHud.DrawPermBuffBox (0x0600044e) has no such second lookup, so
-    /// the permanent column deliberately stays on the single-step path.
+    /// The authoritative wire icon is the original status level's SmallMap.
+    /// The former source-skill retry could replace an authored zero or a temporarily
+    /// unavailable original resource with unrelated art. Both columns now use only
+    /// the exact wire resource; GameHud.BuffIcon retries unavailable resources itself.
     /// </summary>
     private Texture2D LoadFiniteStatusIcon(CharData.BuffView row)
     {
-        Texture2D icon = LoadStatusIcon(row.iconId);
-        if (!icon && row.skillId > 0)
-        {
-            icon = LoadStatusIcon(Win05.SkillIconId(row.skillId));
-        }
-
-        return icon;
+        return LoadStatusIcon(row.iconId);
     }
 
     /// <summary>

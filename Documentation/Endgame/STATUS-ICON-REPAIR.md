@@ -1,4 +1,7 @@
-# Status icon receipt and resource audit
+# Earlier status icon audit, superseded by original SmallMap recovery
+
+> The JSON/skill-only audit below was incomplete. Original `res_ff21.pkg/zipbin/ov_exceptdesc.bin` has a per-level `ResExceptDesc.SmallMap` field, verified by `ov_res.bin`, which the server importer omitted. The final paired-server report is `docs/native-status-icons.md`; it audits all 203 positive status IDs and all 40 level slots, restores exact native fields, and preserves authored zero. The earlier source-icon propagation and zero-refresh preservation conclusions below must not be used as original status artwork evidence. The client now accepts authoritative wire icons including zero and does not replace them with previous/source skill artwork. No new substitute artwork was introduced by the native recovery.
+
 
 ## Evidence and scope (2026-10-12)
 

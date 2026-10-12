@@ -120,7 +120,7 @@ class SkillBehaviorPresentationAcceptance
         var high=Only(healer,10306);var highRow=Obj(Array(high["skillRanks"])[0]);highRow["hardRank"]=20L;highRow["softRank"]="7";highRow["effectiveRank"]="27";highRow["nextEffectiveRank"]="28";highRow["canInvest"]=false;Obj(Obj(highRow["contract"])["current"])["mpCost"]=901L;
         Apply(state,high);Check(state.SkillRank(10306).EffectiveRank=="27","equipment ranks above20 retained");MP(10306,900,false);MP(10306,901,true);
         var highBehavior=Obj(Obj(highRow["contract"])["current"]);
-        // Even high-rank efficiency retains a positive integer MP admission gate.
+        // Even a reduced high-rank cost retains a positive integer MP admission gate.
         highBehavior["mpCost"]=1L;Apply(state,high);
         MP(10306,0,false);MP(10306,1,true);
         // A newer inventory revision invalidates old typed cost before replacement arrives.

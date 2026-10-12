@@ -23,19 +23,8 @@ public partial class MonsterEntity
 
     public void SetStatusIcons(List<StatusIcon> list)
     {
-        if (list != null && sicons != null)
-            for (int i = 0; i < list.Count; i++)
-            {
-                StatusIcon row = list[i];
-                if (row.icon > 0) continue;
-                foreach (StatusIcon previous in sicons)
-                    if (previous.status == row.status && previous.icon > 0)
-                    {
-                        row.icon = previous.icon;
-                        list[i] = row;
-                        break;
-                    }
-            }
+        // Zero is an authored original status-level value. Do not carry art
+        // across a level change merely because the status identity is unchanged.
         sicons = list;
         if (sicons != null && sicons.Count > 0)
         {
