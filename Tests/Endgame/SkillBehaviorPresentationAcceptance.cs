@@ -25,6 +25,34 @@ class SkillBehaviorPresentationAcceptance
     {Check(s.Apply(EndgameResponse.Parse(BoundedJson.Serialize(root))),"published fixture");return s.SkillRanks[0];}
     static void MP(int id,int available,bool allowed)
     {writes=0;tip=null;CharData.mp=available;client.UseSkill(id,2);Check(writes==(allowed?1:0),"actual NetClient MP boundary"+id+" mp"+available+" tip"+tip);}
+    static void ActualGrowthPackets(string path)
+    {
+        var ids = new HashSet<int>(); int samples = 0;
+        foreach (string json in File.ReadLines(path))
+        {
+            var response = EndgameResponse.Parse(json); var state = State();
+            Check(state.Apply(response), "Actual growth packet applies atomically");
+            var row = state.SkillRanks[0]; var contract = row.Contract; var value = contract.Current;
+            ids.Add(row.ID); samples++; CharData.race = contract.Profession - 1;
+            Check(AuthoritativeProfessionSkill.Current(row.ID) == value && Win05.SkillInfo(row.ID).name == contract.Name, "Production provider owns current growth result");
+            AuthoritativeProfessionSkill.TryResolve(row.ID, out var aim, out var range, out var radius, out var angle, out var length, out var width, out var trap);
+            if (!value.Usable) { Check(aim == SkillTargeting.Aim.Unavailable, "Attribute passives never become castable"); continue; }
+            Check(range == value.CastDistance && radius == value.Area.Radius && angle == value.Area.Angle && length == value.Area.Length && width == value.Area.Width, "Grown support geometry matches real targeting");
+            foreach (int available in new[] { Math.Max(0, value.MPCost - 1), value.MPCost, value.MPCost + 1 })
+            {
+                writes = 0; tip = null; CharData.mp = available;
+                if (value.PointRequired) client.UseSkillAt(row.ID, 100, 100, 2); else client.UseSkill(row.ID, 2);
+                Check(writes == (available >= value.MPCost ? 1 : 0), "Actual NetClient current-cost admission for grown skill " + row.ID + "/" + row.EffectiveRank);
+                if (available < value.MPCost) Check(tip == "法力不足", "Insufficient actual cost retains native feedback");
+            }
+            state.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"ok\":true,\"revision\":\"2\"}"));
+            writes = 0; CharData.mp = int.MaxValue;
+            if (value.PointRequired) client.UseSkillAt(row.ID, 100, 100, 2); else client.UseSkill(row.ID, 2);
+            Check(writes == 0, "Newer equipment revision blocks stale growth cost before NetClient write");
+        }
+        Check(ids.Count == 148 && samples > 300, "Production NetClient path covers all resolved skills and policy boundaries");
+        Console.WriteLine("Skill growth actual NetClient acceptance: " + samples + " server samples / " + checks + " checks passed.");
+    }
     // Upper-bound equipped packets are not the baseline 149-row fixtures: they
     // may contain a cross-profession grant and have equipment-resolved MP/ranks.
     static void VariantPackets(string[] args)
@@ -76,6 +104,8 @@ class SkillBehaviorPresentationAcceptance
         GameTables.Texts["skills"]="{\"skills\":[{\"id\":10401,\"name\":\"旁观火弹\",\"icon\":5046,\"castkind\":1,\"tgt\":1,\"canEnemy\":1,\"dist\":450},{\"id\":10306,\"name\":\"污染净世\",\"icon\":1,\"levels\":[{\"lv\":1,\"mp\":100}]},{\"id\":10307,\"name\":\"污染祝祷\",\"icon\":1,\"levels\":[{\"lv\":1,\"mp\":120}]},{\"id\":10212,\"name\":\"偷窃术\",\"icon\":5031,\"desc\":\"legacy theft placeholder\",\"castkind\":1,\"tgt\":1,\"canEnemy\":1,\"levels\":[{\"lv\":1,\"mp\":69}]}]}";
         CharData.skills[10306]=CharData.skills[10307]=CharData.skills[10212]=1;
         client=new NetClient();NetClient.I=client;client.BindSkillCommandsForIndependentRuntime((s,f)=>tip=s,(id,target)=>writes++,(id,x,y,target)=>writes++,on=>{},()=>{});
+        string growth = Environment.GetEnvironmentVariable("FFO_SKILL_GROWTH_FIXTURE");
+        if (!string.IsNullOrEmpty(growth)) ActualGrowthPackets(growth);
         if(args[0]=="--variant-packets"){VariantPackets(args);return;}
         var seen=new HashSet<int>();string healer=null,assassin=null;
         foreach(string path in new[]{args[0],args[1],args[2],args[3],args[4]})

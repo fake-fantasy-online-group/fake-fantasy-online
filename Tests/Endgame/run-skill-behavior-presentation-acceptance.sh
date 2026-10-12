@@ -12,4 +12,4 @@ P="$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets"
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
  "$P/AuthoritativeProfessionSkill.cs" "$P/Win05.SkillData.cs" "$P/NativeSwordSkillTargeting.cs" "$P/NetClient.SkillCommands.cs" \
  "$ROOT/Tests/Endgame/SkillBehaviorPresentationAcceptanceStubs.cs" "$ROOT/Tests/Endgame/SkillBehaviorPresentationAcceptance.cs"
-"$FFO_MONO_ROOT/bin/mono" "$OUT/Acceptance.exe" "$@"
+FFO_SKILL_GROWTH_FIXTURE="$ROOT/Tests/Endgame/Fixtures/skill-growth-v7.jsonl" "$FFO_MONO_ROOT/bin/mono" "$OUT/Acceptance.exe" "$@"

@@ -24,6 +24,14 @@ internal static class EndgameLootContextContract
     private static void Apply(Client client, string json) => client.Endgame.Apply(EndgameResponse.Parse(json));
     private static void Main()
     {
+        foreach (var sample in new[] { new { Value = 10000, Text = "效果命中 +100%" }, new { Value = 500, Text = "效果命中 +5%" }, new { Value = 1, Text = "效果命中 +0.01%" }, new { Value = -50, Text = "效果命中 -0.5%" } })
+        {
+            var stat = new EndgameStatView(new Dictionary<string, object> { { "attr", 1000001L }, { "value", (long)sample.Value }, { "mode", 0L } });
+            string text = (string)typeof(EndgamePanel).GetMethod("StatText", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { stat });
+            Check(text == sample.Text, "Effect-hit basis points match authoritative native server units");
+            Check((bool)typeof(EndgamePanel).GetMethod("IsAttributeLine", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { text }), "Effect hit stays an ordinary attribute, not an orange special effect");
+            Check(EndgamePanel.DarkGold(text) == "\u00035" + text, "Effect-hit attribute keeps original dark-gold palette");
+        }
         var client = new Client(); var panel = new EndgamePanel(); panel.Bind(client);
         client.Endgame.Begin(new EndgameRequest("hello")); Apply(client, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
         Apply(client, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"loot\",\"chunks\":1,\"revision\":\"1\",\"items\":[{\"uid\":\"1\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"仙遗\",\"uniqueId\":1,\"socketCount\":2,\"formationId\":1,\"sockets\":[{\"index\":0,\"itemId\":1900028001}]},{\"uid\":\"2\",\"itemId\":1900028001,\"location\":\"bag\",\"tab\":1,\"slot\":1,\"name\":\"角木蛟\"}]}");

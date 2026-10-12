@@ -470,7 +470,9 @@ internal static class NativeSkillTooltipContract
                 Check(EndgameSkillRankView.IsProfessionSkill(rank.ID), "Fixture uses actual profession skill ID " + rank.ID);
                 if (!fullCatalog)
                 {
-                    int soft = rank.ID == 10405 ? 3 : 4;
+                    // Current content v6 makes 2610 an 冰箭术-only grant; the
+                    // legacy v5 frost-wide +1 must not inflate 冰爆术 here.
+                    int soft = 3;
                     Check(rank.HardRank == 19 && rank.SoftRank == soft.ToString(CultureInfo.InvariantCulture) &&
                         rank.EffectiveRank == (19 + soft).ToString(CultureInfo.InvariantCulture) && rank.NextEffectiveRank == (20 + soft).ToString(CultureInfo.InvariantCulture),
                         "Real equipped fixture preserves hard19 plus legal gear and full next rank " + rank.ID);
@@ -595,9 +597,12 @@ internal static class NativeSkillTooltipContract
                 "Actual server integer cost remains positive and never rises across sampled ranks");
             previous = behavior.MPCost;
             string rank = ((long)sample["rank"]).ToString(CultureInfo.InvariantCulture);
+            int id = Convert.ToInt32(sample["id"], CultureInfo.InvariantCulture);
+            string name = (string)sample["name"];
+            Check(id == 10301 && name == "治愈术", "Only the approved healing skill supplies this reduced-cost fixture");
             string lines = BoundedJson.Serialize(sample["lines"]);
-            State(Rank(hard: 20, effective: rank, next: "", invest: false, current: lines, upcoming: "[]"));
-            string text = Win05.TestNativeGrowthTip(10401, false, "净化术");
+            State(Rank(hard: 20, effective: rank, next: "", invest: false, current: lines, upcoming: "[]").Replace("\"id\":10401", "\"id\":10301"));
+            string text = Win05.TestNativeGrowthTip(id, false, name);
             foreach (string line in (IReadOnlyList<object>)sample["lines"])
                 Check(Count(text, line) == 1, "Actual server prose/cost/timing renders exactly once at " + rank);
             Check(text.Contains("消耗: " + behavior.MPCost + "点法力"), "Server integer admission amount remains original consumption line");
@@ -606,7 +611,33 @@ internal static class NativeSkillTooltipContract
             Check(((IReadOnlyList<object>)sample["lines"]).Count == 4, "Original description and three detail rows remain the complete block");
             foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(text, scale, new Vector2(300, 200));
         }
-        Check(cases.Count == 7 && previous == 1, "Real server fixture covers ranks5/20/21/30/50/100/1000000 including positive one-MP gate");
+        Check(cases.Count == 7 && previous == 1, "Real healing fixture covers ranks19/20/21/30/50/100/1000000 including positive one-MP gate");
+    }
+    private static void ServerActualGrowthTips(string path)
+    {
+        var ids = new HashSet<int>(); int samples = 0;
+        foreach (string json in File.ReadLines(path))
+        {
+            var response = EndgameResponse.Parse(json);
+            var state = new EndgameClientState();
+            state.Begin(new EndgameRequest("hello"));
+            state.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\",\"endgame.skill-behavior.v1\"]}"));
+            Check(state.Apply(response), "Actual new-growth response is accepted by strict parser and state");
+            EndgamePanel.GrowthState = state;
+            var rank = state.SkillRanks.Single(); var contract = rank.Contract;
+            ids.Add(rank.ID); samples++;
+            string text = Win05.TestNativeGrowthTip(rank.ID, true, contract.Name, contract.Current.Usable);
+            Check(Layout(text).Item1[0].Item1 == contract.Name, "New growth retains original title");
+            foreach (var line in rank.CurrentEffectLines) Check(text.Contains(line), "Actual current growth prose remains complete");
+            foreach (var line in rank.NextEffectLines) Check(text.Contains(line), "Actual next growth prose remains complete");
+            string hotbar = Win05.TestNativeGrowthTip(rank.ID, false, contract.Name, contract.Current.Usable);
+            foreach (string line in rank.CurrentEffectLines) Check(Count(hotbar, line) == 1, "Current growth line appears exactly once on hotbar");
+            Check(!text.Contains("法力效率") && !text.Contains("抵抗概率降至") && !text.Contains("参数"), "Retired growth mechanics are absent from real server cards");
+            foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(text, scale, new Vector2(300, 200));
+            state.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"ok\":true,\"revision\":\"2\"}"));
+            Check(Win05.TestNativeGrowthTip(rank.ID, true, contract.Name).Contains("正在等待服务器技能资料"), "Newer revision hides stale attribute/effect-hit growth");
+        }
+        Check(ids.Count == 148 && samples > 300, "Real growth fixtures cover every resolved profession skill and all policy boundaries");
     }
     private static void EquipmentVariantTips(string fixtureDirectory)
     {
@@ -640,7 +671,8 @@ internal static class NativeSkillTooltipContract
         CenteringAfterWrapping(); HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
         PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation(); ReducedManaCostPreservesOriginalBlock();
         foreach (string fixture in args) CheckServerFixture(fixture);
-        ServerActualManaCostTips(Environment.GetEnvironmentVariable("FFO_SKILL_EFFICIENCY_FIXTURE"));
+        ServerActualManaCostTips(Environment.GetEnvironmentVariable("FFO_SKILL_MANA_FIXTURE"));
+        ServerActualGrowthTips(Environment.GetEnvironmentVariable("FFO_SKILL_GROWTH_FIXTURE"));
         string variants = Environment.GetEnvironmentVariable("FFO_VARIANT_FIXTURE_DIR");
         if (!string.IsNullOrEmpty(variants)) EquipmentVariantTips(variants);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");

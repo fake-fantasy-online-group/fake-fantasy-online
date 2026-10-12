@@ -1,13 +1,15 @@
 [
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
-      "消耗: 64点法力",
+      "目标恢复最大生命的100%+640点当前生命。",
+      "消耗: 59点法力",
       "技能吟唱: 瞬发",
       "技能间隔: 1秒"
     ],
+    "name": "治愈术",
     "payload": {
-      "mpCost": 64,
+      "mpCost": 59,
       "prepareMs": 0,
       "cooldownMs": 1000,
       "castDistance": 450,
@@ -32,19 +34,21 @@
         "angle": 0
       }
     },
-    "rank": 5
+    "rank": 19
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
-      "消耗: 50点法力",
+      "目标恢复最大生命的100%+670点当前生命。",
+      "消耗: 58点法力",
       "技能吟唱: 瞬发",
-      "技能间隔: 0.77秒"
+      "技能间隔: 0.98秒"
     ],
+    "name": "治愈术",
     "payload": {
-      "mpCost": 50,
+      "mpCost": 58,
       "prepareMs": 0,
-      "cooldownMs": 769,
+      "cooldownMs": 981,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
@@ -70,16 +74,18 @@
     "rank": 20
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
-      "消耗: 49点法力",
+      "目标恢复最大生命的100%+700点当前生命。",
+      "消耗: 57点法力",
       "技能吟唱: 瞬发",
-      "技能间隔: 0.76秒"
+      "技能间隔: 0.96秒"
     ],
+    "name": "治愈术",
     "payload": {
-      "mpCost": 49,
+      "mpCost": 57,
       "prepareMs": 0,
-      "cooldownMs": 757,
+      "cooldownMs": 962,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
@@ -105,16 +111,18 @@
     "rank": 21
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
-      "消耗: 43点法力",
+      "目标恢复最大生命的100%+970点当前生命。",
+      "消耗: 49点法力",
       "技能吟唱: 瞬发",
-      "技能间隔: 0.67秒"
+      "技能间隔: 0.82秒"
     ],
+    "name": "治愈术",
     "payload": {
-      "mpCost": 43,
+      "mpCost": 49,
       "prepareMs": 0,
-      "cooldownMs": 666,
+      "cooldownMs": 820,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
@@ -140,16 +148,18 @@
     "rank": 30
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
-      "消耗: 34点法力",
+      "目标恢复最大生命的100%+1570点当前生命。",
+      "消耗: 37点法力",
       "技能吟唱: 瞬发",
-      "技能间隔: 0.53秒"
+      "技能间隔: 0.62秒"
     ],
+    "name": "治愈术",
     "payload": {
-      "mpCost": 34,
+      "mpCost": 37,
       "prepareMs": 0,
-      "cooldownMs": 526,
+      "cooldownMs": 618,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
@@ -175,16 +185,18 @@
     "rank": 50
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "目标恢复最大生命的100%+3070点当前生命。",
       "消耗: 23点法力",
       "技能吟唱: 瞬发",
-      "技能间隔: 0.34秒"
+      "技能间隔: 0.38秒"
     ],
+    "name": "治愈术",
     "payload": {
       "mpCost": 23,
       "prepareMs": 0,
-      "cooldownMs": 344,
+      "cooldownMs": 382,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
@@ -210,16 +222,18 @@
     "rank": 100
   },
   {
+    "id": 10301,
     "lines": [
-      "消除队友身上昏迷和中毒的效果，每次升级消除的效果增强。",
+      "目标恢复最大生命的100%+30000070点当前生命。",
       "消耗: 1点法力",
       "技能吟唱: 瞬发",
       "技能间隔: 0秒"
     ],
+    "name": "治愈术",
     "payload": {
       "mpCost": 1,
       "prepareMs": 0,
-      "cooldownMs": 0,
+      "cooldownMs": 1,
       "castDistance": 450,
       "usable": true,
       "requiresInvisible": false,
