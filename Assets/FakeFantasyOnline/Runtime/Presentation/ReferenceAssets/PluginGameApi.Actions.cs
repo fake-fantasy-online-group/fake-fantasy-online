@@ -22,6 +22,12 @@ public sealed partial class PluginGameApi
 
     private sealed class PluginAction
     {
+        internal ReferenceFirstWorldInitialFrame TitlePreviousFrame;
+        internal ClientSessionCoordinator TitleSession;
+        internal IPluginTitleBridge TitleOwner;
+        internal string TitleInstance;
+        internal long TitleResultSequence;
+        internal long TitleSubmittedRevision;
         internal GameActionRequest Request;
         internal GameActionReceipt Receipt;
         internal long Scene;
@@ -60,7 +66,7 @@ public sealed partial class PluginGameApi
         string worldReason = "An active, built world session is required.";
         string actorReason = "A live native player and combat owner are required.";
         string mobileReason = "The native player is unavailable, dead, immobile, working, or riding another player.";
-        return new List<GameActionDefinition>
+        var definitions = new List<GameActionDefinition>
         {
             ActionDefinition("movement.move", "Navigate through native collision/pathfinding in map pixels. Completion observes local arrival only. Cancelling stops only the owned path. Receipts and request IDs retain the last 1024 settled actions per API instance.", mobile, mobileReason,
                 "x:number", "y:number", "tolerance?:number", "timeoutSeconds?:number"),
@@ -100,7 +106,10 @@ public sealed partial class PluginGameApi
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
                 "entityId:string", "text:string")
-        }.AsReadOnly();
+        };
+        AddTitleActions(definitions);
+        AddPartyActions(definitions);
+        return definitions.AsReadOnly();
     }
 
     private static GameActionDefinition ActionDefinition(string name, string description, bool available, string reason, params string[] fields)
@@ -126,6 +135,10 @@ public sealed partial class PluginGameApi
         if (request == null) throw new ArgumentNullException(nameof(request));
         RefreshScene();
         TickActions();
+        // Title actions accept identifiers only. Reject unsupported (possibly sensitive)
+        // fields before retaining the request, and never echo their keys or values.
+        if (!ValidateTitleActionEnvelope(request))
+            return ActionRejected(request, "arguments.invalid", "Ordinary actions do not accept credential fields; title actions accept only documented non-sensitive identifiers and guards.");
         if (request.RequestId != null && (request.RequestId.Length == 0 || request.RequestId.Length > 128))
             return ActionRejected(request, "request_id.invalid", "requestId must contain between 1 and 128 characters.");
         string previousId;
@@ -187,7 +200,7 @@ public sealed partial class PluginGameApi
         catch (Exception error)
         {
             // Native callbacks may already have begun side effects. An exception cannot prove rejection.
-            ActionSet(entry, GameActionState.Unknown, "action.exception", error.GetType().Name + ": " + error.Message);
+            ActionSet(entry, GameActionState.Unknown, "action.exception", entry.Request.Name.StartsWith("title.", StringComparison.Ordinal) ? "Native title dispatch failed; its outcome is unknown. Observe title before retrying." : error.GetType().Name + ": " + error.Message);
         }
         return entry.Receipt;
     }
@@ -233,6 +246,8 @@ public sealed partial class PluginGameApi
 
     private void ActionDispatch(PluginAction entry)
     {
+        if (entry.Request.Name.StartsWith("title.", StringComparison.Ordinal)) { DispatchTitle(entry); return; }
+        if (entry.Request.Name.StartsWith("party.", StringComparison.Ordinal)) { DispatchParty(entry); return; }
         var args = entry.Request.Arguments;
         var session = Session;
         var frame = ActionFrame;
@@ -455,6 +470,7 @@ public sealed partial class PluginGameApi
 
     private void ActionPoll(PluginAction entry)
     {
+        if (entry.TitleOwner != null) { PollTitle(entry); return; }
         if (!ActionActive(entry) && (entry.Pending == null || entry.PendingSettled)) return;
         // Observe a native queued pickup/skill's actual gateway task before scene/cancel checks.
         // Sending may already have happened, in which case it cannot be revoked.
@@ -655,7 +671,7 @@ public sealed partial class PluginGameApi
     private GameActionReceipt ActionSet(PluginAction entry, GameActionState state, string code, string message, Dictionary<string, object> data = null)
     {
         data = data ?? new Dictionary<string, object>();
-        data["sceneRevision"] = entry.Scene; data["serverOutcomeKnown"] = false;
+        data["sceneRevision"] = entry.Scene; if (!data.ContainsKey("serverOutcomeKnown")) data["serverOutcomeKnown"] = false;
         entry.Receipt = new GameActionReceipt(entry.Receipt.ActionId, entry.Request.RequestId, entry.Request.Name, state, code, message, data);
         if (!ActionActive(entry)) { entry.Cancellation?.Dispose(); entry.Cancellation = null; }
         if (ActionActive(entry) || (entry.Pending != null && !entry.PendingSettled)) activeActions.Add(entry);

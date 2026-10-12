@@ -12,7 +12,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// Main-thread, transport-neutral view of the native game. Observations never acknowledge
 /// gameplay queues. Each consumer keeps its own event cursor; all returned values are copies.
 /// </summary>
-public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IDisposable
+public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IGameSensitiveLogin, IDisposable
 {
     private const int EventCapacity = 1024;
     private const int MaximumRows = 512;
@@ -139,6 +139,7 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
     private void RefreshObservationRevisions()
     {
         ClientSessionCoordinator s = Session;
+        TrackTitleObservation();
         ReferenceFirstWorldInitialFrame frame = ObservationFrame;
         TrackObservation("world", Token(s?.State, s?.Connected, GameBootstrap.CurMapId, frame?.Built));
         TrackObservation("dialogue", CurrentDialogueRevision().ToString(CultureInfo.InvariantCulture));
@@ -150,6 +151,8 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
         TrackObservation("entities", Token(s?.WorldEntitiesVersion, s?.RemotePlayersVersion,
             s?.RemotePathsVersion, s?.MonsterPathsVersion));
         TrackObservation("buffs", Token(s?.BuffStateVersion));
+        TrackObservation("party", PartyObservationToken(s?.PartyStateVersion, frame?.Player?.EntityId,
+            CharData.charId, ObservationWorldReady(s)));
         TrackObservation("quests", Token(s?.TaskLogStateVersion, s?.NpcTaskOffersStateVersion));
         var player = frame?.Player;
         TrackObservation("player", Token(s?.PlayerStatusStateVersion, s?.LocalPlayerLifeStateVersion,
@@ -200,6 +203,8 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
     }
 
     private string EntityReference(string kind, int id) => kind + ":" + sceneRevision.ToString(CultureInfo.InvariantCulture) + ":" + id.ToString(CultureInfo.InvariantCulture);
+    private static string PartyObservationToken(long? nativeVersion, int? selfEntityId, long selfCharacterId, bool worldReady) =>
+        Token(nativeVersion, selfEntityId, selfCharacterId, worldReady);
     private static int ObservationFrameNumber
     {
         // Keep Unity's internal call out of the offline observer's JIT body. This accessor

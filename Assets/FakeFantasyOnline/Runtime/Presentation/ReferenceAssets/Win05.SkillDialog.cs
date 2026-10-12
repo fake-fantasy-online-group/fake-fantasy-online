@@ -623,7 +623,7 @@ public partial class Win05
             CharData.skills.TryGetValue(slot.id, out int currentLevel);
             int iconId = info == null ? 0 : info.icon;
             Texture2D icon = LoadSkillIcon(iconId);
-            DrawSkillIcon(iconRect, icon, currentLevel > 0);
+            DrawSkillIcon(iconRect, icon, currentLevel > 0, tree != null);
             if (currentLevel > 0 && BitmapFont.Ready)
             {
                 BitmapFont.DrawOutline(
@@ -977,22 +977,22 @@ public partial class Win05
         return texture;
     }
 
-    // Official 06001025, arm64 :674-711 / x86_64 :819-836: a null icon is a drawn state, not a skip.
-    // `op_Inequality(icon, 0)` false sets GUI.color = (0, 0, 0, 0.25) (arm64 :686, 0x3e800000) and
-    // paints Texture2D.whiteTexture (arm64 :687-688) over the *unfitted* icon rect - the Fit
-    // 06001052 call only exists in the non-null arm (arm64 :701, x86_64 :869) - after which both
-    // arms share one DrawTexture and one `set_color(1,1,1,1)` (arm64 :708-711).
-    private static void DrawSkillIcon(Rect area, Texture2D icon, bool learned)
+    // Tree artwork contains obsolete inactive pictures. Preserve its outer rim,
+    // cover the inner well, then draw only the current skill icon. Opaque dimming
+    // keeps unlearned icons distinct without exposing a second baked picture.
+    private static void DrawSkillIcon(Rect area, Texture2D icon, bool learned, bool hasTreeArtwork)
     {
-        if (icon == null)
+        float insetX = hasTreeArtwork ? area.width * (2f / 36f) : 0f;
+        float insetY = hasTreeArtwork ? area.height * (2f / 36f) : 0f;
+        Rect well = new Rect(area.x + insetX, area.y + insetY,
+            area.width - 2f * insetX, area.height - 2f * insetY);
+        GUI.color = new Color(17f / 255f, 17f / 255f, 17f / 255f, 1f);
+        GUI.DrawTexture(well, Texture2D.whiteTexture);
+        if (icon != null)
         {
-            GUI.color = new Color(0f, 0f, 0f, 0.25f);
-            GUI.DrawTexture(area, Texture2D.whiteTexture);
-        }
-        else
-        {
-            if (!learned) GUI.color = new Color(1, 1, 1, 0.38f);
-            GUI.DrawTexture(Fit(area, icon), icon);
+            // Brightness, not opacity: an unlearned skill must still be one image.
+            GUI.color = learned ? Color.white : new Color(0.55f, 0.55f, 0.55f, 1f);
+            GUI.DrawTexture(Fit(well, icon), icon);
         }
 
         GUI.color = Color.white;

@@ -9,8 +9,15 @@ using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.PluginApi;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
-internal static class GameActionAdapterTests
+internal static partial class GameActionAdapterTests
 {
+    private static IReadOnlyDictionary<string, object> Object(object value) => (IReadOnlyDictionary<string, object>)value;
+    private static IReadOnlyList<object> Rows(object value) => (IReadOnlyList<object>)value;
+    private static GameActionDefinition Definition(PluginGameApi api, string name)
+    {
+        foreach (var definition in api.GetActions()) if (definition.Name == name) return definition;
+        throw new Exception("Missing action definition: " + name);
+    }
     private static int checks;
     private static Dictionary<string, object> Map(params object[] pairs)
     { var d = new Dictionary<string, object>(); for (int i = 0; i < pairs.Length; i += 2) d.Add((string)pairs[i], pairs[i + 1]); return d; }
@@ -146,6 +153,9 @@ internal static class GameActionAdapterTests
             var retained = Act(api, "inventory.sort", Map("tab", 0), "old");
             for (int i = 0; i < 1024; i++) Act(api, "inventory.sort", Map("tab", 0), "new" + i);
             Check(api.GetAction(retained.ActionId).Code == "action.not_found", "settled action retention bounded to 1024");
+            RunTitleTests();
+            RunPartyTests();
+            RunPartyObservationTests();
             Console.WriteLine("Game action adapter passed: " + checks + " assertions (native substitutes; no gameplay executed).");
             return 0;
         }
@@ -156,8 +166,20 @@ internal static class GameActionAdapterTests
 namespace UnityEngine { internal static class Time { internal static float time; } }
 namespace FakeFantasyOnline.Application
 {
-    public enum ClientSessionState { InWorld, Offline }
+    public enum ClientSessionState { InWorld, Offline, EnteringWorld }
     public enum WorldReviveOption : byte { RespawnCharacter }
+    public sealed class WorldPartyMemberState
+    {
+        public int EntityId, Level, HitPoints, MaximumHitPoints, Gender, HairId, HairColor;
+        public string DisplayName; public bool Online = true;
+    }
+    public sealed class WorldPartyState
+    {
+        public int LeaderEntityId; public List<WorldPartyMemberState> Members = new List<WorldPartyMemberState>();
+        public string PartyName = "";
+        public List<long> CharacterIds = new List<long>(); public List<byte> Professions = new List<byte>();
+        public bool ContainsEntity(int id) => id != 0 && Members.Exists(m => m.EntityId == id);
+    }
     public sealed class WorldGroundItemState { public int X, Y; }
     public sealed class WorldNpcState { public int EntityId; public string DisplayName; }
     public sealed class WorldNpcTaskOfferState { public int TaskId; }
@@ -171,6 +193,7 @@ namespace FakeFantasyOnline.Application
     public sealed class WorldChatSendRequest { public static WorldChatSendRequest ForChannel(byte c, string t, object s) => new WorldChatSendRequest(); public static WorldChatSendRequest ForWhisper(string n, string t, object s) => new WorldChatSendRequest(); }
     public sealed class ClientSessionCoordinator
     {
+        public bool Connected = true;
         public ClientSessionState State = ClientSessionState.InWorld;
         public WorldInventoryState InventoryState = new WorldInventoryState();
         public WorldSkillBookState SkillBookState = new WorldSkillBookState();
@@ -179,6 +202,21 @@ namespace FakeFantasyOnline.Application
         public WorldLocalPlayerLifeState LocalPlayerLifeState = new WorldLocalPlayerLifeState();
         public Dictionary<int, WorldGroundItemState> GroundItems = new Dictionary<int, WorldGroundItemState>();
         public long NpcTaskOffersStateVersion = 1, TaskLogStateVersion = 1;
+        public WorldPartyState PartyState = new WorldPartyState();
+        private long partyStateVersion = 1;
+        public Func<long> PartyVersionReader;
+        public long PartyStateVersion { get => PartyVersionReader == null ? partyStateVersion : PartyVersionReader(); set => partyStateVersion = value; }
+        public string LastPartyAction, LastPartyName; public int LastPartyTarget;
+        private Task<Result> PartySend(string action, int id = 0, string name = null)
+        { LastPartyAction = action; LastPartyTarget = id; LastPartyName = name; return Send(); }
+        public Task<Result> CreatePartyAndInviteAsync(string n, object targets, CancellationToken c)
+        { if (targets != null) throw new Exception("Party create must not invite implicitly"); return PartySend("create", 0, n); }
+        public Task<Result> RequestPartyInviteAsync(int id, string n, CancellationToken c) => PartySend("invite", id, n);
+        public Task<Result> RequestPartyJoinAsync(int id, string n, CancellationToken c) => PartySend("join", id, n);
+        public Task<Result> RequestPartyKickAsync(int id, CancellationToken c) => PartySend("kick", id);
+        public Task<Result> RequestPartyLeaderAsync(int id, CancellationToken c) => PartySend("leader", id);
+        public Task<Result> RequestPartyLeaveAsync(CancellationToken c) => PartySend("leave");
+        public Task<Result> RequestPartyDismissAsync(CancellationToken c) => PartySend("dismiss");
         public int Sends; public Task<Result> Next;
         private Task<Result> Send() { Sends++; return Next ?? Task.FromResult(Result.Success()); }
         public Task<Result> SortInventoryAsync(byte t, CancellationToken c) => Send();
@@ -201,6 +239,12 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     public sealed partial class PluginGameApi
     {
+        private sealed class ObservationArguments { internal int Offset, Limit = 128; }
+        public void TestExpireAction(string actionId) { actions[actionId].Deadline = 0; }
+        private static Dictionary<string, object> Values(params object[] pairs)
+        { var result = new Dictionary<string, object>(); for (int i = 0; i < pairs.Length; i += 2) result.Add((string)pairs[i], pairs[i + 1]); return result; }
+        private string BoundText(string text, int maximum = 512) => text == null ? "" : text.Length <= maximum ? text : text.Substring(0, maximum);
+        private string EntityReference(string kind, int id) => kind + ":" + TestScene + ":" + id;
         public ClientSessionCoordinator TestSession; public long TestScene = 1;
         private ClientSessionCoordinator Session => TestSession;
         private long sceneRevision => TestScene;
@@ -214,6 +258,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal sealed class Window { internal ReferenceFirstWorldInitialFrame Frame; }
     internal sealed class ReferenceFirstWorldInitialFrame
     {
+        internal bool Built = true;
         internal LocalPlayer Player = new LocalPlayer(); internal CombatWorld CombatOwnerForIndependentRuntime = new CombatWorld();
         internal float MapWidthForIndependentRuntime => 1000; internal float MapHeightForIndependentRuntime => 1000;
         internal Dictionary<int, ReferenceWorldNpcActor> NpcActors = new Dictionary<int, ReferenceWorldNpcActor>();
@@ -243,7 +288,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public void WalkToPickup(int id, int x, int y) { PendingPickupIdForIndependentRuntime = id; SetTestPath(); }
         internal void StopForNpcPointerForIndependentRuntime() { MoveToTargetForIndependentRuntime = false; }
     }
-    internal static class CharData { internal static int immobile, rideAnchorId; }
+    internal static class CharData { internal static int immobile, rideAnchorId; internal static long charId; internal static string name; }
     internal partial class NetClient { internal static NetClient I; internal static bool IsMiningTool(int id) => false; }
     public partial class CombatWorld
     {

@@ -16,6 +16,7 @@ public sealed partial class PluginGameApi
         RequireMainThread();
         return new List<GameQueryDefinition>
         {
+            QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
             QueryDefinition("player", "Local player position, authoritative vitals, attributes, pet and local movement/combat state."),
             QueryDefinition("entities", "Remote players, monsters, pets and traps from authoritative receipts; positions may predate paths. Bounded server paths are included.", "radius:number", "x:number", "y:number", "kind:string", "entityId:string", "name:string"),
@@ -25,6 +26,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("equipment", "Equipped slots, item identities, durability and appearance.", "itemId:integer", "name:string"),
             QueryDefinition("skills", "Learned skills, levels, real HUD cooldown seconds and last cast receipt. Learned-skill metadata gaps are explicit.", "skillId:integer"),
             QueryDefinition("buffs", "Local buffs and durations at authoritative receipt, without consuming native queues.", "skillId:integer", "name:string"),
+            QueryDefinition("party", "Native party name, leader and member receipt with exact expectedPartyRevision, local membership and leadership. offset pages members; no network request is implicit.", "offset:integer"),
             QueryDefinition("target", "Current local selection, live actor position, target vitals and matching status receipt."),
             QueryDefinition("quests", "Active/completed quests and current NPC offers with expectedQuestRevision and expectedOffersRevision.", "taskId:integer"),
             QueryDefinition("dialogue", "Actual NPC dialogue choices, expectedNpcId and dialogueRevision for stale-safe choice dispatch."),
@@ -42,7 +44,9 @@ public sealed partial class PluginGameApi
         foreach (string field in fields)
         {
             string[] parts = field.Split(':');
-            properties.Add(parts[0], Values("type", parts[1]));
+            var fieldSchema = Values("type", parts[1]);
+            if (parts[0] == "offset") { fieldSchema["minimum"] = 0; fieldSchema["maximum"] = 4096; }
+            properties.Add(parts[0], fieldSchema);
         }
         return new GameQueryDefinition(domain, description,
             Values("type", "object", "properties", properties, "additionalProperties", false));
@@ -81,12 +85,13 @@ public sealed partial class PluginGameApi
             ClientSessionCoordinator s = Session;
             if (!IsObservationDomain(domain))
                 data = Unavailable("unknown_domain", "This observation domain is not implemented.");
-            else if (domain != "world" && domain != "ui" && !ObservationWorldReady(s))
+            else if (domain != "title" && domain != "world" && domain != "ui" && !ObservationWorldReady(s))
                 data = Unavailable("not_in_world", "An active, built world is required for this observation.");
             else
             {
                 switch (domain)
                 {
+                    case "title": data = ObserveTitle(args); break;
                     case "world": data = ObserveWorld(s); break;
                     case "player": data = ObservePlayer(s); break;
                     case "entities": data = ObserveEntities(s, args); break;
@@ -96,6 +101,7 @@ public sealed partial class PluginGameApi
                     case "equipment": data = ObserveEquipment(s, args); break;
                     case "skills": data = ObserveSkills(s, args); break;
                     case "buffs": data = ObserveBuffs(s, args); break;
+                    case "party": data = ObserveParty(s, args); break;
                     case "target": data = ObserveTarget(s, args); break;
                     case "quests": data = ObserveQuests(s, args); break;
                     case "dialogue": data = ObserveDialogue(args); break;
@@ -566,9 +572,9 @@ public sealed partial class PluginGameApi
     {
         switch (domain)
         {
-            case "world": case "player": case "entities": case "npcs": case "loot":
+            case "title": case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
-            case "quests": case "dialogue": case "ui": return true;
+            case "party": case "quests": case "dialogue": case "ui": return true;
             default: return false;
         }
     }
@@ -578,6 +584,7 @@ public sealed partial class PluginGameApi
         string specific;
         switch (domain)
         {
+            case "title": case "party": specific = "|offset|"; break;
             case "entities": specific = "|radius|x|y|kind|entityId|name|"; break;
             case "npcs": specific = "|radius|x|y|entityId|name|"; break;
             case "loot": specific = "|radius|x|y|entityId|name|itemId|"; break;
@@ -597,7 +604,7 @@ public sealed partial class PluginGameApi
 
     private sealed class ObservationArguments
     {
-        internal int Limit = 128;
+        internal int Limit = 128, Offset;
         internal int? Tab, ItemId, SkillId, TaskId;
         internal double? X, Y, Radius;
         internal string Kind, EntityId, Name, SinceQueryKey;
@@ -609,6 +616,7 @@ public sealed partial class PluginGameApi
                 switch (pair.Key)
                 {
                     case "limit": Limit = Math.Max(1, Math.Min(MaximumRows, Integer(pair.Value, pair.Key))); break;
+                    case "offset": Offset = Integer(pair.Value, pair.Key); if (Offset < 0 || Offset > 4096) throw new ArgumentException("offset must be between 0 and 4096."); break;
                     case "tab": Tab = Integer(pair.Value, pair.Key); break;
                     case "itemId": ItemId = Integer(pair.Value, pair.Key); break;
                     case "skillId": SkillId = Integer(pair.Value, pair.Key); break;

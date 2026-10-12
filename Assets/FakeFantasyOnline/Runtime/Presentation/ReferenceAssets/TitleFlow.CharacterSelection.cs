@@ -178,19 +178,9 @@ internal sealed partial class TitleFlow
             }
             else
             {
-                Rect emptySlot = new Rect(x, 121f, 195f, 167f);
-                bool hover = !pendingDelete && emptySlot.Contains(Event.current.mousePosition);
-                ArtworkSkin.Panel(emptySlot, highlighted: hover);
-                // The labelled creation artwork stays at its native 152x33 size inside
-                // the original full-slot hit area; no text is baked into a stretched card.
-                Rect createButton = new Rect(x + 21.5f, 188f, 152f, 33f);
-                Texture2D[] createFrames = ArtworkSkin.Frames("res/uires/titleui/createbtn.gsa", 3);
-                if (createFrames != null && createFrames[0] != null)
-                    ArtworkSkin.IconFace(createButton, createFrames, hover,
-                        hover && Input.GetMouseButton(0), !pendingDelete);
-                else
-                    ArtworkSkin.ButtonFace(createButton, "＋ 创建角色", enabled: !pendingDelete,
-                        selected: hover, pressed: hover && Input.GetMouseButton(0));
+                RecoveredTitleCharacterSurface.DrawBorder(new Rect(x, 121f, width, height), 1f, Color.white);
+                GUI.Label(new Rect(x, height * 0.5f + 121f - 10f, 195f, 20f),
+                    "<color=#B4B4B4>＋ 创建角色</color>", center);
                 if (!pendingDelete && GUI.Button(new Rect(x, 121f, 195f, 167f), GUIContent.none, GUIStyle.none))
                 {
                     prepareCreation(SelectedCharacterForIndependentRuntime);
@@ -213,6 +203,7 @@ internal sealed partial class TitleFlow
             if (entering && Time.realtimeSinceStartup - enterAtMs > 15f)
             {
                 entering = false;
+                PublishPluginTitleResult("enter_timeout");
                 setMessage("进入游戏超时, 请重试");
             }
             GUI.enabled = !entering;
@@ -260,21 +251,23 @@ internal sealed partial class TitleFlow
 
         if (pendingDelete && selSlot >= 0 && selSlot < serverChars.Count)
         {
-            Color previousColor = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, 0.6f);
             GUI.DrawTexture(new Rect(0f, 0f, 800f, 600f), Texture2D.whiteTexture);
-            GUI.color = previousColor;
-            ArtworkSkin.Panel(new Rect(210f, 225f, 380f, 150f));
+            GUI.color = Color.white;
+            GUI.color = new Color(0.1f, 0.1f, 0.12f, 0.98f);
+            GUI.DrawTexture(new Rect(210f, 225f, 380f, 150f), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            RecoveredTitleCharacterSurface.DrawBorder(new Rect(210f, 225f, 380f, 150f), 2f, Color.white);
             GUI.Label(new Rect(210f, 243f, 380f, 24f), "<color=#FF6666><b>删除角色</b></color>", center);
             GUI.Label(new Rect(222f, 277f, 356f, 40f),
                 "确定删除【" + serverChars[selSlot].DisplayName + "】?\n删除后不可恢复!", centerWrap ?? center);
-            if (ArtworkSkin.Button(new Rect(254f, 333f, 110f, 30f), "确定删除"))
+            if (GUI.Button(new Rect(254f, 333f, 110f, 30f), "确定删除"))
             {
                 action(TitleCharacterAction.Delete);
                 pendingDelete = false;
                 setMessage("删除中...");
             }
-            if (ArtworkSkin.Button(new Rect(436f, 333f, 110f, 30f), "取消")) pendingDelete = false;
+            if (GUI.Button(new Rect(436f, 333f, 110f, 30f), "取消")) pendingDelete = false;
         }
     }
 }

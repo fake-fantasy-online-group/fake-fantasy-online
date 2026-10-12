@@ -23,6 +23,7 @@ namespace FakeFantasyOnline.PluginHost
         public object Handle(object value)
         {
             string id = null;
+            bool sensitive = IsSensitiveLogin(value);
             try
             {
                 var request = Object(value, "request");
@@ -51,6 +52,15 @@ namespace FakeFantasyOnline.PluginHost
                         result = Map("domain", snapshot.Domain, "sceneRevision", snapshot.SceneRevision,
                             "revision", snapshot.Revision, "data", snapshot.Data);
                         break;
+                    case "sensitive-login":
+                        Only(args, "account", "password", "expectedTitleInstanceId", "expectedTitleRevision");
+                        var login = api as IGameSensitiveLogin;
+                        if (login == null) throw new ProtocolException("capability_missing", "Sensitive login is unavailable.");
+                        var loginResult = login.SubmitLogin(Credential(args, "account", 20), Credential(args, "password", 40),
+                            Text(args, "expectedTitleInstanceId", true), Text(args, "expectedTitleRevision", true));
+                        result = Map("submitted", loginResult != null && loginResult.Submitted,
+                            "code", SafeLoginCode(loginResult == null ? null : loginResult.Code));
+                        break;
                     case "act":
                         Only(args, "name", "arguments", "requestId", "expectedSceneRevision");
                         var requestId = Text(args, "requestId", true);
@@ -58,6 +68,7 @@ namespace FakeFantasyOnline.PluginHost
                             ? Integer(args, "expectedSceneRevision", 0, long.MaxValue) : (long?)null;
                         var actionName = Text(args, "name", true);
                         var actionArguments = Arguments(args);
+                        if (ContainsSensitiveKeys(actionArguments)) throw new ProtocolException("sensitive_arguments", "Credentials require the separate ephemeral login method.");
                         foreach (var definition in api.GetActions())
                             if (definition.Name == actionName) RejectInexactIntegerArguments(actionArguments, definition.Arguments, "arguments");
                         result = Receipt(api.Execute(new GameActionRequest(actionName, actionArguments, requestId, expected)));
@@ -94,15 +105,59 @@ namespace FakeFantasyOnline.PluginHost
             }
             catch (ProtocolException exception)
             {
-                return Error(id, exception.Code, exception.Message);
+                return Error(id, exception.Code, sensitive ? "Sensitive login request was rejected." : exception.Message);
             }
             catch (ArgumentException exception)
             {
-                return Error(id, "invalid_params", exception.Message);
+                return Error(id, "invalid_params", sensitive ? "Sensitive login request was rejected." : exception.Message);
             }
             catch (Exception)
             {
                 return Error(id, "api_error", "The game API could not complete this request.");
+            }
+        }
+
+        public static bool IsSensitiveLogin(object value)
+        {
+            var map = value as IReadOnlyDictionary<string, object>;
+            object method;
+            return map != null && map.TryGetValue("method", out method) && Equals(method, "sensitive-login");
+        }
+
+        public static bool ContainsSensitiveKeys(object value)
+        {
+            var map = value as IReadOnlyDictionary<string, object>;
+            if (map != null)
+                foreach (var pair in map)
+                {
+                    var key = pair.Key.Replace("_", "").Replace("-", "").ToLowerInvariant();
+                    if (key.Contains("password") || key.Contains("credential") || key == "passwd" || key == "secret" || key == "token") return true;
+                    if (ContainsSensitiveKeys(pair.Value)) return true;
+                }
+            var list = value as System.Collections.IList;
+            if (list != null) foreach (var item in list) if (ContainsSensitiveKeys(item)) return true;
+            return false;
+        }
+
+        private static string Credential(IReadOnlyDictionary<string, object> args, string key, int max)
+        {
+            object value;
+            var text = args.TryGetValue(key, out value) ? value as string : null;
+            if (string.IsNullOrEmpty(text) || text.Length > max || text.IndexOfAny(new[] { '\r', '\n', '\0' }) >= 0)
+                throw new ProtocolException("invalid_params", "Invalid login fields.");
+            return text;
+        }
+
+        private static string SafeLoginCode(string code)
+        {
+            switch (code)
+            {
+                case "outcome_unknown": case "submitted": case "sent": case "busy": case "not_ready": case "title_changed":
+                case "scene_changed": case "invalid_credentials": case "login_unavailable":
+                case "stale_title": case "native_unavailable": case "invalid_state":
+                case "title_instance_changed": case "title_revision_changed":
+                    return code;
+                default: return "login_result";
             }
         }
 
@@ -125,8 +180,10 @@ namespace FakeFantasyOnline.PluginHost
                     queries.Add(Map("domain", query.Domain, "description", query.Description, "arguments", query.Arguments));
             return Map("protocol", ProtocolVersion,
                 "queries", queries, "observationDiscoveryAvailable", catalog != null,
-                "methods", new object[] { "describe", "observe", "act", "status", "action-status", "cancel", "events" },
+                "methods", new object[] { "describe", "observe", "act", "status", "action-status", "cancel", "events", "sensitive-login" },
                 "actions", actions,
+                "sensitiveLoginAvailable", api is IGameSensitiveLogin,
+                "sensitiveLoginSemantics", "Ephemeral trusted-local method; no receipt, retention or retry. Loopback has no token authentication. Observe title after submission.",
                 "maxEventCount", MaxEventCount,
                 "eventCursor", "Client-owned afterSequence; resyncRequired means snapshots must be refreshed.",
                 "actionSemantics", "requestId identifies a retry; actionId identifies its receipt. Sent is not completion.",
