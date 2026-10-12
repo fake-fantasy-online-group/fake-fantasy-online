@@ -100,6 +100,17 @@ public sealed partial class SkillTargeting
         if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
         { AuthoritativeProfessionSkill.Waiting(); End(); return; }
 
+        // Equipment can change after the cursor opens, including a same-revision rank
+        // refresh. Re-read the authoritative plan instead of retaining the old footprint.
+        if (AuthoritativeProfessionSkill.TryResolve(skillId, out Aim refreshedMode, out float refreshedRange,
+            out float refreshedRadius, out float refreshedAngle, out float refreshedLength, out float refreshedWidth, out bool refreshedTrap))
+        {
+            if (refreshedMode != mode) { End(); return; }
+            rangePx = refreshedRange > 0f ? refreshedRange : float.PositiveInfinity;
+            radiusPx = refreshedRadius; fanDeg = refreshedAngle; rectLen = refreshedLength; rectWid = refreshedWidth;
+            noCircle = refreshedTrap;
+        }
+
         PlayerController pc = PlayerController.I;
         if (pc == null || Camera.main == null)
         {

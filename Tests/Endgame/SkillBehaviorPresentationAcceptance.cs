@@ -9,10 +9,10 @@ class SkillBehaviorPresentationAcceptance
 {
     static int checks,writes;static string tip;static NetClient client;
     static void Check(bool value,string message){if(!value)throw new Exception(message);checks++;}
-    static EndgameClientState State(bool behavior=true)
+    static EndgameClientState State(bool behavior=true, bool variants=false)
     {
         var s=new EndgameClientState();s.Begin(new EndgameRequest("hello"));
-        s.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\""+(behavior?",\"endgame.skill-behavior.v1\"":"")+"]}"));
+        s.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\""+(behavior?",\"endgame.skill-behavior.v1\"":"")+(variants?",\"endgame.skill-variants.v1\"":"")+"]}"));
         EndgamePanel.GrowthState=s;return s;
     }
     static Dictionary<string,object> Obj(object value)=>(Dictionary<string,object>)value;
@@ -25,6 +25,50 @@ class SkillBehaviorPresentationAcceptance
     {Check(s.Apply(EndgameResponse.Parse(BoundedJson.Serialize(root))),"published fixture");return s.SkillRanks[0];}
     static void MP(int id,int available,bool allowed)
     {writes=0;tip=null;CharData.mp=available;client.UseSkill(id,2);Check(writes==(allowed?1:0),"actual NetClient MP boundary"+id+" mp"+available+" tip"+tip);}
+    // Upper-bound equipped packets are not the baseline 149-row fixtures: they
+    // may contain a cross-profession grant and have equipment-resolved MP/ranks.
+    static void VariantPackets(string[] args)
+    {
+        Check(args.Length==6,"five full variant packets required after --variant-packets");
+        var professions=new HashSet<int>(); var variants=new HashSet<string>();
+        for(int index=1;index<args.Length;index++)
+        {
+            string text=File.ReadAllText(args[index]); int bytes=System.Text.Encoding.UTF8.GetByteCount(text);
+            Check(bytes<61440,"full variant packet under transport budget");
+            var packet=EndgameResponse.Parse(text);
+            var legacy=State();Check(!legacy.Apply(packet) && !legacy.HasSkillRanks,"full variant packet cannot activate without variant cap");
+            var state=State(variants:true);Check(state.SkillVariantsV1 && state.Apply(packet),"full variant packet applies with complete capabilities");
+            Check(state.SkillRanks.Count>=29 && state.SkillRanks.Count<=31,"full profession plus bounded treasure grant");
+            var ids=new HashSet<int>(); int formCount=0;
+            foreach(var row in state.SkillRanks)
+            {
+                Check(ids.Add(row.ID),"unique ID within full packet");
+                if(row.ID==10212){Check(row.Contract==null,"unresolved theft remains held");continue;}
+                var contract=row.Contract;Check(contract!=null,"full packet contract present");
+                var behavior=contract.Current;
+                // Changing race only chooses the local presentation owner; the exact
+                // row itself remains the authoritative server equipment projection.
+                CharData.race=contract.Profession-1;
+                var info=Win05.SkillInfo(row.ID);
+                Check(info!=null && info.name==contract.Name && info.icon==contract.Icon,"full packet original identity");
+                Check(AuthoritativeProfessionSkill.Current(row.ID)==behavior,"full packet exact current plan");
+                AuthoritativeProfessionSkill.TryResolve(row.ID,out var aim,out var range,out var radius,out var angle,out var length,out var width,out var trap);
+                if(behavior==null || !behavior.Usable){Check(aim==SkillTargeting.Aim.Unavailable,"full packet uncastable row remains unavailable");continue;}
+                Check(range==behavior.CastDistance && radius==behavior.Area.Radius && angle==behavior.Area.Angle && length==behavior.Area.Length && width==behavior.Area.Width,"full packet exact targeting geometry");
+                var wanted=behavior.InputMode=="entity"?SkillTargeting.Aim.Single:behavior.InputMode=="point"?SkillTargeting.Aim.Circle:behavior.InputMode=="direction"?SkillTargeting.Aim.Direction:behavior.InputMode=="trapEntity"?SkillTargeting.Aim.Trap:SkillTargeting.Aim.Instant;
+                Check(aim==wanted,"full packet input mode");
+                var variant=behavior.Variant;if(variant==null)continue;
+                formCount++;variants.Add(variant.ID);professions.Add(contract.Profession);
+                Check(state.CurrentSkillVariant(row.ID)==variant && variant.MaxTargets==(row.ID==10017 || row.ID==10102?4:1),"full packet finite variant target cap");
+                Check(row.CurrentEffectLines.Count>0 && row.CurrentEffectLines[0].Contains(variant.Name),"full packet variant text matches plan");
+                if(row.ID==10401)Check(behavior.PrepareMilliseconds==0 && behavior.CooldownMilliseconds>=1200 && behavior.MPCost>0,"full packet flash fire preserves paid cooldown");
+            }
+            Check(formCount==1,"upper-bound packet contains its one declared form");
+            Console.WriteLine("Full variant upper-bound packet: "+Path.GetFileName(args[index])+" "+bytes+" bytes / "+state.SkillRanks.Count+" rows");
+        }
+        Check(professions.Count==5 && variants.Count==5,"five professions and five distinct equipment forms");
+        Console.WriteLine("Skill variant full-packet Presentation acceptance: "+checks+" checks passed (conservative server metadata upper bound; no Unity/Player).");
+    }
     static void Main(string[] args)
     {
         Check(args.Length>=5,"five server response fixtures required");
@@ -32,6 +76,7 @@ class SkillBehaviorPresentationAcceptance
         GameTables.Texts["skills"]="{\"skills\":[{\"id\":10401,\"name\":\"旁观火弹\",\"icon\":5046,\"castkind\":1,\"tgt\":1,\"canEnemy\":1,\"dist\":450},{\"id\":10306,\"name\":\"污染净世\",\"icon\":1,\"levels\":[{\"lv\":1,\"mp\":100}]},{\"id\":10307,\"name\":\"污染祝祷\",\"icon\":1,\"levels\":[{\"lv\":1,\"mp\":120}]},{\"id\":10212,\"name\":\"偷窃术\",\"icon\":5031,\"desc\":\"legacy theft placeholder\",\"castkind\":1,\"tgt\":1,\"canEnemy\":1,\"levels\":[{\"lv\":1,\"mp\":69}]}]}";
         CharData.skills[10306]=CharData.skills[10307]=CharData.skills[10212]=1;
         client=new NetClient();NetClient.I=client;client.BindSkillCommandsForIndependentRuntime((s,f)=>tip=s,(id,target)=>writes++,(id,x,y,target)=>writes++,on=>{},()=>{});
+        if(args[0]=="--variant-packets"){VariantPackets(args);return;}
         var seen=new HashSet<int>();string healer=null,assassin=null;
         foreach(string path in new[]{args[0],args[1],args[2],args[3],args[4]})
         {

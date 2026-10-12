@@ -46,7 +46,7 @@ internal static class AuthoritativeProfessionSkill
             info.dist = behavior.CastDistance;
             info.shape = Shape(behavior.Area.Shape); info.radius = behavior.Area.Radius;
             info.rectl = behavior.Area.Length; info.rectw = behavior.Area.Width; info.rwidth = behavior.Area.Angle;
-            if (contract.Kind == "area") info.tgt = 2;
+            if (contract.Kind == "area" || behavior.InputMode == "direction" || behavior.InputMode == "point") info.tgt = 2;
             if (!behavior.Usable) info.tgt = 18;
         }
         else info.tgt = 18;

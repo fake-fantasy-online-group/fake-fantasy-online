@@ -11,9 +11,16 @@ public sealed partial class ActorEffects
     {
         switch (key)
         {
+            case "白虎守城":
             case "白虎卫身": return "钢铁";
+            case "倒骑观火":
+            case "朱鸟衔烬":
             case "余烬庇佑": return "火之盾";
+            case "空瓢济厄":
             case "圣羽护佑": return "TFX074_40";
+            case "雨洗空符":
+            case "纸驴驮霜":
+            case "玄武镇门": return "TFX028_40";
             default: return key;
         }
     }

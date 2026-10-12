@@ -134,6 +134,7 @@ public sealed partial class EndgameClientState
     { foreach (var row in SkillRanks) if (row.ID == id) return row; return null; }
     /// <summary>Behavior is authoritative only for the currently observed server revision.</summary>
     public EndgameSkillContractView SkillContract(int id) => SkillBehaviorV1 && GrowthV5 && HasSkillRanks && SkillRanksRevision == Revision ? SkillRank(id)?.Contract : null;
+    public EndgameSkillVariantView CurrentSkillVariant(int id) => SkillVariantsV1 ? CurrentSkillBehavior(id)?.Variant : null;
     public EndgameSkillBehaviorView CurrentSkillBehavior(int id) => SkillContract(id)?.Current;
     public bool CanInvestSkill(int id) => GrowthV5 && HasSkillRanks && SkillRanksRevision == Revision && !Pending && UnspentSkillPoints > 0 && SkillRank(id)?.CanInvest == true && (!SkillBehaviorV1 || id == 10212 || SkillRank(id).Contract != null);
     private void ResetSkillRanks()
@@ -146,6 +147,10 @@ public sealed partial class EndgameClientState
     private bool ApplySkillRanks(EndgameResponse response)
     {
         if (!GrowthV5 || response.Revision.Length == 0 || CompareRevision(response.Revision, Revision) < 0 || CompareRevision(response.Revision, SkillRanksRevision) < 0) return false;
+        // Never activate or present a transformed plan without its negotiated contract.
+        if (!SkillVariantsV1)
+            foreach (var row in response.SkillRanks)
+                if (row.Contract?.Current?.Variant != null || row.Contract?.Next?.Variant != null) return false;
         int hard = SkillResultInt(response, "hardCap"), player = SkillResultInt(response, "playerCap"), pet = SkillResultInt(response, "petCap"), points = SkillResultInt(response, "unspentPoints"), formula = SkillResultInt(response, "formulaVersion");
         if (hard != 20 || player != 100 || pet != 80 || points > 99 || formula != 5) throw new FormatException("Unsupported growth rules.");
         SkillRanks = response.SkillRanks; SkillRanksRevision = response.Revision; SkillHardCap = hard; PlayerLevelCap = player; PetLevelCap = pet; UnspentSkillPoints = points; SkillFormulaVersion = formula; HasSkillRanks = true;

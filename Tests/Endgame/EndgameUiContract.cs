@@ -79,6 +79,9 @@ class EndgameUiContract
     static int Occurrences(string text, string value) => (text.Length - text.Replace(value, "").Length) / value.Length;
     static void TooltipContracts(Client c, EndgamePanel p)
     {
+        var classifyEffect = typeof(EndgamePanel).GetMethod("IsLegacyEquipmentEffect", BindingFlags.NonPublic | BindingFlags.Static);
+        Check((bool)classifyEffect.Invoke(null, new object[] { "赋予2级白虎卫身光环", "" }), "concise aura line remains a special effect without detailed equipment explanation");
+        Check(!(bool)classifyEffect.Invoke(null, new object[] { "白虎卫身的古老传说", "" }), "aura name in ordinary lore is not misclassified");
         var unique = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"飞鹤遗音\",\"description\":\"仙人遗音。\",\"socketCount\":2,\"level\":42");
         string native = "\u0007\u00034旧名字+7\n\u0007(武器)\n\n\u00034仙遗·飞鹤遗音\n基底：旧名字\n\u00034力量 +12\n\u00034暴击时，伤害提高8%\n同名仙遗特性取最高值；不同特性按通道上限叠加。\n仙人遗音。\n\n耐久度: 50/50\n需要等级: 20\n需要职业: 剑客\n\n攻击 20-30\n重量 5\n\n\u00034命中 +5\n\u00034孔数 0/2\n原有描述。";
         string tip = EndgamePanel.OverlayTooltip(unique, native);

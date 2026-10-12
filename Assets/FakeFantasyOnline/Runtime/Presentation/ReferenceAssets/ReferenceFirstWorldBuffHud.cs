@@ -259,6 +259,13 @@ public sealed class ReferenceFirstWorldBuffHud : IDisposable
             value += "\n" + description;
         }
 
+        // -2 is a source-bound equipment aura: no duration or false permanence.
+        // Membership is replaced by the authoritative buff snapshot on teardown.
+        if (wireRemainingSeconds == -2)
+        {
+            return value + "\n(光环生效中)";
+        }
+
         if (wireRemainingSeconds < 0)
         {
             return value + "\n(永久)";

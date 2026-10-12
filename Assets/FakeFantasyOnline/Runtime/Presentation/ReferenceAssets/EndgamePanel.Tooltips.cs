@@ -282,7 +282,7 @@ public sealed partial class EndgamePanel
         if (TraitContainsLine(traits, plain)) return true;
         // Compatibility for native legacy/V5 text predating the orange marker.
         // Ordinary element percentages and skill ranks have distinct numeric forms.
-        return plain.Contains("光环：") || plain.Contains("概率") && plain.Contains("释放") ||
+        return plain.Contains("光环：") || (plain.StartsWith("赋予", StringComparison.Ordinal) && plain.EndsWith("光环", StringComparison.Ordinal)) || plain.Contains("概率") && plain.Contains("释放") ||
             plain.Contains("伤害提高") || plain.Contains("受到伤害降低") || plain.Contains("直接治疗提高") ||
             plain.Contains("技能法力消耗降低") || plain.Contains("技能吟唱时间缩短") ||
             plain.Contains("技能尺寸扩大") || plain.Contains("陷阱触发半径扩大") ||

@@ -56,10 +56,11 @@ public sealed class EndgameSkillBehaviorView
     public bool GroundEffect { get; }
     public bool PointRequired { get; }
     public bool SelfFallback { get; }
+    public EndgameSkillVariantView Variant { get; }
 
     internal EndgameSkillBehaviorView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameSkillContractData.Fields(d, "mpCost", "prepareMs", "cooldownMs", "castDistance", "usable", "requiresInvisible", "requiredWeaponType", "inputMode", "targetSelf", "targetEnemy", "targetTeam", "allowsDeadTarget", "deadTargetOnly", "area", "groundEffect", "pointRequired", "selfFallback");
+        EndgameSkillContractData.FieldsWithOptional(d, "variant", "mpCost", "prepareMs", "cooldownMs", "castDistance", "usable", "requiresInvisible", "requiredWeaponType", "inputMode", "targetSelf", "targetEnemy", "targetTeam", "allowsDeadTarget", "deadTargetOnly", "area", "groundEffect", "pointRequired", "selfFallback");
         MPCost = EndgameSkillContractData.Nonnegative(d, "mpCost");
         PrepareMilliseconds = EndgameSkillContractData.Nonnegative(d, "prepareMs");
         CooldownMilliseconds = EndgameSkillContractData.Nonnegative(d, "cooldownMs");
@@ -77,7 +78,33 @@ public sealed class EndgameSkillBehaviorView
         GroundEffect = EndgameData.Bool(d, "groundEffect");
         PointRequired = EndgameData.Bool(d, "pointRequired");
         SelfFallback = EndgameData.Bool(d, "selfFallback");
+        Variant = EndgameData.Optional(d, "variant", v => new EndgameSkillVariantView(EndgameData.Object(v)));
         if (DeadTargetOnly && !AllowsDeadTarget) throw new FormatException("Dead-only skill must allow dead targets.");
+    }
+}
+
+/// <summary>Equipment form metadata; execution remains entirely server-owned.</summary>
+public sealed class EndgameSkillVariantView
+{
+    public string ID { get; }
+    public string Name { get; }
+    public string SourceUID { get; }
+    public int Item { get; }
+    public string Description { get; }
+    public int MaxTargets { get; }
+
+    internal EndgameSkillVariantView(IReadOnlyDictionary<string, object> d)
+    {
+        EndgameSkillContractData.Fields(d, "id", "name", "sourceUID", "item", "description", "maxTargets");
+        ID = EndgameData.String(d, "id", 64);
+        Name = EndgameData.String(d, "name", 128);
+        SourceUID = EndgameData.ID(d, "sourceUID");
+        Item = EndgameData.Int(d, "item");
+        Description = EndgameData.String(d, "description", 2048);
+        MaxTargets = EndgameData.Int(d, "maxTargets");
+        if (string.IsNullOrWhiteSpace(ID) || string.IsNullOrWhiteSpace(Name) ||
+            string.IsNullOrWhiteSpace(Description) || SourceUID.Length == 0 || SourceUID == "0" || Item <= 0 || MaxTargets <= 0)
+            throw new FormatException("Invalid equipment skill variant.");
     }
 }
 
@@ -110,6 +137,14 @@ internal static class EndgameSkillContractData
     {
         EndgameData.Keys(d, fields);
         foreach (string field in fields)
+            if (!d.ContainsKey(field)) throw new FormatException("Missing skill behavior field: " + field);
+    }
+    public static void FieldsWithOptional(IReadOnlyDictionary<string, object> d, string optional, params string[] required)
+    {
+        var allowed = new string[required.Length + 1];
+        Array.Copy(required, allowed, required.Length); allowed[required.Length] = optional;
+        EndgameData.Keys(d, allowed);
+        foreach (string field in required)
             if (!d.ContainsKey(field)) throw new FormatException("Missing skill behavior field: " + field);
     }
     public static int Nonnegative(IReadOnlyDictionary<string, object> d, string field)

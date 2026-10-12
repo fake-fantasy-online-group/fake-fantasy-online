@@ -18,7 +18,7 @@ public partial class Win05
         var state = EndgamePanel.GrowthState;
         var rank = state.SkillRank(info.id);
         var rows = new List<(string, char, bool)>();
-        if (rank == null)
+        if (rank == null || state.SkillBehaviorV1 && state.SkillRanksRevision != state.Revision)
         {
             rows.Add((info.name, (char)5, true));
             rows.Add(("正在等待服务器技能资料", (char)6, false));

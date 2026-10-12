@@ -204,3 +204,27 @@ production `protocol.EncodeEndgame` and also reaches the actual client wire code
 The server test export options are `SKILL_ALL_VIEWS_FIXTURE_PATH` with
 `TestV5All149ReadableSkillViewsFixture`, and `SKILL_SYNERGY_FIXTURE_PATH` with
 `TestV5TrainingSynergyRowsAreAuthoritativeIncludingUnlearnedSources`.
+
+### Equipment skill forms V1
+
+The client advertises `endgame.skill-variants.v1`, usable only alongside
+`endgame.v1`, `endgame.growth.v5`, and `endgame.skill-behavior.v1`.
+`contract.current/next.variant` is optional and, when present, contains exactly
+`id`, `name`, `sourceUID` (canonical decimal string), `item`, `description`, and
+`maxTargets`. Metadata is immutable and size-bounded. `typedEffects.variantId`
+is server-side catalog input, not a new client item wire field.
+
+Costs, timings, input mode and geometry continue to come from that behavior's
+single server plan. Skill identity, tree membership and authored text are retained;
+the existing effect rows carry the form text once per current/next block. There
+is no extra equipment-form panel. Cap changes discard old rank snapshots; a
+newer observed revision blocks stale behavior and form text until replacement.
+An open targeting cursor re-reads its footprint and cancels if the input mode
+changes. Unequipping restores ordinary behavior through the next rank snapshot.
+
+`run-skill-variants-contract.sh` executes production DTO/state and targeting
+projection with five Go-generated fixtures, capability dependency/downgrade,
+lossless UID, invalid/bounded fields, same-revision equipment replacement, stale
+revision, and unequip tests. `run-skill-tooltip-contract.sh` additionally renders
+those forms through the existing native tooltip composition with deterministic
+Unity/font substitutes. These are managed contracts, not a Unity/Player run.

@@ -556,12 +556,40 @@ internal static class NativeSkillTooltipContract
         Screen.width = 1280; Screen.height = 900; Screen.dpi = 96f;
         Check(failures.Count == 0, fixtureLabel + " skill cards must fit the native viewport:\n" + string.Join("\n", failures));
     }
+    private static void EquipmentVariantTips(string fixtureDirectory)
+    {
+        foreach (string path in Directory.GetFiles(fixtureDirectory, "*.json"))
+        {
+            var response = EndgameResponse.Parse(File.ReadAllText(path));
+            var state = new EndgameClientState();
+            state.Begin(new EndgameRequest("hello"));
+            state.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\",\"endgame.skill-behavior.v1\",\"endgame.skill-variants.v1\"]}"));
+            Check(state.Apply(response), "Real equipment variant state accepted");
+            EndgamePanel.GrowthState = state;
+            foreach (var rank in state.SkillRanks)
+            {
+                string text = Win05.TestNativeGrowthTip(rank.ID, true, rank.Contract.Name);
+                Check(Layout(text).Item1[0].Item1 == rank.Contract.Name, "Variant keeps original title");
+                foreach (string line in rank.CurrentEffectLines) Check(text.Contains(line), "Variant retains complete current effect");
+                foreach (string line in rank.NextEffectLines) Check(text.Contains(line), "Variant retains complete next effect");
+                Check(Count(text, rank.CurrentEffectLines[0]) <= 2, "Variant line is not separately duplicated as extra explanation");
+                CheckSkillRender(text, 1f, new Vector2(Screen.width / 2f, Screen.height / 2f));
+                string hotbar = Win05.TestNativeGrowthTip(rank.ID, false, rank.Contract.Name);
+                Check(Count(hotbar, rank.CurrentEffectLines[0]) == 1, "Hotbar shows one equipment form line");
+                state.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"ok\":true,\"revision\":\"999999\"}"));
+                string stale = Win05.TestNativeGrowthTip(rank.ID, true, rank.Contract.Name);
+                Check(stale.Contains("正在等待服务器技能资料") && !stale.Contains(rank.Contract.Current.Variant.Description), "Stale form is not displayed after equipment revision advances");
+            }
+        }
+    }
     public static int Main(string[] args)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
         CenteringAfterWrapping(); HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
         PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation();
         foreach (string fixture in args) CheckServerFixture(fixture);
+        string variants = Environment.GetEnvironmentVariable("FFO_VARIANT_FIXTURE_DIR");
+        if (!string.IsNullOrEmpty(variants)) EquipmentVariantTips(variants);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");
         return 0;
     }
