@@ -27,7 +27,7 @@ public sealed partial class EndgamePanel
     {
         if (State.Pending) return;
         if (IsRune(item) || item.SocketCount > 0) LoadCatalog("runes");
-        selectedUID = item.UID; socket = 0; selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; State.InvalidateQuote(); detailScroll = Vector2.zero;
+        selectedUID = item.UID; selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; State.InvalidateQuote(); detailScroll = Vector2.zero;
     }
     private static void Icon(Rect rect, int itemID, bool unique = false)
     {

@@ -23,14 +23,31 @@ contains('Protocol/PrivateServerGateway.Endgame.cs', 'IEndgameClient', '_host.Is
          '_netClient.UnequipItem(item.Slot)', 'row.ItemId == item.ItemID', 'current.UID != item.UID')
 contains('Protocol/PrivateServerEndgameCodec.cs', '0x10d0', '0x80d0', 'new UTF8Encoding(false, true)')
 contains('Presentation/ReferenceAssets/EndgamePanel.cs', 'NpcChatter.CnFont()', 'ArtworkSkin.Panel(', 'WinZ.Forget(this)',
-         'KeyCode.Escape', 'EndgameModule.Runes', 'EndgameModule.Cube', 'EndgameModule.Rift', 'ClearSelection()', 'State?.InvalidateQuote()', 'client.RetryEndgame()',
+         'KeyCode.Escape', 'EndgameModule.Cube', 'EndgameModule.Rift', 'ClearSelection()', 'State?.InvalidateQuote()', 'client.RetryEndgame()',
          'State.Rift.RunID', 'PlayerController.SuppressWorldClick()')
 contains('Presentation/ReferenceAssets/EndgamePanel.Items.cs', 'NetClient.LoadItemIcon(', 'MatchesNative(item)', 'bagOnly')
-contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', '"socket.insert"', '"socket.remove"', 'State.ActiveFormations', 'OwnedItemTooltip(rune)')
-contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'chosen.Materials', 'wallet.Count', 'salvage.rune', 'socket.reorder',
-         'rune.convert', 'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
+contains('Presentation/ReferenceAssets/EndgamePanel.Runes.cs', 'DrawRuneBank', 'State.ActiveFormations', 'OwnedItemTooltip(rune)')
+for filename in ('EndgamePanel.cs', 'EndgamePanel.Runes.cs', 'EndgamePanel.World.cs', 'DialogUI.cs'):
+    source = (runtime / 'Presentation/ReferenceAssets' / filename).read_text(encoding='utf-8')
+    for removed in ('EndgameModule.Runes', 'TryOpenRunesFromWorld', 'DrawRunes', '星篆 · 镶嵌取出'):
+        assert removed not in source, f'{filename}: duplicate rune workbench {removed}'
+        checks += 1
+contains('Presentation/ReferenceAssets/SocketUI.State.cs', 'CanInlayHole(holeIdx)', 'InlayForIndependentRuntime(TargetKind, TgtTab, TgtSlot, (byte)holeIdx, runeTab, runeBagSlot)')
+contains('Presentation/ReferenceAssets/SculpDlg.Window.cs', 'TryDropRune((byte)InventoryDlg.HeldTab, InventoryDlg.HeldBagSlot, i)', 'SocketUI.CanInlayHole(i)')
+assert 'endgame.socket.remove' not in (runtime / 'Presentation/ReferenceAssets/PluginGameApi.Endgame.Actions.cs').read_text()
+checks += 1
+contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'State.Materials', 'cubeInputs: CubeInputs()', 'SyncCubeInputs()',
+         'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID, npcEntityID: cubeNpcEntityID)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'DrawRiftTierSelector(rift)', 'DrawRiftActions(rift, selectedTierValid)', 'rift.Claimable', '"reward_pending"',
-         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes', '"rift.advance"', 'floorIndex: rift.FloorIndex', 'rift.Transitioning', 'RiftDepth', 'aura.Affixes')
+         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes', 'rift.Transitioning', 'RiftDepth', 'aura.Affixes')
+contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'NewbieTipBox.PushText(notice)', 'if (!transition && !floorTransition) return;')
+rift_ui = (runtime / 'Presentation/ReferenceAssets/EndgamePanel.Rift.cs').read_text(encoding='utf-8')
+assert '"rift.advance"' not in rift_ui and 'AdvanceRift(' not in rift_ui, 'Only physical gate entry may initiate a UI floor transfer'
+checks += 1
+for path in ('EndgamePanel.cs', 'EndgamePanel.Rift.cs'):
+    source = (runtime / 'Presentation/ReferenceAssets' / path).read_text(encoding='utf-8')
+    assert 'DrawRiftAnnouncement' not in source and 'announcementUntil' not in source, 'Rift notices must use the native queue without a separate announcement renderer or lifetime'
+    checks += 1
 contains('Presentation/ReferenceAssets/EndgamePanel.RiftTelegraphs.cs', 'DrawRiftArea', 'DrawRiftRing', 'DrawRiftLine', 'TelegraphRemainingMS', 'tell.InnerRadius', 'tell.RemainingMS', 'GUI.matrix = matrix', 'Texture2D.whiteTexture')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.BagTooltip(')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(')

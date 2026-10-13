@@ -23,8 +23,7 @@ The observation domains are:
 - `endgame.items`: UID-bearing items, native location/tab/slot, rolled stats,
   unique traits, ordered sockets, binding and lock flags. Filters are `uid`,
   `location`, `tab`, `itemId` and `name`.
-- `endgame.catalog`: requires `catalog`, one of `uniques`, `runes`, `formations`,
-  or `recipes`. Returns already-loaded rows plus `loaded`, `requested`, `hasMore`
+- `endgame.catalog`: requires `catalog`, one of `uniques`, `runes`, or `formations`. Cube recipe lists are not exposed. Returns already-loaded rows plus `loaded`, `requested`, `hasMore`
   and the server `nextCursor`. Observing does not request a page.
 - `endgame.rift`: authoritative phase/progress/time, invitation/run ID, tier,
   one-based `floorIndex`, decimal-string uint64 `seed`, `generatorVersion`, `mapName`,
@@ -68,9 +67,8 @@ Unknown argument fields are rejected.
 | `endgame.refresh` | none | Snapshot request |
 | `endgame.catalog.request` | `catalog`, optional `cursor` | One catalog page; omitted cursor uses the observed next cursor |
 | `endgame.socket.insert` | `expectedRevision`, `targetUid`, `runeUid`, `socket` | Insert observed bag rune into observed empty socket |
-| `endgame.socket.remove` | `expectedRevision`, `targetUid`, `socket` | Extract observed installed rune |
-| `endgame.cube.quote` | `expectedRevision`, `recipeId`; optional `targetUid`, `runeUid`, `itemUids` | Server preview only |
-| `endgame.cube.execute` | `expectedRevision`, `quoteId` | Execute exact current unexpired server quote |
+| `endgame.cube.quote` | `expectedRevision`, `cubeInputs`; optional installed-socket `itemUids` | Current dedicated 周天鼎 input match/preview only |
+| `endgame.cube.execute` | `expectedRevision`, `quoteId` | Execute exact current unexpired server quote through the same live workbench |
 | `endgame.rift.refresh` | none | Authoritative rift state request preserving the observed invitation/run ID |
 | `endgame.rift.start` | `expectedRevision`, `tier`, optional `runId` | Fresh entry or exact observed invitation/run reentry |
 | `endgame.rift.advance` | `expectedRevision`, `runId`, `floorIndex` | Optional guarded floor exit; server checks run opener/proximity, preserves run difficulty/progress/timer |
@@ -87,15 +85,13 @@ UID fields must be
 canonical positive decimal Int64 strings. `socket` is zero-based 0–4 and must be
 open in that item; insertion also requires it to be empty, extraction occupied.
 Tier is 1–150 and does not change when advancing to another floor; fresh entry
-respects observed nonzero `maxTier`/`unlockedTier` limits. Recipe IDs are positive Int32 values and must already be observed in
-the recipe catalog. Opaque IDs/cursors are at most 128 characters.
+respects observed nonzero `maxTier`/`unlockedTier` limits. Opaque IDs/cursors are at most 128 characters. Cube actions never accept recipe IDs or ask for recipe catalogs.
 
-`itemUids` is an ordered array of at most five distinct positive UID strings. Its
-order is significant for both native commands and retry equality. It is the only
-compound action argument accepted by the adapter. For `socket.reorder`, entries
-must be installed rune UIDs on the chosen target; other selected runes must be in
-the observed bag. A target-required recipe needs its observed bag target; a
-recipe that does not use a target refuses an unrelated one.
+`cubeInputs` contains 1–12 selected inputs. An instance is exactly `{uid:"...",count:1}`; a stackable material is exactly `{itemId:123,count:4}`. UID strings are canonical Int64 values; quantities are positive Int32 values. Unknown fields, duplicate identities and mixed forms are rejected. Inputs must belong to the current authoritative bag snapshot and not exceed owned amounts. These nested objects are frozen for request/retry identity.
+
+`itemUids` is an optional ordered array of at most five distinct positive UID strings for already installed runes on selected equipment. Loose bag runes are ordered by their position in `cubeInputs`. Both orders are significant for retry equality.
+
+First interact with the dedicated 周天鼎 inside the original 商会 room behind 左慈. `endgame.cube-inputs.v1`, `cubeInputsV1` and a non-null `cubeWorkbenchEntityId` confirm capability/current dialogue. Closing the dialogue into the container preserves that source; actor replacement, another NPC, map/session changes or capability loss invalidate it. The adapter resolves and sends the native entity ID itself on quote/execute. No caller-supplied NPC identity bypass is exposed.
 
 Locked or stale items cannot mutate. Equipping an unbound item needs explicit
 `allowBind:true`; trade blocks native equipment activation. The underlying native
@@ -105,10 +101,10 @@ equipment owner still validates inventory identity and session state.
 
 1. Discover availability and observe `endgame`, inventory/items and relevant
    catalogs. Request a missing snapshot/catalog explicitly, then observe again.
-2. Read the actual recipe, inputs, socket order, item locks and current revision.
+2. Choose actual bag inputs and quantities, socket order, item locks and current revision.
    Persist one chosen action and unique request ID before sending.
 3. For cube work, request `endgame.cube.quote` and wait for its correlated server
-   response. Inspect `endgame.quote`, including costs, material shortfall, expiry
+   response. Inspect `endgame.quote`, including matched costs, expiry
    and description. A quote is neither a purchase nor an inventory mutation.
 4. Execute only the intended exact current quote, with its observed revision.
    A new complete inventory snapshot or authoritative mutation invalidates it.
@@ -219,9 +215,18 @@ sources are appended after the original card only on the receiving skill.
 
 Each `trainingSynergies` row provides `sourceId`, `sourceName`, `effect`,
 `effectLabel`, `perPointValue`, `unit` (`percent_bp` or `flat`),
-`investedHardPoints`, `contributionValue`, and `equipmentApplies` (false). Rows
-include declared sources with zero investment. Percentage values are basis points,
-so 100 means 1%; contribution values describe hard points only.
+`investedHardPoints`, `sourceEffectiveRank`, `contributionValue`, and
+`equipmentApplies`. Equipment-aware rows set `equipmentApplies=true` and supply
+the exact decimal-string `sourceEffectiveRank` used by the server, including
+eligible equipment levels. `investedHardPoints` remains the allocated points,
+not the contribution multiplier. Percentage values are basis points, so 300 means
+3%; the rate is authored by the server for the receiving skill's unlock tier.
+`contributionValue` is an Int64 equal to source rank times `perPointValue`.
+Rows include declared unlearned sources at effective rank zero; equipment levels
+alone do not grant learning. Legacy hard-only rows remain accepted with
+`equipmentApplies=false`; an omitted `sourceEffectiveRank` then defaults to
+`investedHardPoints`. The native card displays the source level and per-level
+rate, keeping the original card body and centered incoming section.
 `nativeModifierLines` separately describes the target's existing skill modifiers.
 These optional fields default to empty/zero for older V5 server snapshots.
 

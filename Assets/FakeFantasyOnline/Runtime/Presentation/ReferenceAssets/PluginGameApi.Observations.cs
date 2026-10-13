@@ -18,7 +18,7 @@ public sealed partial class PluginGameApi
         {
             QueryDefinition("endgame", "Native endgame negotiation/session/revision, pending immutable request, quote, wallet and active formations."),
             QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
-            QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes, formations or recipes. No network request is implicit.", "catalog:string", "offset:integer"),
+            QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes or formations. No network request is implicit.", "catalog:string", "offset:integer"),
             QueryDefinition("endgame.skills", "Authoritative V5 skill hard/granted/soft/effective ranks, contributions, current/next effects and investment eligibility. Rank strings preserve all digits.", "skillId:integer", "offset:integer"),
             QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
             QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
@@ -51,7 +51,7 @@ public sealed partial class PluginGameApi
             string[] parts = field.Split(':');
             var fieldSchema = Values("type", parts[1]);
             if (parts[0] == "offset") { fieldSchema["minimum"] = 0; fieldSchema["maximum"] = 4096; }
-            if (parts[0] == "catalog") fieldSchema["enum"] = new object[] { "uniques", "runes", "formations", "recipes" };
+            if (parts[0] == "catalog") fieldSchema["enum"] = new object[] { "uniques", "runes", "formations" };
             properties.Add(parts[0], fieldSchema);
         }
         return new GameQueryDefinition(domain, description,

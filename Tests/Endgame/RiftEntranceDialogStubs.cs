@@ -13,7 +13,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     public partial class GameBootstrap
     {
-        public static GameBootstrap I = new GameBootstrap();
         public EntranceWorld Window = new EntranceWorld();
     }
     public sealed class EntranceWorld

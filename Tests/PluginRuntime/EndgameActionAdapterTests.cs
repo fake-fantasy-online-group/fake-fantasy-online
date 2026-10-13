@@ -75,7 +75,18 @@ internal static partial class GameActionAdapterTests
         var synergy = Object(Rows(row["trainingSynergies"])[0]);
         Check((string)row["nextEffectiveRank"] == "184467440737095516170000002" && (int)row["nextRequiredLevel"] == 20 && Rows(row["nextChangeLines"]).Count == 2 && Rows(row["nativeModifierLines"]).Count == 1, "agent receives exact next rank and separate native modifiers");
         Check((int)synergy["sourceId"] == 10402 && (string)synergy["sourceName"] == "爆炎术" && (int)synergy["perPointValue"] == 100 &&
-            (int)synergy["investedHardPoints"] == 3 && (int)synergy["contributionValue"] == 300 && !(bool)synergy["equipmentApplies"], "agent receives typed hard-only synergy source and contribution");
+            (int)synergy["investedHardPoints"] == 3 && (string)synergy["sourceEffectiveRank"] == "3" && (long)synergy["contributionValue"] == 300 && !(bool)synergy["equipmentApplies"], "agent retains legacy hard-only source with exact fallback rank and Int64 contribution");
+        Apply(native, Map("kind", "skill.ranks", "ok", true, "revision", TestRevision,
+            "skillRanks", new object[] { Map("id", 10401, "hardRank", 19, "grantRank", "0", "softRank", "7", "effectiveRank", "26", "canCast", true, "canInvest", true,
+                "trainingSynergies", new object[] { Map("sourceId", 10402, "sourceName", "爆炎术", "effect", "damage", "effectLabel", "伤害倍率",
+                    "perPointValue", 600, "unit", "percent_bp", "investedHardPoints", 3, "sourceEffectiveRank", "2147483647", "contributionValue", 1288490188200L, "equipmentApplies", true) }) },
+            "result", Map("hardCap", "20", "playerCap", "100", "petCap", "80", "unspentPoints", "2", "formulaVersion", "5")));
+        var equippedRow = Object(Rows(api.TestObserveEndgame("endgame.skills")["skillRanks"])[0]);
+        var equippedSynergy = Object(Rows(equippedRow["trainingSynergies"])[0]);
+        Check((string)equippedSynergy["sourceEffectiveRank"] == "2147483647" && (long)equippedSynergy["contributionValue"] == 1288490188200L &&
+            (int)equippedSynergy["investedHardPoints"] == 3 && (int)equippedSynergy["perPointValue"] == 600 && (bool)equippedSynergy["equipmentApplies"],
+            "agent receives exact server effective source rank, equipment flag, per-level rate and Int64 contribution");
+        Check((string)synergy["sourceEffectiveRank"] == "3" && !(bool)synergy["equipmentApplies"], "new equipment snapshot does not mutate prior observations");
         Check(EndAct(api, "skill.upgrade", Map("expectedRevision", "1", "skillId", 10401)).Code == "endgame.stale_revision", "skill investment requires observed revision");
         Check(EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10402)).Code == "skill.upgrade.unavailable", "unobserved rank cannot invest");
         var receipt = EndAct(api, "skill.upgrade", Map("expectedRevision", TestRevision, "skillId", 10401), "stable-skill-point");
@@ -98,7 +109,7 @@ internal static partial class GameActionAdapterTests
         var api = Setup(); int endgameCount = 0;
         foreach (var definition in api.GetActions()) if (definition.Name.StartsWith("endgame.", StringComparison.Ordinal))
         { endgameCount++; Check(!definition.Available && definition.UnavailableReason.Length > 0, "missing owner explicitly disables " + definition.Name); }
-        Check(endgameCount == 16, "all endgame native operations are discoverable without owner");
+        Check(endgameCount == 15, "all endgame native operations are discoverable without owner");
         Check(!(bool)api.TestObserveEndgame("endgame")["available"], "missing endgame owner observes unavailable");
         EndgameNative native; api = SetupEndgame(out native, false);
         Check(EndAct(api, "refresh").Code == "action.unavailable" && native.Sent.Count == 0, "unnegotiated refresh never sends");
@@ -112,8 +123,12 @@ internal static partial class GameActionAdapterTests
         Check(Convert.ToInt32(tierSchema["minimum"]) == 1 && Convert.ToInt32(tierSchema["maximum"]) == 150, "schema bounds rift tiers");
         var arraySchema = Property(Definition(api, "endgame.cube.quote"), "itemUids");
         Check(Convert.ToInt32(arraySchema["maxItems"]) == 5 && (bool)arraySchema["uniqueItems"] && (string)Object(arraySchema["items"])["type"] == "string", "schema advertises bounded unique ordered UID array");
+        var cubeSchema = Property(Definition(api, "endgame.cube.quote"), "cubeInputs");
+        Check(Convert.ToInt32(cubeSchema["minItems"]) == 1 && Convert.ToInt32(cubeSchema["maxItems"]) == 12 && Rows(Object(cubeSchema["items"])["oneOf"]).Count == 2, "cube input schema admits bounded UID/count or itemId/count objects");
+        var cubeFields = Object(Definition(api, "endgame.cube.quote").Arguments["properties"]);
+        Check(!cubeFields.ContainsKey("recipeId") && !cubeFields.ContainsKey("targetUid") && !cubeFields.ContainsKey("runeUid"), "cube action cannot bypass input matching with recipe or target shortcuts");
         Check((bool)Property(Definition(api, "endgame.rift.leave"), "confirmLeave")["const"], "leave schema requires explicit true confirmation");
-        Check(Rows(Property(Definition(api, "endgame.catalog.request"), "catalog")["enum"]).Count == 4, "catalog schema enumerates four native catalogs");
+        Check(Rows(Property(Definition(api, "endgame.catalog.request"), "catalog")["enum"]).Count == 3, "catalog schema excludes recipe dumps");
         Check(!(bool)definitionInsert.Arguments["additionalProperties"], "endgame action schemas reject unknown fields");
         Check(Act(api, "endgame.refresh").Code == "arguments.invalid", "endgame requires stable caller request ID");
         Check(EndAct(api, "refresh", Map("invented", true)).Code == "arguments.invalid", "unknown action argument never sends");
@@ -127,7 +142,7 @@ internal static partial class GameActionAdapterTests
         Check(EndAct(api, "socket.insert", InsertArgs("9007199254740998")).Code == "endgame.item_stale", "warehouse item cannot become socket target");
         Check(EndAct(api, "socket.insert", InsertArgs(socket: 1)).Code == "endgame.socket_changed", "occupied socket cannot insert");
         Check(EndAct(api, "socket.insert", InsertArgs(socket: 2)).Code == "endgame.socket_unavailable", "unopened socket cannot insert");
-        Check(EndAct(api, "socket.remove", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID, "socket", 0)).Code == "endgame.socket_changed", "empty socket cannot extract");
+        Check(EndAct(api, "socket.remove", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID, "socket", 0)).Code == "action.unknown", "removed extraction action is not an alternative workbench");
         Check(native.Sent.Count == 0, "validation never reaches native send");
         native.Endgame.NoteNativeInventoryPublished();
         Check(!Definition(api, "endgame.socket.insert").Available && !(bool)api.TestObserveEndgame("endgame")["inventorySnapshotCurrent"],
@@ -153,7 +168,7 @@ internal static partial class GameActionAdapterTests
         Check(same.ActionId == receipt.ActionId && native.Sent.Count == 1, "equivalent numeric retry returns same action without resend");
         Check(EndAct(api, "socket.insert", InsertArgs(), "stable-operation").Code == "request_id.conflict" && native.Sent.Count == 1, "changed UID with same caller ID conflicts");
         Check(!api.CancelAction(receipt.ActionId), "submitted endgame mutation cannot be cancelled locally");
-        Check(EndAct(api, "socket.remove", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID, "socket", 1)).Code == "action.unavailable", "uncertain mutation blocks a second mutation");
+        Check(EndAct(api, "socket.remove", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID, "socket", 1)).Code == "action.unknown", "removed extraction action stays undiscoverable during pending mutation");
         ApplyReceipt(native, command, kind: "rift.claim");
         Check(api.GetAction(receipt.ActionId).State == GameActionState.Sent && native.Endgame.Pending && native.Endgame.ResponseFor(command.RequestID) == null, "wrong-kind success cannot clear mutation or complete adapter action");
         ApplyReceipt(native, command, false, "materials", "rift.claim");
@@ -232,34 +247,83 @@ internal static partial class GameActionAdapterTests
     private static void EndgameCubeAndEquipment()
     {
         EndgameNative native; var api = SetupEndgame(out native);
-        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11001)).Code == "endgame.recipe_unobserved", "unobserved recipe cannot be quoted");
-        PublishRecipes(native);
+        var materialInput = new object[] { Map("itemId", 1900028201, "count", 10) };
+        var basic = Map("expectedRevision", TestRevision, "cubeInputs", materialInput);
+        Check(!Definition(api, "endgame.cube.quote").Available && EndAct(api, "cube.quote", basic).Code == "action.unavailable", "agent must interact with live 周天鼎 before quoting");
+        OpenCube(api);
+        Check((bool)api.TestObserveEndgame("endgame")["cubeInputsV1"] && (string)api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == "npc:1:3", "cube capability and exact interacted NPC are observed");
+        foreach (string shortcut in new[] { "recipeId", "targetUid", "runeUid" })
+        {
+            var shortcutArgs = Map("expectedRevision", TestRevision, "cubeInputs", materialInput); shortcutArgs[shortcut] = "1";
+            Check(EndAct(api, "cube.quote", shortcutArgs).Code == "arguments.invalid", "recipe and target shortcuts are rejected");
+        }
+        foreach (object invalid in new object[] {
+            new object[0], new object[13], new object[] { Map("uid", FirstRuneUID, "count", 0) },
+            new object[] { Map("uid", FirstRuneUID, "count", 2) }, new object[] { Map("uid", FirstRuneUID, "count", 1.5) },
+            new object[] { Map("uid", "01", "count", 1) }, new object[] { Map("uid", 9007199254740994L, "count", 1) },
+            new object[] { Map("itemId", 1900028201, "count", -1) }, new object[] { Map("itemId", 1900028201, "count", 2147483648L) },
+            new object[] { Map("itemId", 0, "count", 1) }, new object[] { Map("uid", FirstRuneUID, "itemId", 1, "count", 1) },
+            new object[] { Map("uid", FirstRuneUID, "count", new object[] { 1 }) },
+            new object[] { Map("uid", FirstRuneUID, "count", 1), Map("uid", FirstRuneUID, "count", 1) },
+            new object[] { Map("itemId", 1900028201, "count", 1), Map("itemId", 1900028201, "count", 2) } })
+            Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", invalid)).Code == "arguments.invalid", "malformed, duplicate and out-of-range cube inputs rejected");
         foreach (object array in new object[] { new object[] { FirstRuneUID, FirstRuneUID }, new object[] { 9007199254740994L }, new object[] { "0" }, new object[] { "01" }, new object[] { new object[] { FirstRuneUID } }, new object[] { "1", "2", "3", "4", "5", "6" } })
-            Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11003, "itemUids", array)).Code == "arguments.invalid", "invalid ordered rune array rejected");
-        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11002)).Code == "arguments.invalid", "target-required recipe requires observed target");
-        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11001, "targetUid", EquipmentUID)).Code == "arguments.invalid", "target-free recipe refuses unrelated target");
-        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11002, "targetUid", EquipmentUID, "itemUids", new object[] { FirstRuneUID })).Code == "endgame.rune_stale", "socket reorder only accepts installed rune UIDs");
-        var ordered = new object[] { SecondRuneUID, FirstRuneUID };
-        var requestArgs = Map("expectedRevision", TestRevision, "recipeId", 11003, "itemUids", ordered);
+            Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", materialInput, "itemUids", array)).Code == "arguments.invalid", "invalid installed rune order rejected");
+        foreach (string staleUID in new[] { EquippedUID, "9007199254740998", "42" })
+            Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("uid", staleUID, "count", 1) })).Code == "endgame.item_stale", "cube input must be exact observed bag UID");
+        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("itemId", 1900028201, "count", 51) })).Code == "endgame.material_stale", "cube material reservation cannot exceed snapshot wallet");
+        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("itemId", 1001, "count", 1) })).Code == "endgame.material_stale", "itemId cannot select a bag item without its UID");
+        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("uid", EquipmentUID, "count", 1) }, "itemUids", new object[] { FirstRuneUID })).Code == "endgame.rune_stale", "installed ordering cannot draw runes from bag");
+        var twelve = new object[12]; for (int i = 0; i < twelve.Length; i++) twelve[i] = Map("uid", (100+i).ToString(), "count", 1);
+        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", twelve)).Code == "endgame.item_stale", "twelve slots pass structural bounds before inventory validation");
+        DialogUI.I.Visible = false;
+        Check(Definition(api, "endgame.cube.quote").Available && (string)api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == "npc:1:3", "opening native container may close dialog while retaining live workbench authority");
+        OpenCube(api); GameBootstrap.CurMapId = 8;
+        Check(!Definition(api, "endgame.cube.quote").Available, "map changes invalidate cube workbench");
+        GameBootstrap.CurMapId = 7; OpenCube(api);
+        var originalNpc = GameBootstrap.I.Window.Frame.NpcActors[3].State;
+        GameBootstrap.I.Window.Frame.NpcActors[3].State = new WorldNpcState { EntityId = 3, Script = "Nzhoutianding", DisplayName = "周天鼎" };
+        Check(!Definition(api, "endgame.cube.quote").Available, "recycled NPC entity cannot inherit cube dialog authority");
+        GameBootstrap.I.Window.Frame.NpcActors[3].State = originalNpc; OpenCube(api);
+        DialogUI.I.CurrentNpcEntityId = 4;
+        Check(!Definition(api, "endgame.cube.quote").Available, "changing current NPC invalidates captured workbench authority");
+        OpenCube(api);
+        native.Endgame.Reset(); Negotiate(native); PublishItems(native);
+        Check(!Definition(api, "endgame.cube.quote").Available, "new session generation requires a fresh workbench interaction");
+        OpenCube(api);
+        native.Endgame.Reset(); native.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1" })); PublishItems(native); OpenCube(api);
+        Check(!Definition(api, "endgame.cube.quote").Available && !(bool)api.TestObserveEndgame("endgame")["cubeInputsV1"], "legacy negotiation cannot unlock agent cube inputs");
+        native.Endgame.Reset(); Negotiate(native); PublishItems(native); OpenCube(api);
+        var first = Map("uid", SecondRuneUID, "count", 1);
+        var ordered = new object[] { first, Map("uid", FirstRuneUID, "count", 1), Map("itemId", 1900028201, "count", 10) };
+        var requestArgs = Map("expectedRevision", TestRevision, "cubeInputs", ordered);
         var quoted = EndAct(api, "cube.quote", requestArgs, "ordered-quote"); var command = native.Last;
-        ordered[0] = "1";
-        var sent = SentArguments(native);
-        Check((string)Rows(sent["itemUids"])[0] == SecondRuneUID && (string)Rows(sent["itemUids"])[1] == FirstRuneUID && !command.Mutates, "quote preserves frozen rune order and never mutates");
-        var retryArgs = Map("expectedRevision", TestRevision, "recipeId", 11003m, "itemUids", new object[] { SecondRuneUID, FirstRuneUID });
-        Check(EndAct(api, "cube.quote", retryArgs, "ordered-quote").ActionId == quoted.ActionId && native.Sent.Count == 1, "equivalent ordered-array retry is idempotent");
-        retryArgs["itemUids"] = new object[] { FirstRuneUID, SecondRuneUID };
-        Check(EndAct(api, "cube.quote", retryArgs, "ordered-quote").Code == "request_id.conflict", "different rune ordering conflicts under same request ID");
+        first["uid"] = "1"; ordered[0] = Map("uid", "2", "count", 1);
+        var sent = SentArguments(native); var inputs = Rows(sent["cubeInputs"]);
+        Check((string)Object(inputs[0])["uid"] == SecondRuneUID && (string)Object(inputs[1])["uid"] == FirstRuneUID && (long)Object(inputs[2])["count"] == 10 && !command.Mutates, "quote freezes nested input values and preserves source order without spending inventory");
+        Check((long)sent["npcEntityId"] == 3 && !sent.ContainsKey("recipeId") && !sent.ContainsKey("targetUid") && native.Endgame.Materials[0].Count == 50, "cube quote binds live NPC and only reserves materials visually");
+        var retryArgs = Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("count", 1m, "uid", SecondRuneUID), Map("uid", FirstRuneUID, "count", 1m), Map("itemId", 1900028201m, "count", 10m) });
+        Check(EndAct(api, "cube.quote", retryArgs, "ordered-quote").ActionId == quoted.ActionId && native.Sent.Count == 1, "equivalent nested values and numeric types replay idempotently");
+        retryArgs["cubeInputs"] = new object[] { Map("uid", FirstRuneUID, "count", 1), Map("uid", SecondRuneUID, "count", 1), Map("itemId", 1900028201, "count", 10) };
+        Check(EndAct(api, "cube.quote", retryArgs, "ordered-quote").Code == "request_id.conflict", "different source order conflicts under same request ID");
         ApplyReceipt(native, command, kind: "rift.state");
         Check(native.Endgame.QuotePending && api.GetAction(quoted.ActionId).State == GameActionState.Sent, "wrong-kind quote response cannot clear preview wait");
         PublishQuote(native, command);
         Check(api.GetAction(quoted.ActionId).State == GameActionState.Completed && !native.Endgame.Pending, "server quote completes only read operation");
+        Check(!Object(api.TestObserveEndgame("endgame")["quote"]).ContainsKey("recipeId"), "agent quote keeps server recipe selection opaque");
         Check(EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "wrong")).Code == "endgame.quote_stale", "execution requires exact current quote ID");
+        DialogUI.I.Visible = false;
+        Check(Definition(api, "endgame.cube.execute").Available, "native dialog closing into container retains quote execution authority");
+        OpenCube(api);
         var execute = EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current")); sent = SentArguments(native);
-        Check(execute.State == GameActionState.Sent && native.Last.Mutates && (string)sent["quoteId"] == "quote-current" && !sent.ContainsKey("itemUids") && !sent.ContainsKey("recipeId"), "execution sends only frozen server quote identity and revision");
+        Check(execute.State == GameActionState.Sent && native.Last.Mutates && (string)sent["quoteId"] == "quote-current" && (long)sent["npcEntityId"] == 3 && !sent.ContainsKey("cubeInputs") && !sent.ContainsKey("itemUids") && !sent.ContainsKey("recipeId"), "execution binds opaque quote and current NPC without reinterpreting inputs");
         ApplyReceipt(native, native.Last);
         Check(native.Endgame.Quote == null && api.GetAction(execute.ActionId).State == GameActionState.Completed && (string)api.GetAction(execute.ActionId).Data["serverKind"] == "cube.result", "actual server cube.result completes execution and invalidates quote");
-        api = SetupEndgame(out native); PublishRecipes(native);
-        EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "recipeId", 11001)); PublishQuote(native, native.Last, expiry: "2000-01-01T00:00:00Z");
+        api = SetupEndgame(out native); OpenCube(api);
+        var installedArgs = Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("uid", EquipmentUID, "count", 1) }, "itemUids", new object[] { "9007199254740997" });
+        Check(EndAct(api, "cube.quote", installedArgs).State == GameActionState.Sent && (string)Rows(SentArguments(native)["itemUids"])[0] == "9007199254740997", "optional itemUids preserves installed socket order");
+        PublishQuote(native, native.Last, expiry: "2000-01-01T00:00:00Z");
         Check(EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current")).Code == "endgame.quote_stale" && native.Sent.Count == 1, "expired quote never executes");
         PublishItems(native);
         Check(!Definition(api, "endgame.cube.execute").Available, "new complete snapshot invalidates quote availability");
@@ -378,10 +442,10 @@ internal static partial class GameActionAdapterTests
         Check((int)api.TestObserveEndgame("endgame.items", name: "absent")["total"] == 0, "name filter reports empty matched page");
         var beyond = api.TestObserveEndgame("endgame.items", offset: 4096, limit: 512);
         Check((int)beyond["count"] == 0 && beyond["nextOffset"] == null && !(bool)beyond["truncated"], "offset beyond snapshot returns terminal empty page");
-        var catalog = api.TestObserveEndgame("endgame.catalog", offset: 1, limit: 1, catalog: "recipes");
-        Check((bool)catalog["loaded"] && !(bool)catalog["hasMore"] && (int)catalog["total"] == 3 && (int)Object(Rows(catalog["rows"])[0])["id"] == 11002 && (int)catalog["nextOffset"] == 2, "catalog observation pages loaded native rows separately from server cursor");
-        var firstRecipe = api.TestObserveEndgame("endgame.catalog", limit: 1, catalog: "recipes");
-        Check((string)Object(Rows(firstRecipe["rows"])[0])["money"] == EquipmentUID, "catalog money preserves exact large string amount");
+        Check(!Object(status["catalogs"]).ContainsKey("recipes"), "even internally loaded recipes are not exposed in default catalog status");
+        Check(EndAct(api, "catalog.request", Map("catalog", "recipes")).Code == "arguments.invalid", "agents cannot request legacy recipe catalogs");
+        bool recipeRejected = false; try { api.TestObserveEndgame("endgame.catalog", catalog: "recipes"); } catch (ArgumentException) { recipeRejected = true; }
+        Check(recipeRejected, "agents cannot observe a legacy recipe dump");
         var rift = Object(api.TestObserveEndgame("endgame.rift", limit: 1)["rift"]);
         Check((string)Object(Rows(rift["members"])[0])["charId"] == EquipmentUID && (string)Object(Rows(rift["auras"])[0])["entityId"] == "4294967295" && (string)Object(Rows(rift["auras"])[0])["targetEntityId"] == "monster:1:-1", "rift member and unsigned native aura identities remain exact and scene-qualified");
         Check((int)rift["globePickupRadius"] == 75 && (int)Object(Rows(rift["globes"])[0])["x"] == 321, "rift observes actual globe routing coordinates and pickup radius");
@@ -444,12 +508,18 @@ internal static partial class GameActionAdapterTests
         if (negotiated && snapshot) PublishItems(native);
         return api;
     }
+    private static void OpenCube(PluginGameApi api)
+    {
+        var source = GameBootstrap.I.Window.Frame.NpcActors[3].State;
+        source.DisplayName = "周天鼎"; source.Script = "Nzhoutianding";
+        Check(Act(api, "npc.interact", Map("entityId", "npc:1:3")).State == GameActionState.Completed, "native interaction opens 周天鼎 context");
+    }
     private static void Apply(EndgameNative native, Dictionary<string, object> response)
     { native.Endgame.Apply(EndgameResponse.Parse(BoundedJson.Serialize(response))); }
     private static void Negotiate(EndgameNative native)
     {
         native.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1", "endgame.rift-entrance.v1" },
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1", "endgame.rift-entrance.v1", "endgame.cube-inputs.v1" },
             "riftEntrances", new object[] { Map("mapId", 7, "npcId", 83, "npc", "八仙使者", "script", "Nbaxian") }));
     }
     private static Dictionary<string, object> EndgameItem(string uid, int item, string location, int tab, int slot, bool locked = false)

@@ -14,6 +14,7 @@ public sealed partial class PluginGameApi
         EndgameClientState state = owner?.Endgame;
         var data = Values("available", owner != null && owner.EndgameInWorld && state.Negotiated,
             "apiInstanceId", apiInstanceId, "inWorld", owner != null && owner.EndgameInWorld,
+            "cubeInputsV1", state != null && state.CubeInputsV1,
             "growthV5", state != null && state.GrowthV5, "negotiated", state != null && state.Negotiated, "generation", state?.Generation ?? 0,
             "expectedRevision", state?.Revision ?? "0", "snapshotRevision", state?.SnapshotRevision ?? "0", "hasSnapshot", state != null && state.HasSnapshot,
             "inventorySnapshotCurrent", state != null && state.InventorySnapshotCurrent,
@@ -31,6 +32,8 @@ public sealed partial class PluginGameApi
         switch (domain)
         {
             case "endgame":
+                int cubeEntity = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
+                data["cubeWorkbenchEntityId"] = cubeEntity == 0 ? null : EntityReference("npc", cubeEntity);
                 data["combatStats"] = ObserveEndgameCombatStats(state.CombatStats);
                 data["combatStatsVersion"] = state.CombatStatsVersion; data["combatStatsRevision"] = state.CombatStatsRevision;
                 data["combatStatsReceivedUtc"] = state.CombatStatsReceivedUtc.ToString("o", CultureInfo.InvariantCulture);
@@ -44,7 +47,7 @@ public sealed partial class PluginGameApi
                 data["rift"] = ObserveEndgameRift(state, args, false);
                 data["itemCount"] = state.Items.Count;
                 var catalogs = new Dictionary<string, object>();
-                foreach (string name in new[] { "uniques", "runes", "formations", "recipes" }) catalogs[name] = EndgameCatalogStatus(state, name);
+                foreach (string name in new[] { "uniques", "runes", "formations" }) catalogs[name] = EndgameCatalogStatus(state, name);
                 data["catalogs"] = catalogs;
                 break;
             case "endgame.items":
@@ -65,7 +68,6 @@ public sealed partial class PluginGameApi
                 if (catalog == "uniques") { total = state.Uniques.Count; EndgamePageRows(rows, state.Uniques, args, ObserveEndgameItem); }
                 if (catalog == "runes") { total = state.Runes.Count; EndgamePageRows(rows, state.Runes, args, ObserveEndgameRune); }
                 if (catalog == "formations") { total = state.Formations.Count; EndgamePageRows(rows, state.Formations, args, ObserveEndgameFormation); }
-                if (catalog == "recipes") { total = state.Recipes.Count; EndgamePageRows(rows, state.Recipes, args, ObserveEndgameRecipe); }
                 EndgamePage(data, "rows", rows, total, args); break;
             case "endgame.rift": data["rift"] = ObserveEndgameRift(state, args, true); break;
             case "endgame.skills":
@@ -95,7 +97,8 @@ public sealed partial class PluginGameApi
         "nextChangeLines", new List<string>(row.NextChangeLines), "nextEffectiveRank", row.NextEffectiveRank, "nextRequiredLevel", row.NextRequiredLevel, "nativeModifierLines", new List<string>(row.NativeModifierLines),
         "trainingSynergies", EndgameRows(row.TrainingSynergies, synergy => Values("sourceId", synergy.SourceID, "sourceName", synergy.SourceName,
             "effect", synergy.Effect, "effectLabel", synergy.EffectLabel, "perPointValue", synergy.PerPointValue, "unit", synergy.Unit,
-            "investedHardPoints", synergy.InvestedHardPoints, "contributionValue", synergy.ContributionValue, "equipmentApplies", synergy.EquipmentApplies)),
+            "investedHardPoints", synergy.InvestedHardPoints, "sourceEffectiveRank", synergy.SourceEffectiveRank,
+            "contributionValue", synergy.ContributionValue, "equipmentApplies", synergy.EquipmentApplies)),
         "contributions", EndgameRows(row.Contributions, c => Values("sourceId", c.SourceID, "scope", c.Scope, "profession", c.Profession, "branch", c.Branch, "school", c.School, "skillId", c.SkillID, "levels", c.Levels.ToString(CultureInfo.InvariantCulture))));
     private static Dictionary<string, object> EndgameCatalogStatus(EndgameClientState state, string name) => Values(
         "loaded", state.CatalogLoaded(name), "requested", state.CatalogRequested(name), "hasMore", state.CatalogHasMore(name), "nextCursor", state.NextCatalogCursor(name));
@@ -122,9 +125,7 @@ public sealed partial class PluginGameApi
         "channel", BoundText(row.Channel), "runes", CopyNumbers(row.Runes, 5), "stats", EndgameRows(row.Stats, ObserveEndgameStat), "minLevel", row.MinLevel,
         "professions", row.Professions, "slots", CopyNumbers(row.Slots, 32), "active", row.Active, "inactiveReason", BoundText(row.InactiveReason));
     private Dictionary<string, object> ObserveEndgameMaterial(EndgameMaterialView row) => Values("itemId", row.ItemID, "name", BoundText(row.Name), "count", row.Count, "owned", row.Owned);
-    private Dictionary<string, object> ObserveEndgameRecipe(EndgameRecipeView row) => Values("id", row.ID, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),
-        "operation", row.Operation, "money", row.Money, "materials", EndgameRows(row.Materials, ObserveEndgameMaterial), "outputItemId", row.OutputItemID, "targetRequired", row.TargetRequired);
-    private Dictionary<string, object> ObserveEndgameQuote(EndgameQuoteView row) => row == null ? null : Values("quoteId", row.QuoteID, "recipeId", row.RecipeID, "targetUid", row.TargetUID,
+    private Dictionary<string, object> ObserveEndgameQuote(EndgameQuoteView row) => row == null ? null : Values("quoteId", row.QuoteID, "targetUid", row.TargetUID,
         "revision", row.Revision, "money", row.Money, "materials", EndgameRows(row.Materials, ObserveEndgameMaterial), "expiresAt", row.ExpiresAt, "description", BoundText(row.Description, 8192));
     private Dictionary<string, object> ObserveEndgameRift(EndgameClientState state, ObservationArguments args, bool includeMarkers)
     {

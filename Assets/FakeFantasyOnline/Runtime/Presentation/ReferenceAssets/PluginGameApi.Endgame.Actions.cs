@@ -18,6 +18,7 @@ public sealed partial class PluginGameApi
         EndgameClientState state = owner?.Endgame;
         bool ready = owner != null && owner.EndgameInWorld && state.Negotiated;
         bool writable = ready && state.InventorySnapshotCurrent && !state.Pending;
+        bool cubeReady = writable && state.CubeInputsV1 && (DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0) != 0;
         const string unavailable = "The native world must negotiate endgame.v1 before this operation.";
         const string mutation = "A complete server snapshot and no uncertain mutation are required. Observe endgame; use endgame.retry only for the exact pending request.";
         definitions.Add(EndgameDefinition("endgame.skill.refresh", "Request authoritative hard, granted, soft and effective skill ranks, effects and unspent points.", ready && state.GrowthV5, "The server must negotiate endgame.growth.v5."));
@@ -25,9 +26,8 @@ public sealed partial class PluginGameApi
         definitions.Add(EndgameDefinition("endgame.refresh", "Request an authoritative inventory/material/active-formation snapshot through the native endgame owner.", ready, unavailable));
         definitions.Add(EndgameDefinition("endgame.catalog.request", "Request one server catalog page. Omitted cursor uses the observed next cursor. Observe endgame.catalog for page/load state.", ready, unavailable, "catalog:string", "cursor?:string"));
         definitions.Add(EndgameDefinition("endgame.socket.insert", "Insert an observed bag rune into an observed empty socket; only the correlated server receipt establishes the outcome.", writable, mutation, "expectedRevision:string", "targetUid:string", "runeUid:string", "socket:integer"));
-        definitions.Add(EndgameDefinition("endgame.socket.remove", "Extract an observed installed rune through the native server command.", writable, mutation, "expectedRevision:string", "targetUid:string", "socket:integer"));
-        definitions.Add(EndgameDefinition("endgame.cube.quote", "Ask the server for costs, outcome and expiry; this never executes the recipe. itemUids preserves selected rune order.", writable && !state.QuotePending, mutation, "expectedRevision:string", "recipeId:integer", "targetUid?:string", "runeUid?:string", "itemUids?:array"));
-        definitions.Add(EndgameDefinition("endgame.cube.execute", "Execute exactly the currently observed unexpired server quote. Costs/risks are in endgame.quote; no implicit quote or reroll.", writable && state.Quote != null && !state.QuotePending, mutation, "expectedRevision:string", "quoteId:string"));
+        definitions.Add(EndgameDefinition("endgame.cube.quote", "Reserve observed bag items and material quantities in the live 周天鼎 input container; the server matches the inputs and quotes costs, outcome and expiry. Optional itemUids orders installed socket runes only.", cubeReady && !state.QuotePending, "Interact with a live 周天鼎 and observe a complete snapshot with endgame.cube-inputs.v1 negotiated.", "expectedRevision:string", "cubeInputs:array", "itemUids?:array"));
+        definitions.Add(EndgameDefinition("endgame.cube.execute", "Execute exactly the currently observed unexpired server quote. Costs/risks are in endgame.quote; no implicit quote or reroll.", cubeReady && state.Quote != null && !state.QuotePending, "An observed quote and live 周天鼎 dialog are required.", "expectedRevision:string", "quoteId:string"));
         definitions.Add(EndgameDefinition("endgame.rift.refresh", "Request authoritative rift state, invitation, combat markers and reward eligibility.", ready, unavailable));
         definitions.Add(EndgameDefinition("endgame.rift.start", "Spend a key for a fresh run, or enter the observed invitation/run with its exact runId. For a fresh run use npc.interact on a configured entrance first; admitted-run reentry retains its existing runId path.", writable && state.Rift != null && (ExistingEndgameRift(state.Rift) || DialogUI.I != null && DialogUI.I.RiftEntranceEntityForIndependentRuntime(state) != 0), "Interact with a live NPC listed in endgame.riftEntrances, then observe the current snapshot.", "expectedRevision:string", "tier:integer", "runId?:string"));
         definitions.Add(EndgameDefinition("endgame.rift.advance", "Use the observed floor exit to skip remaining packs. Preserves run, difficulty tier, timer and earned progress; runId and floorIndex guard stale navigation. The server checks run opener/exit proximity.", writable && state.Rift != null && state.Rift.CanAdvance && state.Rift.RunID.Length > 0 && state.Rift.FloorIndex > 0 && !state.Rift.Transitioning && state.Rift.Phase == "active", "Observe an active, non-transitioning floor with canAdvance=true and no uncertain native mutation.", "expectedRevision:string", "runId:string", "floorIndex:integer"));
@@ -56,13 +56,26 @@ public sealed partial class PluginGameApi
             if (key == "tier") { schema["minimum"] = 1; schema["maximum"] = 150; }
             if (key == "floorIndex") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
             if (key == "skillId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
-            if (key == "recipeId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
-            if (key == "catalog") schema["enum"] = new object[] { "uniques", "runes", "formations", "recipes" };
+            if (key == "catalog") schema["enum"] = new object[] { "uniques", "runes", "formations" };
             if (key == "confirmLeave") schema["const"] = true;
             if (key == "itemUids")
             {
                 schema["maxItems"] = 5; schema["uniqueItems"] = true;
                 schema["items"] = new Dictionary<string, object> { { "type", "string" }, { "pattern", "^[1-9][0-9]{0,18}$" }, { "maxLength", 19 } };
+            }
+            if (key == "cubeInputs")
+            {
+                schema["minItems"] = 1; schema["maxItems"] = 12; schema["uniqueItems"] = true;
+                schema["items"] = new Dictionary<string, object> { { "oneOf", new object[] {
+                    new Dictionary<string, object> { { "type", "object" }, { "required", new object[] { "uid", "count" } }, { "additionalProperties", false },
+                        { "properties", new Dictionary<string, object> {
+                            { "uid", new Dictionary<string, object> { { "type", "string" }, { "pattern", "^[1-9][0-9]{0,18}$" }, { "maxLength", 19 } } },
+                            { "count", new Dictionary<string, object> { { "type", "integer" }, { "const", 1 } } } } } },
+                    new Dictionary<string, object> { { "type", "object" }, { "required", new object[] { "itemId", "count" } }, { "additionalProperties", false },
+                        { "properties", new Dictionary<string, object> {
+                            { "itemId", new Dictionary<string, object> { { "type", "integer" }, { "minimum", 1 }, { "maximum", int.MaxValue } } },
+                            { "count", new Dictionary<string, object> { { "type", "integer" }, { "minimum", 1 }, { "maximum", int.MaxValue } } } } } }
+                } } };
             }
             properties.Add(key, schema); if (!optional) required.Add(key);
         }
@@ -97,6 +110,24 @@ public sealed partial class PluginGameApi
         }
         return result;
     }
+    private static List<EndgameCubeInput> EndgameCubeInputs(IReadOnlyDictionary<string, object> args)
+    {
+        if (!args.TryGetValue("cubeInputs", out object value) || !(value is IReadOnlyList<object> rows) || rows.Count < 1 || rows.Count > 12)
+            throw new ArgumentException("cubeInputs must contain 1..12 input objects.");
+        var inputs = new List<EndgameCubeInput>(); var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (object row in rows)
+        {
+            var input = row as IReadOnlyDictionary<string, object>;
+            if (input == null || input.Count != 2 || !input.ContainsKey("count") || input.ContainsKey("uid") == input.ContainsKey("itemId"))
+                throw new ArgumentException("Each cube input must contain exactly uid or itemId, and count.");
+            int count = ActionInt(input, "count", 1);
+            string uid = input.ContainsKey("uid") ? EndgameIdentity(ActionString(input, "uid"), "uid") : "";
+            int item = uid.Length == 0 ? ActionInt(input, "itemId", 1) : 0;
+            if (!seen.Add(uid.Length > 0 ? "u" + uid : "i" + item)) throw new ArgumentException("cubeInputs cannot contain duplicate identities.");
+            inputs.Add(new EndgameCubeInput(uid, item, count));
+        }
+        return inputs;
+    }
     private static bool EndgameTransient(string error) => error == "pending" || error == "busy" || error == "storage" || error == "storage_unavailable";
     private static string EndgameWireID(string requestID)
     {
@@ -128,7 +159,7 @@ public sealed partial class PluginGameApi
         IEndgameClient owner = EndgameClient; EndgameClientState state = owner.Endgame;
         var args = entry.Request.Arguments; string op = entry.Request.Name.Substring("endgame.".Length);
         string revision = "", uid = "", rune = "", quote = "", run = "", catalog = "", cursor = "";
-        int socket = 0, recipe = 0, tier = 0, floor = 0, skill = 0, npcEntityID = 0; List<string> itemUIDs = null;
+        int socket = 0, tier = 0, floor = 0, skill = 0, npcEntityID = 0; List<string> itemUIDs = null; List<EndgameCubeInput> cubeInputs = null;
         if (args.ContainsKey("expectedRevision"))
         {
             revision = EndgameIdentity(ActionString(args, "expectedRevision"), "expectedRevision", true);
@@ -168,34 +199,47 @@ public sealed partial class PluginGameApi
                 cursor = args.ContainsKey("cursor") ? EndgameString(args, "cursor", false) : state.NextCatalogCursor(catalog);
                 if (cursor.Length > 0 && cursor != state.NextCatalogCursor(catalog)) throw new ActionFailure("endgame.catalog_stale", "Use the currently observed next catalog cursor.");
                 break;
-            case "socket.insert": case "socket.remove":
+            case "socket.insert":
                 uid = EndgameIdentity(ActionString(args, "targetUid"), "targetUid"); EndgameItemView target = EndgameItem(uid);
                 socket = ActionInt(args, "socket", 0, 4);
                 if (socket >= target.SocketCount) throw new ActionFailure("endgame.socket_unavailable", "The observed socket is not open.");
                 bool occupied = false; foreach (var installed in target.Sockets) if (installed.Index == socket && installed.ItemID > 0) occupied = true;
-                if (occupied != (op == "socket.remove")) throw new ActionFailure("endgame.socket_changed", "Insertion requires an empty socket; removal requires an installed rune.");
-                if (op == "socket.insert") { rune = EndgameIdentity(ActionString(args, "runeUid"), "runeUid"); EndgameItem(rune, "bag"); }
+                if (occupied) throw new ActionFailure("endgame.socket_changed", "Insertion requires an empty socket.");
+                rune = EndgameIdentity(ActionString(args, "runeUid"), "runeUid"); EndgameItem(rune, "bag");
                 break;
             case "cube.quote":
-                recipe = ActionInt(args, "recipeId", 1); itemUIDs = EndgameUIDs(args);
-                uid = EndgameString(args, "targetUid", false); rune = EndgameString(args, "runeUid", false);
-                EndgameRecipeView chosen = null; foreach (var row in state.Recipes) if (row.ID == recipe) chosen = row;
-                if (chosen == null) throw new ActionFailure("endgame.recipe_unobserved", "Load and observe the recipe catalog before requesting its quote.");
-                EndgameItemView cubeTarget = uid.Length > 0 ? EndgameItem(uid, "bag") : null;
-                if (chosen.TargetRequired && cubeTarget == null) throw new ArgumentException("This recipe requires targetUid.");
-                if (!chosen.TargetRequired && cubeTarget != null) throw new ArgumentException("This recipe does not use targetUid.");
-                if (rune.Length > 0) EndgameItem(rune, "bag");
-                if (itemUIDs != null) foreach (string id in itemUIDs)
+                npcEntityID = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
+                if (!state.CubeInputsV1 || npcEntityID == 0) throw new ActionFailure("endgame.workbench_required", "Interact with the current 周天鼎 before preparing inputs.");
+                cubeInputs = EndgameCubeInputs(args); itemUIDs = EndgameUIDs(args);
+                EndgameItemView cubeTarget = null;
+                foreach (var input in cubeInputs)
                 {
-                    if (chosen.Operation != "socket.reorder") EndgameItem(id, "bag");
+                    if (input.UID.Length > 0)
+                    {
+                        var selected = EndgameItem(input.UID, "bag");
+                        if (selected.SocketCount > 0)
+                        {
+                            if (cubeTarget != null && itemUIDs != null) throw new ArgumentException("Installed rune ordering requires exactly one socketed input item.");
+                            cubeTarget = selected;
+                        }
+                    }
                     else
                     {
-                        bool installed = false; if (cubeTarget != null) foreach (var row in cubeTarget.Sockets) if (row.UID == id && row.ItemID > 0) installed = true;
-                        if (!installed) throw new ActionFailure("endgame.rune_stale", "Reorder inputs must be the observed installed rune UIDs.");
+                        bool present = false;
+                        foreach (var material in state.Materials) if (material.ItemID == input.ItemID && input.Count <= material.Count) present = true;
+                        if (!present) throw new ActionFailure("endgame.material_stale", "The selected material quantity is unavailable in the observed snapshot.");
                     }
+                }
+                if (itemUIDs != null) foreach (string id in itemUIDs)
+                {
+                    bool installed = false;
+                    if (cubeTarget != null) foreach (var row in cubeTarget.Sockets) if (row.UID == id && row.ItemID > 0) installed = true;
+                    if (!installed) throw new ActionFailure("endgame.rune_stale", "Reorder inputs must be the observed installed rune UIDs of the selected equipment.");
                 }
                 break;
             case "cube.execute":
+                npcEntityID = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
+                if (!state.CubeInputsV1 || npcEntityID == 0) throw new ActionFailure("endgame.workbench_required", "Interact with the current 周天鼎 before executing its quote.");
                 quote = EndgameString(args, "quoteId");
                 if (state.Quote == null || state.Quote.QuoteID != quote || state.Quote.Revision != revision ||
                     !DateTimeOffset.TryParse(state.Quote.ExpiresAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset expires) || expires <= DateTimeOffset.UtcNow)
@@ -232,7 +276,7 @@ public sealed partial class PluginGameApi
                 break;
             default: throw new ArgumentException("Unknown endgame operation.");
         }
-        var command = new EndgameRequest(op, revision, uid, rune, socket, recipe, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor, skill, npcEntityID);
+        var command = new EndgameRequest(op, revision, uid, rune, socket, 0, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor, skill, npcEntityID, cubeInputs);
         TrackEndgame(entry, owner, command);
         bool submitted = owner.SendEndgame(command);
         if (!submitted && !ReferenceEquals(state.PendingRequest, command))
@@ -295,7 +339,7 @@ public sealed partial class PluginGameApi
     }
     private static string EndgameCatalogName(string name)
     {
-        if (name != "uniques" && name != "runes" && name != "formations" && name != "recipes") throw new ArgumentException("catalog must be uniques, runes, formations, or recipes.");
+        if (name != "uniques" && name != "runes" && name != "formations") throw new ArgumentException("catalog must be uniques, runes, or formations.");
         return name;
     }
 }

@@ -6,7 +6,7 @@ using FakeFantasyOnline.Application;
 using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
-class EndgameUiContract
+partial class EndgameUiContract
 {
     static int assertions;
     static void Check(bool value, string name) { if (!value) throw new Exception(name); assertions++; }
@@ -135,8 +135,8 @@ class EndgameUiContract
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("通关余时 06:00") && t.Contains("第 4 阶")), "completed summary displays frozen server time and authoritative unlock without predicting extra levels");
         var bg = new UnityEngine.Texture2D(); var back = new UnityEngine.Texture2D(); var fill = new UnityEngine.Texture2D();
         ArtworkSkin.frameTextures["res/uires/common/msgboxbk.gsa"] = new[] { bg };
-        ArtworkSkin.frameTextures["res/uires/statusbar/expbarbk.gsa"] = new[] { back };
-        ArtworkSkin.frameTextures["res/uires/statusbar/expbar.gsa"] = new[] { fill };
+        ArtworkSkin.frameTextures["res/uires/gameui/intonatebarbk.gsa"] = new[] { back };
+        ArtworkSkin.frameTextures["res/uires/gameui/intonatebar.gsa"] = new[] { fill };
         UnityEngine.GUI.uvTextures.Clear(); UnityEngine.GUI.uvAlphaBlends.Clear();
         typeof(EndgamePanel).GetMethod("DrawRiftWindowArtwork", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { new UnityEngine.Rect(0, 0, 940, 660), 1f, false });
         Check(UnityEngine.GUI.uvTextures.Count == 10 && UnityEngine.GUI.uvTextures[1].Item1.width == 44 && UnityEngine.GUI.uvTextures[1].Item1.height == 44, "original background expands with intact native 44px corners");
@@ -146,13 +146,13 @@ class EndgameUiContract
         Check(UnityEngine.GUI.uvTextures[0].Item1.width == 270 && UnityEngine.GUI.uvTextures[0].Item1.height == 252, "dropdown backing covers its entire pointer area so covered text cannot bleed through border margins");
         UnityEngine.GUI.uvTextures.Clear();
         var progress = typeof(EndgamePanel).GetMethod("DrawProgress", BindingFlags.NonPublic | BindingFlags.Instance);
-        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), 50, 100 });
+        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 34), 50, 100 });
         var clip = UnityEngine.GUI.uvTextures[0];
-        Check(ReferenceEquals(clip.Item2, fill) && clip.Item1.width == 400 && clip.Item1.height == 6 && clip.Item3.width == .5f, "original six-pixel fill is half-clipped at 50 percent, never replaced by a colored rectangle");
-        UnityEngine.GUI.uvTextures.Clear(); progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), -1, 100 });
+        Check(ReferenceEquals(clip.Item2, fill) && clip.Item1.width == 58 && clip.Item1.height == 10 && clip.Item3.width == .5f, "selected original green fill is half-clipped at 50 percent in its native gold frame");
+        UnityEngine.GUI.uvTextures.Clear(); progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 34), -1, 100 });
         Check(UnityEngine.GUI.uvTextures.Count == 0, "negative progress draws no fill");
-        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), 200, 100 });
-        Check(UnityEngine.GUI.uvTextures[0].Item1.width == 800, "overflow progress remains inside authored bar");
+        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 34), 200, 100 });
+        Check(UnityEngine.GUI.uvTextures[0].Item1.width == 116, "overflow progress remains inside authored bar");
         ArtworkSkin.frameTextures.Clear(); UnityEngine.Event.current = new UnityEngine.Event();
     }
     static void MultiFloorContracts(Client c, EndgamePanel p)
@@ -165,37 +165,80 @@ class EndgameUiContract
         Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Json.Contains("\"tier\":150") && !c.Last.Json.Contains("floorIndex"), "fresh paid entry chooses difficulty independently of run floor"); Receipt(c);
         int before;
         string floor = ",\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"秘林\",\"canAdvance\":true,\"exitX\":700,\"exitY\":850";
+        int notices = NewbieTipBox.notices.Count;
         Rift(c, "multifloor", "active", extra: floor); Call(p, "Update");
-        Check((string)Get(p, "announcement") == "", "restored floor does not invent an arrival notice");
-        Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("第 2 阶") && t.Contains("第 3 层")) && ArtworkSkin.enableds["前往下一层 · 跳过余敌"], "UI separates difficulty and floor and allows skipping without full progress");
-        Draw(p, "前往下一层 · 跳过余敌"); var pending = c.Last;
-        Check(pending.Op == "rift.advance" && pending.Json.Contains("\"floorIndex\":3") && pending.Json.Contains("multifloor") && pending.Json.Contains("\"expectedRevision\":\"" + c.Endgame.Revision + "\"") && !pending.Json.Contains("tier"), "advance captures exact run and floor only");
-        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌"); Check(c.Sent.Count == before, "double advance is blocked while pending");
+        Check(NewbieTipBox.notices.Count == notices, "restored floor does not invent a native arrival notice");
+        Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("第 2 阶") && t.Contains("第 3 层")) && UnityEngine.GUI.labels.Exists(t => t.Contains("走入本层出口传送门")), "UI separates difficulty and floor and explains physical gate entry");
+        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌");
+        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "modal has no next-floor transfer button or click mutation");
+        var pending = new EndgameRequest("rift.advance", c.Endgame.Revision, runID: "multifloor", floorIndex: 3);
+        Check(c.SendEndgame(pending), "fixture stages a pending request originating at the physical gate");
+        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌"); Check(c.Sent.Count == before, "modal does not add another gate request while pending");
         Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending), "closing retains uncertain floor transition");
         Set(p, "open", true); Draw(p, "查询原请求"); Check(ReferenceEquals(c.Endgame.PendingRequest, pending), "manual floor retry retains nonce"); Receipt(c);
         Set(p, "confirmLeave", true); Rift(c, "multifloor", "active", extra: floor.Replace("\"floorIndex\":3", "\"floorIndex\":4")); Call(p, "Update");
-        Check(((string)Get(p, "announcement")).Contains("第 4 层") && !(bool)Get(p, "confirmLeave") && c.Endgame.Rift.Tier == 2, "arrival announces floor while preserving tier and clearing old leave confirmation");
-        float until = (float)Get(p, "announcementUntil"); Call(p, "Update"); Check((float)Get(p, "announcementUntil") == until, "same floor does not replay arrival");
+        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("第 4 层") && !(bool)Get(p, "confirmLeave") && c.Endgame.Rift.Tier == 2, "native arrival notice preserves floor, tier and clears old leave confirmation");
+        Call(p, "Update"); Draw(p); Draw(p);
+        Check(NewbieTipBox.notices.Count == notices + 1, "same floor and repeated GUI passes do not replay native arrival");
         Rift(c, "multifloor", "active", extra: floor + ",\"transitioning\":true"); Draw(p);
-        Check(!ArtworkSkin.enableds["正在前往下一层…"] && !Enabled("进入已有洞天"), "native transition blocks repeated advance and reentry");
+        Check(!ArtworkSkin.enableds.ContainsKey("正在前往下一层…") && UnityEngine.GUI.labels.Exists(t => t == "正在前往下一层，请稍候。") && !Enabled("进入已有洞天"), "native transition shows passive status and blocks reentry");
         Rift(c, "multifloor", "boss", extra: floor); ArtworkSkin.enableds.Clear(); Draw(p);
         Check(!ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "guardian phase cannot offer skipping");
         string tells = ",\"telegraphs\":[{\"id\":\"circle\",\"entityId\":\"1\",\"ability\":\"烈焰爆裂\",\"shape\":\"circle\",\"x\":500,\"y\":500,\"radius\":105,\"remainingMS\":1500},{\"id\":\"ring\",\"entityId\":\"2\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":500,\"y\":500,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800},{\"id\":\"line\",\"entityId\":\"3\",\"ability\":\"裂地斩\",\"shape\":\"line\",\"x\":500,\"y\":500,\"endX\":700,\"endY\":500,\"radius\":38,\"remainingMS\":1400}]";
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.rift-portals.v1\"]}");
+        Apply(c, "{\"kind\":\"rift.context\",\"ok\":true,\"result\":{\"inInstance\":\"true\"}}");
         UnityEngine.Camera.main = new UnityEngine.Camera(); Rift(c, "multifloor", "active", extra: floor + tells);
         Set(p, "open", false); BitmapFont.labels.Clear(); UnityEngine.GUI.textures.Clear(); Draw(p);
+        before = c.Sent.Count; Draw(p, "下一层 · 出口 (700, 850)");
+        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !ArtworkSkin.enableds.ContainsKey("查看洞天"), "compact HUD has no transfer or workbench button");
         Check(BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") && t.Contains("秒") && t.Contains("离开圆圈")) && BitmapFont.labels.Exists(t => t.Contains("震环冲击") && t.Contains("避开圆环")) && BitmapFont.labels.Exists(t => t.Contains("裂地斩") && t.Contains("离开直线")), "all danger shapes show readable ability, countdown and dodge hint");
-        Check(UnityEngine.GUI.textures.Count > 100 && BitmapFont.labels.Exists(t => t.Contains("下一层出口")), "native overlay draws real geometry and the optional exit marker");
+        Check(UnityEngine.GUI.textures.Count > 100, "native overlay draws danger geometry without a center HUD block");
         Rift(c, "multifloor", "boss", extra: floor); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); before = c.Sent.Count; Draw(p, "下一层 · 出口 (700, 850)");
-        Check(BitmapFont.labels.Exists(t => t == "镇境劫影 · 出口 (700, 850)") && BitmapFont.labels.Exists(t => t == "◆ 镇境劫影 · 本层出口") && BitmapFont.labels.Exists(t => t.Contains("前往本层出口，击败")), "guardian phase retains spawn marker, HUD coordinates and exit objective");
+        Check(BitmapFont.labels.Exists(t => t == "◆ 镇境劫影 · 本层出口") && !BitmapFont.labels.Exists(t => t.Contains("前往本层出口，击败")), "guardian phase retains its world spawn marker without duplicating a permanent objective panel");
         Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !BitmapFont.labels.Exists(t => t.Contains("下一层出口")), "guardian location is informational and cannot advance the floor");
         Rift(c, "multifloor", "active", extra: floor.Replace("\"canAdvance\":true", "\"canAdvance\":false")); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); Draw(p);
-        Check(BitmapFont.labels.Exists(t => t.Contains("下一层出口")) && ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !ArtworkSkin.enableds["下一层 · 出口 (700, 850)"], "faraway players can discover exit marker and HUD coordinates without advance authority");
+        Check(!ArtworkSkin.enableds.ContainsKey("查看洞天") && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)"), "faraway players do not gain a HUD advance button");
         Rift(c, "multifloor", "active", extra: floor + tells);
         typeof(EndgameClientState).GetField("<RiftReceivedUtc>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, DateTime.UtcNow.AddSeconds(-4));
         BitmapFont.labels.Clear(); Draw(p); Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("震环冲击") || t.Contains("裂地斩")), "elapsed tells disappear without fabricating impact or damage");
         Rift(c, "multifloor", "active", extra: floor + tells + ",\"transitioning\":true"); BitmapFont.labels.Clear(); Draw(p);
         Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("下一层出口")), "transition suppresses old map danger and exit geometry");
         UnityEngine.Camera.main = null;
+    }
+    static void NativeRiftNoticeContracts()
+    {
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        int notices = NewbieTipBox.notices.Count;
+        Rift(c, "notice-run", "active", extra: ",\"floorIndex\":1"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices, "binding a restored run does not enqueue a native notice");
+        Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("劫影现身"), "simultaneous phase and floor change emits one meaningful native notice");
+        for (int i = 0; i < 10; i++)
+        {
+            Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2,\"progress\":" + i + ",\"canAdvance\":" + (i % 2 == 0 ? "true" : "false"));
+            Call(p, "Update");
+        }
+        Check(NewbieTipBox.notices.Count == notices + 1, "polling progress and eligibility changes do not fill the native notice queue");
+        c.EndgameInWorld = false; Call(p, "Update");
+        Rift(c, "notice-run", "reward_pending", extra: ",\"floorIndex\":2"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "phase changes outside the world do not enqueue notices");
+        c.EndgameInWorld = true; Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "world reentry silently restores the current phase");
+        Rift(c, "notice-run", "completed", true, extra: ",\"floorIndex\":2"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 2 && NewbieTipBox.notices[notices + 1].Contains("可重返拾取"), "new authoritative completion after reentry still produces its native notice");
+        p.Unbind(c); Rift(c, "notice-run", "closed", true, extra: ",\"floorIndex\":2");
+        p.Bind(c); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 2, "rebind never replays transitions missed while detached");
+        c.Endgame.Reset(); c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 2, "new connection generation silently restores even the same run ID");
+        Rift(c, "notice-run", "failed", extra: ",\"floorIndex\":2"); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 3 && NewbieTipBox.notices[notices + 2].Contains("演劫未竟"), "genuine failure after restoration produces a native notice");
+        p.Unbind(c);
     }
     static EndgameItemView TooltipItem(string fields) => EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"items\":[{" + fields + "}]}").Items[0];
     static int Occurrences(string text, string value) => (text.Length - text.Replace(value, "").Length) / value.Length;
@@ -349,42 +392,30 @@ class EndgameUiContract
     }
     static void SocketRecipeContracts()
     {
-        // The native client has no capacity/probability model: each target-specific quote is server text.
-        string[] chances = { "100%", "50%", "1/3", "25%", "20%" };
+        // Random capacity and probability remain authoritative server text.
         for (int capacity = 1; capacity <= 5; capacity++)
         {
             var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
-            c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+            c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"]}");
             string gear = "{\"uid\":\"9007199254740901\",\"itemId\":2001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"无孔装备\",\"socketCount\":0}";
             Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"socket-base\",\"chunks\":1,\"revision\":\"1\",\"items\":[" + gear + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":8}]}");
-            InventoryDlg.rows[0] = new InventoryDlg.Item { id = 2001, bagIdx = 0 };
-            Set(p, "open", true); Set(p, "module", EndgameModule.Cube); Set(p, "recipeID", 1006); Set(p, "selectedUID", "9007199254740901");
-            c.Endgame.Begin(new EndgameRequest("catalog", catalog: "recipes"));
-            string description = "仅限无孔装备，随机开出1至真实容量的孔数，各孔数等概率；已有孔不可重开。";
-            Apply(c, "{\"kind\":\"catalog.recipes\",\"ok\":true,\"recipes\":[{\"id\":1006,\"name\":\"开窍引星\",\"description\":\"" + description + "\",\"operation\":\"socket.open\",\"targetRequired\":true,\"money\":\"5000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":4}]}]}");
+            InventoryDlg.rows[0] = new InventoryDlg.Item { id = 2001, bagIdx = 0 }; GameBootstrap.CurMapId = 506;
+            Check(EndgamePanel.TryOpenCubeFromNpc(506, 77, "Nzhoutianding", () => true), "dedicated cube NPC opens container");
             Draw(p);
-            Check(UnityEngine.GUI.labels.Contains(description) && UnityEngine.GUI.labels.Exists(t => t.Contains("铜币：5000") && t.Contains("持有 8 / 需要 4")) && !UnityEngine.GUI.labels.Exists(t => t.Contains("净煞尘")), "server random socket recipe and marrow-only cost displayed for capacity " + capacity);
-            Draw(p, "问鼎 · 查看完整耗费"); var request = c.Last;
-            Check(request.Op == "cube.quote" && request.Json.Contains("\"recipeId\":1006") && request.Json.Contains("9007199254740901"), "random opening quotes exact target for capacity " + capacity);
-            int sent = c.Sent.Count; Draw(p, "问鼎 · 查看完整耗费");
-            Check(c.Sent.Count == sent && !ArtworkSkin.enableds["照此投料 · 炼化"], "pending quote cannot repeat or execute for capacity " + capacity);
-            string preview = "随机开出1至" + capacity + "孔，每种孔数概率" + chances[capacity - 1] + "；已有孔不可重开。";
-            Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":1006,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":4,\"owned\":8}]}}");
-            Draw(p);
-            Check(UnityEngine.GUI.labels.Exists(t => t.StartsWith(preview) && t.Contains("铜币：5000") && t.Contains("星髓：8 / 4")) && !UnityEngine.GUI.labels.Exists(t => t.Contains("净煞尘")), "target-specific probability and cost stay verbatim for capacity " + capacity);
-            Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "quote never predicts holes or spends materials for capacity " + capacity);
-            Draw(p, "照此投料 · 炼化"); var execute = c.Last;
-            Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && !execute.Json.Contains("socketCount") && !execute.Json.Contains("targetUid"), "execution uses only frozen quote identity for capacity " + capacity);
-            sent = c.Sent.Count; Draw(p, "照此投料 · 炼化");
-            Check(c.Sent.Count == sent, "random opening cannot reroll by double click for capacity " + capacity);
-            Draw(p, "×"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains the exact uncertain random request for capacity " + capacity);
-            Receipt(c);
-            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"opened-base\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + gear.Replace("\"socketCount\":0", "\"socketCount\":1") + "]}");
-            Set(p, "open", true); Set(p, "selectedUID", "9007199254740901");
-            Draw(p, "问鼎 · 查看完整耗费"); request = c.Last;
-            Apply(c, "{\"kind\":\"cube.quote\",\"ok\":false,\"requestId\":\"" + request.RequestID + "\",\"error\":\"requirements\",\"message\":\"已有孔不可重开。\"}");
-            Draw(p);
-            Check(c.Endgame.Quote == null && !ArtworkSkin.enableds["照此投料 · 炼化"] && UnityEngine.GUI.labels.Contains("已有孔不可重开。"), "server rejection of existing holes leaves no executable quote for capacity " + capacity);
+            var put = typeof(EndgamePanel).GetMethod("PutCubeItem", BindingFlags.NonPublic | BindingFlags.Instance);
+            put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
+            put.Invoke(p, new object[] { "", 1900028201, "星髓" });
+            Set(p, "cubeQuantity", "4"); Draw(p, "确认数量"); Draw(p, "问鼎"); var request = c.Last;
+            Check(request.Op == "cube.quote" && request.Json.Contains("cubeInputs") && !request.Json.Contains("recipeId") && request.Json.Contains("9007199254740901"), "container sends only selected identities and quantities");
+            int sent = c.Sent.Count; Draw(p, "问鼎"); Check(c.Sent.Count == sent && !Enabled("炼化"), "pending match cannot repeat or execute");
+            string preview = "随机开出1至" + capacity + "孔，每种孔数概率1/" + capacity + "；已有孔不可重开。";
+            Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":0,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\"}}");
+            Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.StartsWith(preview) && t.Contains("铜币：5000")), "matched risk and fee remain server-authored");
+            Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "container and match never spend inventory");
+            Draw(p, "炼化"); var execute = c.Last;
+            Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && execute.Json.Contains("npcEntityId") && !execute.Json.Contains("cubeInputs") && !execute.Json.Contains("recipeId"), "execute binds quote and live workbench only");
+            sent = c.Sent.Count; Draw(p, "炼化"); Check(c.Sent.Count == sent, "double click cannot duplicate or reroll");
+            Draw(p, "×"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity"); Receipt(c);
         }
     }
     static void NativeStatTooltipContracts(Client c, EndgamePanel p)
@@ -774,22 +805,14 @@ class EndgameUiContract
         InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1001, bagIdx = 0 }; InventoryDlg.rows[1] = new InventoryDlg.Item { id = 1900028001, bagIdx = 1 };
         EquipDlg.Equipped.Add(new EquipDlg.EquippedItem { id = 1002, slot = 25 });
         Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "removed toolbar cannot open any module");
-        Check(EndgamePanel.TryOpenRunesFromWorld(), "artisan opens standalone rune workbench");
-        Check(c.Sent.Exists(r => r.Op == "snapshot") && !c.Sent.Exists(r => r.Catalog == "uniques" || r.Catalog == "formations" || r.Catalog == "recipes"), "rune entry loads owned state without encyclopedia catalogs");
+        Check(!Enum.IsDefined(typeof(EndgameModule), "Runes") && typeof(EndgamePanel).GetMethod("TryOpenRunesFromWorld", BindingFlags.Static | BindingFlags.NonPublic) == null, "standalone rune module and opener are removed");
         string tooltip = EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], "legacy details"); Check(tooltip.Contains("\u00035飞鹤遗音") && tooltip.Contains("legacy details") && !tooltip.Contains("宿序"), "dark-gold tooltip retains native description without duplicate socket block");
         Check(EndgamePanel.BagTooltip(0, InventoryDlg.rows[0], "legacy") == "legacy", "wrong tab cannot overlay");
-        Set(p, "selectedUID", "9007199254740993"); Set(p, "module", EndgameModule.Runes); Set(p, "selectedRuneUID", "9007199254740994");
-        Draw(p, "嵌入所选星篆"); Check(c.Last.Op == "socket.insert" && c.Last.Json.Contains("9007199254740994"), "insert submits exact rune UID");
-        int count = c.Sent.Count; Draw(p, "嵌入所选星篆"); Check(c.Sent.Count == count, "double mutation blocked"); Draw(p, "查询原请求"); Check(c.Retries == 1, "retry uses pending request");
-        var pending = c.Endgame.PendingRequest; Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending) && WinZ.forgotten > 0, "close retains nonce and removes hit region"); Receipt(c);
-        Set(p, "open", true); Set(p, "module", EndgameModule.Cube); Set(p, "recipeID", 11001);
-        c.Endgame.Begin(new EndgameRequest("catalog", catalog: "recipes"));
-        Apply(c, "{\"kind\":\"catalog.recipes\",\"ok\":true,\"recipes\":[{\"id\":11001,\"name\":\"凝髓成篆\",\"description\":\"确定星篆\",\"operation\":\"rune.inscribe\",\"money\":\"30000\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":30}]}]}");
-        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"wallet\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + items + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":12}]}");
-        Draw(p, "问鼎 · 查看完整耗费"); var quoteRequest = c.Last;
-        Check(quoteRequest.Op == "cube.quote" && !quoteRequest.Json.Contains("targetUid"), "inscribe quote needs no target"); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("持有 12 / 需要 30")), "material shortfall visible before quote");
-        Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + quoteRequest.RequestID + "\",\"quote\":{\"quoteId\":\"opaque-quote\",\"recipeId\":11001,\"revision\":\"2\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"消耗材料炼制\",\"money\":\"30000\"}}");
-        Draw(p, "照此投料 · 炼化"); Check(c.Last.Op == "cube.execute" && c.Last.Json.Contains("opaque-quote") && !c.Last.Json.Contains("itemUids") && !c.Last.Json.Contains("recipeId"), "execute contains only frozen quote identity"); Receipt(c);
+        EndgamePanel.TryOpenRiftFromWorld();
+        var pending = new EndgameRequest("rift.claim", c.Endgame.Revision, runID: "pending-close"); c.SendEndgame(pending);
+        int count = c.Sent.Count; Draw(p, "查询原请求"); Check(c.Retries == 1 && c.Sent.Count == count, "retry uses pending request");
+        Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending) && WinZ.forgotten > 0, "close retains nonce and removes hit region"); Receipt(c);
+        Set(p, "open", true);
         Set(p, "module", EndgameModule.Rift); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
         UnityEngine.Time.unscaledTime = 10; Call(p, "Update"); Check(c.Last.Json.Contains("invited-run"), "poll preserves invitation run");
         Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!Enabled("领取我的洞天所得") && !Enabled("消耗一钥 · 开启洞天"), "reward saving disables claim and start");
@@ -799,18 +822,20 @@ class EndgameUiContract
         int beforeLeave = c.Sent.Count; Draw(p, "离开洞天"); Check(c.Sent.Count == beforeLeave, "leave requires confirmation"); Draw(p, "确认离境 · 无自动返钥"); Check(c.Last.Op == "rift.leave", "confirmed leave reaches server"); Receipt(c);
         OpenEntrance(c); Rift(c, "completed-run", "closed", keys: 1); Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Op == "rift.start" && !c.Last.Json.Contains("runId"), "closed run permits new paid run");
         Receipt(c);
+        int notices = NewbieTipBox.notices.Count;
         Rift(c, "stages", "active"); Call(p, "Update");
-        Check((string)Get(p, "announcement") == "", "restored active run establishes silent baseline");
+        Check(NewbieTipBox.notices.Count == notices, "restored active run establishes silent native notice baseline");
         Rift(c, "stages", "boss"); Call(p, "Update");
-        Check(((string)Get(p, "announcement")).Contains("劫影现身"), "authoritative boss transition announces objective");
-        float until = (float)Get(p, "announcementUntil"); UnityEngine.Time.unscaledTime += 1; Call(p, "Update");
-        Check((float)Get(p, "announcementUntil") == until, "repeated snapshot does not replay phase announcement");
+        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("劫影现身"), "authoritative boss transition uses the native bottom-right notice API");
+        UnityEngine.Time.unscaledTime += 1; Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "repeated snapshot does not replay native phase announcement");
         Rift(c, "stages", "reward_pending"); Call(p, "Update");
-        Check(((string)Get(p, "announcement")).Contains("正在保存"), "saving phase never promises claimable rewards");
+        Check(NewbieTipBox.notices.Count == notices + 2 && NewbieTipBox.notices[notices + 1].Contains("正在保存"), "native saving notice never promises claimable rewards");
         Rift(c, "stages", "completed", true); Call(p, "Update"); Set(p, "open", false);
         int mutations = c.Sent.FindAll(r => r.Mutates).Count;
         Draw(p, "查看战果 · 领取");
-        Check((bool)Get(p, "open") && (EndgameModule)Get(p, "module") == EndgameModule.Rift && c.Sent.FindAll(r => r.Mutates).Count == mutations, "HUD opens result review without claiming automatically");
+        Check(!(bool)Get(p, "open") && !ArtworkSkin.enableds.ContainsKey("查看战果 · 领取") && c.Sent.FindAll(r => r.Mutates).Count == mutations, "passive HUD neither opens review nor claims automatically");
+        Check(EndgamePanel.TryOpenRiftFromWorld(), "existing world review route remains available"); Draw(p);
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("可重返拾取")), "completed panel outside the instance describes reentry instead of paid entry instructions");
         ArtworkSkin.enableds.Clear(); Draw(p);
         Check(!ArtworkSkin.enableds.ContainsKey("查看战果 · 领取"), "open panel suppresses overlapping HUD controls");
@@ -831,7 +856,8 @@ class EndgameUiContract
         Check(Enabled("离开洞天") && !ArtworkSkin.enableds.ContainsKey("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得"), "logical closed run still inside retains its leave escape and never offers a fresh paid run");
         Check(!UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")) && UnityEngine.GUI.labels.Exists(t => t.Contains("归元道使")), "closed instance keeps completion and NPC exit view instead of reopening the tier selector");
         Set(p, "open", false); Draw(p, "查看洞天");
-        Check((bool)Get(p, "open"), "closed but occupied instance retains a reachable HUD review and leave route");
+        Check(!(bool)Get(p, "open") && !ArtworkSkin.enableds.ContainsKey("查看洞天"), "closed occupied instance keeps HUD passive");
+        Check(EndgamePanel.TryOpenRiftFromWorld(), "existing world review retains the closed-instance leave route"); Draw(p);
         int beforeClosedLeave = c.Sent.FindAll(r => r.Mutates).Count; Draw(p, "离开洞天");
         Check(c.Sent.FindAll(r => r.Mutates).Count == beforeClosedLeave, "closed instance leave still requires the existing confirmation");
         Draw(p, "确认离境 · 无自动返钥");
@@ -841,17 +867,20 @@ class EndgameUiContract
         Check(Enabled("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("离开洞天"), "departed closed and fully claimed run permits new paid entry instead of stale leave");
         Rift(c, "stages", "failed", keys: 1); Draw(p);
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")), "failed nonclaimable run keeps next-run tier selector");
+        notices = NewbieTipBox.notices.Count;
         Rift(c, "other-run", "boss"); Call(p, "Update");
-        Check((string)Get(p, "announcement") == "", "different run does not replay old phase transition");
+        Check(NewbieTipBox.notices.Count == notices, "different run does not replay old native phase transition");
         Rift(c, "other-run", "completed", true); Call(p, "Update");
+        notices = NewbieTipBox.notices.Count;
         Rift(c, "", "closed"); Call(p, "Update");
-        Check((string)Get(p, "announcement") == "", "empty run clears old phase feedback");
+        Check(NewbieTipBox.notices.Count == notices && (string)Get(p, "observedRun") == "", "empty run clears phase baseline without adding a native notice");
         UnityEngine.Event.current.mousePosition = new UnityEngine.Vector2(811, 477); Draw(p);
         typeof(EndgamePanel).GetMethod("ShowPanelTooltip", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(p, new object[] { "screen hover" });
         Check(UITip.mouse.x == 811 && UITip.mouse.y == 477 && UITip.scale == (float)Get(p, "panelScale"), "panel tooltip forwards original screen pointer and window scale");
         UnityEngine.Event.current.mousePosition = new UnityEngine.Vector2(-9000, -9000);
         MultiFloorContracts(c, p);
-        c.Endgame.Reset(); Call(p, "Update"); Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection"); Check((string)Get(p, "announcement") == "", "reset clears phase feedback"); Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "new negotiation required");
+        notices = NewbieTipBox.notices.Count;
+        c.Endgame.Reset(); Call(p, "Update"); Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection"); Check(NewbieTipBox.notices.Count == notices && (string)Get(p, "observedRun") == "", "reset clears phase baseline without replaying native notices"); Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "new negotiation required");
         var requirement = EndgameResponse.Parse("{\"kind\":\"catalog.uniques\",\"ok\":true,\"items\":[{\"itemId\":1001,\"uniqueId\":1001,\"profession\":24,\"uniqueRollBp\":10000}]}").Items[0];
         string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");
         TooltipContracts(c, p);
@@ -866,6 +895,8 @@ class EndgameUiContract
         AttributeEffectOrderingContracts(c, p);
         ItemizationStatTextContracts(c, p);
         InventoryIdentityContracts(c, p);
+        NativeRiftNoticeContracts();
+        RiftHudProgressContracts();
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

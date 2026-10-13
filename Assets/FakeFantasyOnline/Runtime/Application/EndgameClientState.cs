@@ -27,6 +27,7 @@ public sealed partial class EndgameClientState
     public string QuoteRequestID { get; private set; } = "";
     public EndgameRiftView Rift { get; private set; }
     public IReadOnlyList<EndgameRiftEntranceView> RiftEntrances { get; private set; } = Array.Empty<EndgameRiftEntranceView>();
+    public bool CubeInputsV1 { get; private set; }
     public bool RiftPortalsV1 { get; private set; }
     public bool RiftInInstance { get; private set; }
     public bool RiftContextKnown { get; private set; }
@@ -61,7 +62,7 @@ public sealed partial class EndgameClientState
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
-        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
+        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
         RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRequestID = ""; helloRetryScheduled = helloAwaitingResponse = false;
@@ -175,7 +176,7 @@ public sealed partial class EndgameClientState
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false, riftPortals = false, riftEntrances = false;
+            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false, riftPortals = false, riftEntrances = false, cubeInputs = false;
             foreach (var value in response.Capabilities)
             {
                 if (value == "endgame.v1") capable = true;
@@ -185,6 +186,7 @@ public sealed partial class EndgameClientState
                 if (value == "endgame.skill-variants.v1") skillVariants = true;
                 if (value == "endgame.rift-portals.v1") riftPortals = true;
                 if (value == "endgame.rift-entrance.v1") riftEntrances = true;
+                if (value == "endgame.cube-inputs.v1") cubeInputs = true;
             }
             bool accepted = response.OK && capable;
             bool transientHello = response.Error == "pending" || response.Error == "storage" ||
@@ -202,6 +204,7 @@ public sealed partial class EndgameClientState
             if (accepted || !Negotiated)
             {
                 bool previousVariants = SkillVariantsV1;
+                CubeInputsV1 = accepted && cubeInputs;
                 RiftPortalsV1 = accepted && riftPortals;
                 if (RiftPortalsV1 && !hasRiftSceneContext) RiftContextKnown = false;
                 Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth;

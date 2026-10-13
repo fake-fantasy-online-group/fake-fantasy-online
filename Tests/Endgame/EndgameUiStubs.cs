@@ -3,9 +3,13 @@ using System;
 using System.Collections.Generic;
 namespace UnityEngine
 {
-    public class Object { }
-    public class MonoBehaviour : Object { public Transform transform = new Transform(); }
-    public class Transform { public Vector3 position; }
+    public class Object { public bool destroyed; public static void Destroy(Object value) { if (value != null) value.destroyed = true; } }
+    public class MonoBehaviour : Object { public bool isActiveAndEnabled = true; public Transform transform = new Transform(); }
+    public class Transform { public Vector3 position, localPosition; public Transform parent; }
+    public class GameObject : Object { public readonly string name; public Transform transform = new Transform(); public bool active = true; public readonly Dictionary<Type, object> components = new Dictionary<Type, object>(); public GameObject(string name) { this.name = name; } public void SetActive(bool value) { active = value; } public T AddComponent<T>() where T : new() { var result = new T(); components[typeof(T)] = result; return result; } }
+    public class Sprite : Object { }
+    public class Material : Object { }
+    public class SpriteRenderer { public Sprite sprite; public Material sharedMaterial; public int sortingOrder; }
     public struct Vector2
     {
         public float x, y;
@@ -44,7 +48,7 @@ namespace UnityEngine
     public static class Time { public static float unscaledTime; }
     public static class Screen { public static int width = 1280, height = 900; }
     public enum KeyCode { F8, Escape, Return, KeypadEnter, Home, End, UpArrow, DownArrow, PageUp, PageDown }
-    public static class Input { public static KeyCode? pressed; public static bool GetKeyDown(KeyCode code) => pressed == code; }
+    public static class Input { public static Vector3 mousePosition; public static KeyCode? pressed; public static bool GetKeyDown(KeyCode code) => pressed == code; }
     public enum EventType { Repaint, MouseDown, MouseUp, MouseDrag, ScrollWheel, KeyDown, Used }
     public class Event
     {
@@ -56,7 +60,21 @@ namespace UnityEngine
     public class Font { }
     public enum FontStyle { Bold }
     public enum ScaleMode { ScaleToFit }
-    public class Texture2D { public static Texture2D whiteTexture = new Texture2D(); }
+    public struct Color32 { public byte r, g, b, a; public Color32(byte r, byte g, byte b, byte a) { this.r = r; this.g = g; this.b = b; this.a = a; } }
+    public enum TextureFormat { RGBA32 }
+    public enum FilterMode { Point }
+    public enum TextureWrapMode { Clamp }
+    public class Texture2D : Object
+    {
+        public int width = 1, height = 1; public Color32[] pixels = new[] { new Color32(1, 200, 5, 255) };
+        public FilterMode filterMode; public TextureWrapMode wrapMode;
+        public Texture2D() { }
+        public Texture2D(int w, int h, TextureFormat format, bool mipmap, bool linear) { width = w; height = h; pixels = new Color32[w * h]; }
+        public Color32[] GetPixels32() => (Color32[])pixels.Clone();
+        public void SetPixels32(Color32[] value) { pixels = (Color32[])value.Clone(); }
+        public void Apply(bool mipmap, bool unreadable) { }
+        public static Texture2D whiteTexture = new Texture2D();
+    }
     public class RectOffset { public RectOffset(int a, int b, int c, int d) { } }
     public class GUIContent { public string text; public GUIContent(string text) { this.text = text; } }
     public class GUIStyleState { public Color textColor; }
@@ -111,6 +129,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static void BarRows(object owner, Rect track, int visible, int total, ref int scroll) { calls++; }
     }
     internal static class NpcChatter { public static Font CnFont() => new Font(); }
+    internal static class NewbieTipBox
+    {
+        public static readonly List<string> notices = new List<string>();
+        public static void PushText(string text) { notices.Add(text); }
+    }
     internal static class BitmapFont { public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
     internal static class UIScale { public static float Factor = 1; }
     internal static class WinZ
@@ -121,7 +144,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     internal static class UITip { public static string last; public static Vector2 mouse; public static float scale; public static void Show(string text, float s) { last = text; scale = s; } public static void ShowAtForIndependentRuntime(string text, float s, Vector2 pointer) { Show(text, s); mouse = pointer; } }
     internal static partial class TooltipContent { public static string QualityName(string name, int quality) => "\u0003" + quality + name; public static string Fmt(string name, string desc) => "\u0007" + name + "\n" + desc; }
-    internal static class GameHud { public static string HotSlotTip(int index) => "hotbar:" + index; }
+    public partial class GameHud { public static GameHud I; public float uiScale; public bool showAvatar = true; public static string HotSlotTip(int index) => "hotbar:" + index; }
     internal static class PlayerController { public static void SuppressWorldClick() { } }
     internal static class InventoryDlg
     {
@@ -136,7 +159,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static List<EquippedItem> Equipped = new List<EquippedItem>();
     }
     internal static class NetClient { public static Texture2D LoadItemIcon(int id) => null; }
-    public partial class GameBootstrap { public static int CurMapId; public static float CurPpu = 100, CurWorldH = 1000; }
+    public partial class GameBootstrap { public static GameBootstrap I; public static int CurMapId; public static float CurPpu = 100, CurWorldW = 2000, CurWorldH = 1000; public bool Switching; public Transform WorldRootForMapConstructionForIndependentRuntime; public static readonly Material PortalMaterial = new Material(); public static readonly Sprite PortalSprite = new Sprite(); public static Material IsoYObjMat() => PortalMaterial; public Sprite GetObjectSpriteForIndependentRuntime(int id, ResLoader.ObjSprite image, float ppu) => PortalSprite; }
+    public class ResLoader { public static ResLoader I; public int Loads, AnimLoads, LastID, LastWidth, LastHeight; public float LastPpu; public ObjSprite Image; public ObjAnim Animation; public struct ObjSprite { public Texture2D tex; public int nLeft, nTop, clipBy, frames; } public struct ObjAnim { public Sprite[] frames; public int[] nLeft, nTop; } public ObjSprite LoadObj(int id, int w, int h) { Loads++; LastID = id; LastWidth = w; LastHeight = h; return Image; } public ObjAnim LoadObjAnim(int id, float ppu) { AnimLoads++; LastID = id; LastPpu = ppu; return Animation; } }
+    public class FrameAnimator { public float frameMs; public bool loop; public Func<(Sprite[], Vector3[])> loader; }
     public partial class CombatWorld { private static CombatWorld I; private Dictionary<int, MonsterEntity> monsters = new Dictionary<int, MonsterEntity>(); }
     public class MonsterEntity { public Transform transform = new Transform(); }
 }

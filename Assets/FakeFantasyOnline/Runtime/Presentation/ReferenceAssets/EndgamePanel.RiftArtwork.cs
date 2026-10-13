@@ -9,10 +9,91 @@ public sealed partial class EndgamePanel
     // Original client resources, shared with SysMsgBox, GameHud and SysConfigDlg.
     // Nothing is copied into the project and ResLoader retains texture ownership.
     private const string RiftBackgroundPath = "res/uires/common/msgboxbk.gsa";
-    private const string RiftProgressBackPath = "res/uires/statusbar/expbarbk.gsa";
-    private const string RiftProgressFillPath = "res/uires/statusbar/expbar.gsa";
+    private const string RiftProgressBackPath = "res/uires/gameui/intonatebarbk.gsa";
+    private const string RiftProgressFillPath = "res/uires/gameui/intonatebar.gsa";
     private const string RiftDropdownPath = "res/uires/newcommon/downbtn.gsa";
+    private Texture2D riftTimeSource, riftTimeFill;
     private bool riftTierOpen;
+
+    // Native portrait ends at y=60, pet vitals at y=104, and karma is (4,104,72,14).
+    // The selected original frame has 8px transparent margins: visible y=104..122.
+    // Use the native HUD scale, not the unrelated 940x660 workbench fit scale.
+    private static float RiftHudScale => GameHud.I != null && GameHud.I.uiScale > 0f ? GameHud.I.uiScale : UIScale.Factor;
+    internal static bool RiftHudVisible => Current != null && Current.isActiveAndEnabled &&
+        Current.client != null && Current.client.EndgameInWorld && Current.State.Negotiated && !Current.open &&
+        (GameHud.I == null || GameHud.I.showAvatar) && Current.State.Rift != null &&
+        (Current.State.RiftInInstance || PollRun(Current.State.Rift) || Current.State.Rift.Claimable);
+    // Target drawing, all target rows and hit tests share this offset. It vanishes
+    // immediately on close, disconnect or leaving the run; no frame-order cache.
+    internal static float RiftTargetHudOffset => RiftHudVisible ? 38f : 0f;
+    private static Rect RiftHudBarRect(float scale) => new Rect(80f * scale, 96f * scale, 140f * scale, 34f * scale);
+
+    private void ReleaseRiftProgressArtwork()
+    {
+        if (riftTimeFill != null) Destroy(riftTimeFill);
+        riftTimeFill = null; riftTimeSource = null;
+    }
+    private Texture2D RiftSilverTimeFill(Texture2D source)
+    {
+        if (source == null) { ReleaseRiftProgressArtwork(); return null; }
+        if (source == riftTimeSource && riftTimeFill != null) return riftTimeFill;
+        ReleaseRiftProgressArtwork();
+        // Desaturate the original fill using HSV value (max channel), preserving
+        // each pixel's highlight/shadow and alpha. A uniform white RGB copy would
+        // flatten its authored bevel, while GUI.color cannot remove green tint.
+        // Never mutate ResLoader's shared original texture.
+        Color32[] pixels = source.GetPixels32();
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            Color32 pixel = pixels[i];
+            byte value = Math.Max(pixel.r, Math.Max(pixel.g, pixel.b));
+            pixels[i] = new Color32(value, value, value, pixel.a);
+        }
+        riftTimeFill = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false, false);
+        riftTimeFill.filterMode = FilterMode.Point;
+        riftTimeFill.wrapMode = TextureWrapMode.Clamp;
+        riftTimeFill.SetPixels32(pixels); riftTimeFill.Apply(false, false);
+        riftTimeSource = source;
+        return riftTimeFill;
+    }
+    private void DrawRiftProgressArtwork(Rect frame, float progressRatio, float elapsedRatio)
+    {
+        Texture2D back = RiftTexture(RiftProgressBackPath), fill = RiftTexture(RiftProgressFillPath);
+        float progress = Mathf.Clamp01(progressRatio), elapsed = Mathf.Clamp01(elapsedRatio);
+        Color color = GUI.color;
+        try
+        {
+            GUI.color = new Color(1f, 1f, 1f, 1f);
+            if (back != null) GUI.DrawTexture(frame, back);
+            if (fill == null) return;
+            Rect slot = new Rect(frame.x + frame.width * 12f / 140f, frame.y + frame.height * 12f / 34f,
+                frame.width * 116f / 140f, frame.height * 10f / 34f);
+            // One slot: white elapsed time is behind green progress. Omit white when
+            // completely covered, including equality and 100% green, to avoid alpha bleed.
+            if (elapsed > progress)
+            {
+                Texture2D white = RiftSilverTimeFill(fill);
+                GUI.DrawTextureWithTexCoords(new Rect(slot.x, slot.y, slot.width * elapsed, slot.height), white, new Rect(0, 0, elapsed, 1));
+            }
+            if (progress > 0)
+                GUI.DrawTextureWithTexCoords(new Rect(slot.x, slot.y, slot.width * progress, slot.height), fill, new Rect(0, 0, progress, 1));
+        }
+        finally { GUI.color = color; }
+    }
+    private static int RiftRemainingSeconds(EndgameRiftView rift, DateTime received, DateTime now)
+    {
+        if (rift == null) return 0;
+        // Reserved time has not started. Successful completion and all terminal
+        // snapshots keep the server's exact result, including during reward saving.
+        if (rift.Phase != "active" && rift.Phase != "boss") return rift.RemainingSeconds;
+        double elapsed = Math.Max(0, (now - received).TotalSeconds);
+        return (int)Math.Max(0, rift.RemainingSeconds - Math.Min(int.MaxValue, Math.Floor(elapsed)));
+    }
+    private static float RiftElapsedRatio(EndgameRiftView rift, int remaining)
+    {
+        if (rift == null || rift.TotalSeconds <= 0 || rift.Phase == "reserved") return 0;
+        return Mathf.Clamp01(1f - (float)Math.Max(0, remaining) / rift.TotalSeconds);
+    }
     private int riftTierScroll, riftTierHighlight = 1;
     private const float RiftWindowWidth = 600f, RiftWindowHeight = 450f;
     private const int RiftVisibleTierRows = 8;

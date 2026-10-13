@@ -50,9 +50,14 @@ public sealed partial class EndgamePanel
 
     // HUD review carries no NPC authority. Only fresh paid entry requires a live entrance dialog.
     internal static bool TryOpenRiftFromWorld() => TryOpenWorldView(EndgameModule.Rift);
-    internal static bool TryOpenCubeFromWorld() => TryOpenWorldView(EndgameModule.Cube);
-
-    internal static bool TryOpenRunesFromWorld() => TryOpenWorldView(EndgameModule.Runes);
+    internal static bool TryOpenCubeFromWorld() => false;
+    internal static bool TryOpenCubeFromNpc(int mapID, int entityID, string script, Func<bool> sourceCurrent)
+    {
+        if (!WorldEntryAvailable || !Current.State.CubeInputsV1 || mapID != GameBootstrap.CurMapId || entityID == 0 || script != "Nzhoutianding" || sourceCurrent == null || !sourceCurrent()) return false;
+        if (!TryOpenWorldView(EndgameModule.Cube)) return false;
+        Current.cubeNpcEntityID = entityID; Current.cubeMapID = mapID; Current.cubeSourceCurrent = sourceCurrent;
+        return true;
+    }
 
     private static bool TryOpenWorldView(EndgameModule targetModule)
     {

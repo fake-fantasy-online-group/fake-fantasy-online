@@ -25,7 +25,7 @@ class EndgameWorldEntryContract
     static void Negotiate(Client c)
     {
         c.Endgame.Begin(new EndgameRequest("hello"));
-        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"]}"));
     }
     const string Entrance = "{\"mapId\":7,\"npcId\":83,\"npc\":\"八仙使者\",\"script\":\"Nbaxian\"}";
     static void EntranceHello(Client c, string entrance = Entrance, bool capability = true)
@@ -42,7 +42,7 @@ class EndgameWorldEntryContract
     {
         var c = new Client(); var p = new EndgamePanel(); p.Bind(c); GameBootstrap.CurMapId = 7;
         var npc = new WorldNpcState { EntityId = -1, DisplayName = "八仙使者", Script = "Nbaxian" };
-        GameBootstrap.I.Window.Current = npc;
+        GameBootstrap.I = new GameBootstrap(); GameBootstrap.I.Window.Current = npc;
         var dialog = new DialogUI(); Negotiate(c); dialog.OpenForTest(npc);
         Check(dialog.Options.Count == 1, "legacy hello preserves original services without Rift entry");
         EntranceHello(c, capability: false); dialog.OpenForTest(npc);
@@ -106,15 +106,19 @@ class EndgameWorldEntryContract
         Check(c.Sent.Exists(r => r.Op == "snapshot") && c.Sent.Exists(r => r.Op == "rift.state"), "world open requests real snapshot and run");
         Check(c.Sent.TrueForAll(r => r.Op == "snapshot" || r.Op == "rift.state" || r.Op == "catalog"), "entry does not spend keys or authorize mutations");
         Update(p); Check((bool)Get(p, "open"), "first update keeps NPC-opened panel visible");
-        Check(EndgamePanel.TryOpenCubeFromWorld() && (EndgameModule)Get(p, "module") == EndgameModule.Cube, "crafting NPC opens only cube controls");
-        Check(c.Sent.Exists(r => r.Catalog == "recipes"), "crafting entry requests recipe catalog");
+        Check(!EndgamePanel.TryOpenCubeFromWorld(), "generic world opener cannot bypass cube NPC identity");
+        GameBootstrap.CurMapId = 506;
+        Check(!EndgamePanel.TryOpenCubeFromNpc(7,77,"Nzhoutianding",()=>true) && !EndgamePanel.TryOpenCubeFromNpc(506,0,"Nzhoutianding",()=>true) &&
+            !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nartisan",()=>true) && !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>false), "cube entry requires current map, entity, exact script and live source");
+        Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true) && (EndgameModule)Get(p, "module") == EndgameModule.Cube, "native cube NPC opens only cube controls");
+        Check(!c.Sent.Exists(r => r.Catalog == "recipes"), "ingredient-driven cube does not load recipe menu catalog");
         var pending = new EndgameRequest("rift.start", tier: 1); c.SendEndgame(pending);
         Check(EndgamePanel.TryOpenRiftFromWorld() && ReferenceEquals(c.Endgame.PendingRequest, pending), "opening a view preserves uncertain mutation identity");
         c.Endgame.Reset(); int before = c.Sent.Count;
         Check(!EndgamePanel.TryOpenCubeFromWorld() && c.Sent.Count == before, "stale NPC option cannot bypass reset negotiation");
         Update(p); Check(!(bool)Get(p, "open"), "reset closes old view");
         Negotiate(c);
-        Check(EndgamePanel.TryOpenCubeFromWorld(), "renegotiated entry opens before update");
+        Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true), "renegotiated native cube entry opens before update");
         Update(p); Check((bool)Get(p, "open"), "renegotiated open survives update");
         UnityEngine.Input.pressed = UnityEngine.KeyCode.F8; Update(p);
         Check((bool)Get(p, "open"), "F8 cannot toggle an NPC-opened workbench");
@@ -122,7 +126,7 @@ class EndgameWorldEntryContract
         Check(!(bool)Get(p, "open"), "Escape closes standalone workbench");
         UnityEngine.Input.pressed = UnityEngine.KeyCode.F8; Update(p);
         Check(!(bool)Get(p, "open"), "F8 cannot open a universal panel");
-        Check(EndgamePanel.TryOpenRunesFromWorld() && (EndgameModule)Get(p, "module") == EndgameModule.Runes, "artisan has independent socket controls");
+        Check(!Enum.IsDefined(typeof(EndgameModule), "Runes") && typeof(EndgamePanel).GetMethod("TryOpenRunesFromWorld", BindingFlags.NonPublic | BindingFlags.Static) == null, "rune controls exist only in the original furnace");
         Check(!c.Sent.Exists(r => r.Catalog == "uniques" || r.Catalog == "formations"), "module entries never open encyclopedias");
         UnityEngine.Input.pressed = null;
         p.Unbind(c); before = c.Sent.Count;

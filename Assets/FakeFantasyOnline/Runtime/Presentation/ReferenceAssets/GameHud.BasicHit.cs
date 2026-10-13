@@ -12,8 +12,8 @@ public partial class GameHud
 
     public static Rect TargetBarRect()
     {
-        float scale = UIScale.Factor;
-        return new Rect(72f * scale, 108f * scale, 128f * scale, 40f * scale);
+        float scale = I != null && I.uiScale > 0f ? I.uiScale : UIScale.Factor;
+        return new Rect(72f * scale, (108f + EndgamePanel.RiftTargetHudOffset) * scale, 128f * scale, 40f * scale);
     }
     internal bool MouseOverTargetForIndependentRuntime()
     {

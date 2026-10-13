@@ -265,6 +265,19 @@ class EndgameContracts
         skillState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\"]}"));
         Check(skillState.Apply(skillFixture) && skillState.SkillRanksRevision == "1" && skillState.UnspentSkillPoints == 93 &&
             skillState.CanInvestSkill(10401) && !skillState.CanInvestSkill(10410), "complete Go wire fixture publishes authoritative investment guards");
+        var equippedSynergyFixture = Fixture(args[0], "skill-synergy-equipped-v11");
+        Check(equippedSynergyFixture.Kind == "skill.ranks" && equippedSynergyFixture.SkillRanks.Count == 4,
+            "Migration74 production PostgreSQL/equipment projection reaches unchanged wire decoder");
+        var equippedSynergyState = new EndgameClientState(); equippedSynergyState.Begin(new EndgameRequest("hello"));
+        equippedSynergyState.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.growth.v5\"]}"));
+        Check(equippedSynergyState.Apply(equippedSynergyFixture), "Complete equipment-aware wire snapshot publishes through production state");
+        var equippedSource = equippedSynergyState.SkillRank(10402).TrainingSynergies[0];
+        Check(equippedSource.SourceID == 10401 && equippedSource.InvestedHardPoints == 3 && equippedSource.SourceEffectiveRank == "5" &&
+            equippedSource.PerPointValue == 300 && equippedSource.ContributionValue == 1500 && equippedSource.EquipmentApplies,
+            "Actual equipped item2018 source3 plus2 contributes five levels at beneficiary3percent");
+        var unlearnedSource = equippedSynergyState.SkillRank(10410).TrainingSynergies[0];
+        Check(unlearnedSource.SourceID == 10409 && unlearnedSource.InvestedHardPoints == 0 && unlearnedSource.SourceEffectiveRank == "0" &&
+            unlearnedSource.ContributionValue == 0 && unlearnedSource.EquipmentApplies, "Unlearned equipment-only source stays zero through actual wire encoding");
         Console.WriteLine("PASS " + assertions + " endgame contracts including real Go-produced wire fixtures.");
     }
 }

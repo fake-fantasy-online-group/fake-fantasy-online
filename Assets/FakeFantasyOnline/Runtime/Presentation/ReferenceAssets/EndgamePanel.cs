@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 /// <summary>Shared server binding for independent NPC workbenches and the active-rift HUD.</summary>
-internal enum EndgameModule { Runes, Cube, Rift }
+internal enum EndgameModule { Cube, Rift }
 public sealed partial class EndgamePanel : MonoBehaviour
 {
     internal static EndgamePanel Current { get; private set; }
@@ -17,10 +17,10 @@ public sealed partial class EndgamePanel : MonoBehaviour
     internal static bool RefreshGrowthSkills() => GrowthState != null && Current.client.SendEndgame(new EndgameRequest("skill.ranks"));
     private bool open, confirmLeave;
     private EndgameModule module;
-    private int socket, recipeID = 1010, tier = 1;
+    private int tier = 1;
     private string selectedUID = "", selectedRuneUID = "";
     private readonly List<string> orderedRunes = new List<string>();
-    private Vector2 itemScroll, detailScroll, runeScroll, recipeScroll;
+    private Vector2 itemScroll, detailScroll, runeScroll;
     private Vector2 panelScreenMouse;
     private float panelScale = 1f;
     private GUIStyle label, heading, small;
@@ -30,7 +30,6 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private float nextSkillBehaviorRefresh;
     private string skillBehaviorRefreshRevision;
     private int skillBehaviorRefreshAttempts;
-    private string requestedRecipeCursor;
     private const float W = 940f, H = 660f;
     private static readonly Color Gold = new Color(1f, .83f, .39f);
     private static readonly Color Jade = new Color(.49f, .88f, .79f);
@@ -38,28 +37,29 @@ public sealed partial class EndgamePanel : MonoBehaviour
 
     public void Bind(IEndgameClient source)
     {
-        if (!ReferenceEquals(client, source)) { client = source; ClearSelection(); open = false; generation = -1; observedGeneration = -1; announcement = ""; }
+        if (!ReferenceEquals(client, source)) { ClearRiftScenePortal(); client = source; ClearSelection(); open = false; generation = -1; observedGeneration = -1; }
         Current = this;
     }
     public void Unbind(IEndgameClient source)
     {
         if (!ReferenceEquals(client, source)) return;
-        WinZ.Forget(this); client = null; open = false; announcement = ""; observedGeneration = -1; ClearSelection();
+        ClearRiftScenePortal(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); client = null; open = false; observedGeneration = -1; ClearSelection();
     }
-    private void OnDestroy() { WinZ.Forget(this); if (Current == this) Current = null; }
+    private void OnDestroy() { ClearRiftScenePortal(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); if (Current == this) Current = null; }
     private void ClearSelection()
     {
         ClearRiftEntrance();
         ResetRiftTierDropdown();
-        selectingCubeTarget = selectingCubeOutput = false; requestedRecipeCursor = null;
+        ClearCubeInputs();
         selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; confirmLeave = false;
-        itemScroll = detailScroll = runeScroll = recipeScroll = Vector2.zero;
+        itemScroll = detailScroll = runeScroll = Vector2.zero;
     }
     private void Close() { WinZ.Forget(this); open = false; ClearSelection(); State?.InvalidateQuote(); }
     private void Update()
     {
+        SyncRiftScenePortal();
         if (State == null || !client.EndgameInWorld)
-        { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; announcement = ""; observedGeneration = -1; return; }
+        { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; observedGeneration = -1; return; }
         if (generation != State.Generation)
         {
             generation = State.Generation; ClearSelection(); open = false;
@@ -79,7 +79,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
             }
         }
         ObserveRiftPhase();
-        if (open && module == EndgameModule.Cube) LoadRecipeMetadata();
+        if (open && module == EndgameModule.Cube && !CubeSourceCurrent()) Close();
         if (open && Input.GetKeyDown(KeyCode.Escape))
         { if (riftTierOpen) ResetRiftTierDropdown(); else Close(); }
         if (State.Negotiated && State.Rift != null && PollRun(State.Rift) && Time.unscaledTime >= nextRiftRefresh)
@@ -89,26 +89,13 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private void QueryRift() => Send(new EndgameRequest("rift.state", runID: State.Rift == null ? "" : State.Rift.RunID));
     private void Refresh()
     {
-        requestedRecipeCursor = null;
         Send(new EndgameRequest("snapshot"));
         if (module == EndgameModule.Rift) QueryRift();
         if (open) EnsureModuleData();
     }
     private void EnsureModuleData()
     {
-        if (module == EndgameModule.Runes || module == EndgameModule.Cube) LoadCatalog("runes");
-        if (module == EndgameModule.Cube) LoadRecipeMetadata();
-    }
-    private void LoadRecipeMetadata()
-    {
-        // Recipes are actionable workbench metadata, never a player encyclopedia.
-        // Follow the authoritative cursor so later rune outputs stay craftable.
-        string cursor = State.NextCatalogCursor("recipes");
-        // Record the attempt before Send: transport failure releases read-request state
-        // and returns false. Both transport and server failures wait for explicit refresh.
-        if (State.CatalogRequested("recipes") || !State.CatalogHasMore("recipes") || requestedRecipeCursor == cursor) return;
-        requestedRecipeCursor = cursor;
-        Send(new EndgameRequest("catalog", catalog: "recipes", cursor: cursor));
+        if (module == EndgameModule.Cube) LoadCatalog("runes");
     }
     private void LoadCatalog(string name)
     {
@@ -132,7 +119,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         GUI.depth = -15;
         if (!State.Negotiated) return;
         float hudScale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / W, (Screen.height - 20f) / H)));
-        DrawRiftHud(hudScale); DrawRiftMarkers(hudScale); DrawRiftAnnouncement(hudScale);
+        DrawRiftHud(hudScale); DrawRiftMarkers(hudScale);
         if (!open) return;
         Rect window = new Rect((Screen.width - width * scale) * .5f, (Screen.height - height * scale) * .5f, width * scale, height * scale);
         var frame = WinZ.Frame(this, window, 4); GUI.depth = frame.Item1;
@@ -153,11 +140,10 @@ public sealed partial class EndgamePanel : MonoBehaviour
                 ArtworkSkin.Panel(new Rect(0, 0, width, height), highlighted: true);
                 ArtworkSkin.Panel(new Rect(9, 9, width - 18, 79));
             }
-            Text(new Rect(26, 17, module == EndgameModule.Rift ? width - 82 : 760, 32), module == EndgameModule.Runes ? "星篆镶嵌" : module == EndgameModule.Cube ? "周天鼎" : "演劫洞天", heading);
-            Text(new Rect(27, 52, module == EndgameModule.Rift ? width - 74 : 790, 25), module == EndgameModule.Runes ? "选择器物、孔位与背包星篆。" : module == EndgameModule.Cube ? "选择炼化方式与材料，问鼎后确认投料。" : "持符钥开启洞天；队友需在队长附近。", small);
+            Text(new Rect(26, 17, module == EndgameModule.Rift ? width - 82 : 760, 32), module == EndgameModule.Cube ? "周天鼎" : "演劫洞天", heading);
+            Text(new Rect(27, 52, module == EndgameModule.Rift ? width - 74 : 790, 25), module == EndgameModule.Cube ? "将背包物品放入鼎中，问鼎后确认炼化。" : "持符钥开启洞天；队友需在队长附近。", small);
             if (ArtworkSkin.Button(new Rect(width - 48, 18, 27, 27), "×")) Close();
-            if (module == EndgameModule.Runes) DrawRunes();
-            else if (module == EndgameModule.Cube) DrawCube();
+            if (module == EndgameModule.Cube) DrawCube();
             else DrawRift();
             if (module != EndgameModule.Rift) ArtworkSkin.Panel(new Rect(19, height - 58, width - 38, 39));
             string status = State.Pending ? "结果确认中：" + State.PendingRequest.Op + "。查询会沿用同一请求。" : State.SnapshotLoading ? "正在拼合完整星图…" : State.Message;

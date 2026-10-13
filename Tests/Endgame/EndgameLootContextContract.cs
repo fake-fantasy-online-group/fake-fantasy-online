@@ -1,4 +1,4 @@
-// Real tooltip and rune-panel code; deterministic UI substitutes, no Unity Player.
+// Real tooltip and shared rune helper code; deterministic UI substitutes, no Unity Player.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -76,13 +76,14 @@ internal static class EndgameLootContextContract
         Check(detail.Contains("打孔炉逐孔开启") && detail.Contains("无孔器物随机开窍"), "existing item detail distinguishes native incremental opening from zero-socket cube randomness");
         var key = new InventoryDlg.Item { id = 1900028101, bagIdx = 8 };
         Check(EndgamePanel.BagTooltip(1, key, "符钥").Contains("龙城八仙使者"), "key has in-world trial entry");
-        Call(panel, "EnsureStyles"); Set(panel, "selectedUID", "1"); Set(panel, "selectedRuneUID", "2");
-        UnityEngine.GUI.labels.Clear(); Call(panel, "DrawRunes");
-        Check(!ArtworkSkin.enableds["嵌入所选星篆"] && ArtworkSkin.enableds["取出此孔星篆"], "occupied socket offers extraction instead of doomed insert");
-        Check(!ArtworkSkin.enableds.ContainsKey("周天鼎 · 随机开窍 / 调序"), "socket workbench has no cross-module cube shortcut");
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("无原生额外词条") && t.Contains("不看颜色") && t.Contains("基础攻防与后加星篆、精炼不计")), "existing formation detail explains base eligibility without inferring it from color or later upgrades");
-        Check(client.Sent.FindAll(r => r.Catalog == "formations").Count == 1, "normal rune view does not duplicate pending formed-item catalog request");
-        Check(!ArtworkSkin.enableds.ContainsKey("宿阵图鉴") && !ArtworkSkin.enableds.ContainsKey("二十八宿图鉴"), "player socket view exposes no encyclopedia navigation");
+        Check(detail.Contains("原有镶嵌炉") && !detail.Contains("嵌入/取出") && !detail.Contains("太清演劫录"), "owned equipment guidance uses original inlay furnace with no duplicate extraction UI");
+        string runeDetail = EndgamePanel.ItemDescription(client.Endgame.Items[1], false);
+        Check(runeDetail.Contains("原有镶嵌炉") && runeDetail.Contains("拖到空孔") && !runeDetail.Contains("星篆·宿阵"), "rune guidance uses original drag-to-hole path");
+        Check(typeof(EndgamePanel).GetMethod("DrawRunes", BindingFlags.NonPublic | BindingFlags.Instance) == null && !Enum.IsDefined(typeof(EndgameModule), "Runes"), "standalone rune workbench no longer exists");
+        Call(panel, "EnsureStyles"); Set(panel, "selectedUID", "1");
+        UnityEngine.GUI.labels.Clear(); Call(panel, "DrawFormationDiscovery", new UnityEngine.Rect(0, 0, 594, 116));
+        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("无原生额外词条") && t.Contains("不看颜色") && t.Contains("基础攻防与后加星篆、精炼不计")), "shared formation detail retains base eligibility rules");
+        Check(client.Sent.FindAll(r => r.Catalog == "formations").Count == 1, "shared rune helpers do not duplicate pending formed-item catalog request");
         Apply(client, "{\"kind\":\"catalog.formations\",\"ok\":true,\"formations\":[{\"id\":1,\"name\":\"宿阵甲\",\"channel\":\"战阵\",\"minLevel\":20,\"professions\":0,\"slots\":[4,13],\"runes\":[1900028001,1900028001]}]}");
         Check(EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], native).Contains("宿阵甲"), "owned formation tooltip resolves metadata without an encyclopedia");
         Console.WriteLine("PASS " + assertions + " contextual loot contracts; no Unity engine launch.");

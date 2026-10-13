@@ -8,31 +8,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public sealed partial class EndgamePanel
 {
-    private void DrawRunes()
-    {
-        DrawItemList(new Rect(20, 142, 246, 444));
-        EndgameItemView item = Selected();
-        ArtworkSkin.Panel(new Rect(279, 142, 639, 444));
-        Text(new Rect(297, 151, 598, 32), item == null ? "星篆有序，循宿成阵" : item.Name, heading);
-        Text(new Rect(298, 187, 596, 38), "先选器物，再选空窍与背包星篆；悬停查看星篆属性。取出保留原星篆，宿序从左到右。", small);
-        for (int index = 0; index < 5; index++)
-        {
-            EndgameSocketView installed = null; if (item != null) foreach (var row in item.Sockets) if (row.Index == index) installed = row;
-            string name = item == null || index >= item.SocketCount ? "未开窍" : installed == null || installed.ItemID == 0 ? "空窍" : installed.Name.Length > 0 ? installed.Name : RuneName(installed.ItemID);
-            Rect cell = new Rect(298 + index * 117, 232, 110, 47);
-            if (ArtworkSkin.Tab(cell, (index + 1) + " · " + name, enabled: item != null && index < item.SocketCount && !State.Pending, selected: socket == index)) socket = index;
-            if (installed != null && installed.ItemID > 0 && cell.Contains(Event.current.mousePosition))
-                ShowPanelTooltip(name + "\n" + RuneDetails(installed.ItemID, false) + "\n此为第 " + (index + 1) + " 窍，顺序参与宿阵判定。");
-        }
-        DrawRuneBank(new Rect(297, 292, 594, 112), false);
-        bool can = item != null && !item.Locked && !State.Pending && socket < item.SocketCount;
-        bool occupied = false; if (item != null) foreach (var row in item.Sockets) if (row.Index == socket && row.ItemID > 0) occupied = true;
-        if (ArtworkSkin.Button(new Rect(298, 414, 174, 29), "嵌入所选星篆", enabled: can && !occupied && selectedRuneUID.Length > 0))
-            Send(new EndgameRequest("socket.insert", State.Revision, item.UID, selectedRuneUID, socket));
-        if (ArtworkSkin.Button(new Rect(486, 414, 151, 29), "取出此孔星篆", enabled: can && occupied))
-            Send(new EndgameRequest("socket.remove", State.Revision, item.UID, socket: socket));
-        DrawFormationDiscovery(new Rect(297, 454, 594, 116));
-    }
     private void DrawRuneBank(Rect rect, bool multiple)
     {
         var runes = new List<EndgameItemView>();

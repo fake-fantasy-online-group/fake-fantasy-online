@@ -46,7 +46,7 @@ class EndgameGrowthContract
         string source = "{\"sourceId\":10402,\"sourceName\":\"爆炎术\",\"effect\":\"damage\",\"effectLabel\":\"伤害倍率\",\"perPointValue\":25,\"unit\":\"percent_bp\",\"investedHardPoints\":3,\"contributionValue\":75,\"equipmentApplies\":false}";
         string updated = legacy.Substring(0, legacy.Length - 1) + ",\"nextEffectiveRank\":\"11\",\"nextRequiredLevel\":8,\"nextChangeLines\":[\"伤害倍率180%\",\"其余效果不变\"],\"trainingSynergies\":[" + source + "],\"nativeModifierLines\":[\"火焰精通：伤害倍率 +10%\"]}";
         var view = Parse(Ranks(updated)).SkillRanks[0];
-        Check(view.NextEffectiveRank == "11" && view.NextRequiredLevel == 8 && view.NextChangeLines.Count == 2 && view.TrainingSynergies[0].SourceName == "爆炎术" && view.TrainingSynergies[0].ContributionValue == 75 && view.NativeModifierLines.Count == 1, "typed source per-hard-point and native modifier projection");
+        Check(view.NextEffectiveRank == "11" && view.NextRequiredLevel == 8 && view.NextChangeLines.Count == 2 && view.TrainingSynergies[0].SourceName == "爆炎术" && view.TrainingSynergies[0].SourceEffectiveRank == "3" && view.TrainingSynergies[0].ContributionValue == 75 && view.NativeModifierLines.Count == 1, "legacy source defaults to hard-point rank without changing native modifier projection");
         Check(Parse(Ranks(updated.Replace("\"investedHardPoints\":3", "\"investedHardPoints\":0").Replace("\"contributionValue\":75", "\"contributionValue\":0"))).SkillRanks[0].TrainingSynergies.Count == 1, "zero-invested synergy remains visible");
         Check(Parse(Ranks(updated.Replace("\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":\"184467440737095516170000001\""))).SkillRanks[0].NextEffectiveRank == "184467440737095516170000001", "next effective rank never narrows");
         foreach (var pair in new[] {
@@ -64,6 +64,33 @@ class EndgameGrowthContract
             new[] { "\"nextEffectiveRank\":\"11\"", "\"nextEffectiveRank\":\"0\"" },
         }) Reject(() => Parse(Ranks(updated.Replace(pair[0], pair[1]))), "reject malformed synergy " + pair[1]);
         Reject(() => Parse(Ranks(updated.Replace("[" + source + "]", "[" + source + "," + source + "]"))), "duplicate source effect rejected");
+        string effective = updated.Replace("\"equipmentApplies\":false", "\"equipmentApplies\":true,\"sourceEffectiveRank\":\"10\"")
+            .Replace("\"perPointValue\":25", "\"perPointValue\":300").Replace("\"contributionValue\":75", "\"contributionValue\":3000");
+        var equipped = Parse(Ranks(effective)).SkillRanks[0].TrainingSynergies[0];
+        Check(equipped.EquipmentApplies && equipped.InvestedHardPoints == 3 && equipped.SourceEffectiveRank == "10" && equipped.ContributionValue == 3000,
+            "equipment source effective rank is separate from investment and validates full contribution");
+        foreach (int rate in new[] { 300, 400, 500, 600 })
+            Check(Parse(Ranks(effective.Replace("\"perPointValue\":300", "\"perPointValue\":" + rate)
+                .Replace("\"contributionValue\":3000", "\"contributionValue\":" + (10 * rate)))).SkillRanks[0].TrainingSynergies[0].PerPointValue == rate,
+                "server-authored tier rate remains exact " + rate);
+        string zero = effective.Replace("\"investedHardPoints\":3", "\"investedHardPoints\":0")
+            .Replace("\"sourceEffectiveRank\":\"10\"", "\"sourceEffectiveRank\":\"0\"").Replace("\"contributionValue\":3000", "\"contributionValue\":0");
+        Check(Parse(Ranks(zero)).SkillRanks[0].TrainingSynergies[0].SourceEffectiveRank == "0", "unlearned equipment-only source does not invent learned rank");
+        Check(Parse(Ranks(effective.Replace("\"investedHardPoints\":3", "\"investedHardPoints\":0"))).SkillRanks[0].TrainingSynergies[0].SourceEffectiveRank == "10",
+            "server-authorized granted source does not require invested hard points");
+        string maximum = effective.Replace("\"sourceEffectiveRank\":\"10\"", "\"sourceEffectiveRank\":\"2147483647\"")
+            .Replace("\"perPointValue\":300", "\"perPointValue\":600").Replace("\"contributionValue\":3000", "\"contributionValue\":1288490188200");
+        Check(Parse(Ranks(maximum)).SkillRanks[0].TrainingSynergies[0].ContributionValue == 1288490188200L,
+            "maximum server engine rank times tier rate retains Int64 contribution without overflow");
+        foreach (string badRank in new[] { "", "01", "-1", "+1", "1.5", "1e1", " 10", "184467440737095516170000001" })
+            Reject(() => Parse(Ranks(effective.Replace("\"sourceEffectiveRank\":\"10\"", "\"sourceEffectiveRank\":\"" + badRank + "\""))),
+                "invalid or mismatched effective source rank is rejected " + badRank);
+        Reject(() => Parse(Ranks(effective.Replace("\"sourceEffectiveRank\":\"10\"", "\"sourceEffectiveRank\":10"))), "source effective rank is decimal text");
+        Reject(() => Parse(Ranks(effective.Replace("\"contributionValue\":3000", "\"contributionValue\":900"))), "equipment contribution cannot silently use hard points");
+        Reject(() => Parse(Ranks(effective.Replace("\"contributionValue\":3000", "\"contributionValue\":3001"))), "equipment contribution cannot include fractional effective rank");
+        Reject(() => Parse(Ranks(effective.Replace("\"equipmentApplies\":true", "\"equipmentApplies\":false"))), "hard-only source cannot carry equipment rank");
+        Reject(() => Parse(Ranks(effective.Replace("\"contributionValue\":3000", "\"contributionValue\":-1"))), "negative equipment contribution rejected");
+        Reject(() => Parse(Ranks(effective.Replace("\"contributionValue\":3000", "\"contributionValue\":9223372036854775808"))), "beyond Int64 contribution rejected");
     }
     static void Main()
     {

@@ -76,7 +76,7 @@ public sealed class EndgameSkillRankView
         return value;
     }
 }
-/// <summary>Server-defined hard-point synergy. Equipment ranks never feed this view.</summary>
+/// <summary>Server-defined received synergy, including the authoritative source rank.</summary>
 public sealed class EndgameTrainingSynergyView
 {
     public int SourceID { get; }
@@ -86,20 +86,29 @@ public sealed class EndgameTrainingSynergyView
     public int PerPointValue { get; }
     public string Unit { get; }
     public int InvestedHardPoints { get; }
-    public int ContributionValue { get; }
+    public string SourceEffectiveRank { get; }
+    public long ContributionValue { get; }
     public bool EquipmentApplies { get; }
     internal EndgameTrainingSynergyView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "sourceId", "sourceName", "effect", "effectLabel", "perPointValue", "unit", "investedHardPoints", "contributionValue", "equipmentApplies");
+        EndgameData.Keys(d, "sourceId", "sourceName", "effect", "effectLabel", "perPointValue", "unit", "investedHardPoints", "sourceEffectiveRank", "contributionValue", "equipmentApplies");
         SourceID = EndgameData.Int(d, "sourceId"); SourceName = EndgameData.String(d, "sourceName", 128);
         Effect = EndgameData.String(d, "effect", 64); EffectLabel = EndgameData.String(d, "effectLabel", 128);
         PerPointValue = EndgameData.Int(d, "perPointValue"); Unit = EndgameData.String(d, "unit", 32);
-        InvestedHardPoints = EndgameData.Int(d, "investedHardPoints"); ContributionValue = EndgameData.Int(d, "contributionValue");
+        InvestedHardPoints = EndgameData.Int(d, "investedHardPoints"); ContributionValue = EndgameData.Long(d, "contributionValue");
         EquipmentApplies = EndgameData.Bool(d, "equipmentApplies");
+        string sourceRank = EndgameData.String(d, "sourceEffectiveRank", EndgameResponse.MaximumBytes);
+        // Older hard-only rows omitted this additive field. Equipment-aware rows
+        // must state their own source rank; never infer it from the receiving skill.
+        SourceEffectiveRank = d.ContainsKey("sourceEffectiveRank") || EquipmentApplies
+            ? EndgameSkillRankView.DecimalRank(sourceRank)
+            : InvestedHardPoints.ToString(CultureInfo.InvariantCulture);
         if (!EndgameSkillRankView.IsProfessionSkill(SourceID) || SourceName.Length == 0 || Effect.Length == 0 || EffectLabel.Length == 0 ||
             PerPointValue <= 0 || Unit != "percent_bp" && Unit != "flat" || InvestedHardPoints < 0 || InvestedHardPoints > 20 ||
-            EquipmentApplies || ContributionValue < 0 || (long)PerPointValue * InvestedHardPoints != ContributionValue)
-            throw new FormatException("Invalid hard-point training synergy.");
+            !EquipmentApplies && SourceEffectiveRank != InvestedHardPoints.ToString(CultureInfo.InvariantCulture) ||
+            ContributionValue < 0 || ContributionValue % PerPointValue != 0 ||
+            (ContributionValue / PerPointValue).ToString(CultureInfo.InvariantCulture) != SourceEffectiveRank)
+            throw new FormatException("Invalid training synergy.");
     }
 }
 public sealed class EndgameSkillContribution

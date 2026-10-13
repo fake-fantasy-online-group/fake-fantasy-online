@@ -5,14 +5,12 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.cs').read_text()
 checks = [
     'if (NpcName.Contains("巧匠") || NpcName.Contains("左慈"))',
-    '"周天鼎 · 问鼎炼化", () => OpenEndgameView(EndgameModule.Cube)',
+    'AddCubeWorkbenchOption();',
     'if (NpcName.Contains("妖魔结界守卫") || NpcName.Contains("结界使"))',
     'AddRiftEntranceOption();',
     'Open(GameBootstrap.I?.Window?.NpcStateForIndependentRuntime(npc), npc);',
     'CaptureRiftEntrance(npc);',
     'module == EndgameModule.Rift ? EndgamePanel.TryOpenRiftFromWorld() :',
-    'module == EndgameModule.Runes ? EndgamePanel.TryOpenRunesFromWorld() : EndgamePanel.TryOpenCubeFromWorld()',
-    '"星篆 · 镶嵌取出", () => OpenEndgameView(EndgameModule.Runes)',
     '"符钥何用？", () => ShowSay(',
     '(NpcName.Contains("试炼小仙") || NpcName.Contains("试炼大仙"))',
     'AddTrialOption("领取试炼任务", "trialtask")',
@@ -23,8 +21,11 @@ checks = [
 ]
 for snippet in checks:
     assert snippet in source, snippet
-assert source.count('if (EndgamePanel.WorldEntryAvailable)') == 1
-assert 'if (EndgamePanel.WorldEntryAvailable &&' in source
+assert '星篆 · 镶嵌取出' not in source and 'EndgameModule.Runes' not in source
+assert 'CaptureCubeWorkbench(npc);' in source
+cube = (root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.Cube.cs').read_text()
+assert 'EndgamePanel.TryOpenCubeFromNpc' in cube and 'source.Script == "Nzhoutianding"' in cube
+assert 'IsNpcStateCurrentForIndependentRuntime(source)' in cube and 'state.CubeInputsV1' in cube
 print(f'PASS {len(checks) + 2} NPC menu wiring guards; native trial, life-skill and furnace paths retained.')
 
 branch = source[source.index('if (NpcName.Contains("妖魔结界守卫")'):source.index('if (NpcName.Contains("试炼大仙")')]

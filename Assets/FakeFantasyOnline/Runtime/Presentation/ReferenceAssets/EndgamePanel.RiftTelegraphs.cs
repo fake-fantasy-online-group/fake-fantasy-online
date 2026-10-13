@@ -11,7 +11,7 @@ public sealed partial class EndgamePanel
     // hit detection, damage and expiry remain server-owned.
     private static Vector3 RiftScreenPoint(Camera camera, float x, float y)
     {
-        Vector3 point = camera.WorldToScreenPoint(new Vector3(x / GameBootstrap.CurPpu, (GameBootstrap.CurWorldH - y) / GameBootstrap.CurPpu, 0));
+        Vector3 point = camera.WorldToScreenPoint(new Vector3((x - GameBootstrap.CurWorldW * .5f) / GameBootstrap.CurPpu, (GameBootstrap.CurWorldH * .5f - y) / GameBootstrap.CurPpu, 0));
         return new Vector3(point.x, Screen.height - point.y, point.z);
     }
     private static double TelegraphRemainingMS(EndgameRiftTelegraphView tell, DateTime receivedUtc)

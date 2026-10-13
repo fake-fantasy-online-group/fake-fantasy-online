@@ -2,11 +2,11 @@
 
 ## Play entry
 
-The native world host negotiates `endgame.v1` after character admission. Transient loading/storage or send failures retry after a two-second cooldown, with at most three hello attempts per connection. A missing response (including a read-only hello interrupted by a map transfer) waits 15 seconds before entering that cooldown; disconnect clears the timer and retry budget. A failed refresh after successful negotiation preserves the accepted renderer. This is separate from manual mutation retries. There is no F8 shortcut, global endgame launcher, or cross-module tab strip. Existing **巧匠/左慈** dialogue opens separate **星篆 · 镶嵌取出** and **周天鼎 · 问鼎炼化** workbenches; **龙城八仙使者** opens **演劫洞天**. Trial NPCs retain key-use advice. An older server has no added dialogue entries and sends no endgame mutations.
+The native world host negotiates `endgame.v1` after character admission. Transient loading/storage or send failures retry after a two-second cooldown, with at most three hello attempts per connection. A missing response (including a read-only hello interrupted by a map transfer) waits 15 seconds before entering that cooldown; disconnect clears the timer and retry budget. A failed refresh after successful negotiation preserves the accepted renderer. This is separate from manual mutation retries. There is no F8 shortcut, global endgame launcher, or cross-module tab strip. Star runes use the original **镶嵌炉** drag-to-empty-hole flow, with no standalone insertion/extraction workbench; the original doorway behind **左慈** leads to the **周天鼎** in 商会; **龙城八仙使者** opens **演劫洞天**. Trial NPCs retain key-use advice. An older server has no added dialogue entries and sends no endgame mutations.
 
 - **仙遗与宿阵装备**: inspect, equip and unequip through the existing native bag and character equipment UI. Native tooltips retain rolled attributes, requirements, lore and ordered sockets. Occupied server slots **14–25** are accessible through the character window's compact **其他装备** control, borrowing only the doll area and reusing native slot actions; there is no duplicate equipment dashboard or unique encyclopedia.
-- **星篆镶嵌**: use the artisan dialogue, select real equipment, a socket and a bag rune, then insert or extract. Owned rune hover details and active formation status remain. Rune/formation encyclopedia navigation and the cross-module cube shortcut are removed. Opening this workbench never requests unique or formation discovery catalogs; owned-item tooltip metadata still loads as needed.
-- **周天鼎**: the artisan opens its own workbench. Choose among 12 actionable operation families. Equipment inputs are selected inside the workbench from real bag items; rune inscription/conversion has a local output chooser, preserving all 28 outputs for each operation and all 66 functional recipes. The server recipe cursor is followed automatically while this workbench is open, without player catalog pagination. A failed metadata page waits for explicit refresh; closing stops continuation and reopening resumes the cursor. For rune salvage choose one bag rune; for conversion/array insertion choose ordered bag rune UIDs; for reordering choose installed runes in the desired order. 问鼎 shows authoritative cost/result/risk; 照此投料 executes only that frozen quote. Selection changes or a new inventory snapshot invalidate it.
+- **星篆镶嵌**: open the original 镶嵌炉, drag bag equipment into its equipment slot, then drag a bag star rune into an open empty socket. The existing native furnace packet and authoritative socket receipt are retained. Invalid/stale bag inputs, unopened holes and occupied holes cannot submit. There is no extra 星篆 insertion/extraction dialog or plugin removal action. Native owned-rune tooltips and formation metadata remain.
+- **周天鼎**: enter the existing 商会 interior through the native doorway behind 左慈, then talk to the dedicated 周天鼎 (original NPC sprite 903). Its 12-slot container accepts owned bag instances and exact stackable quantities, with the existing icon/tooltip path. It never loads or shows recipe/operation/output lists. The server matches `cubeInputs` against database rules; identical-input variants of one operation are equally likely, with no random roll during preview. 问鼎 reports matched result/risk and copper, then 炼化 executes the frozen quote atomically. Placing, removing, closing and reconnecting never move physical items. See [container contract](CUBE-CONTAINER.md).
 - **演劫洞天**: 四村试炼小仙接取试炼；完成领钥后，在龙城八仙使者对话中选择演劫洞天。队友须在队长附近。Choose difficulty **1–150 阶**, with direct numeric input and ±1/±10 controls. Difficulty is separate from the run’s **第 N 层**. The server’s optional maximum/unlock limits constrain fresh entry. Joining an invitation preserves its run ID; fresh entry leaves the run ID empty. The HUD shows server progress, time, map/floor, current objectives, elite aura colors/affixes and globe markers. Runs expose an exact decimal-string seed and generator version. The optional floor exit is marked in the native world; the run opener can approach it and choose **前往下一层** to skip remaining packs. This preserves difficulty, accumulated progress and the run timer; uncollected globes are not credited. Advance sends the observed run ID and one-based floor index, blocks repeated clicks while uncertain, and uses the normal native map transition. It is unavailable during transitions and the guardian phase. Circle/ring/finite-line attack telegraphs draw translucent danger areas, clear boundaries, ability names, dodge hints and local countdowns from server-authored map pixels. Ring centers remain clear. Warnings expire locally or disappear on the authoritative update; they do not apply damage. Phase changes show a short non-modal notice; restored snapshots do not replay transitions. The HUD opens result review without claiming automatically and yields input to the open panel. Move within 75 pixels of a globe for the server's automatic pickup. Claim is enabled only by the server's `claimable` flag. Interrupted paid runs can expose compensation. Leaving requires a second click.
 
 Close/Escape clears selections and quotes but keeps an uncertain mutation. **查询原请求** resends the same immutable request ID and parameters, never a new purchase or reroll. Disconnect/title return clears visible state. A bounded, process-memory retry journal restores only the same endpoint/account/server-issued persistent character ID's uncertain request after a new hello; it never automatically executes it. **The journal does not survive quitting the client process.** Server receipts remain authoritative.
@@ -166,9 +166,13 @@ original layout. `nextRequiredLevel` supplies the native requirement row.
 by the card: unchanged effects and costs are not deleted from the next block.
 
 One green incoming-training section is appended after the complete original card.
-Only the recipient lists each source skill, its invested hard points and its
-per-point bonus, including zero-invested planning sources. Equipment ranks do
-not increase these contributions. No generated outgoing-target list is added to
+Only the recipient lists each source skill, its authoritative effective level
+and its server-authored per-level bonus, including zero-level planning sources.
+Eligible equipment levels count in the source rank when the server marks the row
+`equipmentApplies=true`; equipment alone does not teach an unlearned source.
+The 3–6% rate comes from the beneficiary's learning tier on the server. Legacy
+hard-only rows still display their allocated points and per-point rate.
+No generic equipment explanation or generated outgoing-target list is added to
 the source skill. Its original authored passive description remains intact.
 The same typed data is available through `endgame.skills`; older optional metadata
 remains compatible. No equipment tooltip composition is changed by this fix.
@@ -204,6 +208,22 @@ production `protocol.EncodeEndgame` and also reaches the actual client wire code
 The server test export options are `SKILL_ALL_VIEWS_FIXTURE_PATH` with
 `TestV5All149ReadableSkillViewsFixture`, and `SKILL_SYNERGY_FIXTURE_PATH` with
 `TestV5TrainingSynergyRowsAreAuthoritativeIncludingUnlearnedSources`.
+
+The original V5/V7/V9 authored fixtures remain historical compatibility inputs.
+Equipment-aware synergy tests separately cover the additive decimal-string
+`sourceEffectiveRank`, exact Int64 contribution validation, zero effective source
+rank, every 3–6% rate, and native centered rendering without changing the original
+body or adding an outgoing list. The plugin projection exposes the same source
+rank and Int64 total without calculating from the receiving skill's equipment.
+The separate `skill-synergy-equipped-v11.json`/`.wire.hex` pair is exported by
+`TestEquipmentSynergyPostgres` via `SKILL_EQUIPMENT_SYNERGY_FIXTURE_PATH`, using
+migration74 PostgreSQL catalogs and authored item2018. Its Warlock rows cover
+3%, 4% and 6% beneficiary tiers, source hard3 plus equipped2 becoming effective5,
+and an unlearned source at zero. The 5% display rate and Int64 boundary are
+separately labeled synthetic client cases; the server covers all profession tiers.
+Migration74's equipment-aware rows require the matching updated client: older
+clients reject the new optional field and equipment-aware mode in their closed
+DTO parser. The wire framing, schema number and opcodes are unchanged.
 
 ### Equipment skill forms V1
 

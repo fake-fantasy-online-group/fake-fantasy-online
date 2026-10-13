@@ -363,7 +363,7 @@ public sealed partial class EndgamePanel
         if (IsRune(item))
         {
             text.Append(RuneDetails(item.ItemID, false));
-            if (!tooltip) text.Append("\n在太清演劫录 → 星篆·宿阵，选择器物与空窍后嵌入。\n洞天可寻得星篆；巧匠或左慈的周天鼎可凝髓成篆。\n");
+            if (!tooltip) text.Append("\n在原有镶嵌炉中放入装备，再把背包星篆逐枚拖到空孔。单枚星篆即有自身属性，须满足装备与已镶星篆的使用等级。\n洞天可寻得星篆；巧匠或左慈的周天鼎可凝髓成篆。\n");
         }
         if (item.SocketCount > 0)
         {
@@ -379,7 +379,7 @@ public sealed partial class EndgamePanel
         string status = FormationStatus(item);
         if (status.Length > 0) text.Append('\n').Append(status).Append('\n');
         if (!tooltip && !IsRune(item) && (item.UniqueID > 0 || item.SocketCount > 0))
-            text.Append("\n太清演劫录 → 星篆·宿阵可嵌入/取出。\n打孔炉逐孔开启；巧匠或左慈 → 周天鼎可为无孔器物随机开窍，或调序、炼化。先问鼎查看耗费。\n");
+            text.Append("\n原有镶嵌炉逐枚镶入星篆，每枚各自生效。填满孔位后，底材、孔数与从左到右的宿序符合才追加宿阵；未成阵仍保留星篆属性。\n打孔炉逐孔开启；巧匠或左慈 → 周天鼎可为无孔器物随机开窍，或调序、炼化。先问鼎查看耗费。\n");
         if (item.Locked) text.Append("\n器物已锁定，须先解除锁定才能加工。\n");
         if (!tooltip && item.UID.Length > 0) text.Append("\n器物凭证 ").Append(item.UID).Append(" · 修订 ").Append(item.Revision);
         return text.ToString();

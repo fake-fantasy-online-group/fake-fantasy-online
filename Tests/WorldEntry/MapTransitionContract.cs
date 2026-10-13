@@ -102,7 +102,15 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public static class ChatUI { public static void Add(string channel, string text, Color color, string who) { } }
     public static class DifficultyBox { public static void Show(string title, string normal, string hard, Action n, Action h) { } }
-    internal static class EndgamePanel { internal static bool OwnsRift; internal static bool TryTransferRiftPortalFromWorld() => OwnsRift; }
+    internal enum RiftPortalContinuation { Waiting, Finished, Sent, Public }
+    internal static class EndgamePanel
+    {
+        internal static bool OwnsRift;
+        internal static bool TryTransferRiftPortalFromWorld() => OwnsRift;
+        internal static bool TryTransferRiftPortalFromWorld(out Func<RiftPortalContinuation> retry) { retry = null; return OwnsRift; }
+        internal static bool TryGetRiftPortalFromWorld(out string run, out int floor, out long generation, out float x, out float y)
+        { run = null; floor = 0; generation = 0; x = y = 0; return false; }
+    }
     public class NetClient
     {
         public static NetClient I;

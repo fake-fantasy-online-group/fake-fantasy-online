@@ -77,8 +77,12 @@ check('AppendGrowthLevelBlock(rows, rank.NextEffectLines, null, "下一等级", 
       'Original next-level block must repeat full prose/details and never select changed-only summaries')
 check('rank.Contributions' not in growth,
       'Skill card must not dump equipment grant/debug contribution records as training effects')
-check('rank.TrainingSynergies' in growth and 'synergy.PerPointValue' in growth and 'synergy.InvestedHardPoints' in growth,
-      'Training section must display typed source hard-points and per-point rate')
+check('rank.TrainingSynergies' in growth and 'synergy.PerPointValue' in growth and 'synergy.SourceEffectiveRank' in growth and 'synergy.EquipmentApplies' in growth,
+      'Training section must display the authoritative source effective rank and per-level rate')
+check('synergy.InvestedHardPoints' in growth and '每点: ' in growth,
+      'Legacy hard-only rows retain their original source and per-point meaning')
+check('装备加级' not in growth and 'synergy.ContributionValue' not in growth,
+      'Incoming rows stay concise, with no exclusion note, explanation or duplicated aggregate contribution')
 check('CultureInfo.InvariantCulture' in growth,
       'Per-point percent formatting must remain stable across device locales')
 check(all(label not in growth for label in ['投入点数:', '装备与状态:', '授予等级:', '投入1点后:', '其余效果不变']),

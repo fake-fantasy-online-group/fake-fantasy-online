@@ -236,6 +236,7 @@ public sealed partial class DialogUI : MonoBehaviour
         // DisplayName is therefore a legal name that still opens; the empty string also keeps
         // NpcName non-null for the later Contains checks in BuildMenu.
         CaptureRiftEntrance(npc);
+        CaptureCubeWorkbench(npc);
         NpcName = (originalReceiver != null ? originalReceiver.npcName : npc.DisplayName) ?? string.Empty;
 
         // DialogUI.Show 06000211 hides the ordinary dialog and returns before task offers.
@@ -795,11 +796,6 @@ public sealed partial class DialogUI : MonoBehaviour
                 Visible = false;
                 Win05.OpenLifeLearn();
             }));
-            if (EndgamePanel.WorldEntryAvailable)
-            {
-                Add(new ReferenceNpcDialogOption("星篆 · 镶嵌取出", () => OpenEndgameView(EndgameModule.Runes)));
-                Add(new ReferenceNpcDialogOption("周天鼎 · 问鼎炼化", () => OpenEndgameView(EndgameModule.Cube)));
-            }
         }
         // Official 06000234: this separate family-stash row follows life learning.
         if (NpcName.Contains("家族仓库"))
@@ -844,6 +840,7 @@ public sealed partial class DialogUI : MonoBehaviour
         if (NpcName.Contains("妖魔结界守卫") || NpcName.Contains("结界使"))
             AddTrialOption("进入妖魔结界(试炼)", "trial");
         AddRiftEntranceOption();
+        AddCubeWorkbenchOption();
         if (NpcName.Contains("试炼大仙"))
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
         if (EndgamePanel.WorldEntryAvailable &&
@@ -891,7 +888,7 @@ public sealed partial class DialogUI : MonoBehaviour
     private void OpenEndgameView(EndgameModule module)
     {
         bool opened = module == EndgameModule.Rift ? EndgamePanel.TryOpenRiftFromWorld() :
-            module == EndgameModule.Runes ? EndgamePanel.TryOpenRunesFromWorld() : EndgamePanel.TryOpenCubeFromWorld();
+            EndgamePanel.TryOpenCubeFromWorld();
         if (opened) Close();
         else ShowSay("当前功能尚未开放，请进入世界并等待服务器开放后再试。");
     }

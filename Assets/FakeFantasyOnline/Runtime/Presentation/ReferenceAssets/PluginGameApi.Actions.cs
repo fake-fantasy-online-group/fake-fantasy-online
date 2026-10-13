@@ -156,8 +156,7 @@ public sealed partial class PluginGameApi
             return new GameActionReceipt(previousId, request.RequestId, request.Name, GameActionState.Rejected,
                 "request_id.conflict", "This requestId is already associated with different action content. Nothing was executed.");
         }
-        // Bound retained bytes as well as records. The only compound action input is
-        // the ordered, bounded list of rune identities for a native cube quote.
+        // Bound retained bytes and only admit the two documented cube input shapes.
         int argumentTextSize = 0;
         if (request.Arguments.Count > 16) return ActionRejected(request, "arguments.invalid", "At most 16 action arguments are supported.");
         foreach (var argument in request.Arguments)
@@ -172,6 +171,24 @@ public sealed partial class PluginGameApi
                 {
                     if (!(uid is string)) return ActionRejected(request, "arguments.invalid", "itemUids must contain only strings.");
                     argumentTextSize += ((string)uid).Length;
+                }
+            }
+            else if (request.Name == "endgame.cube.quote" && argument.Key == "cubeInputs")
+            {
+                var inputs = argument.Value as IReadOnlyList<object>;
+                if (inputs == null || inputs.Count < 1 || inputs.Count > 12) return ActionRejected(request, "arguments.invalid", "cubeInputs must contain 1..12 input objects.");
+                foreach (object input in inputs)
+                {
+                    var row = input as IReadOnlyDictionary<string, object>;
+                    if (row == null || row.Count != 2 || !row.ContainsKey("count") || row.ContainsKey("uid") == row.ContainsKey("itemId"))
+                        return ActionRejected(request, "arguments.invalid", "Cube inputs require exactly uid or itemId, and count.");
+                    foreach (var field in row)
+                    {
+                        argumentTextSize += field.Key.Length;
+                        if (field.Key == "uid" && field.Value is string) argumentTextSize += ((string)field.Value).Length;
+                        else if ((field.Key != "itemId" && field.Key != "count") || !ActionIsNumber(field.Value))
+                            return ActionRejected(request, "arguments.invalid", "Cube input values must use an exact UID string and numeric count, or numeric itemId and count.");
+                    }
                 }
             }
             else if (!(argument.Value is bool) && !ActionIsNumber(argument.Value))
@@ -204,7 +221,11 @@ public sealed partial class PluginGameApi
                     case "number": ActionFloat(request.Arguments, key); break;
                     case "string": ActionString(request.Arguments, key); break;
                     case "boolean": ActionBool(request.Arguments, key, false); break;
-                    case "array": EndgameUIDs(request.Arguments); break;
+                    case "array":
+                        if (key == "cubeInputs") EndgameCubeInputs(request.Arguments);
+                        else if (key == "itemUids") EndgameUIDs(request.Arguments);
+                        else throw new ArgumentException("Unsupported compound action argument.");
+                        break;
                 }
             }
             foreach (object key in (IEnumerable)definition.Arguments["required"])

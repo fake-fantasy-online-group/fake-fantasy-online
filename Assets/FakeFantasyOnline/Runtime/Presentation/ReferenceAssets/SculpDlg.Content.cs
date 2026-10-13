@@ -37,7 +37,11 @@ internal partial class SculpDlg
                     mat.have >= mat.need ? CraftUI.GOLD : new Color(1f, 0.45f, 0.45f, 1f));
             }
         }
-        if (SocketUI.HoleCount > 0) Line("空孔可从背包拖符文镶嵌", CraftUI.GRAY);
+        if (SocketUI.HoleCount > 0)
+        {
+            Line("把背包星篆/符文拖到空孔，逐枚镶嵌", CraftUI.GRAY);
+            Line("星篆单枚生效；孔满且底材、宿序符合才成阵", CraftUI.GRAY);
+        }
     }
     private void Coin(Texture2D icon, float x, long value)
     {

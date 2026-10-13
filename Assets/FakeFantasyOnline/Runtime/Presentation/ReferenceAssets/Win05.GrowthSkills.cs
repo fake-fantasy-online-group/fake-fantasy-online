@@ -61,7 +61,7 @@ public partial class Win05
         if (SkillUsableForHotbar(info)) rows.Add(("双击或拖曳至快捷栏以使用这个技能", (char)6, false));
 
         // A single append-only extension, on the receiving skill. Never enumerate
-        // a source skill's outgoing targets or mix equipment grants into training.
+        // a source skill's outgoing targets or calculate contributions locally.
         AppendGrowthSynergies(rows, rank);
         return ComposeTip(rows);
     }
@@ -105,14 +105,15 @@ public partial class Win05
         foreach (var synergy in rank.TrainingSynergies)
         {
             if (synergy.SourceID != previousSource)
-                rows.Add((synergy.SourceName + "（投入" + synergy.InvestedHardPoints + "点）", (char)1, true));
+                rows.Add((synergy.SourceName + (synergy.EquipmentApplies
+                    ? "（等级" + synergy.SourceEffectiveRank + "）"
+                    : "（投入" + synergy.InvestedHardPoints + "点）"), (char)1, true));
             string value = synergy.Unit == "percent_bp"
                 ? (synergy.PerPointValue / 100m).ToString("0.##", CultureInfo.InvariantCulture) + "%"
                 : synergy.PerPointValue.ToString(CultureInfo.InvariantCulture);
-            rows.Add(("每点: " + synergy.EffectLabel + " +" + value, (char)1, true));
+            rows.Add(((synergy.EquipmentApplies ? "每级: " : "每点: ") + synergy.EffectLabel + " +" + value, (char)1, true));
             previousSource = synergy.SourceID;
         }
-        if (rank.TrainingSynergies.Count > 0) rows.Add(("装备加级不增加协同", (char)2, true));
         foreach (string line in rank.NativeModifierLines)
             if (!IsOriginalDamageBonus(line)) rows.Add((line, (char)1, true));
     }

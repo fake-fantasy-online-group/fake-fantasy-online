@@ -59,9 +59,12 @@ internal static partial class SocketUI
             NetClient.I.DrillForIndependentRuntime(TargetKind, TgtTab, TgtSlot, 1, (byte)(protect ? 1 : 0));
     }
 
+    internal static bool CanInlayHole(int holeIdx) => HasTarget && CurLevel >= 0 &&
+        holeIdx >= 0 && holeIdx < 5 && holeIdx < Sockets.Count && Sockets[holeIdx] == 0;
+
     public static void Inlay(int holeIdx, byte runeTab, int runeBagSlot)
     {
-        if (HasTarget && NetClient.I != null)
+        if (CanInlayHole(holeIdx) && runeTab < InventoryDlg.Items.Length && runeBagSlot >= 0 && NetClient.I != null)
             NetClient.I.InlayForIndependentRuntime(TargetKind, TgtTab, TgtSlot, (byte)holeIdx, runeTab, runeBagSlot);
     }
 }

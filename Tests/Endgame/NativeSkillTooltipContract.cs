@@ -211,9 +211,8 @@ internal static class NativeSkillTooltipContract
                     ("等级: 26", (char)0, true),
                     ("完整原技能描述与原来左对齐的细节保留", (char)0, false),
                     ("受到以下技能加成", (char)1, true),
-                    ("很长的技能来源名称（投入10点）", (char)1, true),
-                    ("每点: 持续时间 +0.5%", (char)1, true),
-                    ("装备加级不增加协同", (char)2, true),
+                    ("很长的技能来源名称（等级10）", (char)1, true),
+                    ("每级: 持续时间 +6%", (char)1, true),
                 };
                 string text = (string)typeof(Win05).GetMethod("ComposeTip", HiddenStatic).Invoke(null, new object[] { authored });
                 Render(text, scale, new Vector2(35f, 45f));
@@ -258,7 +257,7 @@ internal static class NativeSkillTooltipContract
         CheckRow(rows, "每点: 目标 +2", Green);
         CheckRow(rows, "余烬（投入0点）", Green);
         CheckRow(rows, "每点: 持续时间 +0.5%", Green);
-        CheckRow(rows, "装备加级不增加协同", Gray);
+        Check(!text.Contains("装备加级不增加协同"), "Retired equipment exclusion note is absent");
         Check(text.Contains("\u0001已学被动使本技能伤害提升5%"), "Original green passive-damage aggregate preserved before footer");
         Check(Count(text, "火焰专精（投入3点）") == 1, "One source heading for multiple incoming effects");
         Check(!text.Contains("投入点数:") && !text.Contains("装备与状态:") && !text.Contains("授予等级:") && !text.Contains("投入1点后:"),
@@ -279,7 +278,46 @@ internal static class NativeSkillTooltipContract
         var training = text.Substring(text.IndexOf("受到以下技能加成", StringComparison.Ordinal));
         State(Rank(soft: "184467440737095516170000001", effective: "184467440737095516170000020"));
         string equipped = Win05.TestNativeGrowthTip();
-        Check(training == equipped.Substring(equipped.IndexOf("受到以下技能加成", StringComparison.Ordinal)), "Equipment ranks never inflate incoming training rows");
+        Check(training == equipped.Substring(equipped.IndexOf("受到以下技能加成", StringComparison.Ordinal)), "Receiving skill equipment ranks do not replace the server's source-specific legacy rows");
+    }
+    private static string EquipmentTrainingRank(int rate = 300, string sourceRank = "10", long contribution = 3000, int invested = 3) =>
+        Rank().Replace(Extra, ",\"nextRequiredLevel\":45,\"trainingSynergies\":[" +
+            "{\"sourceId\":10402,\"sourceName\":\"火焰专精\",\"effect\":\"damage\",\"effectLabel\":\"伤害\",\"perPointValue\":" + rate +
+            ",\"unit\":\"percent_bp\",\"investedHardPoints\":" + invested + ",\"sourceEffectiveRank\":\"" + sourceRank +
+            "\",\"contributionValue\":" + contribution + ",\"equipmentApplies\":true}],\"nativeModifierLines\":[\"已学被动使本技能伤害提升5%\"]");
+    private static void EquipmentTrainingDrawing()
+    {
+        State(Rank());
+        string original = Win05.TestNativeGrowthTip();
+        string originalBody = original.Substring(0, original.IndexOf("受到以下技能加成", StringComparison.Ordinal));
+        foreach (int rate in new[] { 300, 400, 500, 600 })
+        {
+            State(EquipmentTrainingRank(rate, contribution: rate * 10));
+            string text = Win05.TestNativeGrowthTip();
+            var rows = Layout(text).Item1;
+            CheckRow(rows, "受到以下技能加成", Green);
+            CheckRow(rows, "火焰专精（等级10）", Green);
+            CheckRow(rows, "每级: 伤害 +" + (rate / 100) + "%", Green);
+            Check(text.Substring(0, text.IndexOf("受到以下技能加成", StringComparison.Ordinal)) == originalBody,
+                "Equipment synergy changes only the append-only incoming rows, preserving every original body row");
+            Check(Count(text, "火焰专精（等级10）") == 1 && !text.Contains("（投入3点）") && !text.Contains("装备加级") &&
+                !text.Contains("每点:") && !text.Contains("item:equipment-only"),
+                "Equipment source shows its actual effective rank once, without contradictory or extra explanatory notes");
+            string hotbar = Win05.TestNativeGrowthTip(includeNext: false);
+            Check(hotbar.Contains("火焰专精（等级10）") && hotbar.Contains("每级: 伤害 +" + (rate / 100) + "%") &&
+                !hotbar.Contains("下一等级"), "Hotbar shares source-effective incoming rows with its original current-only body");
+            foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(text, scale, new Vector2(300f, 200f));
+        }
+        State(EquipmentTrainingRank(sourceRank: "0", contribution: 0, invested: 0));
+        string unlearned = Win05.TestNativeGrowthTip();
+        CheckRow(Layout(unlearned).Item1, "火焰专精（等级0）", Green);
+        Check(unlearned.Contains("每级: 伤害 +3%"), "Unlearned equipment-only source remains visible at server rank zero for planning");
+        State(EquipmentTrainingRank(rate: 600, sourceRank: "2147483647", contribution: 1288490188200L));
+        string high = Win05.TestNativeGrowthTip();
+        Render(high, 1f, new Vector2(0f, 0f));
+        Check(string.Concat(BitmapFont.Draws.Select(draw => draw.Text)).Contains("火焰专精（等级2147483647）"),
+            "Full effective source rank survives actual native wrapping without numeric narrowing");
+        foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(high, scale, new Vector2(300f, 200f));
     }
     private static void CapUnlearnedAndHotbar()
     {
@@ -355,7 +393,7 @@ internal static class NativeSkillTooltipContract
         State(Rank(current: "[]", upcoming: "[]"));
         Check(Win05.TestNativeGrowthTip().Contains("服务器尚未提供技能效果"), "Absent authoritative block is explicit");
         string valid = Ranks(Rank());
-        Reject(valid.Replace("\"equipmentApplies\":false", "\"equipmentApplies\":true"), "Training rejects equipment-derived synergy");
+        Reject(valid.Replace("\"equipmentApplies\":false", "\"equipmentApplies\":true"), "Equipment-derived synergy requires authoritative source rank");
         Reject(valid.Replace("\"contributionValue\":300", "\"contributionValue\":1000"), "Training validates hard points times rate");
         Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":11005"), "Life skill cannot be training source");
         Reject(valid.Replace("\"sourceId\":10405", "\"sourceId\":10401"), "Self-source rejected");
@@ -482,7 +520,7 @@ internal static class NativeSkillTooltipContract
                     var training = rank.TrainingSynergies.Single();
                     Check(training.SourceID == (rank.ID == 10405 ? 10402 : 10409) && training.InvestedHardPoints == 10 &&
                         training.PerPointValue == 100 && training.ContributionValue == 1000 && !training.EquipmentApplies,
-                        "Actual equipped gear does not inflate source10 hard-point synergy " + rank.ID);
+                        "Legacy V5 fixture retains its authored hard-only source10 synergy " + rank.ID);
                     Check(rank.CurrentEffectLines.Count >= 4 && rank.NextEffectLines.Count >= 4,
                         "Real high-rank original prose and native three-row details remain complete " + rank.ID);
                 }
@@ -665,14 +703,46 @@ internal static class NativeSkillTooltipContract
             }
         }
     }
+    private static void ServerEquipmentSynergyTips(string path)
+    {
+        Check(File.Exists(path), "Migration74 equipment synergy fixture is required");
+        var response = EndgameResponse.Parse(File.ReadAllText(path));
+        var state = State();
+        Check(state.Apply(response), "Production migration74 equipment synergy payload is accepted");
+        bool equipmentIncreasedRank = false, unlearnedSource = false;
+        var rates = new HashSet<int>();
+        foreach (var rank in state.SkillRanks)
+        {
+            Check(rank.Contract != null, "Production equipment fixture retains actual skill identity and behavior");
+            string text = Win05.TestNativeGrowthTip(rank.ID, true, rank.Contract.Name, rank.Contract.Current != null && rank.Contract.Current.Usable);
+            foreach (string line in rank.CurrentEffectLines) Check(text.Contains(line), "Equipped server current prose remains complete");
+            if (rank.HardRank < 20)
+                foreach (string line in rank.NextEffectLines) Check(text.Contains(line), "Equipped server next prose remains complete");
+            foreach (var synergy in rank.TrainingSynergies)
+            {
+                Check(synergy.EquipmentApplies && text.Contains(synergy.SourceName + "（等级" + synergy.SourceEffectiveRank + "）"),
+                    "Production equipment source displays its exact authoritative level");
+                Check(text.Contains("每级: " + synergy.EffectLabel + " +" + (synergy.PerPointValue / 100m).ToString("0.##", CultureInfo.InvariantCulture) + "%"),
+                    "Production beneficiary tier displays the exact server-authored percentage");
+                rates.Add(synergy.PerPointValue);
+                equipmentIncreasedRank |= synergy.SourceEffectiveRank != synergy.InvestedHardPoints.ToString(CultureInfo.InvariantCulture);
+                unlearnedSource |= synergy.SourceEffectiveRank == "0";
+            }
+            Check(!text.Contains("装备加级") && !text.Contains("每点:"), "Production equipment card has no stale hard-only note or extra explanation");
+            foreach (float scale in new[] { 1f, 2f }) CheckSkillRender(text, scale, new Vector2(300f, 200f));
+        }
+        Check(equipmentIncreasedRank && unlearnedSource, "Real equipped fixture includes both increased learned source and zero-level unlearned source");
+        Check(rates.SetEquals(new[] { 300, 400, 600 }), "Production Warlock fixture covers its three actual beneficiary tiers; synthetic rate test separately covers 5%");
+    }
     public static int Main(string[] args)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-        CenteringAfterWrapping(); HierarchyAndDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
+        CenteringAfterWrapping(); HierarchyAndDrawing(); EquipmentTrainingDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
         PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation(); ReducedManaCostPreservesOriginalBlock();
         foreach (string fixture in args) CheckServerFixture(fixture);
         ServerActualManaCostTips(Environment.GetEnvironmentVariable("FFO_SKILL_MANA_FIXTURE"));
         ServerActualGrowthTips(Environment.GetEnvironmentVariable("FFO_SKILL_GROWTH_FIXTURE"));
+        ServerEquipmentSynergyTips(Environment.GetEnvironmentVariable("FFO_SKILL_SYNERGY_FIXTURE"));
         string variants = Environment.GetEnvironmentVariable("FFO_VARIANT_FIXTURE_DIR");
         if (!string.IsNullOrEmpty(variants)) EquipmentVariantTips(variants);
         Console.WriteLine("PASS " + checks + " native skill tooltip production composition/layout/render contracts (deterministic Unity/art/font substitutes; no Unity or Player run).");

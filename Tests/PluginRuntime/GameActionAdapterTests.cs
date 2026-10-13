@@ -255,6 +255,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class EndgamePanel
     {
         internal static EndgameClientState WorldState;
+        internal static bool TryOpenCubeFromNpc(int map, int entity, string script, Func<bool> current) => current();
         internal static bool TryOpenRiftFromNpc(int map, int entity, string name, string script, Func<bool> current) => current();
     }
     internal sealed class ReferenceFirstWorldInitialFrame
@@ -330,7 +331,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal void Close() { Visible = false; }
         private void Add(ReferenceNpcDialogOption row) => Options.Add(row);
         private void ShowSay(string text) { }
-        internal void CaptureForTest(WorldNpcState npc) { CurrentNpcEntityId = npc?.EntityId ?? 0; CaptureRiftEntrance(npc); }
+        internal void CaptureForTest(WorldNpcState npc) { CurrentNpcEntityId = npc?.EntityId ?? 0; CaptureRiftEntrance(npc); CaptureCubeWorkbench(npc); }
     }
     internal sealed class GroundItems
     {
