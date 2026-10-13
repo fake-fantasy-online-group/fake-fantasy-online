@@ -48,7 +48,7 @@ internal partial class NetClient : MonoBehaviour
             int minimum = behavior != null ? behavior.MPCost : 0;
             var row = EndgamePanel.GrowthState.SkillRank(skillId);
             int cap = skillId == 10018 || skillId == 10227 || skillId == 10432 ? 5
-                : skillId == 10301 ? 19 : skillId == 10305 ? 11 : skillId == 10309 ? 10 : 0;
+                : skillId == 10301 ? 19 : skillId == 10305 ? 11 : skillId == 10309 || skillId == 10212 ? 10 : 0;
             long rank;
             if (minimum > 0 && cap > 0 && row != null &&
                 (row.EffectiveRank.Length > 10 || long.TryParse(row.EffectiveRank, out rank) && rank > cap))

@@ -38,9 +38,9 @@ class SkillBehaviorPresentationAcceptance
             AuthoritativeProfessionSkill.TryResolve(row.ID, out var aim, out var range, out var radius, out var angle, out var length, out var width, out var trap);
             if (!value.Usable) { Check(aim == SkillTargeting.Aim.Unavailable, "Attribute passives never become castable"); continue; }
             Check(range == value.CastDistance && radius == value.Area.Radius && angle == value.Area.Angle && length == value.Area.Length && width == value.Area.Width, "Grown support geometry matches real targeting");
-            // Independent accepted policy boundaries: only these six skills
+            // Independent accepted policy boundaries: only these seven skills
             // defer changing post-cap debit checks to the authoritative server.
-            var roundingCaps = new Dictionary<int, int> { {10018,5}, {10227,5}, {10432,5}, {10301,19}, {10305,11}, {10309,10} };
+            var roundingCaps = new Dictionary<int, int> { {10018,5}, {10227,5}, {10432,5}, {10301,19}, {10305,11}, {10309,10}, {10212,10} };
             int cap, minimum = value.MPCost;
             if (minimum > 0 && roundingCaps.TryGetValue(row.ID, out cap) && decimal.Parse(row.EffectiveRank) > cap) minimum = Math.Max(1, minimum - 1);
             foreach (int available in new[] { 0, 1, Math.Max(0, value.MPCost - 1), value.MPCost, value.MPCost + 1 })
@@ -57,6 +57,88 @@ class SkillBehaviorPresentationAcceptance
         }
         Check(ids.Count == 148 && samples > 300, "Production NetClient path covers all resolved skills and policy boundaries");
         Console.WriteLine("Skill growth actual NetClient acceptance: " + samples + " server samples / " + checks + " checks passed.");
+    }
+    // Exported by the real restored SQL loader and skillRanksForDisplay. Keep
+    // historical null-hold packets unchanged and verify restoration separately.
+    static void TheftGrowthPackets(string path)
+    {
+        var ranks = new HashSet<string>(); int before = checks;
+        string learned = null;
+        foreach (string json in File.ReadLines(path))
+        {
+            var state = State(); CharData.race = 2;
+            Check(state.Apply(EndgameResponse.Parse(json)), "Real theft growth packet applies");
+            var row = state.SkillRank(10212); var value = row?.Contract?.Current;
+            Check(row != null && ranks.Add(row.EffectiveRank) && value != null, "Unique restored theft rank has current contract");
+            Check(AuthoritativeProfessionSkill.Uses(10212) && AuthoritativeProfessionSkill.Current(10212) == value && AuthoritativeProfessionSkill.LearnedActive(10212), "Real theft contract activates typed provider");
+            Check(Win05.SkillInfo(10212).name == row.Contract.Name && Win05.SkillIconId(10212) == row.Contract.Icon, "Restored theft identity comes from server");
+            Check(value.InputMode == "entity" && value.TargetEnemy && !value.PointRequired && value.MPCost >= 1 && value.CooldownMilliseconds >= 100, "Real theft retains enemy targeting and paid cost/cooldown floors");
+            int minimum = long.Parse(row.EffectiveRank) > 10 ? Math.Max(1, value.MPCost - 1) : value.MPCost;
+            foreach (int available in new[] { 0, 1, Math.Max(0, value.MPCost - 2), value.MPCost - 1, value.MPCost, value.MPCost + 1 })
+                BothMP(10212, available, available >= minimum, "Real theft rank " + row.EffectiveRank);
+            Check(state.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"ok\":true,\"revision\":\"2\"}")), "New theft revision observed");
+            Check(AuthoritativeProfessionSkill.Uses(10212) && AuthoritativeProfessionSkill.Current(10212) == null, "Stale theft contract remains owned but unavailable");
+            BothMP(10212, int.MaxValue, false, "Stale theft cannot bypass waiting gate");
+            if (row.EffectiveRank == "1") learned = json;
+        }
+        Check(ranks.SetEquals(new[] { "1", "10", "11", "20", "100" }) && learned != null, "Theft covers restored SQL ranks 1/10/11/20/100");
+
+        var root = Only(learned, 10212); var data = Obj(Array(root["skillRanks"])[0]);
+        var contract = Obj(data["contract"]); contract["next"] = contract["current"]; contract["current"] = null;
+        data["hardRank"] = 0L; data["softRank"] = "0"; data["effectiveRank"] = "0"; data["nextEffectiveRank"] = "1"; data["canCast"] = false;
+        var unlearned = State(); Apply(unlearned, root);
+        Check(AuthoritativeProfessionSkill.Uses(10212) && !AuthoritativeProfessionSkill.LearnedActive(10212), "Unlearned restored theft cannot borrow next behavior");
+        BothMP(10212, int.MaxValue, false, "Unlearned theft");
+        unlearned.Reset();
+        Check(!AuthoritativeProfessionSkill.Uses(10212) && AuthoritativeProfessionSkill.Current(10212) == null, "Reset clears restored theft ownership");
+
+        var legacy = State(false); Apply(legacy, Only(learned, 10212));
+        Check(!AuthoritativeProfessionSkill.Uses(10212), "Absent behavior capability cannot activate theft contract");
+        root = Only(learned, 10212); Obj(Array(root["skillRanks"])[0])["contract"] = null;
+        Apply(State(), root);
+        Check(!AuthoritativeProfessionSkill.Uses(10212) && AuthoritativeProfessionSkill.Current(10212) == null, "Null-contract server retains original theft hold");
+        Check(Win05.SkillInfo(10212).name == "偷窃术", "Null-contract theft retains legacy identity");
+        Console.WriteLine("Restored theft actual Presentation acceptance: " + (checks - before) + " checks / SQL ranks 1,10,11,20,100 passed.");
+    }
+    static void BothMP(int id, int available, bool allowed, string context)
+    {
+        foreach (bool point in new[] { false, true })
+        {
+            writes = 0; tip = null; CharData.mp = available;
+            if (point) client.UseSkillAt(id, 100, 100, 2); else client.UseSkill(id, 2);
+            Check(writes == (allowed ? 1 : 0), context + ": actual command " + id + " mp " + available + " point " + point + " tip " + tip);
+        }
+    }
+    static void RoundingAdmissionGuards(string growth, string theft)
+    {
+        // Deliberately synthetic boundary probes complement, never replace, the
+        // real server fixtures above. Constant cost isolates rank admission.
+        var caps = new Dictionary<int, int> { {10018,5}, {10227,5}, {10432,5}, {10301,19}, {10305,11}, {10309,10}, {10212,10}, {10306,0} };
+        var sources = new Dictionary<int, string>(); int before = checks;
+        foreach (string path in new[] { growth, theft })
+            foreach (string json in File.ReadLines(path))
+            {
+                var row = Obj(Array(Obj(BoundedJson.Parse(json))["skillRanks"])[0]); int id = Convert.ToInt32(row["id"]);
+                if (caps.ContainsKey(id)) sources[id] = json;
+            }
+        Check(sources.Count == caps.Count, "All seven rounding skills plus unaffected control have real source packets");
+        foreach (var entry in caps)
+        {
+            int id = entry.Key, cap = entry.Value;
+            foreach (string rank in new[] { "1", Math.Max(1, cap).ToString(), (cap + 1).ToString(), "100", "9999999999999999999999999999999999999999" })
+                foreach (int cost in new[] { 0, 1, 3 })
+                {
+                    var root = Only(sources[id], id); var row = Obj(Array(root["skillRanks"])[0]); var value = Obj(Obj(row["contract"])["current"]);
+                    row["hardRank"] = 1L; row["softRank"] = (System.Numerics.BigInteger.Parse(rank) - 1).ToString();
+                    row["effectiveRank"] = rank; row["nextEffectiveRank"] = ""; Obj(row["contract"])["next"] = null;
+                    value["mpCost"] = (long)cost; value["pointRequired"] = false;
+                    CharData.race = (id - 10000) / 100; Apply(State(), root);
+                    bool postCap = cap > 0 && (rank.Length > 3 || int.Parse(rank) > cap);
+                    int minimum = postCap && cost > 0 ? Math.Max(1, cost - 1) : cost;
+                    foreach (int available in new[] { 0, 1, 2, 3 }) BothMP(id, available, available >= minimum, "Synthetic rank/floor guard " + rank + " cost " + cost);
+                }
+        }
+        Console.WriteLine("Rounding rank/floor admission guards: " + (checks - before) + " checks / seven skills plus unaffected control passed.");
     }
     // Upper-bound equipped packets are not the baseline 149-row fixtures: they
     // may contain a cross-profession grant and have equipment-resolved MP/ranks.
@@ -111,6 +193,8 @@ class SkillBehaviorPresentationAcceptance
         client=new NetClient();NetClient.I=client;client.BindSkillCommandsForIndependentRuntime((s,f)=>tip=s,(id,target)=>writes++,(id,x,y,target)=>writes++,on=>{},()=>{});
         string growth = Environment.GetEnvironmentVariable("FFO_SKILL_GROWTH_FIXTURE");
         if (!string.IsNullOrEmpty(growth)) ActualGrowthPackets(growth);
+        string theft = Environment.GetEnvironmentVariable("FFO_THEFT_GROWTH_FIXTURE");
+        if (!string.IsNullOrEmpty(theft)) { TheftGrowthPackets(theft); RoundingAdmissionGuards(growth, theft); }
         if(args[0]=="--variant-packets"){VariantPackets(args);return;}
         var seen=new HashSet<int>();string healer=null,assassin=null;
         foreach(string path in new[]{args[0],args[1],args[2],args[3],args[4]})

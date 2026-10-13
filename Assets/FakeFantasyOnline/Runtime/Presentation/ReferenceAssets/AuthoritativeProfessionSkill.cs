@@ -15,8 +15,9 @@ internal static class AuthoritativeProfessionSkill
         var state = EndgamePanel.GrowthState;
         // A local loadout does not describe other professions' observed casts. Keep their
         // legacy art metadata; explicit cross-profession grant rows still use the contract.
-        // 10212 retains its prior path until the conflicting steal implementation is resolved.
-        return id != 10212 && state?.SkillBehaviorV1 == true && EndgameSkillRankView.IsProfessionSkill(id) &&
+        // Older servers still hold 10212 without a contract. Adopt restored theft only
+        // when its authoritative row exists; keep stale rows owned here so casts wait.
+        return (id != 10212 || state?.SkillRank(id)?.Contract != null) && state?.SkillBehaviorV1 == true && EndgameSkillRankView.IsProfessionSkill(id) &&
             ((id - 10000) / 100 == CharData.race || state.SkillRank(id) != null);
     }
     internal static EndgameSkillBehaviorView Current(int id) => Uses(id) ? EndgamePanel.GrowthState.CurrentSkillBehavior(id) : null;
