@@ -278,6 +278,12 @@ internal static partial class GameActionAdapterTests
     {
         EndgameNative native; var api = SetupEndgame(out native);
         Check(!Definition(api, "endgame.rift.start").Available, "rift must be observed before paid admission");
+        PublishRift(native, phase: "closed");
+        Check(!Definition(api, "endgame.rift.start").Available, "live native entrance interaction is required for fresh paid admission");
+        int sentBeforeEntrance = native.Sent.Count;
+        Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2)).Code == "action.unavailable" && native.Sent.Count == sentBeforeEntrance, "agent cannot bypass native entrance dialog");
+        Act(api, "npc.interact", Map("entityId", "npc:1:3"));
+        Check(Definition(api, "endgame.rift.start").Available, "native interaction captures configured entrance");
         PublishRift(native, phase: "reserved");
         foreach (object tier in new object[] { 0, 151, 1.0000000000000002 })
             Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", tier, "runId", "run-current")).Code == "arguments.invalid", "rift invalid tier rejected");
@@ -288,7 +294,14 @@ internal static partial class GameActionAdapterTests
         Check(native.Last.Op == "rift.state" && (string)SentArguments(native)["runId"] == "run-current", "rift refresh preserves invitation run through native authoritative read");
         var entered = EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2, "runId", "run-current"));
         Check(entered.State == GameActionState.Sent && (string)SentArguments(native)["runId"] == "run-current", "reentry preserves observed run identity");
+        Check(!SentArguments(native).ContainsKey("npcEntityId"), "admitted-run reentry preserves its NPC-independent wire contract");
         ApplyReceipt(native, native.Last);
+        Check((string)api.TestObserveEndgame("endgame.rift")["riftEntranceEntityId"] == "npc:1:3", "agent observation identifies actual current entrance");
+        PublishRift(native, phase: "closed"); GameBootstrap.CurMapId = 8;
+        Check(!Definition(api, "endgame.rift.start").Available, "map departure invalidates captured agent entry");
+        GameBootstrap.CurMapId = 7;
+        Check(!Definition(api, "endgame.rift.start").Available, "returning to the same map cannot revive a stale native dialog");
+        Act(api, "npc.interact", Map("entityId", "npc:1:3")); PublishRift(native, phase: "reserved");
         Check(EndAct(api, "rift.leave", Map("expectedRevision", TestRevision, "runId", "run-current", "confirmLeave", false)).Code == "arguments.invalid", "leave requires explicit key-loss acknowledgement");
         Check(EndAct(api, "rift.leave", Map("expectedRevision", TestRevision, "runId", "run-old", "confirmLeave", true)).Code == "endgame.run_stale", "leave guards observed run");
         Check(EndAct(api, "rift.leave", Map("expectedRevision", TestRevision, "runId", "run-current", "confirmLeave", true)).State == GameActionState.Sent && native.Last.Op == "rift.leave", "confirmed leave uses native command");
@@ -304,6 +317,12 @@ internal static partial class GameActionAdapterTests
         PublishRift(native, phase: "closed");
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2, "runId", "run-current")).Code == "endgame.run_stale", "closed run cannot masquerade as invitation");
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 150)).State == GameActionState.Sent && !SentArguments(native).ContainsKey("runId"), "fresh paid admission omits obsolete run ID");
+        Check((long)SentArguments(native)["npcEntityId"] == 3, "fresh paid admission sends selected native entity rather than static config ID");
+        ApplyReceipt(native, native.Last);
+        native.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1" }));
+        PublishRift(native, phase: "reserved");
+        Check(Definition(api, "endgame.rift.start").Available && EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 2, "runId", "run-current")).State == GameActionState.Sent && !SentArguments(native).ContainsKey("npcEntityId"), "invitation recovery stays available with legacy hello and no NPC context");
     }
     private static void EndgameRiftAdvance()
     {
@@ -333,6 +352,7 @@ internal static partial class GameActionAdapterTests
         Check(!Definition(api, "endgame.rift.advance").Available, "guardian phase cannot be skipped");
         PublishRift(native, canAdvance: false);
         Check(!Definition(api, "endgame.rift.advance").Available, "server exit eligibility controls advance availability");
+        Act(api, "npc.interact", Map("entityId", "npc:1:3"));
         PublishRift(native, phase: "closed", unlockedTier: 80);
         Check(EndAct(api, "rift.start", Map("expectedRevision", TestRevision, "tier", 81)).Code == "endgame.tier_locked", "fresh entry respects observed tier unlock ceiling");
     }
@@ -344,6 +364,8 @@ internal static partial class GameActionAdapterTests
         Check(Rows(status["materials"]).Count == 1 && (int)Object(Rows(status["materials"])[0])["count"] == 50, "material wallet count remains authoritative");
         var formation = Object(Rows(status["activeFormations"])[0]);
         Check((int)Rows(formation["runes"])[0] == 1900028002 && (int)Rows(formation["runes"])[1] == 1900028001, "active formation rune order preserved");
+        Check(Rows(status["riftEntrances"]).Count == 1 && (int)Object(Rows(status["riftEntrances"])[0])["mapId"] == 7 && (int)Object(Rows(status["riftEntrances"])[0])["npcId"] == 83, "agent discovers server-configured entrance identity");
+        Check(status["riftEntranceEntityId"] == null, "observation never invents an active native entrance");
         Check(!Object(status["rift"]).ContainsKey("auras"), "summary omits marker bulk while dedicated rift view exposes it");
         var items = api.TestObserveEndgame("endgame.items", offset: 1, limit: 2);
         Check((int)items["total"] == 5 && (int)items["count"] == 2 && (int)items["nextOffset"] == 3 && (bool)items["truncated"], "item paging returns bounded rows and continuation offset");
@@ -415,6 +437,9 @@ internal static partial class GameActionAdapterTests
     private static PluginGameApi SetupEndgame(out EndgameNative native, bool negotiated = true, bool snapshot = true)
     {
         var api = Setup(); native = new EndgameNative(); api.TestSession.EndgameClientForPlugins = native;
+        EndgamePanel.WorldState = native.Endgame; GameBootstrap.CurMapId = 7;
+        var source = GameBootstrap.I.Window.Frame.NpcActors[3].State;
+        source.DisplayName = "八仙使者"; source.Script = "Nbaxian";
         if (negotiated) Negotiate(native);
         if (negotiated && snapshot) PublishItems(native);
         return api;
@@ -424,7 +449,8 @@ internal static partial class GameActionAdapterTests
     private static void Negotiate(EndgameNative native)
     {
         native.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1" }));
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1", "endgame.rift-entrance.v1" },
+            "riftEntrances", new object[] { Map("mapId", 7, "npcId", 83, "npc", "八仙使者", "script", "Nbaxian") }));
     }
     private static Dictionary<string, object> EndgameItem(string uid, int item, string location, int tab, int slot, bool locked = false)
     { return Map("uid", uid, "itemId", item, "location", location, "tab", tab, "slot", slot, "revision", TestRevision, "name", "Synthetic item", "locked", locked); }

@@ -53,8 +53,8 @@ public sealed partial class EndgamePanel
         float x = 32 + (536f - count * width - Math.Max(0, count - 1) * 12f) * .5f;
         if (showStart)
         {
-            if (ArtworkSkin.Button(new Rect(x, 339, width, 34), reenter ? "进入已有洞天" : "消耗一钥 · 开启洞天", enabled: !State.Pending && !waiting && selectedTierValid && rift != null && (reenter || rift.KeyCount > 0)))
-                Send(new EndgameRequest("rift.start", State.Revision, runID: reenter ? rift.RunID : "", tier: reenter ? rift.Tier : tier));
+            if (ArtworkSkin.Button(new Rect(x, 339, width, 34), reenter ? "进入已有洞天" : "消耗一钥 · 开启洞天", enabled: (reenter || RiftEntranceCurrent()) && !State.Pending && !waiting && selectedTierValid && rift != null && (reenter || rift.KeyCount > 0)))
+                Send(new EndgameRequest("rift.start", State.Revision, runID: reenter ? rift.RunID : "", tier: reenter ? rift.Tier : tier, npcEntityID: reenter ? 0 : riftEntranceEntityID));
             x += width + 12;
         }
         if (showClaim)
@@ -139,9 +139,9 @@ public sealed partial class EndgamePanel
             case "reward_pending": return "劫影已退，战果正在保存；请稍候。";
             case "completed": return LiveCompletedRift(rift) ? "洞天已成：拾妥所得，可与归元道使交谈离境。" : "洞天仍在，可重返拾取；收束后可补领。";
             case "interrupted": return rift.Claimable ? "洞天中断：可领取服务器确认的补偿符钥。" : "洞天中断：请查询服务器结算。";
-            case "failed": return rift.Claimable ? "演劫未竟：仍有服务器确认的所得可领取。" : "演劫未竟：本次已结束，可返回守卫再战。";
+            case "failed": return rift.Claimable ? "演劫未竟：仍有服务器确认的所得可领取。" : "演劫未竟：本次已结束，可返回龙城八仙使者处再战。";
             case "closed": return State.RiftInInstance ? "洞天已成，可与归元道使交谈离境。" : rift.Claimable ? "洞天已闭：战果已保存，仍可领取你的所得。" : "洞天已闭：所得请在背包查看，炼化可拜访巧匠左慈。";
-            case "aborted": return "洞天已中断，请返回守卫查看后续。";
+            case "aborted": return "洞天已中断，请返回龙城八仙使者处查看后续。";
             default: return "静候开境";
         }
     }

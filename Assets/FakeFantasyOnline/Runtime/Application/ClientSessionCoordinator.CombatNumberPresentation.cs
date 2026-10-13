@@ -25,6 +25,11 @@ public sealed partial class ClientSessionCoordinator
         }
     }
 
+    // Called only when the actual old world is retired, never by a duplicate
+    // entered=1 acknowledgement. No authoritative experience data is changed.
+    public void RetireCombatNumberSceneForIndependentRuntime() =>
+        CombatNumberPresentation.RetireScene();
+
     private void ResetCombatNumberPresentation() => combatNumberPresentation.Clear();
 }
 

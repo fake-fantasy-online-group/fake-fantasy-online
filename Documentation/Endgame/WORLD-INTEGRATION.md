@@ -6,7 +6,7 @@
 
 ## 参考与取舍
 
-- Blizzard [Welcome to Challenge Rifts](https://news.blizzard.com/en-us/article/21353255/welcome-to-challenge-rifts)：在专用场景的方尖碑启动挑战。采用其“在世界对象处进入活动”的分工，映射到既有妖魔结界守卫，不照搬挑战秘境规则。
+- Blizzard [Welcome to Challenge Rifts](https://news.blizzard.com/en-us/article/21353255/welcome-to-challenge-rifts)：在专用场景的方尖碑启动挑战。采用其“在世界对象处进入活动”的分工，映射到既有龙城八仙使者，不照搬挑战秘境规则。
 - Blizzard [2.0.4 patch notes](https://news.blizzard.com/en-gb/article/13532431/patch-2-0-4-now-live)：城镇方尖碑、Orek、Kadala的位置调整说明活动入口与NPC服务本就分布在世界中。
 - Blizzard [Season 20](https://news.blizzard.com/en-us/article/23319442/season-20-now-live)：魔盒作为器物改造系统，与佐敦库勒身份关联；借鉴服务有世界身份，接到本作巧匠左慈。官方旧版魔盒指南当前无法读取，未据此推断细节。
 - Blizzard [2.0 PTR / Runewords](https://news.blizzard.com/en-gb/article/24130178/the-2-0-ptr-what-you-need-to-know)：符文通过掉落、镶嵌组合、工匠合成衔接。此为历史PTR设计参考，非现行规则说明；本作仍保留自己的宿序和职业限制。

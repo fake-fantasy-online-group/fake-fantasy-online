@@ -26,6 +26,7 @@ public sealed partial class EndgameClientState
     public bool QuotePending { get; private set; }
     public string QuoteRequestID { get; private set; } = "";
     public EndgameRiftView Rift { get; private set; }
+    public IReadOnlyList<EndgameRiftEntranceView> RiftEntrances { get; private set; } = Array.Empty<EndgameRiftEntranceView>();
     public bool RiftPortalsV1 { get; private set; }
     public bool RiftInInstance { get; private set; }
     public bool RiftContextKnown { get; private set; }
@@ -56,6 +57,7 @@ public sealed partial class EndgameClientState
         responses.Clear(); responseOrder.Clear();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = false;
+        RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
         helloRequestedAt = helloRetryAt = default(DateTime);
@@ -66,7 +68,7 @@ public sealed partial class EndgameClientState
     public bool Begin(EndgameRequest request)
     {
         if (request.Op == "hello")
-        { HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
+        { RiftEntrances = Array.Empty<EndgameRiftEntranceView>(); HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
         // A native-only publication gets one coalesced read, including a failed
         // send. Manual refresh remains available; host ticks never retry forever.
@@ -167,7 +169,7 @@ public sealed partial class EndgameClientState
         if (response.Kind == "hello")
         {
             if (!HelloSent) return false;
-            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false, riftPortals = false;
+            bool capable = false, nativeStats = false, growth = false, skillBehavior = false, skillVariants = false, riftPortals = false, riftEntrances = false;
             foreach (var value in response.Capabilities)
             {
                 if (value == "endgame.v1") capable = true;
@@ -176,8 +178,10 @@ public sealed partial class EndgameClientState
                 if (value == "endgame.skill-behavior.v1") skillBehavior = true;
                 if (value == "endgame.skill-variants.v1") skillVariants = true;
                 if (value == "endgame.rift-portals.v1") riftPortals = true;
+                if (value == "endgame.rift-entrance.v1") riftEntrances = true;
             }
             bool accepted = response.OK && capable;
+            RiftEntrances = accepted && riftEntrances ? response.RiftEntrances : Array.Empty<EndgameRiftEntranceView>();
             // A failed refresh leaves the server's previously negotiated
             // renderer intact. Keep its matching client ownership as well.
             if (accepted || !Negotiated)

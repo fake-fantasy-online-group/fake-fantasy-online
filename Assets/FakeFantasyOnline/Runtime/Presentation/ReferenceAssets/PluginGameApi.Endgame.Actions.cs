@@ -29,7 +29,7 @@ public sealed partial class PluginGameApi
         definitions.Add(EndgameDefinition("endgame.cube.quote", "Ask the server for costs, outcome and expiry; this never executes the recipe. itemUids preserves selected rune order.", writable && !state.QuotePending, mutation, "expectedRevision:string", "recipeId:integer", "targetUid?:string", "runeUid?:string", "itemUids?:array"));
         definitions.Add(EndgameDefinition("endgame.cube.execute", "Execute exactly the currently observed unexpired server quote. Costs/risks are in endgame.quote; no implicit quote or reroll.", writable && state.Quote != null && !state.QuotePending, mutation, "expectedRevision:string", "quoteId:string"));
         definitions.Add(EndgameDefinition("endgame.rift.refresh", "Request authoritative rift state, invitation, combat markers and reward eligibility.", ready, unavailable));
-        definitions.Add(EndgameDefinition("endgame.rift.start", "Spend a key for a fresh run, or enter the observed invitation/run with its exact runId. Complete native NPC prerequisites first.", writable && state.Rift != null, mutation, "expectedRevision:string", "tier:integer", "runId?:string"));
+        definitions.Add(EndgameDefinition("endgame.rift.start", "Spend a key for a fresh run, or enter the observed invitation/run with its exact runId. For a fresh run use npc.interact on a configured entrance first; admitted-run reentry retains its existing runId path.", writable && state.Rift != null && (ExistingEndgameRift(state.Rift) || DialogUI.I != null && DialogUI.I.RiftEntranceEntityForIndependentRuntime(state) != 0), "Interact with a live NPC listed in endgame.riftEntrances, then observe the current snapshot.", "expectedRevision:string", "tier:integer", "runId?:string"));
         definitions.Add(EndgameDefinition("endgame.rift.advance", "Use the observed floor exit to skip remaining packs. Preserves run, difficulty tier, timer and earned progress; runId and floorIndex guard stale navigation. The server checks run opener/exit proximity.", writable && state.Rift != null && state.Rift.CanAdvance && state.Rift.RunID.Length > 0 && state.Rift.FloorIndex > 0 && !state.Rift.Transitioning && state.Rift.Phase == "active", "Observe an active, non-transitioning floor with canAdvance=true and no uncertain native mutation.", "expectedRevision:string", "runId:string", "floorIndex:integer"));
         definitions.Add(EndgameDefinition("endgame.rift.claim", "Claim only the observed server-claimable run reward or interruption compensation.", writable && state.Rift != null && state.Rift.Claimable, mutation, "expectedRevision:string", "runId:string"));
         definitions.Add(EndgameDefinition("endgame.rift.leave", "Leave the observed run. confirmLeave=true acknowledges that leaving does not automatically refund its key.", writable && state.Rift != null && state.Rift.RunID.Length > 0, mutation, "expectedRevision:string", "runId:string", "confirmLeave:boolean"));
@@ -37,6 +37,9 @@ public sealed partial class PluginGameApi
         definitions.Add(EndgameDefinition("endgame.equipment.equip", "Equip the UID-guarded native bag item. allowBind=true is required for an unbound item; sent never proves equipment changed.", writable, mutation, "expectedRevision:string", "targetUid:string", "allowBind?:boolean"));
         definitions.Add(EndgameDefinition("endgame.equipment.unequip", "Unequip the UID-guarded native equipped item, including slots 14–25. Observe a later inventory snapshot for outcome.", writable, mutation, "expectedRevision:string", "targetUid:string"));
     }
+
+    private static bool ExistingEndgameRift(EndgameRiftView rift) => rift != null &&
+        (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss" || rift.Phase == "completed");
 
     private static GameActionDefinition EndgameDefinition(string name, string description, bool available, string reason, params string[] fields)
     {
@@ -125,7 +128,7 @@ public sealed partial class PluginGameApi
         IEndgameClient owner = EndgameClient; EndgameClientState state = owner.Endgame;
         var args = entry.Request.Arguments; string op = entry.Request.Name.Substring("endgame.".Length);
         string revision = "", uid = "", rune = "", quote = "", run = "", catalog = "", cursor = "";
-        int socket = 0, recipe = 0, tier = 0, floor = 0, skill = 0; List<string> itemUIDs = null;
+        int socket = 0, recipe = 0, tier = 0, floor = 0, skill = 0, npcEntityID = 0; List<string> itemUIDs = null;
         if (args.ContainsKey("expectedRevision"))
         {
             revision = EndgameIdentity(ActionString(args, "expectedRevision"), "expectedRevision", true);
@@ -201,11 +204,16 @@ public sealed partial class PluginGameApi
             case "rift.start":
                 tier = ActionInt(args, "tier", 1, 150); run = EndgameString(args, "runId", false);
                 var rift = state.Rift;
-                bool existing = rift != null && (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss" || rift.Phase == "completed");
+                bool existing = ExistingEndgameRift(rift);
                 if (existing && (run != rift.RunID || tier != rift.Tier) || !existing && run.Length > 0)
                     throw new ActionFailure("endgame.run_stale", "Use the observed invitation/run ID and tier for reentry; a fresh entry leaves runId empty.");
                 if (rift == null || rift.Transitioning || rift.Phase == "reward_pending" || rift.Phase == "interrupted" || !existing && rift.KeyCount < 1)
                     throw new ActionFailure("endgame.rift_unavailable", "Refresh the rift, resolve pending rewards/compensation, and obtain a key before fresh entry.");
+                if (!existing)
+                {
+                    npcEntityID = DialogUI.I?.RiftEntranceEntityForIndependentRuntime(state) ?? 0;
+                    if (npcEntityID == 0) throw new ActionFailure("endgame.entrance_required", "Interact with the configured native entrance NPC again before creating a fresh rift.");
+                }
                 if (!existing && (rift.MaxTier > 0 && tier > rift.MaxTier || rift.UnlockedTier > 0 && tier > rift.UnlockedTier))
                     throw new ActionFailure("endgame.tier_locked", "Select a difficulty tier within the server's observed maximum and unlocked limit.");
                 break;
@@ -224,7 +232,7 @@ public sealed partial class PluginGameApi
                 break;
             default: throw new ArgumentException("Unknown endgame operation.");
         }
-        var command = new EndgameRequest(op, revision, uid, rune, socket, recipe, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor, skill);
+        var command = new EndgameRequest(op, revision, uid, rune, socket, recipe, quote, run, tier, itemUIDs, catalog, cursor, EndgameWireID(entry.Request.RequestId), floor, skill, npcEntityID);
         TrackEndgame(entry, owner, command);
         bool submitted = owner.SendEndgame(command);
         if (!submitted && !ReferenceEquals(state.PendingRequest, command))

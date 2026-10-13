@@ -21,7 +21,7 @@ def member(source, signature):
 apply = member(frame, '    internal bool ApplyAuthoritativeCombatFeedbackRevision(')
 # Baseline executes the old body with the new call-site signature, without altering consumption.
 apply = apply.replace('long numbersVersion)', 'long numbersVersion, ClientSessionCoordinator session = null)')
-ready = member(frame, '    private bool TrySpawnCombatNumberForCurrentWorld(') if '    private bool TrySpawnCombatNumberForCurrentWorld(' in frame else ''
+ready = (member(frame, '    private bool OwnsUnshownExperienceForCurrentWorld(') if '    private bool OwnsUnshownExperienceForCurrentWorld(' in frame else '') + member(frame, '    private bool TrySpawnCombatNumberForCurrentWorld(') if '    private bool TrySpawnCombatNumberForCurrentWorld(' in frame else ''
 feedback = member((base / 'Presentation/ReferenceAssets/ReferenceWorldCombatFeedback.cs').read_text(), '    public bool TrySpawnWorldNumber(')
 number = member((base / 'Application/GameSessionContracts.cs').read_text(), 'public sealed class WorldCombatNumberState')
 mono = os.environ.get('FFO_MONO') or shutil.which('mono')
@@ -43,7 +43,7 @@ internal partial class ReferenceWorldCombatFeedback { %s }
         base / 'Application/WorldCombatNumberPresentation.cs',
         base / 'Application/ClientSessionCoordinator.CombatNumberPresentation.cs',
         base / 'Protocol/PrivateServerGateway.CombatNumberPresentation.cs']
-    for name in ['CombatNumber.Spawn.cs', 'CombatNumber.SpawnOn.cs', 'CombatNumber.PlayerTransform.cs']:
+    for name in ['CombatNumber.Spawn.cs', 'CombatNumber.SpawnOn.cs', 'CombatNumber.PlayerTransform.cs', 'CombatNumber.SceneLifetime.cs']:
         files.append(base / 'Presentation/ReferenceAssets' / name)
     exe = out / 'Contract.exe'
     compiler = [mono, csc] if csc.endswith('.exe') else [csc]
@@ -61,4 +61,8 @@ if not args.source:
         assert 'ResetCombatNumberPresentation();' in member(session, '    public void ' + name), name
     assert 'combatNumbersVersion,\n                session))' in frame, 'live poll must use connection consumer'
     assert 'standaloneCombatNumbers.Clear();' in frame
+    assert 'OwnsUnshownExperienceForCurrentWorld());' in apply
+    bootstrap = (base / 'Presentation/ReferenceAssets/GameBootstrap.cs').read_text()
+    assert 'RetireCombatNumberSceneForIndependentRuntime();' in bootstrap
+    assert 'CombatNumber.ReleaseExperienceForSceneTransition();' in bootstrap
     print('PASS experience lifecycle reset and live-poll wiring')

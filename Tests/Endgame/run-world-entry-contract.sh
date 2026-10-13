@@ -9,6 +9,8 @@ OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
+ "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.RiftEntrance.cs" \
+ "$ROOT/Tests/Endgame/RiftEntranceDialogStubs.cs" \
  "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameWorldEntryContract.cs"
 "$MONO/bin/mono" "$OUT/EndgameWorldEntryContract.exe"
 python3 "$ROOT/Tests/Endgame/world_entry_source_contract.py"

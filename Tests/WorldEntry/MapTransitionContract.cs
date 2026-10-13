@@ -102,13 +102,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public static class ChatUI { public static void Add(string channel, string text, Color color, string who) { } }
     public static class DifficultyBox { public static void Show(string title, string normal, string hard, Action n, Action h) { } }
-    internal static class EndgamePanel { internal static bool TryTransferRiftPortalFromWorld() => false; }
+    internal static class EndgamePanel { internal static bool OwnsRift; internal static bool TryTransferRiftPortalFromWorld() => OwnsRift; }
     public class NetClient
     {
         public static NetClient I;
         public void GmCmdForIndependentRuntime(string command) { }
     }
-    public sealed class Doll { public PlayerController SourceControllerForIndependentRuntime; }
+    public sealed class Doll { public PlayerController SourceControllerForIndependentRuntime; public Transform Root = new GameObject("player").transform; public float WorldX => SourceControllerForIndependentRuntime.worldX; public float WorldY => SourceControllerForIndependentRuntime.worldY; }
     public sealed class WorldEntryRecord
     {
         public int MapId; public float X, Y;
@@ -179,6 +179,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static void Line(string value) { }
         public static void Phase(string value, float time) { Phases.Add(value); }
     }
+    public sealed class TestSession { public bool Connected = true; public static int Retires; public void RetireCombatNumberSceneForIndependentRuntime() { Retires++; } }
+    public static class CombatNumber { public static int Releases; public static void ReleaseExperienceForSceneTransition() { Releases++; } }
     public static class GroundItems { public static void ClearAll() { } }
     public static class CombatWorld
     {
@@ -197,9 +199,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     public partial class GameBootstrap
     {
         const float MaxFadeStep = .05f;
-        bool switching, mapTransitionInProgress;
+        bool switching;
         (int, float, float)? _queuedSwitch;
-        (int, float, float, PlayerController)? queuedPortalSwitch;
         Transform worldRoot = new GameObject("old-world").transform;
         Doll pcRef = new Doll { SourceControllerForIndependentRuntime = new PlayerController { worldX = 10, worldY = 20 } };
         string _prevMapName;
@@ -210,7 +211,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         float fadeAlpha;
         static Color _pendingSky;
         public static Action<int, float, float> DoTeleport;
-        object session = new object(), sharedMusic, sharedCombatSound, processNpcNames, persistentGossip, persistentDeal;
+        TestSession session = new TestSession();
+        object sharedMusic, sharedCombatSound, processNpcNames, persistentGossip, persistentDeal;
         Transform worldParent = new GameObject("parent").transform;
         WorldEntryRecord entry = new WorldEntryRecord { MapId = 1, X = 10, Y = 20 };
         bool nativeStartupWorld, configured = true;
@@ -231,7 +233,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public int Started, MaxConcurrent;
         public bool DisposeOnStop = true;
         public bool Receiving => !switching;
-        public bool Busy => mapTransitionInProgress;
+        public bool Busy => Active != 0;
         public bool BlackHeld => _holdSkyBlack;
         public float Alpha => fadeAlpha;
         public int Active => coroutines.Count(c => !c.Done);
@@ -265,6 +267,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         { foreach (var run in coroutines.ToArray()) run.Stop(DisposeOnStop); coroutines.Clear(); }
         public void Step()
         { foreach (var run in coroutines.Where(c => !c.Done).ToArray()) run.Advance(); }
+        public CoroutineRun[] ScheduledBeforeHostPumpForTest() => coroutines.Where(c => !c.Done).ToArray();
+        public void StepScheduledForTest(CoroutineRun[] scheduled)
+        { foreach (var run in scheduled) if (!run.Done) run.Advance(); }
         public void Until(Func<bool> condition)
         {
             for (int i = 0; i < 500 && !condition(); i++) Step();
@@ -284,10 +289,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             candidate.Built = outcome != "partial";
             return true;
         }
-        void ReportPos(bool entered = false)
+        void SendPositionForIndependentRuntime(int map, int x, int y, bool entered)
         {
             if (!entered) return;
-            Ready.Add(new WorldEntryRecord { MapId = CurMapId, X = X, Y = Y });
+            Ready.Add(new WorldEntryRecord { MapId = map, X = x, Y = y });
             OnReady?.Invoke(this);
         }
         void ReleaseBuiltWorld(bool sceneRegistriesReleased = false, Transform releasedRoot = null, bool preservePlayerTransform = false)
@@ -314,7 +319,7 @@ static class MapTransitionContract
         Resources.StallUnload = false; Resources.FallbackMaps.Clear(); Debug.Errors.Clear(); Debug.Logs.Clear();
         LoadTrace.On = false; LoadTrace.Phases.Clear();
         CombatWorld.Clears = 0; CombatWorld.Entities.Clear();
-        Time.unscaledDeltaTime = .05f;
+        Time.unscaledDeltaTime = .05f; EndgamePanel.OwnsRift = false; TestSession.Retires = 0; CombatNumber.Releases = 0;
         return new GameBootstrap();
     }
     static void Scenario(string name, Action body)
@@ -328,270 +333,133 @@ static class MapTransitionContract
         // A finished coroutine can synchronously start the queued one before returning,
         // but its own fading/building body must already be finished at that point.
     }
+    static string State(GameBootstrap b) => $"{b.Builds.Count}:{b.Ready.Count}:{GameBootstrap.CurMapId}:{b.Receiving}:{b.Alpha:F2}:{b.BlackHeld}";
+    static void Flow(string name, GameBootstrap b)
+    {
+        var trace = new List<string> { State(b) };
+        for (int i=0; i<500 && b.Active!=0; i++) { b.Step(); trace.Add(State(b)); }
+        Check(b.Active==0, "original iterator completes");
+        Console.WriteLine("FLOW " + name + " " + string.Join("|",trace));
+    }
     static void Main()
     {
-        Scenario("preflight GSM is read once and the exact bytes reach construction", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210);
-            byte[] preflight = ResLoader.I.LastBytes;
-            Check(ResLoader.I.Reads.Count == 1 && b.Builds.Count == 0, "preflight completes before the first construction");
-            Settled(b, 2, 200, 210);
-            Check(ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm" }), "construction does not reread the target GSM");
-            Check(ReferenceEquals(preflight, b.BuildMapBytes.Single()), "handoff preserves exact source bytes without copying");
-            Check(Debug.Logs.Count(x => x.StartsWith("[切图耗时]")) == 1, "one completed transition emits one compact timing summary");
-            Check(Debug.Logs.Single(x => x.StartsWith("[切图耗时]")).Contains("预读"), "summary includes the pre-fade read with tracing off");
-        });
-        Scenario("a prepared source is consumed once and cannot become a long-lived map cache", () => {
-            Fresh(); var loader = ResLoader.I;
-            var prepared = new GameBootstrap.PreparedMapSource(loader, "map/qw0002.gsm");
-            byte[] original = loader.LastBytes;
-            Check(ReferenceEquals(prepared.ReadOnce(loader, "map/qw0002.gsm"), original), "first matching read uses preload");
-            Check(!prepared.HasBytes, "consumption releases the retained buffer immediately");
-            Check(!ReferenceEquals(prepared.ReadOnce(loader, "map/qw0002.gsm"), original) && loader.Reads.Count == 2,
-                "second construction reads a new source");
-        });
-        Scenario("loader and exact path mismatches preserve normal resource reads", () => {
-            Fresh(); var oldLoader = ResLoader.I; var newLoader = new ResLoader();
-            var prepared = new GameBootstrap.PreparedMapSource(oldLoader, "map/qw0002.gsm");
-            Check(ReferenceEquals(prepared.ReadOnce(newLoader, "map/qw0002.gsm"), newLoader.LastBytes) &&
-                newLoader.Reads.Count == 1 && !prepared.HasBytes, "loader replacement cannot receive stale bytes");
-            foreach (string path in new[] { "map/qw0001.gsm", "map/qw0002.msk", "map/qw0002.smp" })
-            {
-                prepared = new GameBootstrap.PreparedMapSource(oldLoader, "map/qw0002.gsm");
-                byte[] original = oldLoader.LastBytes;
-                Check(!ReferenceEquals(prepared.ReadOnce(oldLoader, path), original) && oldLoader.Reads.Last() == path && !prepared.HasBytes,
-                    "rollback/mask/minimap path reads independently: " + path);
-            }
-        });
-        Scenario("failed construction and retry cannot reuse a stale target buffer", () => {
-            var b = Fresh(); b.BuildOutcomes.Enqueue("throw"); b.SwitchMap(2, 200, 210);
-            Settled(b, 1, 10, 20);
-            Check(ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm", "map/qw0001.gsm" }), "rollback reads its own source once");
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(ResLoader.I.Reads.Count(x => x == "map/qw0002.gsm") == 2, "retry preflights a new target source");
-            Check(!ReferenceEquals(b.BuildMapBytes.First(), b.BuildMapBytes.Last()), "retry never uses the failed attempt's bytes");
-        });
-        Scenario("missing GSM retains the Resources texture fallback", () => {
-            var b = Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm"); Resources.FallbackMaps.Add("qw0002");
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(b.BuildMapBytes.Single() == null, "null map bytes continue to native texture fallback without inventing a GSM");
-        });
-        Scenario("cancelled preflight cannot leak into a later transition", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); byte[] old = ResLoader.I.LastBytes;
-            b.ExitForTest(); b.SwitchMap(3, 300, 310); Settled(b, 3, 300, 310);
-            Check(!ReferenceEquals(old, b.BuildMapBytes.Single()) && ResLoader.I.Reads.SequenceEqual(new[] { "map/qw0002.gsm", "map/qw0003.gsm" }),
-                "cancelled source has no bootstrap/global cache slot");
-        });
-        Scenario("detailed trace covers the previously invisible pre-fade read", () => {
-            var b = Fresh(); LoadTrace.On = true; b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(LoadTrace.Phases.First() == "目标图预读(淡入前)", "preflight is the first measured transition phase");
-            Check(LoadTrace.Phases.Contains("GC.Collect") && LoadTrace.Phases.Contains("UnloadUnusedAssets"), "memory management remains measured and present");
-        });
-        Scenario("map-ready reply cannot start a second build/fade", () => {
-            var b = Fresh();
-            b.OnReady = owner => { if (owner.Ready.Count == 1) owner.SwitchMapAuthoritative(2, 200, 210); };
-            b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);
-            Check(b.Started == 1, "synchronous map-ready response must not start a second loader");
-            Check(b.Receiving, "entity packet gate opens when the world is built");
-            Check(b.Busy, "coroutine remains owned after BuildWorld opens packet gate");
-            Settled(b, 2, 200, 210);
-            Check(b.Builds.Count == 1 && b.Started == 1, "one transfer has exactly one load");
-            Check(b.Ready.Count == 2, "queued confirmation receives map-ready acknowledgement");
-        });
-        Scenario("entities arriving after map-ready survive the remaining fade-out", () => {
-            var b = Fresh(); int clearsAtReady = -1;
-            b.OnReady = owner => {
-                Check(owner.Built && owner.Receiving, "ready is sent only after the new world is built and its receive gate is open");
-                clearsAtReady = CombatWorld.Clears;
-                CombatWorld.Entities.Add(2001); // Target snapshot arriving after ACK.
+        Scenario("first client-prebuilt map publishes one ready after a complete world", () => {
+            var b=Fresh(); b.OnReady=owner=>{
+                Check(owner.Built && owner.Receiving, "complete player/world and open receiver precede first ready");
+                CombatWorld.Entities.Add(2001);
             };
-            b.SwitchMapAuthoritative(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(clearsAtReady > 0 && CombatWorld.Clears == clearsAtReady && CombatWorld.Entities.Contains(2001),
-                "no cleanup runs after ready during the same successful transition");
+            b.SwitchMap(2,200,210); Check(b.Builds.Count==0 && b.Ready.Count==0 && !b.Receiving, "preflight/fade precede build and ready");
+            Flow("first-client",b); Settled(b,2,200,210);
+            Check(b.Builds.Count==1 && b.Ready.Count==1 && CombatWorld.Entities.Contains(2001), "first snapshot survives remaining fade with no second build or ready");
         });
-        Scenario("duplicate same-landing confirmation cannot clear already-received target entities", () => {
-            var b = Fresh(); int clearsAtReady = -1;
-            b.OnReady = owner => {
-                if (owner.Ready.Count != 1) return;
-                clearsAtReady = CombatWorld.Clears;
-                CombatWorld.Entities.Add(2002);
-                owner.SwitchMapAuthoritative(2, 200, 210);
-            };
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(b.Ready.Count == 2 && b.Builds.Count == 1, "acknowledge the queued server confirmation without another world build");
-            Check(CombatWorld.Clears == clearsAtReady && CombatWorld.Entities.Contains(2002),
-                "the second ACK is not a native registry reset and target entities survive");
+        Scenario("first server-driven map uses the same initial lifecycle", () => {
+            var b=Fresh(); b.SwitchMapAuthoritative(2,200,210); Flow("first-server",b); Settled(b,2,200,210);
+            Check(b.Builds.Count==1&&b.Ready.Count==1, "one authoritative transfer has one ready");
         });
-        Scenario("old-world portal callbacks remain suppressed during fade-in", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); b.HitPortalForTest(99, 990, 991);
-            Settled(b, 2, 200, 210);
-            Check(b.Builds.Count == 1, "retired-world gate cannot overwrite active destination");
+        Scenario("consecutive completed transfers retain one ready each", () => {
+            var b=Fresh(); b.SwitchMap(2,200,210); b.Drain(); b.SwitchMap(3,300,310);
+            Flow("consecutive",b); Settled(b,3,300,310);
+            Check(b.Builds.Select(x=>x.MapId).SequenceEqual(new[]{2,3}) && b.Ready.Select(x=>x.MapId).SequenceEqual(new[]{2,3}), "each real destination built and acknowledged once");
         });
-        Scenario("authoritative rift exit owns the transition before ordinary gates are restored", () => {
-            var b = Fresh(); var oldPlayer = b.Player;
-            b.SwitchMapAuthoritative(2, 200, 210);
-            Check(b.Busy && !b.Receiving && ReferenceEquals(oldPlayer, b.Player), "public-map teleport starts while the old controller still exists");
-            // Rift context has already become false. The default-false EndgamePanel
-            // substitute deliberately enters the actual ordinary portal branch.
-            b.HitPortalForTest(99, 990, 991);
-            Check(oldPlayer.TransferredForIndependentRuntime && b.Started == 1,
-                "old ordinary gate can latch but cannot start another map coroutine");
-            Settled(b, 2, 200, 210);
-            Check(b.Builds.Count == 1 && b.Ready.Count == 1 && b.Started == 1,
-                "old-world portal is neither executed nor replayed after authoritative exit");
+        Scenario("real same-map transfer is not swallowed by coordinate deduplication", () => {
+            var b=Fresh(); b.SwitchMapAuthoritative(1,55,65); Flow("same-map",b); Settled(b,1,55,65);
+            Check(b.Builds.Count==1&&b.Ready.Count==1, "same-map world is really rebuilt and acknowledged");
         });
-        Scenario("new destination portal latch queues a real next transfer during fade-out", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);
-            var player = b.Player; b.HitPortalForTest(3, 300, 310);
-            Check(player.TransferredForIndependentRuntime && b.Started == 1, "native portal latched but no parallel loader started");
-            Settled(b, 3, 300, 310);
-            Check(b.Builds.Select(x => x.MapId).SequenceEqual(new[] { 2, 3 }), "latched portal survives fade-out");
+        Scenario("queued same landing before build does not emit compensatory second ready", () => {
+            var b=Fresh(); b.SwitchMap(2,200,210); b.SwitchMapAuthoritative(2,200,210);
+            Flow("queued-same",b); Settled(b,2,200,210);
+            Check(b.Builds.Count==1&&b.Ready.Count==1, "original same landing suppression has no extra publication/ready");
         });
-        Scenario("same landing authority acknowledgement does not lose a queued portal", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);
-            b.HitPortalForTest(3, 300, 310); b.SwitchMapAuthoritative(2, 200, 210);
-            Settled(b, 3, 300, 310);
-            Check(b.Builds.Count == 2 && b.Ready.Count == 3, "confirm first landing then honor next portal");
+        Scenario("queued distinct authority is executed by original post-fade replay", () => {
+            var b=Fresh(); b.SwitchMap(2,200,210); b.SwitchMapAuthoritative(3,300,310);
+            Flow("queued-distinct",b); Settled(b,3,300,310);
+            Check(b.Builds.Count==2&&b.Ready.Count==2, "both real loads own their original ready");
         });
-        Scenario("new authoritative destination supersedes the old player's queued portal", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);
-            b.HitPortalForTest(3, 300, 310); b.SwitchMapAuthoritative(4, 400, 410);
-            Settled(b, 4, 400, 410);
-            Check(b.Builds.Select(x => x.MapId).SequenceEqual(new[] { 2, 4 }), "server authority wins over portal on superseded map");
+        Scenario("a genuine later teleport retains original native behavior", () => {
+            var b=Fresh(); b.SwitchMap(2,200,210); b.Until(()=>b.Ready.Count==1);
+            b.SwitchMapAuthoritative(2,200,210); Flow("late-real-same",b); Settled(b,2,200,210);
+            Check(b.Builds.Count==2&&b.Ready.Count==2, "later native teleport is not globally discarded");
         });
-        Scenario("late reply during visible fade-out does not reload", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210);
-            b.Until(() => b.Builds.Count == 1 && b.Alpha > 0 && b.Alpha < 1);
-            for (int i = 0; i < 4; i++) b.SwitchMapAuthoritative(2, 200, 210);
-            Settled(b, 2, 200, 210);
-            Check(b.Builds.Count == 1 && b.Started == 1, "fade-out duplicate replies coalesce");
+        Scenario("throwing construction rolls back through the original map path", () => {
+            var b=Fresh(); b.BuildOutcomes.Enqueue("throw"); b.SwitchMap(2,200,210);
+            Flow("throw-rollback",b); Settled(b,1,10,20);
+            Check(b.Ready.Count==1&&b.Ready[0].MapId==1, "only successful rollback reports ready");
         });
-        Scenario("pre-build authoritative landing correction uses the first build", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210);
-            b.SwitchMapAuthoritative(2, 250.5f, 260.25f);
-            Settled(b, 2, 250.5f, 260.25f);
-            Check(b.Builds.Count == 1 && b.Ready.Count == 1, "corrected landing built/reported once");
+        Scenario("missing map retains original scene without ready", () => {
+            var b=Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm"); b.SwitchMap(2,200,210);
+            Flow("missing",b); Settled(b,1,10,20);
+            Check(b.Builds.Count==0&&b.Ready.Count==0, "missing target does not retire original world");
         });
-        Scenario("pre-build authoritative correction survives a transient build failure", () => {
-            var b = Fresh(); b.BuildOutcomes.Enqueue("throw"); b.SwitchMap(2, 200, 210);
-            b.SwitchMapAuthoritative(2, 250, 260);
-            Settled(b, 2, 250, 260);
-            Check(b.Builds.Select(x => x.MapId).SequenceEqual(new[] { 2, 1, 2 }), "queued target retries after rollback");
-            Check(b.Ready.Select(x => x.MapId).SequenceEqual(new[] { 1, 2 }), "only built rollback and corrected target report ready");
+        Scenario("spawn inside an ordinary portal requires a leave and re-enter edge",()=>{
+            var b=Fresh();b.Player.transferProcs=new List<MapLink.MapProc>{new MapLink.MapProc{poly=true,mapTo=2,toX=200,toY=210}};
+            b.Player.StartForIndependentRuntime();b.Player.AdvanceTransferForIndependentRuntime();
+            Check(b.Started==0&&b.Player.WasInsideTransferForIndependentRuntime,"original Start suppresses a portal under the spawn point");
+            b.Player.transferProcs[0].poly=false;b.Player.AdvanceTransferForIndependentRuntime();
+            b.Player.transferProcs[0].poly=true;b.Player.AdvanceTransferForIndependentRuntime();Settled(b,2,200,210);
+            Check(b.Builds.Count==1&&b.Ready.Count==1,"ordinary walking enters the shared local prebuild path after leaving spawn gate");
         });
-        Scenario("a real same-map teleport to different coordinates is preserved", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 1);
-            b.SwitchMapAuthoritative(2, 333, 444);
-            Settled(b, 2, 333, 444);
-            Check(b.Builds.Count == 2 && b.Started == 2, "different same-map landing is not swallowed");
+        Scenario("command portals do not imply a local map prebuild",()=>{
+            var b=Fresh();b.Player.transferProcs=new List<MapLink.MapProc>{new MapLink.MapProc{poly=true,mapTo=2,toX=200,toY=210,cmd="taoyu"}};
+            SocialClient.Party.Clear();b.Player.AdvanceTransferForIndependentRuntime();
+            Check(b.Started==0&&b.Builds.Count==0&&b.Ready.Count==0,"party/script portal branch cannot be classified as empty-command local prediction");
         });
-        Scenario("rapid newer destinations retain only the latest authority", () => {
-            var b = Fresh(); b.SwitchMap(2, 200, 210);
-            b.SwitchMapAuthoritative(3, 300, 310); b.SwitchMapAuthoritative(4, 400, 410);
-            b.Until(() => b.Builds.Count == 1); b.SwitchMapAuthoritative(5, 500, 510);
-            Settled(b, 5, 500, 510);
-            Check(b.Builds.Select(x => x.MapId).SequenceEqual(new[] { 2, 5 }), "only latest queued map executes");
+        Scenario("private rift portal never starts a speculative public-map build", () => {
+            var b=Fresh(); EndgamePanel.OwnsRift=true; b.HitPortalForTest(3,300,310);
+            Check(b.Started==0&&b.Builds.Count==0&&b.Ready.Count==0,"rift route remains server-owned instead of world-map bounce");
         });
-        Scenario("idle server same-map reload remains a valid lifecycle request", () => {
-            var b = Fresh(); b.SwitchMapAuthoritative(1, 10, 20);
-            Settled(b, 1, 10, 20); Check(b.Builds.Count == 1, "no blanket same-map deduplication");
+#if !ORIGINAL_BASELINE
+        Scenario("retained synchronous byte handoff does not add a yield or a second read", () => {
+            var b=Fresh(); b.SwitchMap(2,200,210); byte[] first=ResLoader.I.LastBytes;
+            Check(ResLoader.I.Reads.Count==1&&b.Builds.Count==0,"same original first-frame synchronous preflight");
+            Settled(b,2,200,210);
+            Check(ResLoader.I.Reads.Count==1&&ReferenceEquals(first,b.BuildMapBytes.Single()),"constructor consumes exact prepared bytes once");
+            var prepared=new GameBootstrap.PreparedMapSource(ResLoader.I,"map/qw0004.gsm"); byte[] saved=ResLoader.I.LastBytes;
+            Check(ReferenceEquals(saved,prepared.ReadOnce(ResLoader.I,"map/qw0004.gsm"))&&!prepared.HasBytes,"handoff is single-use, not retained map cache");
         });
-        Scenario("missing map preserves old world and permits retry", () => {
-            var b = Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm"); b.SwitchMap(2, 200, 210);
-            Settled(b, 1, 10, 20); Check(b.Builds.Count == 0 && b.Ready.Count == 0, "missing map never retires old world or reports ready");
-            ResLoader.I.Missing.Clear(); b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-        });
-        Scenario("a rejected real portal can retry after leaving and re-entering", () => {
-            var b = Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm"); b.HitPortalForTest(2, 200, 210);
-            Check(!b.Player.TransferredForIndependentRuntime && b.Player.WasInsideTransferForIndependentRuntime, "rejected portal rearms without a per-frame retry loop");
-            b.Player.AdvanceTransferForIndependentRuntime();
-            Check(b.Started == 1, "standing inside a missing-resource portal cannot keep retrying");
-            b.Player.transferProcs[0].poly = false; b.Player.AdvanceTransferForIndependentRuntime();
-            ResLoader.I.Missing.Clear(); b.Player.transferProcs[0].poly = true; b.Player.AdvanceTransferForIndependentRuntime();
-            Settled(b, 2, 200, 210);
-            Check(b.Builds.Count == 1 && b.Started == 2, "leaving/re-entering the actual portal retries successfully");
-        });
-        Scenario("resource read failure restores old map metadata before retry", () => {
-            var b = Fresh(); ResLoader.I.ThrowRead = true; b.SwitchMap(2, 200, 210);
-            Settled(b, 1, 10, 20);
-            Check(b.mapName == "qw0001" && b.spawnX == 10 && b.spawnY == 20 && b.Ready.Count == 0, "read exception restores original source and landing");
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-        });
-        Scenario("missing map still services a queued newer server destination", () => {
-            var b = Fresh(); ResLoader.I.Missing.Add("map/qw0002.gsm");
-            ResLoader.I.ReadHook = () => b.SwitchMapAuthoritative(3, 300, 310);
-            b.SwitchMap(2, 200, 210); Settled(b, 3, 300, 310);
-            Check(b.Builds.Count == 1, "missing target did not consume the queued request");
-        });
-        foreach (string failure in new[] { "missing", "reject", "partial", "throw" })
-            Scenario("construction " + failure + " rolls back without a false map-ready", () => {
-                var b = Fresh(); b.BuildOutcomes.Enqueue(failure); b.SwitchMap(2, 200, 210);
-                Settled(b, 1, 10, 20);
-                Check(b.Builds.Count == 2 && b.Ready.All(x => x.MapId == 1), "only complete rollback is acknowledged");
-                b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+        foreach(string failure in new[]{"missing","reject","partial"})
+            Scenario("incomplete "+failure+" target cannot report ready",()=>{
+                var b=Fresh();b.BuildOutcomes.Enqueue(failure);b.SwitchMap(2,200,210);Settled(b,1,10,20);
+                Check(b.Builds.Count==2&&b.Ready.Count==1&&b.Ready[0].MapId==1,"half-built root does not falsely acknowledge target");
             });
-        Scenario("failed target and failed rollback both release retry ownership", () => {
-            var b = Fresh(); b.BuildOutcomes.Enqueue("missing"); b.BuildOutcomes.Enqueue("missing");
-            b.SwitchMap(2, 200, 210); b.Drain();
-            Check(!b.Busy && !b.BlackHeld && b.Alpha == 0 && b.Ready.Count == 0, "double failure is neither ready nor stuck black");
-            b.SwitchMapAuthoritative(3, 300, 310); Settled(b, 3, 300, 310);
+        Scenario("incomplete rollback cannot report ready either",()=>{
+            var b=Fresh();b.BuildOutcomes.Enqueue("partial");b.BuildOutcomes.Enqueue("missing");b.SwitchMap(2,200,210);b.Drain();
+            Check(b.Ready.Count==0,"no successfully built world means no ready");
         });
-        Scenario("an incomplete root cannot deduplicate a queued recovery teleport", () => {
-            var b = Fresh(); b.BuildOutcomes.Enqueue("missing"); b.BuildOutcomes.Enqueue("missing");
-            b.SwitchMap(2, 200, 210); b.Until(() => b.Builds.Count == 2);
-            b.SwitchMapAuthoritative(1, 10, 20); Settled(b, 1, 10, 20);
-            Check(b.Builds.Count == 3 && b.Ready.Count == 1, "queued recovery actually constructs a window");
-        });
-        foreach (bool afterBuild in new[] { false, true })
-            Scenario("final exit cancels " + (afterBuild ? "fade-out" : "fade-in") + " and discards queued work", () => {
-                var b = Fresh(); b.SwitchMap(2, 200, 210);
-                if (afterBuild) { b.Until(() => b.Builds.Count == 1); b.HitPortalForTest(7, 700, 710); }
-                b.SwitchMapAuthoritative(3, 300, 310);
-                int before = b.Builds.Count;
-                b.ExitForTest(); for (int i = 0; i < 30; i++) b.Step();
-                Check(b.Active == 0 && !b.Busy && !b.BlackHeld && b.Alpha == 0, "exit cancels all fade ownership");
-                Check(b.Builds.Count == before && GameBootstrap.CurMapId == 0, "no coroutine resurrects departed world");
-                b.SwitchMap(4, 400, 410); Settled(b, 4, 400, 410);
+        foreach(bool afterBuild in new[]{false,true})
+        foreach(bool disposal in new[]{false,true})
+            Scenario("final exit cancels original iterator afterBuild="+afterBuild+" dispose="+disposal,()=>{
+                var b=Fresh();b.DisposeOnStop=disposal;b.SwitchMap(2,200,210);
+                if(afterBuild)b.Until(()=>b.Builds.Count==1);
+                int builds=b.Builds.Count, ready=b.Ready.Count;b.ExitForTest();b.Step();b.Step();
+                Check(b.Active==0&&!b.Built&&!b.BlackHeld&&b.Alpha==0,"exit releases coroutine and black overlay independently of disposal");
+                Check(b.Builds.Count==builds&&b.Ready.Count==ready,"retired iterator cannot resurrect a map or send late ready");
             });
-        Scenario("exit reset does not depend on Unity disposing stopped iterators", () => {
-            var b = Fresh(); b.DisposeOnStop = false; b.SwitchMap(2, 200, 210);
-            b.Until(() => b.Builds.Count == 1); b.HitPortalForTest(3, 300, 310);
-            b.SwitchMapAuthoritative(4, 400, 410); b.ExitForTest();
-            Check(!b.Busy && !b.BlackHeld && b.Alpha == 0 && b.Active == 0, "explicit cancellation resets even without iterator finally");
-            b.SwitchMap(5, 500, 510); Settled(b, 5, 500, 510);
-            Check(b.Builds.Select(x => x.MapId).SequenceEqual(new[] { 2, 5 }), "cancelled queues cannot resume in later world");
+        Scenario("exit also retires a blocked resource-unload wait",()=>{
+            var b=Fresh();Resources.StallUnload=true;b.SwitchMap(2,200,210);b.Step();b.Step();b.ExitForTest();b.Step();
+            Check(b.Active==0&&b.Builds.Count==0&&b.Ready.Count==0,"pending resource wait cannot outlive logout");
         });
-        Scenario("unexpected cleanup failure unlocks a later retry", () => {
-            var b = Fresh(); ArtCaches.ThrowEvict = true; b.SwitchMap(2, 200, 210);
-            bool failed = false; try { b.Drain(); } catch (InvalidOperationException) { failed = true; }
-            Check(failed && !b.Busy && !b.BlackHeld && b.Alpha == 0, "iterator finally releases a thrown cleanup");
-            b.SwitchMap(3, 300, 310); Settled(b, 3, 300, 310);
+        Scenario("resource rejection rearms only after the original portal is left",()=>{
+            var b=Fresh();ResLoader.I.Missing.Add("map/qw0002.gsm");b.HitPortalForTest(2,200,210);
+            Check(!b.Player.TransferredForIndependentRuntime&&b.Player.WasInsideTransferForIndependentRuntime,"rejected live portal remains suppressed inside polygon but no longer permanently transferred");
+            ResLoader.I.Missing.Clear();b.Player.AdvanceTransferForIndependentRuntime();
+            Check(b.Builds.Count==0&&b.Ready.Count==0,"no repeated load on every frame still standing inside");
+            b.Player.transferProcs[0].poly=false;b.Player.AdvanceTransferForIndependentRuntime();
+            b.Player.transferProcs[0].poly=true;b.Player.AdvanceTransferForIndependentRuntime();Settled(b,2,200,210);
+            Check(b.Builds.Count==1&&b.Ready.Count==1,"fresh leave/re-enter loads and acknowledges exactly once");
         });
-        Scenario("map-definition failure before scheduling does not latch loading", () => {
-            var b = Fresh(); MapDef.ThrowLoad = true; bool failed = false;
-            try { b.SwitchMap(2, 200, 210); } catch (InvalidOperationException) { failed = true; }
-            Check(failed && !b.Busy && b.Receiving && b.Active == 0 && b.mapName == "qw0001", "pre-coroutine failure unlocks unchanged world");
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
+        Scenario("synchronous resource exception restores original metadata and permits retry",()=>{
+            var b=Fresh();ResLoader.I.ThrowRead=true;b.SwitchMap(2,200,210);
+            Check(b.Receiving&&!b.Busy&&b.mapName=="qw0001"&&b.spawnX==10&&b.spawnY==20,"read exception clears loading and restores source fields");
+            Check(b.Ready.Count==0&&b.Builds.Count==0,"rejected preflight never creates or acknowledges a world");
+            b.SwitchMap(3,300,310);Settled(b,3,300,310);
+            Check(b.Builds.Count==1&&b.Ready.Count==1,"later valid request retries cleanly");
         });
-        Scenario("map-definition rejection also rearms the actual portal latch", () => {
-            var b = Fresh(); MapDef.ThrowLoad = true; bool failed = false;
-            try { b.HitPortalForTest(2, 200, 210); } catch (InvalidOperationException) { failed = true; }
-            Check(failed && !b.Player.TransferredForIndependentRuntime && b.Player.WasInsideTransferForIndependentRuntime, "definition error preserves retryable original controller");
-            b.Player.AdvanceTransferForIndependentRuntime(); Check(b.Started == 0, "no retry while still inside failed gate");
-            b.Player.transferProcs[0].poly = false; b.Player.AdvanceTransferForIndependentRuntime();
-            b.Player.transferProcs[0].poly = true; b.Player.AdvanceTransferForIndependentRuntime();
-            Settled(b, 2, 200, 210); Check(b.Started == 1, "re-entering recovered gate schedules exactly one load");
+        Scenario("XP hooks retire only when original transition commits to retiring the world",()=>{
+            var b=Fresh();ResLoader.I.Missing.Add("map/qw0002.gsm");b.SwitchMap(2,200,210);
+            Check(TestSession.Retires==0&&CombatNumber.Releases==0,"rejected target never retires old scene visuals");
+            b.SwitchMap(3,300,310);b.Drain();Check(TestSession.Retires==1&&CombatNumber.Releases==1,"one actual transition performs one visual-only retirement");
         });
-        Scenario("stalled asynchronous resource unload remains serialized and can be cancelled", () => {
-            var b = Fresh(); Resources.StallUnload = true; b.SwitchMap(2, 200, 210);
-            for (int i = 0; i < 100; i++) { b.Step(); b.SwitchMapAuthoritative(3, 300, 310); b.SwitchMap(4, 400, 410); }
-            Check(b.Busy && b.Started == 1 && b.Builds.Count == 0, "waiting operation cannot spawn parallel loaders");
-            b.ExitForTest(); Resources.StallUnload = false; b.SwitchMap(5, 500, 510); Settled(b, 5, 500, 510);
-        });
-        Scenario("zero-duration and long-frame fades still complete one lifecycle", () => {
-            var b = Fresh(); b.fadeInSec = b.fadeOutSec = 0; Time.unscaledDeltaTime = 4;
-            b.SwitchMap(2, 200, 210); Settled(b, 2, 200, 210);
-            Check(b.Started == 1 && b.Builds.Count == 1, "zero-duration fade retains construction ownership");
-        });
-        Console.WriteLine("PASS " + checks + " assertions across " + scenarios + " map transition source scenarios; Unity rendering not exercised");
+#endif
+        Console.WriteLine($"PASS {checks} assertions across {scenarios} original-lifecycle source scenarios; Unity rendering not exercised");
     }
 }

@@ -140,7 +140,7 @@ public sealed partial class DialogUI : MonoBehaviour
     // an observation/compatibility adapter; live NPC fields are read in native order.
     public void Show(NpcInteract npc)
     {
-        Open(null, npc);
+        Open(GameBootstrap.I?.Window?.NpcStateForIndependentRuntime(npc), npc);
         if (!LastOpenWasFurnace)
         {
             // Same existing Application writer/receipt observation while hosted; the native
@@ -235,6 +235,7 @@ public sealed partial class DialogUI : MonoBehaviour
         // tail-calling Show) contains an IsNullOrWhiteSpace gate. A blank or whitespace
         // DisplayName is therefore a legal name that still opens; the empty string also keeps
         // NpcName non-null for the later Contains checks in BuildMenu.
+        CaptureRiftEntrance(npc);
         NpcName = (originalReceiver != null ? originalReceiver.npcName : npc.DisplayName) ?? string.Empty;
 
         // DialogUI.Show 06000211 hides the ordinary dialog and returns before task offers.
@@ -841,17 +842,14 @@ public sealed partial class DialogUI : MonoBehaviour
                 AddTrialOption("传送到妖魔结界守卫(5银)", "trialgo");
         }
         if (NpcName.Contains("妖魔结界守卫") || NpcName.Contains("结界使"))
-        {
             AddTrialOption("进入妖魔结界(试炼)", "trial");
-            if (EndgamePanel.WorldEntryAvailable)
-                Add(new ReferenceNpcDialogOption("演劫洞天 · 查看符钥与开境", () => OpenEndgameView(EndgameModule.Rift)));
-        }
+        AddRiftEntranceOption();
         if (NpcName.Contains("试炼大仙"))
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
         if (EndgamePanel.WorldEntryAvailable &&
             (NpcName.Contains("试炼小仙") || NpcName.Contains("试炼大仙")))
             Add(new ReferenceNpcDialogOption("符钥何用？", () => ShowSay(
-                "若试炼奖励中领得演劫符钥，可去寻妖魔结界守卫，选择“演劫洞天”查看符钥与开境。组队时请在守卫附近会合；能否开境、耗费与所得，以服务器确认为准。")));
+                "若试炼奖励中领得演劫符钥，可去寻龙城八仙使者，选择“演劫洞天”查看符钥与开境。组队时请在八仙使者附近会合；能否开境、耗费与所得，以服务器确认为准。")));
 
         AddRiftExitOptions();
         AddDungeonExitAndHardOptions();

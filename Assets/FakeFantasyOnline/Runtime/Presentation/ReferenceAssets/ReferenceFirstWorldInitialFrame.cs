@@ -2259,12 +2259,24 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
             return true;
         }
         numberPresentation.TryPresent(
-            numbers, Time.unscaledTime, TrySpawnCombatNumberForCurrentWorld);
+            numbers, Time.unscaledTime, TrySpawnCombatNumberForCurrentWorld,
+            OwnsUnshownExperienceForCurrentWorld());
         if (numberPresentation.TakeBacklogWarning())
             Debug.LogWarning("[飘字] 未显示经验提示超过256条，已淘汰最旧提示；实际经验不受影响。");
         lastCombatNumbersVersion = numbersVersion;
 
         return true;
+    }
+
+    private bool OwnsUnshownExperienceForCurrentWorld()
+    {
+        // Ownership is separate from resource/anchor readiness. A live frame may
+        // own an unshown visual even when its glyphs or local anchor are missing.
+        // A receipt first seen while switching or on a superseded frame is unknown;
+        // do not assume it came from the old map or discard a real new-map reward.
+        GameBootstrap owner = NpcSpawnOwnerForIndependentRuntime;
+        return owner == null || (!owner.Switching &&
+            ReferenceEquals(owner.Window?.Frame, this));
     }
 
     private bool TrySpawnCombatNumberForCurrentWorld(WorldCombatNumberState number)

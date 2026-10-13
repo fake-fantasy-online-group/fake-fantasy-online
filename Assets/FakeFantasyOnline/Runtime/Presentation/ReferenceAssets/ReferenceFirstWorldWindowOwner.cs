@@ -3957,6 +3957,18 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
     // Official 06000926 forwards the interactable to the dialog singleton without owning the open
     // path. The identity walk is only the adapter from the recovered NpcInteract back to the
     // entity id this owner keys its actors by.
+    internal WorldNpcState NpcStateForIndependentRuntime(NpcInteract npc)
+    {
+        if (frame == null || npc == null) return null;
+        foreach (var pair in frame.NpcActors)
+            if (pair.Value != null && pair.Value.Built && ReferenceEquals(pair.Value.SelectableOwner, npc)) return pair.Value.State;
+        return null;
+    }
+
+    internal bool IsNpcStateCurrentForIndependentRuntime(WorldNpcState npc) => npc != null && frame != null &&
+        frame.NpcActors.TryGetValue(npc.EntityId, out ReferenceWorldNpcActor actor) && actor != null && actor.Built &&
+        ReferenceEquals(actor.State, npc);
+
     internal void ObserveNpcDialogShownForIndependentRuntime(NpcInteract npc)
     {
         // Observation only: the native singleton already performed Show and its one request.

@@ -66,7 +66,7 @@ public sealed partial class EndgamePanel
             if (row.Contains(Event.current.mousePosition)) ShowPanelTooltip(OwnedItemTooltip(item));
             if (row.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown && Event.current.button == 0) { Select(item); Event.current.Use(); }
         }
-        if (rows.Count == 0) Text(new Rect(10, 15, area.width - 25, 85), State.InventorySnapshotCurrent ? "尚无可用器物。试炼可获得洞天符钥；向妖魔结界守卫问询演劫洞天。" : "正在等待服务器器物星图…", small);
+        if (rows.Count == 0) Text(new Rect(10, 15, area.width - 25, 85), State.InventorySnapshotCurrent ? "尚无可用器物。试炼可获得洞天符钥；向龙城八仙使者问询演劫洞天。" : "正在等待服务器器物星图…", small);
         GUI.EndScrollView();
     }
 }

@@ -55,6 +55,7 @@ public partial class CombatNumber
 
     private void ReturnToPool()
     {
+        ForgetExperienceScene();
         for (int i = 0; i < _children.Count; i++)
             if (_children[i]) _children[i].gameObject.SetActive(false);
         DropOwned();
@@ -76,7 +77,11 @@ public partial class CombatNumber
         }
     }
 
-    private void OnDestroy() => DropOwned();
+    private void OnDestroy()
+    {
+        ForgetExperienceScene();
+        DropOwned();
+    }
 }
 
 }

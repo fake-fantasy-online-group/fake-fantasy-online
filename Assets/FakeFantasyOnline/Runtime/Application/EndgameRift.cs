@@ -4,6 +4,24 @@ using System.Globalization;
 
 namespace FakeFantasyOnline.Application
 {
+/// <summary>Database-owned NPC binding. Native entity IDs are resolved separately from the world.</summary>
+public sealed class EndgameRiftEntranceView
+{
+    public int MapID { get; }
+    public int NpcID { get; }
+    public string Npc { get; }
+    public string Script { get; }
+    internal EndgameRiftEntranceView(IReadOnlyDictionary<string, object> d)
+    {
+        EndgameData.Keys(d, "mapId", "npcId", "npc", "script");
+        MapID = EndgameData.Int(d, "mapId"); NpcID = EndgameData.Int(d, "npcId");
+        Npc = EndgameData.String(d, "npc", 128); Script = EndgameData.String(d, "script", 128);
+        if (MapID <= 0 || NpcID <= 0 || string.IsNullOrWhiteSpace(Npc) || string.IsNullOrWhiteSpace(Script))
+            throw new FormatException("Invalid rift entrance binding.");
+    }
+    public bool Matches(int mapID, string npc, string script) => MapID == mapID &&
+        string.Equals(Npc, npc, StringComparison.Ordinal) && string.Equals(Script, script, StringComparison.Ordinal);
+}
 public sealed class EndgameRiftMemberView
 {
     public string CharID { get; }

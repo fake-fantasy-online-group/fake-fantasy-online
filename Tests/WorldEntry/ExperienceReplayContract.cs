@@ -87,7 +87,59 @@ class ExperienceReplayContract
         var characterB = new ReferenceFirstWorldInitialFrame().Activate(); Time.unscaledTime+=.3f;
         Check(Poll(characterB,characterSession,realGateway.Numbers,realGateway.Version) && CombatNumber.Rendered==beforeCharacter+2,"B new edge renders without replaying A consumed or pending edges");
         Check(Poll(new ReferenceFirstWorldInitialFrame().Activate(),characterSession,realGateway.Numbers,realGateway.Version) && CombatNumber.Rendered==beforeCharacter+2,"B map rebuild also retains consumption");
+        SceneOwnershipCases();
         Console.WriteLine("PASS experience replay/queue/frame/spawn contract ("+checks+" assertions)");
+    }
+    static void SceneOwnershipCases()
+    {
+        CombatNumber.ArtReady=true; CombatNumber.FailValue=-1;
+        var gateway = new StreamGateway(); var session = new ClientSessionCoordinator(gateway);
+        var old = new ReferenceFirstWorldInitialFrame().Activate();
+        int shown = CombatNumber.Rendered;
+        var journal = new[]{N(1,101)};
+        Check(Poll(old,session,journal,1) && CombatNumber.Rendered==shown+1,"scene-owned already-shown reward acknowledged");
+        CombatNumber.ArtReady=false; journal=new[]{N(1,101),N(2,202)};
+        Check(Poll(old,session,journal,2) && session.CombatNumberPresentation.PendingCount==1,"known old live frame owns missing-art reward");
+        old.NpcSpawnOwnerForIndependentRuntime.Switching=true;
+        journal=new[]{N(1,101),N(2,202),N(3,303)};
+        Check(Poll(old,session,journal,3) && session.CombatNumberPresentation.PendingCount==2,"first receipt during switching stays unknown rather than assumed old");
+        session.RetireCombatNumberSceneForIndependentRuntime();
+        Check(session.CombatNumberPresentation.PendingCount==1 && session.CombatNumberPresentation.RetiredScenePresentationCount==1,"retirement removes only proven old-scene pending");
+        Check(journal[0].Value==101 && journal[1].Value==202 && journal[2].Value==303,"retirement never mutates authoritative receipt values");
+        CombatNumber.ArtReady=true; var next=new ReferenceFirstWorldInitialFrame().Activate(); Time.unscaledTime+=1;
+        Check(Poll(next,session,journal,3) && CombatNumber.Rendered==shown+2,"new scene preserves unknown transition reward, no old shown/pending replay");
+        Check(session.CombatNumberPresentation.PendingCount==0,"unknown transition receipt consumed once");
+        Check(Poll(next,session,new[]{N(1,101),N(2,202)},4) && CombatNumber.Rendered==shown+2,"late old immutable journal snapshot cannot resurrect retired or shown revisions");
+        journal=new[]{N(1,101),N(2,202),N(3,303),N(4,404)};
+        Check(Poll(next,session,journal,5) && CombatNumber.Rendered==shown+3,"genuine new-map reward is not swallowed");
+        // The wire has no scene identity for an arbitrary notification still in flight.
+        // It is a new receipt, not proof of replay, even when its value matches old XP.
+        journal=new[]{N(5,202)};
+        Check(Poll(next,session,journal,6) && CombatNumber.Rendered==shown+4,"unknown late first-time receipt is preserved even with old equal amount");
+        session.RetireCombatNumberSceneForIndependentRuntime();
+        Check(Poll(new ReferenceFirstWorldInitialFrame().Activate(),session,journal,7) && CombatNumber.Rendered==shown+4,"duplicate/rebuilt frame cannot replay newly consumed reward");
+        CombatNumber.ArtReady=false; var third=new ReferenceFirstWorldInitialFrame().Activate();
+        Check(Poll(third,session,new[]{N(6,606)},8) && session.CombatNumberPresentation.PendingCount==1,"new scene owns its own missing-art receipt");
+        session.RetireCombatNumberSceneForIndependentRuntime();
+        Check(session.CombatNumberPresentation.PendingCount==0 && session.CombatNumberPresentation.RetiredScenePresentationCount==2,"later retirement clears that scene only");
+        var mismatch=new ReferenceFirstWorldInitialFrame().Activate();
+        mismatch.NpcSpawnOwnerForIndependentRuntime.Window.Frame=new ReferenceFirstWorldInitialFrame();
+        Check(Poll(mismatch,session,new[]{N(7,707)},9) && session.CombatNumberPresentation.PendingCount==1,"superseded frame cannot claim an unseen receipt");
+        session.RetireCombatNumberSceneForIndependentRuntime();
+        Check(session.CombatNumberPresentation.PendingCount==1,"unknown superseded-frame receipt survives retirement");
+        CombatNumber.ArtReady=true; Time.unscaledTime+=1;
+        Check(Poll(new ReferenceFirstWorldInitialFrame().Activate(),session,new[]{N(7,707)},10) && CombatNumber.Rendered==shown+5,"live new owner displays preserved first-time receipt");
+        session.Connected=false;
+        Check(Poll(third,session,new[]{N(8,808)},11) && session.CombatNumberPresentation.PendingCount==0,"disconnect clears scene-owned and unknown visual state");
+        session.Connected=true; gateway.CombatNumberStreamGeneration++;
+        Check(Poll(new ReferenceFirstWorldInitialFrame().Activate(),session,new[]{N(1,909)},12) && CombatNumber.Rendered==shown+6,"new connection accepts fresh revision 1 without old ownership leakage");
+        var acquire = new WorldCombatNumberPresentation(); var unknown = new[]{N(1,1001)};
+        acquire.TryPresent(unknown,0,n=>false,false); acquire.RetireScene();
+        Check(acquire.PendingCount==1 && acquire.RetiredScenePresentationCount==0,"unknown loading receipt survives prior retirement");
+        acquire.TryPresent(unknown,1,n=>false,true);
+        Check(acquire.PendingCount==1,"failed live-scene retry keeps reward pending while acquiring ownership");
+        acquire.RetireScene();
+        Check(acquire.PendingCount==0 && acquire.RetiredScenePresentationCount==1 && acquire.ConsumedRevision==1,"next retirement drops only acquired visual and retains consumed revision fence");
     }
 }
 namespace FakeFantasyOnline.Application
@@ -139,7 +191,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         static List<Sprite> BuildGlyphs(int value,int type)=>ArtReady && value!=FailValue ? new List<Sprite>{new Sprite()} : null;
         static CombatNumber Rent()=>new CombatNumber();
         SpriteRenderer NextChild() { Rendered++; LastPosition=transform.position; return new SpriteRenderer(); }
-        void ReturnToPool() {}
+        void ReturnToPool() { ForgetExperienceScene(); }
     }
 }
 namespace UnityEngine

@@ -22,6 +22,12 @@ public sealed partial class PluginGameApi
             "message", BoundText(state?.Message ?? "", 2048));
         if (state == null || !owner.EndgameInWorld || !state.Negotiated)
         { data["reason"] = "The active native world has not negotiated endgame.v1."; return data; }
+        if (domain == "endgame" || domain == "endgame.rift")
+        {
+            data["riftEntrances"] = EndgameRows(state.RiftEntrances, e => Values("mapId", e.MapID, "npcId", e.NpcID, "npc", e.Npc, "script", e.Script));
+            int entranceEntity = DialogUI.I?.RiftEntranceEntityForIndependentRuntime(state) ?? 0;
+            data["riftEntranceEntityId"] = entranceEntity == 0 ? null : EntityReference("npc", entranceEntity);
+        }
         switch (domain)
         {
             case "endgame":

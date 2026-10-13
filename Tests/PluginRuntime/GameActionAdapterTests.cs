@@ -175,7 +175,7 @@ namespace FakeFantasyOnline.Application
         public bool ContainsEntity(int id) => id != 0 && Members.Exists(m => m.EntityId == id);
     }
     public sealed class WorldGroundItemState { public int X, Y; }
-    public sealed class WorldNpcState { public int EntityId; public string DisplayName; }
+    public sealed class WorldNpcState { public int EntityId; public string DisplayName, Script; }
     public sealed class WorldNpcTaskOfferState { public int TaskId; }
     public sealed class WorldNpcTaskOffersState { public List<WorldNpcTaskOfferState> Offers = new List<WorldNpcTaskOfferState>(); }
     public sealed class WorldTaskLogState { public object FindActive(int id) => id == 7 ? new object() : null; }
@@ -244,8 +244,19 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void Emit(string name, IReadOnlyDictionary<string, object> data) { }
         private long CurrentDialogueRevision() => DialogUI.I.Revision;
     }
-    internal sealed class GameBootstrap { internal static GameBootstrap I; internal Window Window; }
-    internal sealed class Window { internal ReferenceFirstWorldInitialFrame Frame; }
+    internal sealed class GameBootstrap { internal static int CurMapId; internal static GameBootstrap I; internal Window Window; }
+    internal sealed class Window
+    {
+        internal ReferenceFirstWorldInitialFrame Frame;
+        internal WorldNpcState NpcStateForIndependentRuntime(NpcInteract npc)
+        { foreach (var actor in Frame.NpcActors.Values) if (ReferenceEquals(actor.SelectableOwner, npc)) return actor.State; return null; }
+        internal bool IsNpcStateCurrentForIndependentRuntime(WorldNpcState npc) => Frame.NpcActors.TryGetValue(npc.EntityId, out var actor) && ReferenceEquals(actor.State, npc);
+    }
+    internal static class EndgamePanel
+    {
+        internal static EndgameClientState WorldState;
+        internal static bool TryOpenRiftFromNpc(int map, int entity, string name, string script, Func<bool> current) => current();
+    }
     internal sealed class ReferenceFirstWorldInitialFrame
     {
         internal bool Built = true;
@@ -303,15 +314,23 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal sealed class ReferenceWorldRemotePlayerActor { internal RemotePlayer SourceIdentityForIndependentRuntime; internal RemoteState State = new RemoteState(); }
     internal static class ReferenceWorldTargetSelectionMath { internal static bool IsFriendly(int a, int b, bool hostile) => !hostile; }
     internal sealed class ReferenceWorldNpcActor { internal NpcInteract SelectableOwner; internal WorldNpcState State; }
-    internal sealed class NpcInteract { internal void Show() { DialogUI.I.Visible = true; } }
-    internal sealed class ReferenceNpcDialogOption { internal string Label; }
-    internal sealed class DialogUI
+    internal sealed class NpcInteract { internal void Show() { DialogUI.I.CaptureForTest(GameBootstrap.I.Window.NpcStateForIndependentRuntime(this)); DialogUI.I.Visible = true; } }
+    internal sealed class ReferenceNpcDialogOption
+    {
+        internal string Label; internal Action Action;
+        internal ReferenceNpcDialogOption() { }
+        internal ReferenceNpcDialogOption(string label, Action action) { Label = label; Action = action; }
+    }
+    public sealed partial class DialogUI
     {
         internal static DialogUI I; internal static bool VisibleS => I != null && I.Visible;
         internal bool Visible; internal int CurrentNpcEntityId; internal long Revision; internal int Activations;
         internal List<ReferenceNpcDialogOption> Options = new List<ReferenceNpcDialogOption>();
         internal bool ActivateOption(ReferenceNpcDialogOption option) { Activations++; return true; }
         internal void Close() { Visible = false; }
+        private void Add(ReferenceNpcDialogOption row) => Options.Add(row);
+        private void ShowSay(string text) { }
+        internal void CaptureForTest(WorldNpcState npc) { CurrentNpcEntityId = npc?.EntityId ?? 0; CaptureRiftEntrance(npc); }
     }
     internal sealed class GroundItems
     {

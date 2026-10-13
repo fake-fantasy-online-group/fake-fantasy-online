@@ -62,6 +62,7 @@ public partial class CombatNumber
                 child.color = color;
                 x += widths[i] - overlap;
             }
+            number.TrackExperienceScene();
             return true;
         }
         if (BitmapFont.Ready)
@@ -82,6 +83,7 @@ public partial class CombatNumber
                 child.color = tint;
                 number._ownedTex = texture;
                 number._ownedSp = sprite;
+                number.TrackExperienceScene();
                 return true;
             }
         }

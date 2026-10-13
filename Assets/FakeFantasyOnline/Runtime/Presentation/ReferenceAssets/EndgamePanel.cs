@@ -49,6 +49,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private void OnDestroy() { WinZ.Forget(this); if (Current == this) Current = null; }
     private void ClearSelection()
     {
+        ClearRiftEntrance();
         ResetRiftTierDropdown();
         selectingCubeTarget = selectingCubeOutput = false; requestedRecipeCursor = null;
         selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; confirmLeave = false;
@@ -64,6 +65,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
             generation = State.Generation; ClearSelection(); open = false;
             skillBehaviorRefreshRevision = null; skillBehaviorRefreshAttempts = 0; nextSkillBehaviorRefresh = 0;
         }
+        RiftEntranceCurrent();
         if (State.SkillBehaviorV1)
         {
             if (skillBehaviorRefreshRevision != State.Revision)

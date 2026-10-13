@@ -25,7 +25,14 @@ public partial class CombatNumber : MonoBehaviour
         petT = t;
         petHeadY = headWorldY;
     }
-    internal static void BindPlayerTransformForIndependentRuntime(Transform player) => playerT = player;
+    internal static void BindPlayerTransformForIndependentRuntime(Transform player)
+    {
+        playerT = player;
+        // Final world exit/disconnect detaches the registered local owner. The
+        // frame disposal guard calls this only while it still owns that transform,
+        // so an older frame cannot clear a newer world's experience popups.
+        if (!player) ReleaseExperienceForSceneTransition();
+    }
 }
 
 }

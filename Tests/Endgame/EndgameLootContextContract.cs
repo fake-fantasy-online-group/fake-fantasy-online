@@ -75,7 +75,7 @@ internal static class EndgameLootContextContract
         string detail = EndgamePanel.ItemDescription(client.Endgame.Items[0], false);
         Check(detail.Contains("打孔炉逐孔开启") && detail.Contains("无孔器物随机开窍"), "existing item detail distinguishes native incremental opening from zero-socket cube randomness");
         var key = new InventoryDlg.Item { id = 1900028101, bagIdx = 8 };
-        Check(EndgamePanel.BagTooltip(1, key, "符钥").Contains("妖魔结界守卫"), "key has in-world trial entry");
+        Check(EndgamePanel.BagTooltip(1, key, "符钥").Contains("龙城八仙使者"), "key has in-world trial entry");
         Call(panel, "EnsureStyles"); Set(panel, "selectedUID", "1"); Set(panel, "selectedRuneUID", "2");
         UnityEngine.GUI.labels.Clear(); Call(panel, "DrawRunes");
         Check(!ArtworkSkin.enableds["嵌入所选星篆"] && ArtworkSkin.enableds["取出此孔星篆"], "occupied socket offers extraction instead of doomed insert");

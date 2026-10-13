@@ -48,6 +48,16 @@ class EndgameUiContract
         Call(p, "DrawRift");
         Check((bool)Get(p, "riftTierOpen") && UnityEngine.Event.current.type == UnityEngine.EventType.Used, "native input click opens dropdown and consumes world click");
     }
+    static void OpenEntrance(Client c)
+    {
+        if (c.Endgame.RiftEntrances.Count == 0)
+        {
+            c.Endgame.Begin(new EndgameRequest("hello"));
+            Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.rift-entrance.v1\"],\"riftEntrances\":[{\"mapId\":7,\"npcId\":83,\"npc\":\"八仙使者\",\"script\":\"Nbaxian\"}]}");
+        }
+        GameBootstrap.CurMapId = 7;
+        Check(EndgamePanel.TryOpenRiftFromNpc(7, 83, "八仙使者", "Nbaxian", () => true), "UI fixture opens from negotiated live entrance");
+    }
     static void RiftDropdownContracts(Client c, EndgamePanel p)
     {
         Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":150,\"maxTier\":150");
@@ -147,8 +157,8 @@ class EndgameUiContract
     }
     static void MultiFloorContracts(Client c, EndgamePanel p)
     {
-        Set(p, "open", true); Set(p, "module", EndgameModule.Rift); Rift(c, "", "closed", keys: 1);
-        RiftDropdownContracts(c, p);
+        OpenEntrance(c); Rift(c, "", "closed", keys: 1);
+        RiftDropdownContracts(c, p); OpenEntrance(c);
         Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":150,\"maxTier\":150");
         Set(p, "tier", 150); Draw(p);
         Check((int)Get(p, "tier") == 150 && UnityEngine.GUI.labels.Exists(t => t.Contains("阶")) && !ArtworkSkin.enableds.ContainsKey("+"), "dropdown selection reaches150 without stepper controls");
@@ -785,9 +795,9 @@ class EndgameUiContract
         Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!Enabled("领取我的洞天所得") && !Enabled("消耗一钥 · 开启洞天"), "reward saving disables claim and start");
         Rift(c, "old-paid", "interrupted", true, ok: false); Check(c.Endgame.Rift.RunID == "old-paid", "rejected join surfaces prior run");
         Draw(p, "领取补偿符钥"); Check(c.Last.Op == "rift.claim" && c.Last.Json.Contains("old-paid"), "compensation claims exact run"); Receipt(c);
-        Rift(c, "completed-run", "completed", true); Draw(p, "进入已有洞天"); Check(c.Last.Op == "rift.start" && c.Last.Json.Contains("completed-run"), "live completed run reentry"); Receipt(c);
+        Rift(c, "completed-run", "completed", true); Draw(p, "进入已有洞天"); Check(c.Last.Op == "rift.start" && c.Last.Json.Contains("completed-run") && !c.Last.Json.Contains("npcEntityId"), "live completed run reentry preserves the original NPC-independent run contract"); Receipt(c);
         int beforeLeave = c.Sent.Count; Draw(p, "离开洞天"); Check(c.Sent.Count == beforeLeave, "leave requires confirmation"); Draw(p, "确认离境 · 无自动返钥"); Check(c.Last.Op == "rift.leave", "confirmed leave reaches server"); Receipt(c);
-        Rift(c, "completed-run", "closed", keys: 1); Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Op == "rift.start" && !c.Last.Json.Contains("runId"), "closed run permits new paid run");
+        OpenEntrance(c); Rift(c, "completed-run", "closed", keys: 1); Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Op == "rift.start" && !c.Last.Json.Contains("runId"), "closed run permits new paid run");
         Receipt(c);
         Rift(c, "stages", "active"); Call(p, "Update");
         Check((string)Get(p, "announcement") == "", "restored active run establishes silent baseline");
@@ -827,7 +837,7 @@ class EndgameUiContract
         Draw(p, "确认离境 · 无自动返钥");
         Check(c.Last.Op == "rift.leave" && c.Last.Json.Contains("\"runId\":\"stages\""), "confirmed escape from closed occupied instance leaves the exact run"); Receipt(c);
         typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, false);
-        Rift(c, "stages", "closed", false, keys: 1); Draw(p);
+        OpenEntrance(c); Rift(c, "stages", "closed", false, keys: 1); Draw(p);
         Check(Enabled("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("离开洞天"), "departed closed and fully claimed run permits new paid entry instead of stale leave");
         Rift(c, "stages", "failed", keys: 1); Draw(p);
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")), "failed nonclaimable run keeps next-run tier selector");

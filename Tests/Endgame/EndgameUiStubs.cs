@@ -136,7 +136,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static List<EquippedItem> Equipped = new List<EquippedItem>();
     }
     internal static class NetClient { public static Texture2D LoadItemIcon(int id) => null; }
-    public class GameBootstrap { public static float CurPpu = 100, CurWorldH = 1000; }
+    public partial class GameBootstrap { public static int CurMapId; public static float CurPpu = 100, CurWorldH = 1000; }
     public partial class CombatWorld { private static CombatWorld I; private Dictionary<int, MonsterEntity> monsters = new Dictionary<int, MonsterEntity>(); }
     public class MonsterEntity { public Transform transform = new Transform(); }
 }

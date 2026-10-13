@@ -17,8 +17,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// The public/private game-state fields and SwitchMapAuthoritative/SwitchMap/TransitionTo/Fade
 /// control flow retain the official owner. The ConfigureWorld/Window members are isolated
 /// independent-runtime adapters for the source client's Application boundary and the already
-/// recovered BuildWorld graph. Independent-runtime coroutine serialization keeps a map
-/// transition owned through its final fade while preserving the native entity-receive gate.
+/// recovered BuildWorld graph. Map switching follows the initial source-release lifecycle;
+/// the synchronous map-byte handoff avoids duplicate reads without adding another ready.
 /// </remarks>
 public partial class GameBootstrap : MonoBehaviour
 {
@@ -119,12 +119,6 @@ public partial class GameBootstrap : MonoBehaviour
     private bool configured;
     private bool nativeStartupWorld;
     private Action titleStartupForIndependentRuntime;
-    // The native switching flag also gates incoming entity receipts and opens as soon
-    // as BuildWorld starts. Keep coroutine ownership separate: fades still yield after
-    // that point, so neither a portal nor an authoritative reply may start a second one.
-    private bool mapTransitionInProgress;
-    private (int, float, float, PlayerController)? queuedPortalSwitch;
-
     public bool Switching => switching;
 
     internal bool HasWorldStateForIndependentRuntime =>
@@ -458,7 +452,7 @@ public partial class GameBootstrap : MonoBehaviour
 
     public void SwitchMapAuthoritative(int mapId, float toX, float toY)
     {
-        if (mapTransitionInProgress)
+        if (switching)
         {
             _queuedSwitch = (mapId, toX, toY);
         }
@@ -470,38 +464,21 @@ public partial class GameBootstrap : MonoBehaviour
 
     public void SwitchMap(int mapId, float toX, float toY)
     {
-        if (mapTransitionInProgress)
+        if (switching)
         {
-            // The newly built player can reach another gate during fade-out. Its native
-            // transfer callback has already latched, so retain that request instead of
-            // stranding the player. Old-world callbacks during fade-in are still dropped.
-            PlayerController player = pcRef?.SourceControllerForIndependentRuntime;
-            if (!switching && window != null && window.Built && player != null)
-                queuedPortalSwitch = (mapId, toX, toY, player);
             return;
         }
 
-        PlayerController originalPlayer = pcRef?.SourceControllerForIndependentRuntime;
-        mapTransitionInProgress = true;
         switching = true;
-        try
-        {
-            if (ResLoader.I != null)
-                MapDef.EnsureLoaded(ResLoader.I.Pkg);
-            string targetName = MapSourceName(mapId);
-            _prevMapName = mapName;
-            _pendingMapId = mapId;
-            mapName = targetName;
-            spawnX = toX;
-            spawnY = toY;
-            StartCoroutine(TransitionTo());
-        }
-        catch
-        {
-            ResetMapTransitionForIndependentRuntime();
-            RearmRejectedPortalForIndependentRuntime(originalPlayer);
-            throw;
-        }
+        if (ResLoader.I != null)
+            MapDef.EnsureLoaded(ResLoader.I.Pkg);
+
+        _prevMapName = mapName;
+        _pendingMapId = mapId;
+        mapName = MapSourceName(mapId);
+        spawnX = toX;
+        spawnY = toY;
+        StartCoroutine(TransitionTo());
     }
 
     private void RearmRejectedPortalForIndependentRuntime(PlayerController rejectedPlayer)
@@ -509,87 +486,13 @@ public partial class GameBootstrap : MonoBehaviour
         PlayerController player = pcRef?.SourceControllerForIndependentRuntime;
         if (worldRoot == null || window == null || !window.Built || player == null ||
             !ReferenceEquals(player, rejectedPlayer) || !player.TransferredForIndependentRuntime) return;
-        // Resource rejection leaves this player alive. Allow leaving/re-entering the
-        // gate to retry, without retrying a missing map on every frame inside the gate.
+        // Keep the current gate suppressed until the player actually leaves it. A
+        // recovered resource can then be retried by a fresh leave/re-enter edge.
         player.TransferredForIndependentRuntime = false;
         player.WasInsideTransferForIndependentRuntime = true;
     }
 
     private IEnumerator TransitionTo()
-    {
-        bool completed = false;
-        IEnumerator transition = TransitionToCore();
-        try
-        {
-            // Drive the body here so exceptions and cancellation dispose this owner,
-            // including failures before the first yield or after world construction.
-            while (transition.MoveNext()) yield return transition.Current;
-            completed = true;
-        }
-        finally
-        {
-            (transition as IDisposable)?.Dispose();
-            ResetMapTransitionForIndependentRuntime();
-            if (!completed)
-            {
-                _queuedSwitch = null;
-                queuedPortalSwitch = null;
-            }
-        }
-
-        ReplayQueuedMapSwitchForIndependentRuntime();
-    }
-
-    private void ResetMapTransitionForIndependentRuntime()
-    {
-        mapTransitionInProgress = false;
-        switching = false;
-        fadeAlpha = 0f;
-        ApplyPendingSky();
-    }
-
-    private void CancelMapTransitionForIndependentRuntime()
-    {
-        _queuedSwitch = null;
-        queuedPortalSwitch = null;
-        // This bootstrap owns only the map coroutine (and its nested fades).
-        StopAllCoroutines();
-        ResetMapTransitionForIndependentRuntime();
-    }
-
-    private void ReplayQueuedMapSwitchForIndependentRuntime()
-    {
-        (int, float, float, PlayerController)? portal = queuedPortalSwitch;
-        queuedPortalSwitch = null;
-        if (_queuedSwitch.HasValue)
-        {
-            (int, float, float) queued = _queuedSwitch.Value;
-            _queuedSwitch = null;
-            PlayerController player = pcRef?.SourceControllerForIndependentRuntime;
-            if (worldRoot != null && window != null && window.Built && player != null &&
-                queued.Item1 == CurMapId && (int)queued.Item2 == (int)player.worldX &&
-                (int)queued.Item3 == (int)player.worldY)
-            {
-                // This is the already-built destination, not another load. The server may
-                // still be waiting for its map-ready acknowledgement; never silently drop it.
-                ReportPos(true);
-            }
-            else
-            {
-                // A server correction takes priority over a portal in the superseded world.
-                Debug.Log(string.Format("[切图] 补执行切图期间到达的服务端强切 → 图{0}({1},{2})",
-                    queued.Item1, (int)queued.Item2, (int)queued.Item3));
-                SwitchMap(queued.Item1, queued.Item2, queued.Item3);
-                return;
-            }
-        }
-
-        if (portal.HasValue && worldRoot != null && window != null && window.Built &&
-            ReferenceEquals(portal.Value.Item4, pcRef?.SourceControllerForIndependentRuntime))
-            SwitchMap(portal.Value.Item1, portal.Value.Item2, portal.Value.Item3);
-    }
-
-    private IEnumerator TransitionToCore()
     {
         string backName = string.IsNullOrEmpty(_prevMapName)
             ? mapName
@@ -599,32 +502,24 @@ public partial class GameBootstrap : MonoBehaviour
         float backX = backPlayer != null ? backPlayer.worldX : spawnX;
         float backY = backPlayer != null ? backPlayer.worldY : spawnY;
 
-        // Include the synchronous preflight, which happens before the first fade
-        // frame. Previously this potentially visible stall was outside the trace.
-        if (LoadTrace.AutoOnMapSwitch) LoadTrace.Begin(backName + "到" + mapName);
-        LoadTrace.Line(string.Format("切图开始 {0}(图{1}) → {2}(图{3}) 落点({4},{5})",
-            backName, backCurMap, mapName, _pendingMapId, (int)spawnX, (int)spawnY));
-        System.Diagnostics.Stopwatch traceClock = System.Diagnostics.Stopwatch.StartNew();
-        long traceMark = 0L;
-
+        // Keep the deployed synchronous single-read handoff. It changes neither the
+        // original coroutine's yield points nor when the world reports entered=1.
         PreparedMapSource preparedMapSource = null;
         bool sourceAvailable;
         try
         {
             if (ResLoader.I != null)
                 preparedMapSource = new PreparedMapSource(ResLoader.I, "map/" + mapName + ".gsm");
-            sourceAvailable = ResLoader.I == null ||
-                preparedMapSource.HasBytes ||
+            sourceAvailable = ResLoader.I == null || preparedMapSource.HasBytes ||
                 Resources.Load<Texture2D>(mapName) != null;
         }
         catch (Exception exception)
         {
+            // A synchronous resource exception rejects this attempt just like missing
+            // bytes. It must not leave the original switching latch set forever.
             Debug.LogError("[切图] 读取目标地图失败 " + mapName + ": " + exception);
             sourceAvailable = false;
         }
-        long sourceReadMs = traceClock.ElapsedMilliseconds;
-        if (LoadTrace.On) LoadTrace.Phase("目标图预读(淡入前)", (float)sourceReadMs);
-        traceMark = traceClock.ElapsedMilliseconds;
         if (!sourceAvailable)
         {
             Debug.LogError(string.Format("[\u5207\u56fe] \u2605\u76ee\u6807\u56fe\u8d44\u6e90\u7f3a\u5931, \u53d6\u6d88\u5207\u56fe: {0}(\u56fe{1}) \u2014\u2014 \u670d\u52a1\u7aef\u53ef\u80fd\u5df2\u6309\u65b0\u56fe\u8bb0\u8d26, \u73b0\u56de\u6eda\u56fe\u540d\u5e76\u8865\u6267\u884c\u6392\u961f\u4e2d\u7684\u670d\u52a1\u7aef\u5f3a\u5207", mapName, _pendingMapId));
@@ -634,14 +529,34 @@ public partial class GameBootstrap : MonoBehaviour
             spawnY = backY;
             switching = false;
             RearmRejectedPortalForIndependentRuntime(backPlayer);
+            if (_queuedSwitch.HasValue)
+            {
+                (int, float, float) queued = _queuedSwitch.Value;
+                _queuedSwitch = null;
+                Debug.Log(string.Format("[\u5207\u56fe] \u53d6\u6d88\u540e\u8865\u6267\u884c\u670d\u52a1\u7aef\u5f3a\u5207 \u2192 \u56fe{0}({1},{2})",
+                    queued.Item1, (int)queued.Item2, (int)queued.Item3));
+                SwitchMap(queued.Item1, queued.Item2, queued.Item3);
+            }
             yield break;
         }
 
+        if (LoadTrace.AutoOnMapSwitch) LoadTrace.Begin(backName + "到" + mapName);
+        LoadTrace.Line(string.Format("切图开始 {0}(图{1}) → {2}(图{3}) 落点({4},{5})",
+            backName, backCurMap, mapName, _pendingMapId, (int)spawnX, (int)spawnY));
+        System.Diagnostics.Stopwatch traceClock = System.Diagnostics.Stopwatch.StartNew();
+        long traceMark = 0L;
+
+        // Retire only visuals owned by the outgoing scene; authoritative XP and
+        // first-time notifications received during the transition remain untouched.
+        session?.RetireCombatNumberSceneForIndependentRuntime();
+        CombatNumber.ReleaseExperienceForSceneTransition();
         _holdSkyBlack = true;
         yield return Fade(0f, 1f, fadeInSec);
-        long fadeInMs = traceClock.ElapsedMilliseconds - traceMark;
-        if (LoadTrace.On) LoadTrace.Phase("淡入黑屏", (float)fadeInMs);
-        traceMark = traceClock.ElapsedMilliseconds;
+        if (LoadTrace.On)
+        {
+            LoadTrace.Phase("淡入黑屏", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
+        }
 
         if (worldRoot != null)
         {
@@ -652,9 +567,11 @@ public partial class GameBootstrap : MonoBehaviour
         CombatWorld.ClearAll();
         StallDlg.Owners.Clear();
         ReleaseBuiltWorld(sceneRegistriesReleased: true, preservePlayerTransform: true);
-        long releaseMs = traceClock.ElapsedMilliseconds - traceMark;
-        if (LoadTrace.On) LoadTrace.Phase("销毁旧图+清怪宠美术", (float)releaseMs);
-        traceMark = traceClock.ElapsedMilliseconds;
+        if (LoadTrace.On)
+        {
+            LoadTrace.Phase("销毁旧图+清怪宠美术", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
+        }
         yield return null;
         bool switchedMapForTrace = mapName != backName || _pendingMapId != backCurMap;
         int evictedMapObjects = switchedMapForTrace ? EvictMapObjectsAtSafePoint() : 0;
@@ -663,37 +580,31 @@ public partial class GameBootstrap : MonoBehaviour
                 evictedMapObjects, MapObjBudgetStat()));
         _scanOpaqueCache.Clear();
         ArtCaches.EvictAtSafePoint();
-        long safePointMs = traceClock.ElapsedMilliseconds - traceMark;
         if (LoadTrace.On)
         {
             LoadTrace.Phase(switchedMapForTrace
                 ? "安全点淘汰+扔物件缓存" : "安全点淘汰(同图重进)",
-                (float)safePointMs);
+                (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
         }
-        traceMark = traceClock.ElapsedMilliseconds;
         GC.Collect();
-        long gcMs = traceClock.ElapsedMilliseconds - traceMark;
-        if (LoadTrace.On) LoadTrace.Phase("GC.Collect", (float)gcMs);
-        traceMark = traceClock.ElapsedMilliseconds;
-        yield return Resources.UnloadUnusedAssets();
-        long unloadMs = traceClock.ElapsedMilliseconds - traceMark;
-        if (LoadTrace.On) LoadTrace.Phase("UnloadUnusedAssets", (float)unloadMs);
-        traceMark = traceClock.ElapsedMilliseconds;
-
-        // A server landing correction received while fading/loading the same target
-        // can be used for the first build, avoiding a second load just to change spawn.
-        (int, float, float)? appliedLanding = null;
-        if (_queuedSwitch.HasValue && _queuedSwitch.Value.Item1 == _pendingMapId)
+        if (LoadTrace.On)
         {
-            appliedLanding = _queuedSwitch;
-            spawnX = appliedLanding.Value.Item2;
-            spawnY = appliedLanding.Value.Item3;
+            LoadTrace.Phase("GC.Collect", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
+        }
+        yield return Resources.UnloadUnusedAssets();
+        if (LoadTrace.On)
+        {
+            LoadTrace.Phase("UnloadUnusedAssets", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
         }
 
         bool built = false;
         try
         {
             BuildWorldCore(transitionOwnsFailure: true, preparedMapSource: preparedMapSource);
+            // A published root can precede a rejected/partial world construction.
             built = worldRoot != null && window != null && window.Built;
         }
         catch (Exception exception)
@@ -702,18 +613,11 @@ public partial class GameBootstrap : MonoBehaviour
         }
         finally
         {
-            // Also release the preflight buffer when construction returns/throws
-            // before its map read, rather than retaining it through fade-out.
             preparedMapSource?.Clear();
-            preparedMapSource = null;
         }
 
         if (built)
         {
-            // A failed build must retain this authoritative target for the queued retry
-            // after rollback. A newer receipt must also survive this completion edge.
-            if (appliedLanding.HasValue && _queuedSwitch == appliedLanding)
-                _queuedSwitch = null;
             CurMapId = _pendingMapId;
             ReportPos(true);
         }
@@ -751,26 +655,35 @@ public partial class GameBootstrap : MonoBehaviour
             switching = false;
         }
 
-        long buildMs = traceClock.ElapsedMilliseconds - traceMark;
-        if (LoadTrace.On) LoadTrace.Phase("BuildWorld(含回滚判定)", (float)buildMs);
-        traceMark = traceClock.ElapsedMilliseconds;
+        if (LoadTrace.On)
+        {
+            LoadTrace.Phase("BuildWorld(含回滚判定)", (float)(traceClock.ElapsedMilliseconds - traceMark));
+            traceMark = traceClock.ElapsedMilliseconds;
+        }
         yield return null;
         yield return Fade(1f, 0f, fadeOutSec);
         fadeAlpha = 0f;
         ApplyPendingSky();
-        long fadeOutMs = traceClock.ElapsedMilliseconds - traceMark;
         if (LoadTrace.On)
         {
-            LoadTrace.Phase("淡出", (float)fadeOutMs);
+            LoadTrace.Phase("淡出", (float)(traceClock.ElapsedMilliseconds - traceMark));
             LoadTrace.Line("★黑屏结束, 以下都是玩家看得见的卡顿");
         }
-        // One summary per completed transition, including without the optional
-        // detailed trace. Yielded phases are wall time, not measured CPU stalls.
-        Debug.Log(string.Format("[切图耗时] {0}(图{1})→{2}(图{3}) 总计{4}ms " +
-            "预读{5} 淡入{6} 清旧{7} 安全点(含等帧){8} GC{9} 卸载(含等待){10} " +
-            "建图(含回滚){11} 淡出(含等帧){12}ms 目标建成={13}",
-            backName, backCurMap, mapName, CurMapId, traceClock.ElapsedMilliseconds,
-            sourceReadMs, fadeInMs, releaseMs, safePointMs, gcMs, unloadMs, buildMs, fadeOutMs, built));
+
+        if (_queuedSwitch.HasValue)
+        {
+            (int, float, float) q = _queuedSwitch.Value;
+            _queuedSwitch = null;
+            PlayerController currentPlayer = pcRef?.SourceControllerForIndependentRuntime;
+            int currentX = currentPlayer != null ? (int)currentPlayer.worldX : int.MinValue;
+            int currentY = currentPlayer != null ? (int)currentPlayer.worldY : int.MinValue;
+            if (q.Item1 != CurMapId || (int)q.Item2 != currentX || (int)q.Item3 != currentY)
+            {
+                Debug.Log(string.Format("[\u5207\u56fe] \u8865\u6267\u884c\u5207\u56fe\u671f\u95f4\u5230\u8fbe\u7684\u670d\u52a1\u7aef\u5f3a\u5207 \u2192 \u56fe{0}({1},{2})",
+                    q.Item1, (int)q.Item2, (int)q.Item3));
+                SwitchMap(q.Item1, q.Item2, q.Item3);
+            }
+        }
     }
 
     private IEnumerator Fade(float from, float to, float dur)
@@ -843,6 +756,17 @@ public partial class GameBootstrap : MonoBehaviour
         {
             Debug.LogException(exception);
         }
+    }
+
+    private void CancelMapTransitionForIndependentRuntime()
+    {
+        // Final exit cannot leave the original yielded iterator able to rebuild a
+        // world after logout. This does not serialize or acknowledge ordinary travel.
+        _queuedSwitch = null;
+        StopAllCoroutines();
+        switching = false;
+        fadeAlpha = 0f;
+        ApplyPendingSky();
     }
 
     // Host bindings support the original bootstrap even after its world root is released.

@@ -35,7 +35,7 @@ class GameHud { static Dictionary<int,Texture2D> buffIcons=new Dictionary<int,Te
 class Time { public static float time,realtimeSinceStartup; }
 class Mathf { public static float Max(float a,float b)=>Math.Max(a,b); }
 class MonsterEntity { public struct StatusIcon { public int status,icon,remainMs; public bool good; }
- List<StatusIcon> sicons; float[] siExpire; void ApplyStatusIcons(){} public int FirstIcon()=>sicons.Count>0?sicons[0].icon:0;
+ List<StatusIcon> sicons; float[] siExpire; void ApplyStatusIcons(bool retryMissingIcons=false){} public int FirstIcon()=>sicons.Count>0?sicons[0].icon:0;
  SIGNATURE SETTER }
 class Test {
  static int checks; static void Check(bool ok,string msg){if(!ok)throw new Exception(msg);checks++;}

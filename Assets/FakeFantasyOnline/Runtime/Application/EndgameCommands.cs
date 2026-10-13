@@ -24,7 +24,7 @@ public sealed class EndgameRequest
     public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade";
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
-        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0)
+        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0, int npcEntityID = 0)
     {
         if (Array.IndexOf(new[] { "skill.ranks", "skill.upgrade", "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
@@ -34,7 +34,7 @@ public sealed class EndgameRequest
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
-        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1" });
+        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1", "endgame.rift-entrance.v1" });
         if (op == "skill.upgrade")
         {
             if (skillID <= 0 || string.IsNullOrEmpty(revision)) throw new ArgumentException("Skill investment requires skillId and expectedRevision.");
@@ -50,6 +50,11 @@ public sealed class EndgameRequest
         if (recipeID != 0) data.Add("recipeId", recipeID);
         if (tier != 0) data.Add("tier", tier);
         if (op == "rift.advance") data.Add("floorIndex", floorIndex);
+        if (npcEntityID != 0)
+        {
+            if (op != "rift.start") throw new ArgumentException("npcEntityId is only valid for rift.start.");
+            data.Add("npcEntityId", (long)unchecked((uint)npcEntityID));
+        }
         if (itemUIDs != null)
         {
             if (itemUIDs.Count > 5) throw new ArgumentException("Too many rune UIDs.");
