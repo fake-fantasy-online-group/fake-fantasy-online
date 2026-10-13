@@ -76,7 +76,7 @@ public partial class SoundManager : MonoBehaviour
         StartCoroutine(LoadAndPlay(id, from24));
     }
 
-    private IEnumerator LoadAndPlay(int id, bool from24)
+    private IEnumerator LoadAndPlay(int id, bool from24, System.Func<bool> stillValid = null)
     {
         Dictionary<int, AudioClip> selected = from24 ? cache24 : cache;
         string first = PickPath(from24 ? snd24Dir : sndDir, id);
@@ -96,7 +96,7 @@ public partial class SoundManager : MonoBehaviour
             }
         }
         selected[id] = clip;
-        if (clip != null) Emit(clip);
+        if (clip != null && (stillValid == null || stillValid())) Emit(clip);
     }
 
     private void Emit(AudioClip clip) => pool[unchecked(poolIdx++) % pool.Length].PlayOneShot(clip);

@@ -11,5 +11,5 @@ OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TooltipContent.Get.cs" \
  "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs"
-"$MONO/bin/mono" "$OUT/EndgameUiContract.exe"
+FFO_ENHANCED_TOOLTIP_FIXTURES="${FFO_ENHANCED_TOOLTIP_FIXTURES:-$ROOT/Tests/Endgame/Fixtures/equipment-local-base-colors.json}" "$MONO/bin/mono" "$OUT/EndgameUiContract.exe"
 python3 "$ROOT/Tests/Endgame/source_contract.py"

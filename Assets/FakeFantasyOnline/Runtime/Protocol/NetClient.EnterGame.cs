@@ -14,7 +14,11 @@ public sealed partial class NetClient
     /// x86_64 :31). The single caller passes the selected roster row name (CharBrief +0x20 of
     /// TitleFlow +0x2d0, row stride 0x68) read inside the entry arm, and no reply is read here.
     /// </remarks>
-    public void EnterGame(string name) =>
+    public void EnterGame(string name)
+    {
+        // Advertise before entry so the very first ground snapshot carries unique identity.
+        SendClientCaps();
         Send(ProtocolOpcodes.EnterWorldRequest, b => b.Str(name ?? ""));
+    }
 }
 }

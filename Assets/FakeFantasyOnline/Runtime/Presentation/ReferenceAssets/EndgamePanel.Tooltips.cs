@@ -68,8 +68,10 @@ public sealed partial class EndgamePanel
         if (lines.Count > 0 && lines[0].StartsWith("\u0007", StringComparison.Ordinal) && !IsNativeSlotLine(lines[0])) lines[0] = title;
         else lines.Insert(0, title);
         // Orange is an authoritative effect marker, including future effect text.
-        // Keep white base stats and requirement/set markers intact. New ordinary
-        // attributes already carry dark gold; legacy text needs a small fallback.
+        // Preserve the server's white/unmodified and dark-gold/local-enhanced
+        // base rows, plus requirement/set markers. Never infer local gains from
+        // quality or percentage text: zero-base and rounded-zero gains stay white.
+        // New ordinary attributes carry dark gold; legacy text needs a fallback.
         for (int i = 1; i < lines.Count; i++)
         {
             string plain = EquipmentAttributeText(PlainLine(lines[i]));

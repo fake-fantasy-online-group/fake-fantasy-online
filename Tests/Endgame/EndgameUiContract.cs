@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.IO;
 using FakeFantasyOnline.Application;
+using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
 class EndgameUiContract
@@ -24,7 +26,8 @@ class EndgameUiContract
     static object Get(object panel, string key) => panel.GetType().GetField(key, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(panel);
     static void Call(object panel, string key) => panel.GetType().GetMethod(key, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(panel, null);
     static void Apply(Client client, string json) => client.Endgame.Apply(EndgameResponse.Parse(json));
-    static void Draw(EndgamePanel panel, string click = null) { ArtworkSkin.click = click; UnityEngine.GUI.labels.Clear(); Call(panel, "OnGUI"); }
+    static bool Enabled(string text) => ArtworkSkin.enableds.TryGetValue(text, out bool enabled) && enabled;
+    static void Draw(EndgamePanel panel, string click = null) { ArtworkSkin.enableds.Clear(); ArtworkSkin.click = click; UnityEngine.GUI.labels.Clear(); Call(panel, "OnGUI"); }
     static void Receipt(Client c)
     {
         var request = c.Endgame.PendingRequest;
@@ -34,14 +37,123 @@ class EndgameUiContract
     {
         Apply(c, "{\"kind\":\"rift.state\",\"ok\":" + (ok ? "true" : "false") + ",\"error\":\"requirements\",\"rift\":{\"runId\":\"" + runID + "\",\"revision\":\"4\",\"phase\":\"" + phase + "\",\"tier\":2,\"claimable\":" + (claimable ? "true" : "false") + ",\"keyCount\":" + keys + extra + "}}");
     }
+    static void DropdownEvent(EndgamePanel panel, UnityEngine.EventType type, float x = -9000, float y = -9000, UnityEngine.KeyCode key = UnityEngine.KeyCode.F8, float wheel = 0)
+    {
+        UnityEngine.Event.current = new UnityEngine.Event { type = type, mousePosition = new UnityEngine.Vector2(x, y), keyCode = key, delta = new UnityEngine.Vector2(0, wheel) };
+        Call(panel, "DrawRiftTierDropdown");
+    }
+    static void OpenTierList(EndgamePanel p)
+    {
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(60, 150) };
+        Call(p, "DrawRift");
+        Check((bool)Get(p, "riftTierOpen") && UnityEngine.Event.current.type == UnityEngine.EventType.Used, "native input click opens dropdown and consumes world click");
+    }
+    static void RiftDropdownContracts(Client c, EndgamePanel p)
+    {
+        Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":150,\"maxTier\":150");
+        Set(p, "tier", 1); UnityEngine.Event.current = new UnityEngine.Event(); Draw(p);
+        Check(WinZ.lastFrame.width == 600 && WinZ.lastFrame.height == 450, "rift uses its compact independent 600 by 450 window");
+        Check(UnityEngine.GUI.labels.FindAll(t => t == "演劫洞天").Count == 1, "rift title is drawn only once");
+        Check(Enabled("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得") && !ArtworkSkin.enableds.ContainsKey("离开洞天"), "fresh selector offers only its necessary start action");
+        OpenTierList(p);
+        DropdownEvent(p, UnityEngine.EventType.Repaint);
+        Check(NativeScroll.calls > 0 && UnityEngine.GUI.labels.Exists(t => t == "第 8 阶"), "long unlocked list uses native scrolling and eight visible rows");
+        DropdownEvent(p, UnityEngine.EventType.ScrollWheel, 100, 240, wheel: 1);
+        Check((int)Get(p, "riftTierScroll") == 3 && UnityEngine.Event.current.type == UnityEngine.EventType.Used, "wheel scroll changes only dropdown rows");
+        Set(p, "riftTierScroll", 149); DropdownEvent(p, UnityEngine.EventType.Repaint);
+        Check((int)Get(p, "riftTierScroll") == 142, "150-tier scroll clamps to last full page");
+        DropdownEvent(p, UnityEngine.EventType.MouseDown, 90, 194 + 7 * 24 + 5);
+        Check((int)Get(p, "tier") == 150 && !(bool)Get(p, "riftTierOpen"), "clicking final visible row selects exactly tier 150");
+        for (int option = 1; option <= 150; option++)
+        {
+            Set(p, "riftTierOpen", true); int scroll = Math.Min(option - 1, 142); Set(p, "riftTierScroll", scroll);
+            DropdownEvent(p, UnityEngine.EventType.MouseDown, 90, 194 + (option - scroll - 1) * 24 + 5);
+            Check((int)Get(p, "tier") == option && !(bool)Get(p, "riftTierOpen"), "every unlocked option is individually selectable: " + option);
+        }
+        OpenTierList(p); DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.Home);
+        Check((int)Get(p, "riftTierHighlight") == 1 && (int)Get(p, "riftTierScroll") == 0 && (int)Get(p, "tier") == 150, "Home moves highlight without changing selection");
+        DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.UpArrow);
+        Check((int)Get(p, "riftTierHighlight") == 1, "keyboard lower bound remains one");
+        DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.PageDown);
+        Check((int)Get(p, "riftTierHighlight") == 9 && (int)Get(p, "riftTierScroll") == 1, "PageDown keeps keyboard highlight visible");
+        DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.End);
+        DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.DownArrow);
+        Check((int)Get(p, "riftTierHighlight") == 150 && (int)Get(p, "riftTierScroll") == 142, "End and arrow respect upper unlock bound");
+        DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.Return);
+        Check(!(bool)Get(p, "riftTierOpen") && (int)Get(p, "tier") == 150, "Enter accepts dropdown highlight");
+        OpenTierList(p); DropdownEvent(p, UnityEngine.EventType.MouseDown, 550, 350);
+        Check(!(bool)Get(p, "riftTierOpen") && UnityEngine.Event.current.type == UnityEngine.EventType.Used, "outside dismissal consumes click before covered leave or start buttons");
+        OpenTierList(p); DropdownEvent(p, UnityEngine.EventType.MouseDown, 60, 150);
+        Check(!(bool)Get(p, "riftTierOpen"), "second field click closes list without reopening");
+        OpenTierList(p); DropdownEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.Escape);
+        Check(!(bool)Get(p, "riftTierOpen") && (bool)Get(p, "open"), "Escape closes dropdown without closing its workbench");
+        OpenTierList(p); Call(p, "ClearSelection");
+        Check(!(bool)Get(p, "riftTierOpen") && (int)Get(p, "riftTierScroll") == 0, "close module or reconnect selection cleanup clears popup state");
+        OpenTierList(p); Call(p, "Close"); Set(p, "open", true);
+        Check(!(bool)Get(p, "riftTierOpen"), "reopened panel does not inherit an open dropdown");
+        ArtworkSkin.respectEventUse = true;
+        OpenTierList(p); int sent = c.Sent.Count;
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(200, 350) };
+        Draw(p, "消耗一钥 · 开启洞天");
+        Check(c.Sent.Count == sent && !(bool)Get(p, "riftTierOpen"), "click on dropdown row over start button selects only and cannot spend a key");
+        OpenTierList(p);
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(565, 30) };
+        Draw(p, "×"); Check((bool)Get(p, "open") && !(bool)Get(p, "riftTierOpen"), "close button first dismisses overlaid dropdown without closing workbench");
+        OpenTierList(p);
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(510, 395) };
+        Draw(p, "刷新"); Check(c.Sent.Count == sent && !(bool)Get(p, "riftTierOpen"), "refresh click dismisses popup without sending an underlying refresh");
+        ArtworkSkin.respectEventUse = false; ArtworkSkin.click = null;
+        OpenTierList(p); Set(p, "generation", -99L); Call(p, "Update");
+        Check(!(bool)Get(p, "open") && !(bool)Get(p, "riftTierOpen"), "session generation replacement closes both workbench and popup");
+        Set(p, "open", true);
+        Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":7,\"maxTier\":150");
+        UnityEngine.Event.current = new UnityEngine.Event(); Draw(p);
+        Check((int)Get(p, "tier") == 7 && UnityEngine.GUI.labels.Exists(t => t.Contains("已开放至第 7 阶")), "authoritative lower unlock bound clamps restored selection");
+        OpenTierList(p); Set(p, "riftTierScroll", 100); UnityEngine.GUI.labels.Clear(); DropdownEvent(p, UnityEngine.EventType.Repaint);
+        Check((int)Get(p, "riftTierScroll") == 0 && !UnityEngine.GUI.labels.Exists(t => t == "第 8 阶"), "locked tiers are not offered as dropdown options");
+        Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":150,\"maxTier\":150");
+        Set(p, "tier", 999); UnityEngine.Event.current = new UnityEngine.Event(); Draw(p);
+        Check((int)Get(p, "tier") == 150, "invalid restored selection cannot expose tier 151");
+        Call(p, "ResetRiftTierDropdown"); OpenTierList(p);
+        c.Endgame.Begin(new EndgameRequest("rift.start", c.Endgame.Revision, tier: 150)); DropdownEvent(p, UnityEngine.EventType.Repaint);
+        Check(!(bool)Get(p, "riftTierOpen"), "pending mutation immediately closes and disables selector"); Receipt(c);
+        Rift(c, "", "closed", keys: 1); Set(p, "tier", 150); UnityEngine.Event.current = new UnityEngine.Event(); Draw(p);
+        Check((int)Get(p, "tier") == 1, "missing unlock field falls back to tier one rather than unlocking 150");
+        Rift(c, "finished", "completed", extra: ",\"remainingSeconds\":360,\"unlockedTier\":4,\"maxTier\":150");
+        typeof(EndgameClientState).GetField("<RiftReceivedUtc>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, DateTime.UtcNow.AddSeconds(-120));
+        Draw(p);
+        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("通关余时 06:00") && t.Contains("第 4 阶")), "completed summary displays frozen server time and authoritative unlock without predicting extra levels");
+        var bg = new UnityEngine.Texture2D(); var back = new UnityEngine.Texture2D(); var fill = new UnityEngine.Texture2D();
+        ArtworkSkin.frameTextures["res/uires/common/msgboxbk.gsa"] = new[] { bg };
+        ArtworkSkin.frameTextures["res/uires/statusbar/expbarbk.gsa"] = new[] { back };
+        ArtworkSkin.frameTextures["res/uires/statusbar/expbar.gsa"] = new[] { fill };
+        UnityEngine.GUI.uvTextures.Clear(); UnityEngine.GUI.uvAlphaBlends.Clear();
+        typeof(EndgamePanel).GetMethod("DrawRiftWindowArtwork", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { new UnityEngine.Rect(0, 0, 940, 660), 1f, false });
+        Check(UnityEngine.GUI.uvTextures.Count == 10 && UnityEngine.GUI.uvTextures[1].Item1.width == 44 && UnityEngine.GUI.uvTextures[1].Item1.height == 44, "original background expands with intact native 44px corners");
+        Check(!UnityEngine.GUI.uvAlphaBlends[0] && UnityEngine.GUI.uvAlphaBlends[1] && ReferenceEquals(UnityEngine.GUI.uvTextures[0].Item2, bg), "opaque backing reuses original background pixels, decorative corners retain their alpha");
+        UnityEngine.GUI.uvTextures.Clear();
+        typeof(EndgamePanel).GetMethod("DrawRiftWindowArtwork", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { new UnityEngine.Rect(45, 345, 270, 252), 1f, true });
+        Check(UnityEngine.GUI.uvTextures[0].Item1.width == 270 && UnityEngine.GUI.uvTextures[0].Item1.height == 252, "dropdown backing covers its entire pointer area so covered text cannot bleed through border margins");
+        UnityEngine.GUI.uvTextures.Clear();
+        var progress = typeof(EndgamePanel).GetMethod("DrawProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), 50, 100 });
+        var clip = UnityEngine.GUI.uvTextures[0];
+        Check(ReferenceEquals(clip.Item2, fill) && clip.Item1.width == 400 && clip.Item1.height == 6 && clip.Item3.width == .5f, "original six-pixel fill is half-clipped at 50 percent, never replaced by a colored rectangle");
+        UnityEngine.GUI.uvTextures.Clear(); progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), -1, 100 });
+        Check(UnityEngine.GUI.uvTextures.Count == 0, "negative progress draws no fill");
+        progress.Invoke(p, new object[] { new UnityEngine.Rect(0, 0, 800, 24), 200, 100 });
+        Check(UnityEngine.GUI.uvTextures[0].Item1.width == 800, "overflow progress remains inside authored bar");
+        ArtworkSkin.frameTextures.Clear(); UnityEngine.Event.current = new UnityEngine.Event();
+    }
     static void MultiFloorContracts(Client c, EndgamePanel p)
     {
         Set(p, "open", true); Set(p, "module", EndgameModule.Rift); Rift(c, "", "closed", keys: 1);
-        UnityEngine.GUI.nextText = "151"; int before = c.Sent.Count; Draw(p, "消耗一钥 · 开启洞天");
-        Check(c.Sent.Count == before && !ArtworkSkin.enableds["消耗一钥 · 开启洞天"], "out-of-range direct tier input cannot spend a key");
-        UnityEngine.GUI.nextText = "150"; Draw(p);
-        Check((int)Get(p, "tier") == 150 && UnityEngine.GUI.labels.Exists(t => t.Contains("阶")) && !ArtworkSkin.enableds["+"], "direct difficulty selection reaches150 and retains upper bound");
+        RiftDropdownContracts(c, p);
+        Rift(c, "", "closed", keys: 1, extra: ",\"unlockedTier\":150,\"maxTier\":150");
+        Set(p, "tier", 150); Draw(p);
+        Check((int)Get(p, "tier") == 150 && UnityEngine.GUI.labels.Exists(t => t.Contains("阶")) && !ArtworkSkin.enableds.ContainsKey("+"), "dropdown selection reaches150 without stepper controls");
         Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Json.Contains("\"tier\":150") && !c.Last.Json.Contains("floorIndex"), "fresh paid entry chooses difficulty independently of run floor"); Receipt(c);
+        int before;
         string floor = ",\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"秘林\",\"canAdvance\":true,\"exitX\":700,\"exitY\":850";
         Rift(c, "multifloor", "active", extra: floor); Call(p, "Update");
         Check((string)Get(p, "announcement") == "", "restored floor does not invent an arrival notice");
@@ -55,7 +167,7 @@ class EndgameUiContract
         Check(((string)Get(p, "announcement")).Contains("第 4 层") && !(bool)Get(p, "confirmLeave") && c.Endgame.Rift.Tier == 2, "arrival announces floor while preserving tier and clearing old leave confirmation");
         float until = (float)Get(p, "announcementUntil"); Call(p, "Update"); Check((float)Get(p, "announcementUntil") == until, "same floor does not replay arrival");
         Rift(c, "multifloor", "active", extra: floor + ",\"transitioning\":true"); Draw(p);
-        Check(!ArtworkSkin.enableds["正在前往下一层…"] && !ArtworkSkin.enableds["进入已有洞天"], "native transition blocks repeated advance and reentry");
+        Check(!ArtworkSkin.enableds["正在前往下一层…"] && !Enabled("进入已有洞天"), "native transition blocks repeated advance and reentry");
         Rift(c, "multifloor", "boss", extra: floor); ArtworkSkin.enableds.Clear(); Draw(p);
         Check(!ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "guardian phase cannot offer skipping");
         string tells = ",\"telegraphs\":[{\"id\":\"circle\",\"entityId\":\"1\",\"ability\":\"烈焰爆裂\",\"shape\":\"circle\",\"x\":500,\"y\":500,\"radius\":105,\"remainingMS\":1500},{\"id\":\"ring\",\"entityId\":\"2\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":500,\"y\":500,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800},{\"id\":\"line\",\"entityId\":\"3\",\"ability\":\"裂地斩\",\"shape\":\"line\",\"x\":500,\"y\":500,\"endX\":700,\"endY\":500,\"radius\":38,\"remainingMS\":1400}]";
@@ -256,17 +368,18 @@ class EndgameUiContract
         const string native = "\u0007(武器)\n耐久度: 50/50\n需要等级: 60\n需要职业: 剑客\n攻击 200-300\n防御 60\n魔法攻击 50\n重量 5\n\u00035力量 +18\n\u00035攻击 +36%\n\u00035移动速度 -3%\n\u00035本件基础攻击强化 +180%\n\u00035连环枪法伤害提高12%\n\u00035孔数 2/2\n法宝技能: 原生技能\n（绑定物品不可交易）";
         foreach (bool nativeStats in new[] { false, true })
         {
+            string description = nativeStats ? native.Replace("\n攻击 200-300\n", "\n\u00035攻击 200-300\n") : native;
             c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
             Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"" + (nativeStats ? ",\"endgame.native-stats.v1\"" : "") + "]}");
             foreach (string activation in new[] { "\"active\":true", "\"inactiveReason\":\"同类宿阵优先级未满足\"", "\"inactiveReason\":\"职业、等级或耐久不符合要求\"" })
             {
                 string fields = "\"name\":\"普通剑\",\"socketCount\":2,\"formationId\":1,\"level\":60,\"trait\":\"本件基础攻击强化 +180%；连环枪法伤害提高12%\",\"sockets\":[{\"index\":1,\"itemId\":1900028002,\"name\":\"星篆·亢金龙\"},{\"index\":0,\"itemId\":1900028001,\"name\":\"星篆·角木蛟\"}]";
                 Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"native-stats-" + activation.Length + "\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0," + fields + "},{\"uid\":\"82\",\"itemId\":1002,\"location\":\"equipped\",\"tab\":2,\"slot\":25," + fields + "," + activation + "}],\"formations\":[{\"id\":1,\"name\":\"宿阵·照夜\",\"description\":\"故旗尚温。\",\"stats\":[{\"attr\":1,\"value\":15},{\"attr\":47,\"value\":30,\"mode\":1}]}]}");
-                var bag = new InventoryDlg.Item { id = 1001, bagIdx = 0, quality = 4, name = "普通剑+7", desc = native };
-                var equipped = new EquipDlg.EquippedItem { id = 1002, slot = 25, quality = 4, name = "普通剑+7", desc = native };
+                var bag = new InventoryDlg.Item { id = 1001, bagIdx = 0, quality = 4, name = "普通剑+7", desc = description };
+                var equipped = new EquipDlg.EquippedItem { id = 1002, slot = 25, quality = 4, name = "普通剑+7", desc = description };
                 InventoryDlg.rows[0] = bag; EquipDlg.Equipped.RemoveAll(row => row.slot == 25); EquipDlg.Equipped.Add(equipped);
                 var ownedTooltip = typeof(EndgamePanel).GetMethod("OwnedItemTooltip", BindingFlags.Static | BindingFlags.NonPublic);
-                string original = TooltipContent.Fmt(TooltipContent.QualityName(bag.name, bag.quality), native);
+                string original = TooltipContent.Fmt(TooltipContent.QualityName(bag.name, bag.quality), description);
                 string bagTip = EndgamePanel.BagTooltip(2, bag, original);
                 string equippedTip = EndgamePanel.EquippedTooltip(equipped, original);
                 foreach (string tip in new[] { bagTip, equippedTip })
@@ -274,7 +387,7 @@ class EndgameUiContract
                     Check(tip.Contains("力量 +15") != nativeStats && tip.Contains("攻击 +30%") != nativeStats, "negotiated native extras suppress catalog duplication; old servers retain fallback");
                     Check(Occurrences(tip, "力量 +18") == 1 && Occurrences(tip, "攻击 +36%") == 1 && Occurrences(tip, "移动速度 -3%") == 1, "server-merged same-scope flat percentage and negative values display once");
                     Check(Occurrences(tip, "攻击强化 +180%") == 1 && !tip.Contains("本件") && Occurrences(tip, "连环枪法伤害提高12%") == 1, "local enhancement and real effect lines survive once without merging into global percent");
-                    Check(tip.Contains("\n攻击 200-300\n防御 60\n魔法攻击 50\n重量 5\n") && tip.Contains("\u00035孔数 2/2"), "all intrinsic base rows stay white while special socket count is dark gold");
+                    Check(tip.Contains("\n" + (nativeStats ? "\u00035" : "") + "攻击 200-300\n防御 60\n魔法攻击 50\n重量 5\n") && tip.Contains("\u00035孔数 2/2"), "server-confirmed local attack is dark gold; unrelated bases and unmarked legacy rows retain their colors");
                     Check(tip.StartsWith("\u0007\u00035照夜+7\n\u0007(武器)\n\u0007\u00035角亢\n") && Occurrences(tip, "故旗尚温。") == 1, "merged stats preserve compact name composition and authored lore");
                 }
                 Check(!bagTip.Contains("不生效") && equippedTip.Contains("不生效") == activation.Contains("同类宿阵"), "potential values remain visible across active broken and suppressed items without false activation claims");
@@ -292,6 +405,60 @@ class EndgameUiContract
             var unformed = TooltipItem("\"itemId\":1001,\"location\":\"bag\",\"slot\":0,\"socketCount\":2");
             string ordinary = "\u0007普通剑\n\u0007(武器)\n攻击 20-30\n\u00032力量 +3\n\u00032孔数 1/2";
             Check(EndgamePanel.OverlayTooltip(unformed, ordinary) == ordinary, "unformed rune gear preserves original colors and values");
+        }
+    }
+    static void GeneratedEnhancedBaseTooltipContracts(Client c, EndgamePanel p)
+    {
+        string path = Environment.GetEnvironmentVariable("FFO_ENHANCED_TOOLTIP_FIXTURES");
+        Check(!string.IsNullOrEmpty(path) && File.Exists(path), "server-generated local-base color fixtures exist");
+        var fixtures = (IReadOnlyList<object>)BoundedJson.Parse(File.ReadAllText(path));
+        Check(fixtures.Count >= 10, "fixtures cover unique and formation local scopes, no-local and ordinary equipment");
+        foreach (IReadOnlyDictionary<string, object> fixture in fixtures)
+        {
+            string name = (string)fixture["name"], native = (string)fixture["tooltip"];
+            var rows = (IReadOnlyList<object>)fixture["intrinsic"];
+            string bagTip = null;
+            foreach (string location in new[] { "bag", "equipped" })
+            {
+                c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
+                Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}");
+                var itemData = new Dictionary<string, object>((IDictionary<string, object>)fixture["item"]);
+                itemData["location"] = location; itemData["slot"] = location == "bag" ? 0 : 25;
+                var snapshot = new Dictionary<string, object> {
+                    { "kind", "snapshot" }, { "ok", true }, { "snapshotId", name + location }, { "chunks", 1 },
+                    { "items", new object[] { itemData } }
+                };
+                if (fixture.TryGetValue("formation", out object formation)) snapshot["formations"] = new object[] { formation };
+                Apply(c, BoundedJson.Serialize(snapshot));
+                Check(c.Endgame.Items.Count == 1, "generated item snapshot loads: " + name);
+                var item = c.Endgame.Items[0];
+                string original = TooltipContent.Fmt(TooltipContent.QualityName(item.Name, 4), native);
+                string tip;
+                if (location == "bag")
+                {
+                    var bag = new InventoryDlg.Item { id = item.ItemID, bagIdx = 0, quality = 4, name = item.Name, desc = native };
+                    InventoryDlg.rows[0] = bag;
+                    tip = EndgamePanel.BagTooltip(2, bag, original); bagTip = tip;
+                }
+                else
+                {
+                    var equipped = new EquipDlg.EquippedItem { id = item.ItemID, slot = 25, quality = 4, name = item.Name, desc = native };
+                    EquipDlg.Equipped.RemoveAll(row => row.slot == 25); EquipDlg.Equipped.Add(equipped);
+                    tip = EndgamePanel.EquippedTooltip(equipped, original);
+                    Check(tip == bagTip, "same server-generated local colors through bag and equipment entrances: " + name);
+                }
+                int prior = -1;
+                foreach (string row in rows)
+                {
+                    int index = ("\n" + tip + "\n").IndexOf("\n" + row + "\n", StringComparison.Ordinal);
+                    Check(index > prior && Occurrences("\n" + tip + "\n", "\n" + row + "\n") == 1,
+                        "server-generated intrinsic value, exact color, order and uniqueness: " + name + "/" + row);
+                    prior = index;
+                }
+                Check(EndgamePanel.OverlayTooltip(item, tip) == tip, "repeated overlay preserves server-derived local colors: " + name);
+                var owned = typeof(EndgamePanel).GetMethod("OwnedItemTooltip", BindingFlags.Static | BindingFlags.NonPublic);
+                Check((string)owned.Invoke(null, new object[] { item }) == tip, "workbench shares server-generated local colors: " + name);
+            }
         }
     }
     static void EquipmentPresentationContracts(Client c, EndgamePanel p)
@@ -537,7 +704,7 @@ class EndgameUiContract
         Draw(p, "照此投料 · 炼化"); Check(c.Last.Op == "cube.execute" && c.Last.Json.Contains("opaque-quote") && !c.Last.Json.Contains("itemUids") && !c.Last.Json.Contains("recipeId"), "execute contains only frozen quote identity"); Receipt(c);
         Set(p, "module", EndgameModule.Rift); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
         UnityEngine.Time.unscaledTime = 10; Call(p, "Update"); Check(c.Last.Json.Contains("invited-run"), "poll preserves invitation run");
-        Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!ArtworkSkin.enableds["领取我的洞天所得"] && !ArtworkSkin.enableds["消耗一钥 · 开启洞天"], "reward saving disables claim and start");
+        Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!Enabled("领取我的洞天所得") && !Enabled("消耗一钥 · 开启洞天"), "reward saving disables claim and start");
         Rift(c, "old-paid", "interrupted", true, ok: false); Check(c.Endgame.Rift.RunID == "old-paid", "rejected join surfaces prior run");
         Draw(p, "领取补偿符钥"); Check(c.Last.Op == "rift.claim" && c.Last.Json.Contains("old-paid"), "compensation claims exact run"); Receipt(c);
         Rift(c, "completed-run", "completed", true); Draw(p, "进入已有洞天"); Check(c.Last.Op == "rift.start" && c.Last.Json.Contains("completed-run"), "live completed run reentry"); Receipt(c);
@@ -556,12 +723,34 @@ class EndgameUiContract
         int mutations = c.Sent.FindAll(r => r.Mutates).Count;
         Draw(p, "查看战果 · 领取");
         Check((bool)Get(p, "open") && (EndgameModule)Get(p, "module") == EndgameModule.Rift && c.Sent.FindAll(r => r.Mutates).Count == mutations, "HUD opens result review without claiming automatically");
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("战果已保存")), "completed panel describes claim instead of new paid entry instructions");
+        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("可重返拾取")), "completed panel outside the instance describes reentry instead of paid entry instructions");
         ArtworkSkin.enableds.Clear(); Draw(p);
         Check(!ArtworkSkin.enableds.ContainsKey("查看战果 · 领取"), "open panel suppresses overlapping HUD controls");
+        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, true);
+        int beforeClaim = c.Sent.Count; ArtworkSkin.enableds.Clear(); Draw(p, "领取我的洞天所得");
+        Check(c.Sent.Count == beforeClaim && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得") && !Enabled("就地拾取洞天所得"), "completed live instance replaces bulk claim with noninteractive native pickup hint");
+        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("拾妥所得") && t.Contains("归元道使")), "completed instance objective points to native loot pickup and the exit NPC");
+        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, false);
+        Rift(c, "stages", "completed", false); Draw(p);
+        Check(!Enabled("领取我的洞天所得") && Enabled("进入已有洞天"), "server live-instance projection prevents remote bulk claim and permits native reentry");
+        Rift(c, "stages", "closed", true); Draw(p);
+        Check(Enabled("领取我的洞天所得"), "server closed-instance projection restores durable recovery claim");
         Rift(c, "stages", "closed", true, keys: 1); Call(p, "Update"); Draw(p);
-        Check(!ArtworkSkin.enableds["消耗一钥 · 开启洞天"] && ArtworkSkin.enableds["领取我的洞天所得"], "durable closed unclaimed run cannot start another paid run");
+        Check(!Enabled("消耗一钥 · 开启洞天") && Enabled("领取我的洞天所得"), "durable closed unclaimed run cannot start another paid run");
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("仍可领取")), "closed unclaimed result does not claim loot is already in bag");
+        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, true);
+        Rift(c, "stages", "closed", false, keys: 1); Set(p, "confirmLeave", false); Draw(p);
+        Check(Enabled("离开洞天") && !ArtworkSkin.enableds.ContainsKey("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得"), "logical closed run still inside retains its leave escape and never offers a fresh paid run");
+        Check(!UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")) && UnityEngine.GUI.labels.Exists(t => t.Contains("归元道使")), "closed instance keeps completion and NPC exit view instead of reopening the tier selector");
+        Set(p, "open", false); Draw(p, "查看洞天");
+        Check((bool)Get(p, "open"), "closed but occupied instance retains a reachable HUD review and leave route");
+        int beforeClosedLeave = c.Sent.FindAll(r => r.Mutates).Count; Draw(p, "离开洞天");
+        Check(c.Sent.FindAll(r => r.Mutates).Count == beforeClosedLeave, "closed instance leave still requires the existing confirmation");
+        Draw(p, "确认离境 · 无自动返钥");
+        Check(c.Last.Op == "rift.leave" && c.Last.Json.Contains("\"runId\":\"stages\""), "confirmed escape from closed occupied instance leaves the exact run"); Receipt(c);
+        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, false);
+        Rift(c, "stages", "closed", false, keys: 1); Draw(p);
+        Check(Enabled("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("离开洞天"), "departed closed and fully claimed run permits new paid entry instead of stale leave");
         Rift(c, "stages", "failed", keys: 1); Draw(p);
         Check(UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")), "failed nonclaimable run keeps next-run tier selector");
         Rift(c, "other-run", "boss"); Call(p, "Update");
@@ -581,6 +770,7 @@ class EndgameUiContract
         AuthoredDescriptionContracts(c, p);
         SpecialLoreTooltipPathContracts(c, p);
         NativeStatTooltipContracts(c, p);
+        GeneratedEnhancedBaseTooltipContracts(c, p);
         EquipmentPresentationContracts(c, p);
         FormationLevelTooltipContracts(c, p);
         SocketRecipeContracts();

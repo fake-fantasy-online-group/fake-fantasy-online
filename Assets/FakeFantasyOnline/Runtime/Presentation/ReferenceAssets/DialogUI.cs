@@ -853,6 +853,7 @@ public sealed partial class DialogUI : MonoBehaviour
             Add(new ReferenceNpcDialogOption("符钥何用？", () => ShowSay(
                 "若试炼奖励中领得演劫符钥，可去寻妖魔结界守卫，选择“演劫洞天”查看符钥与开境。组队时请在守卫附近会合；能否开境、耗费与所得，以服务器确认为准。")));
 
+        AddRiftExitOptions();
         AddDungeonExitAndHardOptions();
         AddTianshenOptions();
         // Official DialogUI.BuildMenu (0x06000215) task section, arm64 06000215.c:578-647 and

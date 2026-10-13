@@ -4,7 +4,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 internal partial class GroundItems
 {
     public static void Spawn(int id, int itemId, int count, int x, int y, string name,
-        bool owned, int lockMs, int kind, int quality = 0)
+        bool owned, int lockMs, int kind, int quality = 0,
+        int uniqueId = 0, bool freshDrop = false, long dropToken = 0)
     {
         Ensure();
         Transform player = CombatNumber.PlayerTransform;
@@ -15,7 +16,14 @@ internal partial class GroundItems
             I.worldW = controller.worldW;
             I.worldH = controller.worldH;
         }
-        if (I.items.ContainsKey(id)) return;
+        if (I.items.TryGetValue(id, out Item existing))
+        {
+            existing.uniqueId = uniqueId;
+            existing.dropToken = dropToken;
+            if (existing.go != null)
+                existing.go.GetComponent<GroundItemEntity>()?.ConfigureUniqueDrop(uniqueId, freshDrop, dropToken);
+            return;
+        }
         var root = new GameObject(string.Format("Ground:{0}:{1}", name, id));
         root.transform.position = new Vector3((x - I.worldW * 0.5f) / I.ppu,
             (I.worldH * 0.5f - y) / I.ppu, 0f);
@@ -29,6 +37,7 @@ internal partial class GroundItems
         entity.id = id;
         entity.gx = x;
         entity.gy = y;
+        entity.ConfigureUniqueDrop(uniqueId, freshDrop, dropToken);
         I.items[id] = new Item
         {
             go = root,
@@ -38,7 +47,9 @@ internal partial class GroundItems
             lockEnd = Time.time + (float)lockMs / 1000f,
             kind = kind,
             quality = quality,
-            itemId = itemId
+            itemId = itemId,
+            uniqueId = uniqueId,
+            dropToken = dropToken
         };
     }
 }

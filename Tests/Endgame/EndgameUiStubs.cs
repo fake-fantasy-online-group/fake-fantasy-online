@@ -43,12 +43,12 @@ namespace UnityEngine
     }
     public static class Time { public static float unscaledTime; }
     public static class Screen { public static int width = 1280, height = 900; }
-    public enum KeyCode { F8, Escape }
+    public enum KeyCode { F8, Escape, Return, KeypadEnter, Home, End, UpArrow, DownArrow, PageUp, PageDown }
     public static class Input { public static KeyCode? pressed; public static bool GetKeyDown(KeyCode code) => pressed == code; }
-    public enum EventType { Repaint, MouseDown, Used }
+    public enum EventType { Repaint, MouseDown, MouseUp, MouseDrag, ScrollWheel, KeyDown, Used }
     public class Event
     {
-        public static Event current = new Event(); public EventType type; public int button;
+        public static Event current = new Event(); public EventType type; public int button; public KeyCode keyCode; public Vector2 delta;
         public Vector2 mousePosition = new Vector2(-9000, -9000);
         public void Use() { type = EventType.Used; }
     }
@@ -79,6 +79,10 @@ namespace UnityEngine
         public static string TextField(Rect r, string text, int n, GUIStyle style) { string value = nextText ?? text; nextText = null; return value; }
         public static Vector2 BeginScrollView(Rect r, Vector2 p, Rect inner) => p;
         public static void EndScrollView() { }
+        public static List<Tuple<Rect, Texture2D, Rect>> uvTextures = new List<Tuple<Rect, Texture2D, Rect>>();
+        public static List<bool> uvAlphaBlends = new List<bool>();
+        public static void DrawTextureWithTexCoords(Rect r, Texture2D t, Rect uv, bool alphaBlend) { DrawTextureWithTexCoords(r, t, uv); uvAlphaBlends[uvAlphaBlends.Count - 1] = alphaBlend; }
+        public static void DrawTextureWithTexCoords(Rect r, Texture2D t, Rect uv) { textures.Add(r); uvTextures.Add(Tuple.Create(r, t, uv)); uvAlphaBlends.Add(true); }
         public static void DrawTexture(Rect r, Texture2D t) { textures.Add(r); }
         public static void DrawTexture(Rect r, Texture2D t, ScaleMode s) { }
     }
@@ -89,23 +93,30 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class ArtworkSkin
     {
         public static string click;
+        public static bool respectEventUse;
         public static Dictionary<string, bool> enableds = new Dictionary<string, bool>();
         public static bool Button(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1)
-        { enableds[text] = enabled; if (click == text && enabled) { click = null; return true; } return false; }
+        { enableds[text] = enabled; if (respectEventUse && Event.current.type == EventType.Used) return false; if (click == text && enabled) { click = null; return true; } return false; }
         public static bool Tab(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1) => Button(r, text, scale, enabled, selected, fontScale);
         public static void ButtonFace(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1, bool pressed = false) { }
         public static void Panel(Rect r, float scale = 1, bool highlighted = false, float opacity = 1) { }
         public static void Input(Rect r, float scale = 1, bool focused = false) { }
         public static void Row(Rect r, float scale = 1, bool highlighted = false) { }
-        public static Texture2D[] Frames(string path, int count = 4) => null;
+        public static Dictionary<string, Texture2D[]> frameTextures = new Dictionary<string, Texture2D[]>();
+        public static Texture2D[] Frames(string path, int count = 4) => frameTextures.TryGetValue(path, out var value) ? value : null;
+    }
+    internal static class NativeScroll
+    {
+        public static int calls;
+        public static void BarRows(object owner, Rect track, int visible, int total, ref int scroll) { calls++; }
     }
     internal static class NpcChatter { public static Font CnFont() => new Font(); }
     internal static class BitmapFont { public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
     internal static class UIScale { public static float Factor = 1; }
     internal static class WinZ
     {
-        public static int forgotten;
-        public static (int, bool) Frame(object owner, Rect r, int depth) => (depth, false);
+        public static int forgotten; public static Rect lastFrame;
+        public static (int, bool) Frame(object owner, Rect r, int depth) { lastFrame = r; return (depth, false); }
         public static void Forget(object owner) { forgotten++; }
     }
     internal static class UITip { public static string last; public static Vector2 mouse; public static float scale; public static void Show(string text, float s) { last = text; scale = s; } public static void ShowAtForIndependentRuntime(string text, float s, Vector2 pointer) { Show(text, s); mouse = pointer; } }

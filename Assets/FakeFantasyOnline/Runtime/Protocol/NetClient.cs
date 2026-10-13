@@ -454,7 +454,7 @@ public sealed partial class NetClient : IDisposable
     {
         Send(
             ProtocolOpcodes.ClientCapabilities,
-            payload => payload.I32(31));
+            payload => payload.I32(31 | 32));
     }
 
     public void SetPetView(int mask)

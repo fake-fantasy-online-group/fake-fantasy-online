@@ -2821,15 +2821,15 @@ public sealed class WorldGroundItemState
         bool owned,
         int lockMilliseconds,
         byte kind,
-        byte quality)
-        : this(groundId, itemId, count, x, y, displayName, owned, lockMilliseconds, kind, quality, false) { }
+        byte quality, int uniqueId = 0, bool freshDrop = false, long dropToken = 0)
+        : this(groundId, itemId, count, x, y, displayName, owned, lockMilliseconds, kind, quality, false, uniqueId, freshDrop, dropToken) { }
 
     public static WorldGroundItemState FromNative(int groundId, int itemId, int count, int x, int y,
-        string displayName, bool owned, int lockMilliseconds, byte kind, byte quality) =>
-        new WorldGroundItemState(groundId, itemId, count, x, y, displayName, owned, lockMilliseconds, kind, quality, true);
+        string displayName, bool owned, int lockMilliseconds, byte kind, byte quality, int uniqueId = 0, bool freshDrop = false, long dropToken = 0) =>
+        new WorldGroundItemState(groundId, itemId, count, x, y, displayName, owned, lockMilliseconds, kind, quality, true, uniqueId, freshDrop, dropToken);
 
     private WorldGroundItemState(int groundId, int itemId, int count, int x, int y,
-        string displayName, bool owned, int lockMilliseconds, byte kind, byte quality, bool native)
+        string displayName, bool owned, int lockMilliseconds, byte kind, byte quality, bool native, int uniqueId, bool freshDrop, long dropToken)
     {
         if (!native && groundId <= 0)
         {
@@ -2861,6 +2861,9 @@ public sealed class WorldGroundItemState
         LockMilliseconds = lockMilliseconds;
         Kind = kind;
         Quality = quality;
+        UniqueId = uniqueId;
+        FreshDrop = freshDrop;
+        DropToken = dropToken;
     }
 
     public int GroundId { get; }
@@ -2873,6 +2876,10 @@ public sealed class WorldGroundItemState
     public int LockMilliseconds { get; }
     public byte Kind { get; }
     public byte Quality { get; }
+    public int UniqueId { get; }
+    public bool FreshDrop { get; }
+    public long DropToken { get; }
+    public bool IsUnique => UniqueId > 0;
 }
 
 /// <summary>

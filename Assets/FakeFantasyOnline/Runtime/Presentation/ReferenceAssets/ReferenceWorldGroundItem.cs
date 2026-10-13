@@ -374,6 +374,8 @@ internal sealed class ReferenceWorldGroundItemActor : IDisposable
         sourceItem.kind = state.Kind;
         sourceItem.quality = state.Quality;
         sourceItem.itemId = state.ItemId;
+        sourceItem.uniqueId = state.UniqueId;
+        sourceItem.dropToken = state.DropToken;
         renderer.sortingOrder = Mathf.Clamp(state.Y, 0, 30000);
         if (icon)
         {
@@ -393,6 +395,8 @@ internal sealed class ReferenceWorldGroundItemActor : IDisposable
         entity.id = state.GroundId;
         entity.gx = state.X;
         entity.gy = state.Y;
+        // Reconstructed actors project state; only the receive path may consume a sound edge.
+        entity.ConfigureUniqueDrop(state.UniqueId, false, state.DropToken);
         return Built;
     }
 
@@ -410,7 +414,8 @@ internal sealed class ReferenceWorldGroundItemActor : IDisposable
                candidate.Count == state.Count && candidate.X == state.X && candidate.Y == state.Y &&
                candidate.DisplayName == state.DisplayName && candidate.Owned == state.Owned &&
                candidate.LockMilliseconds == state.LockMilliseconds &&
-               candidate.Kind == state.Kind && candidate.Quality == state.Quality;
+               candidate.Kind == state.Kind && candidate.Quality == state.Quality &&
+               candidate.UniqueId == state.UniqueId && candidate.DropToken == state.DropToken;
     }
 
     public bool IsProtected(float realtime)
