@@ -236,6 +236,7 @@ public sealed partial class DialogUI : MonoBehaviour
         // DisplayName is therefore a legal name that still opens; the empty string also keeps
         // NpcName non-null for the later Contains checks in BuildMenu.
         CaptureRiftEntrance(npc);
+        CaptureRiftExit(npc);
         CaptureCubeWorkbench(npc);
         NpcName = (originalReceiver != null ? originalReceiver.npcName : npc.DisplayName) ?? string.Empty;
 
