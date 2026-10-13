@@ -82,14 +82,15 @@ sky 与传送门代码，并使用确定性的 Unity 替身。
 原始同步 I/O、强制 GC 和 Unity 对象构建保留，不据此承诺实机零卡顿。
 服务端真实踩门与首次 ready 交接的回归，应另行验证；不能用客户端替身测试代替。
 
-## 有界极端调度诊断
+## 修复前的有界极端调度历史对照（服务端 27291d0）
 
 ```sh
 python3 Tests/WorldEntry/run-map-transition-contract.py --stress
 python3 Tests/WorldEntry/run-map-transition-contract.py --stress-original
 ```
 
-这两项目前**预期以非零退出报告仍存在的兼容问题**，不是全部通过的验收套件。
+这两项保留服务端来源分类修复前的行为，**预期以非零退出复现历史兼容问题**；
+它们不是最终服务端候选的回放，后面的真实包回放才检验本轮修复。
 它们驱动真实客户端生产迭代器，使用两条 FIFO 队列安排上下行与主线程帧边界；
 不在同步建图内部伪造网络回调，也不让刚启动的协程在同帧再次恢复。
 服务端队列行为在此是明确的调度模型，应与真实 session/router 回归配对阅读。
@@ -102,7 +103,7 @@ python3 Tests/WorldEntry/run-map-transition-contract.py --stress-original
   同图不同实例的服务端归属需由真实 session/router 测试另证，不能由此客户端替身推出。
 
 这 100 种调度是**一个问题的不同时间组合**，不是 100 个独立缺陷，
-也不能据此判定原官方客户端有问题。它揭示原客户端与当前自建服务端的一处兼容窗口：
+也不能据此判定原官方客户端有问题。它揭示原客户端与修复前自建服务端的一处兼容窗口：
 
 1. 客户端本地建完，发送首 ready。
 2. 服务端此前因踩门已经发送首 0x803a，但它仍在下行途中。
@@ -110,12 +111,12 @@ python3 Tests/WorldEntry/run-map-transition-contract.py --stress-original
 4. 紧随其后的首轮实体快照在 switching 期间未被接纳；第二次 ready 又触发补全快照。
 
 两个方向各自仍保持 TCP FIFO。这种交叉不能仅靠“提前 ready 收据”覆盖；
-必须核实普通门的本地预测与服务端传送分类。当前诊断保留失败，不以更改预期或
+这正是本轮服务端普通门来源分类修复针对的窗口。历史诊断保留失败，不以更改预期或
 重新加入大切图状态机把它改成通过。
 
 普通门本地预测有前提：本地存在匹配 JSON 门、非 custom map、非命令门、非秘境接管，
 且玩家没有死亡/打工/禁足/同乘等提前返回状态，也不在出生门内抑制或已传送锁中。
-当前生产 MapLink 的资源重载只读 teleport_links JSON；云端没有该真实表和资源包，
+此次历史调查时，生产 MapLink 的资源重载只读 teleport_links JSON；云端未取得该真实表和资源包，
 不能声称数据库所有普通门均与客户端表一致。任务寻路、跟随与插件普通导航仍共享
 原生位移和门检测尾部，不能据此扩展为对所有特殊传送的保证。
 
@@ -123,4 +124,44 @@ python3 Tests/WorldEntry/run-map-transition-contract.py --stress-original
 `TestClientMapReadyFIFOActorScheduleMatrix`（在服务端仓库运行）：
 ready 先于 source Move 时为 0 个 0x803a 加 1 次首快照；handoff 先于 ready 时，
 即使确认已不会丢失，仍为 1 个首 0x803a 加 1 次首快照。
-因此上述客户端 crossing 诊断仍有真实生产序列作为前提，尚不能把全时序单次加载标为通过。
+这是修复前 crossing 诊断的真实生产前提；当时不能将单次加载标为通过。
+下节记录来源分类修复后另行捕获的实际消息与已通过范围，不沿用这一旧模型判断最终候选。
+
+## 服务端来源修复候选的真实包回放
+
+以上 `--stress` 保留修复前服务端行为作为失败对照，不手工删除其中的 0x803a。
+新增回放从真实服务端 Session、Router、场景和编码器捕获消息，再驱动当前恢复版客户端：
+
+```sh
+source /workspace/shared/cloud-test-env.sh
+python3 Tests/WorldEntry/run-map-transition-contract.py --sender
+python3 Tests/WorldEntry/run-map-transition-contract.py \
+  --record-server /workspace/shared/server-development \
+  --server-trace /tmp/native-portal-server-wire-final.json
+```
+
+`--record-server` 运行服务端 `TestNativePortalExportClientIteratorTrace`，记录当前 commit
+及全部生产 Go 源码的 SHA-256；捕获前后若源码变化则拒绝使用结果。完整原始包保留在 JSON，
+每批消息只有在真实客户端迭代器发出相应 ready 后才能投递，不能凭空追加第二次快照。
+
+- 实际 sender 证明普通门只执行本地回调，预建前没有目标 `entered=0`、门户请求或强制
+  最后移动；周期保存仍用源地图，普通移动仅带 x/y，完整建图后才发送目标 `entered=1`。
+- 当前候选捕获 12 条真实服务端序列，覆盖普通门跨图/同图、有/无最后移动、server-only 门、
+  主动传送、真实同落点第二次主动传送，以及旧源 NPC/掉落迟到。
+- 1296 种双向 FIFO/主线程/掉帧调度，22464 项检查通过。每个单传送只有一次建图和 ready，
+  第一次目标实体完整；真正第二次服务端传送仍保留第二次建图。
+- 地面物品与 NPC 使用真实解码器、原生注册/生成/移除方法；源对象被删除，目标网络对象
+  和目标本地预置 NPC 未被误删。Unity 图形构建和玩家/怪物注册表仍使用替身。
+- 将服务端 `transfer.go` 置为 `27291d0` 版本的独立对照生成了真实消息；相同原生
+  GroundItems 接收路径复现旧源掉落残留。候选的按种类移除消息关闭此反例，没有删改
+  捕获消息来制造失败。这是单文件生产差异对照，不是整个旧版本的启动测试。
+
+这组结果仅覆盖上述来源分类和收包生命周期，不能代替副本、选村、回城、GM 等每条业务入口
+的独立路由验证，也不是 Unity 实机卡顿验收。
+
+2026-10-13 最终冻结树捕获：客户端地图生命周期基线 `8066014`，另含大秘境协商保护修复；服务端 HEAD
+`27291d095acf08bb4f3485bea09cf1c6b1002c41` 加本轮未提交修复，生产 Go 源 SHA-256 为
+`790f70e8109974bddb83f2652da4e248de7d0c4eae8df1711ec995fb7420783a`。
+该次完整原包 JSON 的 SHA-256 为
+`0875c9a22148374cf92bc064107269921f4ada5acbdc8f17499475a38f85a0bd`。
+后续源码变化应重新运行上述命令，不沿用此验收 hash。

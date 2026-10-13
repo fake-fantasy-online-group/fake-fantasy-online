@@ -31,6 +31,11 @@ public sealed partial class EndgameClientState
     public bool RiftInInstance { get; private set; }
     public bool RiftContextKnown { get; private set; }
     private bool hasRiftSceneContext;
+    // A valid sidecar reply distinguishes a temporarily unavailable current server
+    // from a silent legacy server. Retry exhaustion is not evidence of a public map.
+    private bool helloServerKnown;
+    private string helloRequestID = "";
+    private const string RiftContextUnavailableMessage = "地图归属尚未确认，暂不能使用传送门；请重新连接后重试。";
     public DateTime RiftReceivedUtc { get; private set; }
     public IReadOnlyList<EndgameItemView> Items { get; private set; } = Array.Empty<EndgameItemView>();
     public IReadOnlyList<EndgameMaterialView> Materials { get; private set; } = Array.Empty<EndgameMaterialView>();
@@ -56,10 +61,10 @@ public sealed partial class EndgameClientState
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
-        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = false;
+        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
         RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
-        helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
+        helloAttempts = 0; helloRequestID = ""; helloRetryScheduled = helloAwaitingResponse = false;
         helloRequestedAt = helloRetryAt = default(DateTime);
         DiscardChunks(); publishedSnapshotID = null; retiredSnapshots.Clear(); retiredSnapshotOrder.Clear();
         inventorySnapshotRequired = nativeSnapshotRefreshPending = false; inventorySnapshotRequiredAt = default(DateTime);
@@ -68,7 +73,7 @@ public sealed partial class EndgameClientState
     public bool Begin(EndgameRequest request)
     {
         if (request.Op == "hello")
-        { RiftEntrances = Array.Empty<EndgameRiftEntranceView>(); HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
+        { RiftEntrances = Array.Empty<EndgameRiftEntranceView>(); helloRequestID = request.RequestID; HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
         // A native-only publication gets one coalesced read, including a failed
         // send. Manual refresh remains available; host ticks never retry forever.
@@ -108,8 +113,9 @@ public sealed partial class EndgameClientState
         if (!Negotiated && helloAwaitingResponse && (now - helloRequestedAt).TotalSeconds >= 15)
         {
             ScheduleHelloRetry(now); Error = "timeout";
-            if (!helloRetryScheduled && !hasRiftSceneContext) RiftContextKnown = true;
-            Message = helloRetryScheduled ? "星图暂未响应，稍后自动重试。" : "星图暂未响应，请重新连接。"; Version++;
+            if (!helloRetryScheduled && !hasRiftSceneContext && !helloServerKnown) RiftContextKnown = true;
+            Message = helloRetryScheduled ? "星图暂未响应，稍后自动重试。" :
+                helloServerKnown && !RiftContextKnown ? RiftContextUnavailableMessage : "星图暂未响应，请重新连接。"; Version++;
         }
         if (helloRetryScheduled && !Negotiated && now >= helloRetryAt)
         { helloRetryScheduled = false; HelloSent = false; Version++; }
@@ -181,6 +187,15 @@ public sealed partial class EndgameClientState
                 if (value == "endgame.rift-entrance.v1") riftEntrances = true;
             }
             bool accepted = response.OK && capable;
+            bool transientHello = response.Error == "pending" || response.Error == "storage" ||
+                response.Error == "storage_unavailable" || response.Error == "busy";
+            // A delayed load may successfully answer an earlier attempt. Accept that
+            // success, but never let an old pending/busy undo a completed negotiation
+            // or pollute an explicitly newer refresh.
+            if (Negotiated && transientHello && (!helloAwaitingResponse ||
+                response.RequestID.Length > 0 && response.RequestID != helloRequestID)) return false;
+            if (capable || transientHello) helloServerKnown = true;
+            if (transientHello && !Negotiated && !hasRiftSceneContext) RiftContextKnown = false;
             RiftEntrances = accepted && riftEntrances ? response.RiftEntrances : Array.Empty<EndgameRiftEntranceView>();
             // A failed refresh leaves the server's previously negotiated
             // renderer intact. Keep its matching client ownership as well.
@@ -195,13 +210,15 @@ public sealed partial class EndgameClientState
             }
             Error = accepted ? "" : response.Error;
             helloAwaitingResponse = helloRetryScheduled = false;
-            if (!accepted && (response.Error == "pending" || response.Error == "storage" || response.Error == "storage_unavailable" || response.Error == "busy"))
+            if (!accepted && transientHello)
                 ScheduleHelloRetry(DateTime.UtcNow);
             Message = accepted ? "星图已启，静候仙缘。" : helloRetryScheduled ? "星图暂未就绪，稍后自动重试。" : response.Message.Length > 0 ? response.Message : "当前服务器未开放演劫系统。";
             // An old server can negotiate the sidecar without portal ownership.
             // Never release a previously confirmed private context on a failed refresh.
-            if (!hasRiftSceneContext && (accepted && !riftPortals || !accepted && !helloRetryScheduled))
+            if (!hasRiftSceneContext && (accepted && !riftPortals || !accepted && !helloRetryScheduled && !helloServerKnown))
                 RiftContextKnown = true;
+            if (!accepted && !helloRetryScheduled && helloServerKnown && !RiftContextKnown)
+                Message = RiftContextUnavailableMessage;
             Version++; return accepted;
         }
         if (!Negotiated) return false;
