@@ -7,6 +7,11 @@ namespace FakeFantasyOnline.Application
 public sealed partial class EndgameClientState
 {
     public bool SnapshotLoading => assembling != null;
+    // Native inventory rows and extension rows arrive in separate packets. A
+    // matching template/slot does not identify a rolled equipment instance.
+    public bool InventorySnapshotCurrent => Negotiated && HasSnapshot && !inventorySnapshotRequired &&
+        !SnapshotLoading && SnapshotRevision == Revision;
+    public bool NeedsInventorySnapshotRefresh => Negotiated && nativeSnapshotRefreshPending && !SnapshotLoading;
     public string SnapshotID => publishedSnapshotID ?? "";
     public string SnapshotRevision { get; private set; } = "0";
     public EndgameCombatStatsView CombatStats { get; private set; }
@@ -34,14 +39,54 @@ public sealed partial class EndgameClientState
     private int nextChunk, chunkCount;
     private DateTime snapshotStartedAt;
     private readonly HashSet<string> seenUIDs = new HashSet<string>(StringComparer.Ordinal);
+    private bool inventorySnapshotRequired;
+    private bool nativeSnapshotRefreshPending;
+    private DateTime inventorySnapshotRequiredAt;
+    private readonly HashSet<string> retiredSnapshots = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Queue<string> retiredSnapshotOrder = new Queue<string>();
+
+    public void NoteNativeInventoryPublished()
+    {
+        // Pushed sidecars follow native inventory on the same ordered connection;
+        // native-only paths are recovered by one host-batch snapshot read.
+        // Never keep an old UID overlay alive
+        // just because a replacement happens to have the same item-table ID.
+        inventorySnapshotRequired = true;
+        nativeSnapshotRefreshPending = true;
+        inventorySnapshotRequiredAt = DateTime.UtcNow;
+        DiscardChunks();
+        InvalidateQuote();
+    }
+
+    private void RetireSnapshot(string id)
+    {
+        if (string.IsNullOrEmpty(id) || !retiredSnapshots.Add(id)) return;
+        retiredSnapshotOrder.Enqueue(id);
+        while (retiredSnapshotOrder.Count > 128) retiredSnapshots.Remove(retiredSnapshotOrder.Dequeue());
+    }
+
+    private void RejectSnapshot()
+    {
+        // An explicit failed read is terminal for this automatic attempt. Keep
+        // its precise server error, not a later misleading timeout or old UID.
+        inventorySnapshotRequired = true;
+        nativeSnapshotRefreshPending = false;
+        inventorySnapshotRequiredAt = default(DateTime);
+        DiscardChunks();
+    }
+
     private void ApplySnapshot(EndgameResponse r)
     {
         if (r.SnapshotID.Length == 0 || r.Chunks < 1 || r.Chunk >= r.Chunks) throw new FormatException("Invalid snapshot envelope.");
-        if (CompareRevision(r.Revision, Revision) < 0 || r.SnapshotID == publishedSnapshotID) return;
+        if (CompareRevision(r.Revision, Revision) < 0 || retiredSnapshots.Contains(r.SnapshotID) ||
+            r.SnapshotID == publishedSnapshotID || assembling != null && CompareRevision(r.Revision, snapshotRevision) < 0) return;
         if (r.Chunk == 0)
         {
             if (assembling != null && snapshotID == r.SnapshotID) { DiscardChunks(); throw new FormatException("Repeated snapshot chunk."); }
             DiscardChunks(); snapshotStartedAt = DateTime.UtcNow; assembling = new List<EndgameItemView>();
+            inventorySnapshotRequired = true;
+            nativeSnapshotRefreshPending = false;
+            inventorySnapshotRequiredAt = snapshotStartedAt;
             snapshotID = r.SnapshotID; snapshotRevision = r.Revision; chunkCount = r.Chunks;
             snapshotMaterials = r.Materials; snapshotFormations = r.Formations; snapshotCombatStats = r.CombatStats; snapshotCombatStatsVersion = CombatStatsVersion;
         }
@@ -61,10 +106,14 @@ public sealed partial class EndgameClientState
         // Its newer runtime state must survive publication of the older chunk-zero view.
         if (snapshotCombatStatsVersion == CombatStatsVersion && CompareRevision(snapshotRevision, CombatStatsRevision) >= 0)
             PublishCombatStats(snapshotCombatStats, snapshotRevision);
-        Revision = SnapshotRevision = snapshotRevision; HasSnapshot = true; publishedSnapshotID = snapshotID; InvalidateQuote(); DiscardChunks();
+        RetireSnapshot(publishedSnapshotID);
+        Revision = SnapshotRevision = snapshotRevision; HasSnapshot = true; inventorySnapshotRequired = false;
+        nativeSnapshotRefreshPending = false;
+        publishedSnapshotID = snapshotID; InvalidateQuote(); DiscardChunks();
     }
     private void DiscardChunks()
     {
+        RetireSnapshot(snapshotID);
         assembling = null; snapshotCombatStats = null; snapshotMaterials = null; snapshotFormations = null; snapshotID = snapshotRevision = null; nextChunk = chunkCount = 0; seenUIDs.Clear();
     }
 }

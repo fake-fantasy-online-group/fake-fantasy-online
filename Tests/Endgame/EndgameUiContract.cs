@@ -191,6 +191,9 @@ class EndgameUiContract
     static int Occurrences(string text, string value) => (text.Length - text.Replace(value, "").Length) / value.Length;
     static void TooltipContracts(Client c, EndgamePanel p)
     {
+        c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"tooltip-native-ready\",\"chunks\":1,\"items\":[]}");
         var classifyEffect = typeof(EndgamePanel).GetMethod("IsLegacyEquipmentEffect", BindingFlags.NonPublic | BindingFlags.Static);
         Check((bool)classifyEffect.Invoke(null, new object[] { "赋予2级白虎卫身光环", "" }), "concise aura line remains a special effect without detailed equipment explanation");
         Check(!(bool)classifyEffect.Invoke(null, new object[] { "白虎卫身的古老传说", "" }), "aura name in ordinary lore is not misclassified");
@@ -253,6 +256,7 @@ class EndgameUiContract
     static void AuthoredDescriptionContracts(Client c, EndgamePanel p)
     {
         c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"authored-native-ready\",\"chunks\":1,\"items\":[]}");
         var item = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"location\":\"bag\",\"slot\":0,\"name\":\"炉火旧剑\",\"description\":\"旧炉之火。\\n主人已去。\",\"trait\":\"普通攻击伤害提高10%\"");
         string native = "\u0007旧剑\n\u0007(武器)\n\n仙遗·炉火旧剑\n基底：旧剑\n力量 +12\n普通攻击伤害提高10%\n旧炉之火。\n主人已去。\n\n耐久度: 50/50\n攻击 20-30\n孔数 0/2\n（绑定物品不可交易）";
         string tip = EndgamePanel.OverlayTooltip(item, native);
@@ -271,13 +275,23 @@ class EndgameUiContract
         var old = EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"items\":[{\"itemId\":1001,\"formationId\":1}]}").Items[0];
         Check(old.Trait == "", "old payload without optional owned Trait stays accepted");
         c.Endgame.Begin(new EndgameRequest("catalog", catalog: "runes"));
-        Apply(c, "{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028028,\"name\":\"星篆·轸水蚓\",\"mansion\":\"轸\",\"quadrant\":\"朱雀\",\"minLevel\":60,\"stats\":[{\"attr\":38,\"value\":1,\"mode\":0}]}]}");
+        Apply(c, "{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028028,\"name\":\"星篆·轸水蚓\",\"description\":\"有效穿戴时，每2秒按生命恢复数值恢复生命。\",\"mansion\":\"轸\",\"quadrant\":\"朱雀\",\"minLevel\":60,\"stats\":[{\"attr\":38,\"value\":1,\"mode\":0}]}]}");
         InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1900028028, bagIdx = 0 };
         var rune = TooltipItem("\"itemId\":1900028028,\"location\":\"bag\",\"slot\":0,\"name\":\"星篆·轸水蚓\"");
         tip = EndgamePanel.OverlayTooltip(rune, "\u0007星篆·轸水蚓\n有效穿戴时每2秒恢复7点生命");
         Check(Occurrences(tip, "每2秒恢复7点生命") == 1 && !tip.Contains("恢复1点生命") && !tip.Contains("生命恢复 +1"), "rune28 actual stored recovery amount suppresses catalog fallback");
         tip = EndgamePanel.OverlayTooltip(rune, "\u0007星篆·轸水蚓");
-        Check(Occurrences(tip, "每2秒恢复1点生命") == 1, "rune catalog fallback remains available without native properties");
+        Check(Occurrences(tip, "生命恢复 +1") == 1 && tip.Contains("每2秒按生命恢复数值恢复生命"), "rune catalog fallback uses generic values and authoritative cadence description");
+        Check(EndgamePanel.RuneDetails(1900028028, false).Contains("每2秒按生命恢复数值恢复生命"), "installed rune details preserve server-owned eligibility and cadence");
+        c.Endgame.Begin(new EndgameRequest("catalog", catalog: "runes"));
+        Apply(c, "{\"kind\":\"catalog.runes\",\"ok\":true,\"runes\":[{\"itemId\":1900028001,\"name\":\"配置恢复星篆\",\"description\":\"有效穿戴时，每1.5秒按生命恢复数值恢复生命。\",\"stats\":[{\"attr\":38,\"value\":3,\"mode\":0}]}]}");
+        InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1900028001, bagIdx = 0 };
+        rune = TooltipItem("\"itemId\":1900028001,\"location\":\"bag\",\"slot\":0,\"name\":\"配置恢复星篆\"");
+        tip = EndgamePanel.OverlayTooltip(rune, "\u0007配置恢复星篆");
+        Check(tip.Contains("生命恢复 +3") && tip.Contains("每1.5秒") && !tip.Contains("每2秒"), "configured alternate rune identity uses authoritative cadence without item-specific inference");
+        tip = EndgamePanel.OverlayTooltip(rune, "\u0007配置恢复星篆\n有效穿戴时每1.5秒恢复7点生命");
+        Check(tip.Contains("每1.5秒恢复7点生命") && !tip.Contains("生命恢复 +3"), "alternate cadence still preserves actual owned recovery amount");
+        Check(EndgamePanel.RuneDetails(1900028001, false).Contains("每1.5秒"), "alternate rune details share authoritative catalog description");
         InventoryDlg.rows[0] = new InventoryDlg.Item { id = 1001, bagIdx = 0 };
     }
     static void SpecialLoreTooltipPathContracts(Client c, EndgamePanel p)
@@ -579,6 +593,7 @@ class EndgameUiContract
         {
             c.Endgame.Reset(); p.Bind(c); c.Endgame.Begin(new EndgameRequest("hello"));
             Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"" + (nativeStats ? ",\"endgame.native-stats.v1\"" : "") + "]}");
+            Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"stat-text-native-ready\",\"chunks\":1,\"items\":[]}");
             var item = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"name\":\"快剑\",\"location\":\"bag\",\"slot\":0,\"stats\":[{\"attr\":25,\"value\":-20,\"mode\":1},{\"attr\":25,\"value\":15,\"mode\":1},{\"attr\":25,\"value\":-200,\"mode\":0}]");
             string original = "\u0007旧剑\n\u0007(武器)\n\u00030攻击 20~30\n" +
                 (nativeStats ? "\u00035攻击速度 +20%\n\u00035攻击速度 -15%\n\u00035攻击间隔 -200毫秒\n" : "") + "\u0006命中时击退敌人";
@@ -676,6 +691,69 @@ class EndgameUiContract
             foreach (var item in c.Endgame.Items)
                 Check(EndgamePanel.OverlayTooltip(item, bagTip) == bagTip, "repeated overlay keeps attribute-ending effects and metadata stable");
         }
+    }
+    static void InventoryIdentityContracts(Client c, EndgamePanel p)
+    {
+        c.Endgame.Reset(); p.Bind(c); c.EndgameInWorld = true;
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}");
+        Func<string, string, string> item = (uid, name) => "{\"uid\":\"" + uid + "\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"uniqueId\":1,\"name\":\"" + name + "\",\"description\":\"" + name + "旧事。\",\"trait\":\"普通攻击伤害提高10%\"}";
+        Action<string, int, int, int, string> snapshot = (id, revision, chunk, chunks, items) => Apply(c,
+            "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"" + id + "\",\"revision\":\"" + revision + "\",\"chunk\":" + chunk + ",\"chunks\":" + chunks + ",\"items\":[" + items + "]}");
+        const string body = "\u0007(武器)\n\u00030攻击 20-30\n\u00035力量 +8\n\u0006普通攻击伤害提高10%\n孔数 0/2\n（绑定物品不可交易）";
+        var native = new InventoryDlg.Item { id = 1001, bagIdx = 0, quality = 4, name = "新器+7", desc = body };
+        InventoryDlg.rows[0] = native;
+        string original = TooltipContent.Fmt(TooltipContent.QualityName(native.name, native.quality), body);
+        snapshot("identity-old", 1, 0, 1, item("81", "旧器"));
+        Check(EndgamePanel.BagTooltip(2, native, original).Contains("旧器旧事。"), "initial native/sidecar pair supplies the owned lore");
+        var historical = c.Endgame.Items[0];
+        c.Endgame.NoteNativeInventoryPublished();
+        Check(c.Endgame.HasSnapshot && !c.Endgame.InventorySnapshotCurrent && c.Endgame.Find("bag", 2, 0, 1001) == null,
+            "same-template native replacement immediately fences old UID identity without erasing historical observation");
+        Check(EndgamePanel.BagTooltip(2, native, original) == original && !EndgamePanel.MatchesNative(historical),
+            "native authoritative stats and effects stay byte-identical while old name lore and workbench UID are withheld");
+        snapshot("identity-new", 2, 0, 2, item("82", "新器"));
+        Check(c.Endgame.SnapshotLoading && EndgamePanel.BagTooltip(2, native, original) == original, "partial replacement cannot overlay its incomplete identity");
+        snapshot("delayed-old-revision", 1, 0, 1, item("81", "旧器"));
+        Check(c.Endgame.SnapshotLoading && !c.Endgame.InventorySnapshotCurrent, "older full snapshot cannot displace a newer assembling revision");
+        snapshot("identity-new", 2, 1, 2, "");
+        string current = EndgamePanel.BagTooltip(2, native, original);
+        Check(c.Endgame.InventorySnapshotCurrent && c.Endgame.Find("bag", 2, 0, 1001).UID == "82" && current.Contains("新器旧事。") && !current.Contains("旧器旧事。"), "only complete replacement publishes the new same-template UID and lore");
+        Check(current.Contains("\u00030攻击 20-30") && Occurrences(current, "力量 +8") == 1 && Occurrences(current, "普通攻击伤害提高10%") == 1,
+            "restored overlay preserves authoritative base color actual stats and effects exactly once");
+        snapshot("identity-old", 2, 0, 1, item("81", "旧器"));
+        Check(c.Endgame.Find("bag", 2, 0, 1001).UID == "82", "retired snapshot cannot revive an old UID even at an equal revision");
+        snapshot("interrupted-old", 3, 0, 2, item("83", "旧器"));
+        c.Endgame.NoteNativeInventoryPublished();
+        snapshot("interrupted-old", 3, 1, 2, "");
+        Check(!c.Endgame.SnapshotLoading && !c.Endgame.InventorySnapshotCurrent, "native publication retires an interrupted snapshot and ignores its delayed tail");
+        snapshot("newer-first", 4, 0, 2, item("84", "新器"));
+        snapshot("interrupted-old", 3, 1, 2, "");
+        Check(c.Endgame.SnapshotLoading, "retired tail cannot discard a newer valid assembly");
+        snapshot("newer-first", 4, 1, 2, "");
+        Check(c.Endgame.Find("bag", 2, 0, 1001).UID == "84", "newer assembly survives old/new revision interleaving");
+        Apply(c, "{\"kind\":\"socket.insert\",\"ok\":true,\"revision\":\"5\"}");
+        Check(!c.Endgame.InventorySnapshotCurrent && EndgamePanel.BagTooltip(2, native, original) == original, "new authoritative revision invalidates old sidecar even before inventory arrives");
+        snapshot("revision-five", 5, 0, 1, item("85", "新器"));
+        c.EndgameInWorld = false;
+        Check(EndgamePanel.BagTooltip(2, native, original) == original, "world departure prevents an overlay before connection teardown completes");
+        c.Endgame.Reset(); c.EndgameInWorld = true;
+        Check(EndgamePanel.BagTooltip(2, native, original) == original, "disconnect removes all old UID overlay authority");
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.native-stats.v1\"]}");
+        Check(EndgamePanel.BagTooltip(2, native, original) == original, "reconnect negotiation cannot reuse the prior character snapshot");
+        snapshot("identity-old", 1, 0, 1, item("91", "重连器"));
+        Check(c.Endgame.InventorySnapshotCurrent && c.Endgame.Find("bag", 2, 0, 1001).UID == "91", "snapshot identity bookkeeping is generation scoped and permits a new session");
+        var worn = new EquipDlg.EquippedItem { id = 1001, slot = 25, quality = 4, name = native.name, desc = body };
+        EquipDlg.Equipped.Clear(); EquipDlg.Equipped.Add(worn);
+        snapshot("equipped-before", 2, 0, 1, item("91", "旧器").Replace("\"location\":\"bag\"", "\"location\":\"equipped\"").Replace("\"slot\":0", "\"slot\":25"));
+        c.Endgame.NoteNativeInventoryPublished();
+        Check(EndgamePanel.EquippedTooltip(worn, original) == original, "same-base equipped replacement also retains the new native description without old overlay");
+        snapshot("equipped-after", 3, 0, 1, item("92", "新器").Replace("\"location\":\"bag\"", "\"location\":\"equipped\"").Replace("\"slot\":0", "\"slot\":25"));
+        Check(EndgamePanel.EquippedTooltip(worn, original).Contains("新器旧事。"), "equipped overlay resumes with the complete replacement UID");
+        c.Endgame.NoteNativeInventoryPublished(); c.Endgame.Tick(DateTime.UtcNow.AddSeconds(16));
+        Check(c.Endgame.Error == "timeout" && c.Endgame.Message.Contains("刷新") && EndgamePanel.EquippedTooltip(worn, original) == original,
+            "missing sidecar exposes bounded refresh recovery and never revives old equipment");
     }
     static void Main()
     {
@@ -777,6 +855,7 @@ class EndgameUiContract
         EquippedCategoryTooltipContracts(c, p);
         AttributeEffectOrderingContracts(c, p);
         ItemizationStatTextContracts(c, p);
+        InventoryIdentityContracts(c, p);
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

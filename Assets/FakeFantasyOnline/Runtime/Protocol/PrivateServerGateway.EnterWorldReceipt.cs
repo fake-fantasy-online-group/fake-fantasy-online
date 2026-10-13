@@ -357,7 +357,10 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
 
         if (response.InventoryState != null)
         {
-            PublishInventoryState(response.InventoryState, cancellationToken);
+            // The retained startup reader may resume off-host after earlier
+            // ConfigureAwait(false) calls. Publish the native/sidecar identity
+            // boundary through the same host executor as other entry owners.
+            await PublishInventoryStateOnHostAsync(response.InventoryState, cancellationToken).ConfigureAwait(false);
         }
 
         if (response.WardrobeState != null)

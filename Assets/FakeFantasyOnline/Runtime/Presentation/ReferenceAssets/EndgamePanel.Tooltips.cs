@@ -205,7 +205,7 @@ public sealed partial class EndgamePanel
             // Native socket-card values are instance data. Never repeat/replace them
             // with reference catalog values when the native description has stats.
             if (!lines.Exists(line => IsAttributeLine(PlainLine(line))))
-                foreach (var stat in rune.Stats) AddMissingLine(lines, lines, RuneStatText(rune.ItemID, stat));
+                foreach (var stat in rune.Stats) AddMissingLine(lines, lines, StatText(stat));
             string mansion = rune.Quadrant + (rune.Mansion.Length > 0 ? (rune.Quadrant.Length > 0 ? " · " : "") + rune.Mansion + "宿" : "");
             if (mansion.Length > 0) AddMissingLine(lines, lines, mansion);
             if (rune.Description.Length > 0) AddMissingLine(lines, lines, rune.Description);
@@ -408,7 +408,7 @@ public sealed partial class EndgamePanel
             // Older servers carry the mansion in Description and omit Mansion.
             if (rune.Mansion.Length > 0) text.Append(text.Length > 0 ? " · " : "").Append(rune.Mansion).Append("宿");
             if (rune.Description.Length > 0) text.Append('\n').Append(rune.Description);
-            foreach (var stat in rune.Stats) text.Append('\n').Append(RuneStatText(rune.ItemID, stat));
+            foreach (var stat in rune.Stats) text.Append('\n').Append(StatText(stat));
             text.Append('\n'); break;
         }
         return text.ToString();
@@ -433,12 +433,9 @@ public sealed partial class EndgamePanel
         { if (text.Length > 0) text.Append('/'); text.Append(names[i]); }
         return text.Length == 0 ? "依原装备限制" : text.ToString();
     }
-    private static string RuneStatText(int itemID, EndgameStatView stat)
-    {
-        if (itemID == 1900028028 && stat.Attr == 38 && stat.Mode == 0 && stat.Value > 0)
-            return "有效穿戴时每2秒恢复" + stat.Value.ToString(CultureInfo.InvariantCulture) + "点生命";
-        return StatText(stat);
-    }
+    // Reference catalog values use ordinary attribute formatting. Special
+    // cadence/eligibility comes from the server's rune Description; owned cards
+    // retain the native description of their actual persisted instance values.
     private static string StatText(EndgameStatView stat)
     {
         bool basisPoints = stat.Attr == 23 || stat.Attr == 66 || stat.Attr == 1000001;

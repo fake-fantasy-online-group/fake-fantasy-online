@@ -59,13 +59,18 @@ public sealed partial class EndgameClientState
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRetryScheduled = helloAwaitingResponse = false;
         helloRequestedAt = helloRetryAt = default(DateTime);
-        DiscardChunks(); publishedSnapshotID = null; ResetCatalogs(); Generation++; Version++;
+        DiscardChunks(); publishedSnapshotID = null; retiredSnapshots.Clear(); retiredSnapshotOrder.Clear();
+        inventorySnapshotRequired = nativeSnapshotRefreshPending = false; inventorySnapshotRequiredAt = default(DateTime);
+        ResetCatalogs(); Generation++; Version++;
     }
     public bool Begin(EndgameRequest request)
     {
         if (request.Op == "hello")
         { HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
+        // A native-only publication gets one coalesced read, including a failed
+        // send. Manual refresh remains available; host ticks never retry forever.
+        if (request.Op == "snapshot") nativeSnapshotRefreshPending = false;
         if (request.Op.StartsWith("skill.", StringComparison.Ordinal) && !GrowthV5) return false;
         if (request.Mutates)
         {
@@ -107,7 +112,15 @@ public sealed partial class EndgameClientState
         if (helloRetryScheduled && !Negotiated && now >= helloRetryAt)
         { helloRetryScheduled = false; HelloSent = false; Version++; }
         if (SnapshotLoading && (now - snapshotStartedAt).TotalSeconds >= 15)
-        { DiscardChunks(); Error = "timeout"; Message = "星图接收未完成，请刷新重试。"; Version++; }
+        { DiscardChunks(); inventorySnapshotRequiredAt = default(DateTime); Error = "timeout"; Message = "星图接收未完成，请刷新重试。"; Version++; }
+        else if (Negotiated && inventorySnapshotRequired && !SnapshotLoading &&
+            inventorySnapshotRequiredAt != default(DateTime) && (now - inventorySnapshotRequiredAt).TotalSeconds >= 15)
+        {
+            // A lost or rejected sidecar must leave the native item readable and
+            // expose recovery, rather than silently reviving its previous UID.
+            inventorySnapshotRequiredAt = default(DateTime);
+            Error = "timeout"; Message = "器物资料尚未同步，请刷新重试。"; Version++;
+        }
         if (QuotePending && (now - quoteRequestedAt).TotalSeconds >= 15)
         { ReleaseReadRequest(QuoteRequestID); Error = "timeout"; Message = "问鼎未收到答复，可重新预览。"; Version++; }
         var expired = new List<string>();
@@ -129,7 +142,7 @@ public sealed partial class EndgameClientState
     }
     public EndgameItemView Find(string location, int tab, int slot, int itemID)
     {
-        if (!Negotiated || !HasSnapshot) return null;
+        if (!InventorySnapshotCurrent) return null;
         // Tab is a bag address, not part of an equipped-slot address. The server
         // retains the item's inventory category (often 2) after equipping it.
         foreach (var item in Items)
@@ -201,6 +214,7 @@ public sealed partial class EndgameClientState
         if (!hasRiftSceneContext && receipt && response.OK && response.Kind == "rift.leave") RiftInInstance = false;
         if (!response.OK)
         {
+            if (response.Kind == "snapshot") RejectSnapshot();
             ReleaseReadRequest(response.RequestID); Error = response.Error;
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;

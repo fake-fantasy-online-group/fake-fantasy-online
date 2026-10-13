@@ -7323,6 +7323,9 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         Interlocked.Increment(ref _accountSecuritySeedVersion);
     }
 
+    private Task PublishInventoryStateOnHostAsync(WorldInventoryState state, CancellationToken cancellationToken) =>
+        _host.RunAsync(() => PublishInventoryState(state, cancellationToken), cancellationToken);
+
     private void PublishInventoryState(
         WorldInventoryState state,
         CancellationToken cancellationToken)
@@ -7339,6 +7342,9 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
             Interlocked.Increment(ref _inventoryStateVersion);
             RecordGroundLootInventoryLocked();
         }
+        // Receipt paths and the retained entry fallback publish on the host.
+        // Endgame is host-owned, not protected by the observation snapshot lock.
+        Endgame.NoteNativeInventoryPublished();
     }
 
     private void PublishWardrobeState(

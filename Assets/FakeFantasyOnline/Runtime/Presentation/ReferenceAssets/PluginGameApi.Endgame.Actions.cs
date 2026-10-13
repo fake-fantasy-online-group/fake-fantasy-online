@@ -17,7 +17,7 @@ public sealed partial class PluginGameApi
         IEndgameClient owner = EndgameClient;
         EndgameClientState state = owner?.Endgame;
         bool ready = owner != null && owner.EndgameInWorld && state.Negotiated;
-        bool writable = ready && state.HasSnapshot && !state.SnapshotLoading && state.SnapshotRevision == state.Revision && !state.Pending;
+        bool writable = ready && state.InventorySnapshotCurrent && !state.Pending;
         const string unavailable = "The native world must negotiate endgame.v1 before this operation.";
         const string mutation = "A complete server snapshot and no uncertain mutation are required. Observe endgame; use endgame.retry only for the exact pending request.";
         definitions.Add(EndgameDefinition("endgame.skill.refresh", "Request authoritative hard, granted, soft and effective skill ranks, effects and unspent points.", ready && state.GrowthV5, "The server must negotiate endgame.growth.v5."));
@@ -108,6 +108,8 @@ public sealed partial class PluginGameApi
     private EndgameItemView EndgameItem(string uid, string location = null)
     {
         EndgameIdentity(uid, "uid");
+        if (!EndgameClient.Endgame.InventorySnapshotCurrent)
+            throw new ActionFailure("endgame.item_stale", "The native inventory changed; wait for or refresh its complete authoritative item snapshot.");
         foreach (var item in EndgameClient.Endgame.Items)
             if (item.UID == uid && (location == null ? item.Location == "bag" || item.Location == "equipped" : item.Location == location))
             {

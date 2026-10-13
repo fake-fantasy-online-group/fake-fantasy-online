@@ -129,6 +129,14 @@ internal static partial class GameActionAdapterTests
         Check(EndAct(api, "socket.insert", InsertArgs(socket: 2)).Code == "endgame.socket_unavailable", "unopened socket cannot insert");
         Check(EndAct(api, "socket.remove", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID, "socket", 0)).Code == "endgame.socket_changed", "empty socket cannot extract");
         Check(native.Sent.Count == 0, "validation never reaches native send");
+        native.Endgame.NoteNativeInventoryPublished();
+        Check(!Definition(api, "endgame.socket.insert").Available && !(bool)api.TestObserveEndgame("endgame")["inventorySnapshotCurrent"],
+            "same-template native replacement withdraws stale sidecar action authority and exposes freshness");
+        Check(EndAct(api, "socket.insert", InsertArgs()).Code == "action.unavailable" && native.Sent.Count == 0,
+            "old UID cannot be submitted between native inventory and complete sidecar publication");
+        PublishItems(native);
+        Check(Definition(api, "endgame.socket.insert").Available && (bool)api.TestObserveEndgame("endgame")["inventorySnapshotCurrent"],
+            "complete sidecar restores common UI and plugin item authority");
         PublishItems(native, locked: true);
         Check(EndAct(api, "socket.insert", InsertArgs()).Code == "endgame.item_locked", "locked item cannot mutate");
         Check(Act(api, "inventory.sort", Map("tab", new object[] { "1" })).Code == "arguments.invalid", "ordered-array exception cannot reach unrelated native actions");

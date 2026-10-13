@@ -16,6 +16,7 @@ public sealed partial class PluginGameApi
             "apiInstanceId", apiInstanceId, "inWorld", owner != null && owner.EndgameInWorld,
             "growthV5", state != null && state.GrowthV5, "negotiated", state != null && state.Negotiated, "generation", state?.Generation ?? 0,
             "expectedRevision", state?.Revision ?? "0", "snapshotRevision", state?.SnapshotRevision ?? "0", "hasSnapshot", state != null && state.HasSnapshot,
+            "inventorySnapshotCurrent", state != null && state.InventorySnapshotCurrent,
             "snapshotLoading", state != null && state.SnapshotLoading, "snapshotId", state?.SnapshotID ?? "",
             "catalogVersion", state?.CatalogVersion ?? "", "error", state?.Error ?? "",
             "message", BoundText(state?.Message ?? "", 2048));

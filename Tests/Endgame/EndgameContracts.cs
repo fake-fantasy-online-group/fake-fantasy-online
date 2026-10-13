@@ -46,6 +46,27 @@ class EndgameContracts
     static void Main(string[] args)
     {
         var s = State(); Check(s.Negotiated, "hello negotiated");
+        foreach (string error in new[] { "snapshot_size", "storage" })
+        {
+            var failedRead = State();
+            failedRead.Apply(Response(Snap("before-read-error", "1", 0, 1, Item())));
+            var pendingMutation = new EndgameRequest("socket.insert", "1", "9007199254740993", "82", 0);
+            failedRead.Begin(pendingMutation);
+            failedRead.NoteNativeInventoryPublished();
+            failedRead.Begin(new EndgameRequest("snapshot"));
+            failedRead.Apply(Response(Snap("interrupted-read", "1", 0, 2, Item())));
+            failedRead.Apply(Response("{\"kind\":\"snapshot\",\"ok\":false,\"error\":\"" + error + "\",\"message\":\"精确读取错误\"}"));
+            failedRead.Tick(DateTime.UtcNow.AddSeconds(16));
+            Check(failedRead.Error == error && failedRead.Message == "精确读取错误", "explicit snapshot failure is not overwritten by timeout: " + error);
+            Check(!failedRead.InventorySnapshotCurrent && !failedRead.SnapshotLoading && !failedRead.NeedsInventorySnapshotRefresh && failedRead.Find("bag", 2, 0, 1001) == null,
+                "failed snapshot retires assembly and automatic attempt without restoring old UID: " + error);
+            Check(ReferenceEquals(failedRead.PendingRequest, pendingMutation), "failed read leaves immutable pending mutation intact: " + error);
+            failedRead.Apply(Response(Snap("interrupted-read", "1", 1, 2, "")));
+            Check(!failedRead.InventorySnapshotCurrent, "failed read's late tail cannot restore authority: " + error);
+            Check(failedRead.Begin(new EndgameRequest("snapshot")), "explicit manual snapshot retry remains available: " + error);
+            failedRead.Apply(Response(Snap("manual-read-recovery", "1", 0, 1, Item())));
+            Check(failedRead.InventorySnapshotCurrent && ReferenceEquals(failedRead.PendingRequest, pendingMutation), "manual snapshot recovery does not resolve unrelated mutation: " + error);
+        }
         Check(!s.NativeEquipmentStats, "new client with legacy server retains legacy stat overlay");
         Check(new EndgameRequest("hello").Json.Contains("endgame.native-stats.v1"), "new client explicitly offers native stat capability");
         var statState = new EndgameClientState(); statState.Begin(new EndgameRequest("hello"));
@@ -98,6 +119,8 @@ class EndgameContracts
         var old = s.Items; s.Apply(Response(Snap("old", "7", 0, 1, ""))); Check(ReferenceEquals(old, s.Items), "stale snapshot ignored");
         s.Apply(Response(Snap("mix", s.Revision, 0, 2, Item()))); Reject(() => s.Apply(Response(Snap("mix", s.Revision, 2, 3, Item("4")))), "mixed chunk envelope"); Check(ReferenceEquals(old, s.Items), "failure retains prior snapshot");
         s.Apply(Response(Snap("duplicate", s.Revision, 0, 2, Item()))); Reject(() => s.Apply(Response(Snap("duplicate", s.Revision, 1, 2, Item()))), "duplicate UID across chunks");
+        Check(s.Find("bag", 2, 0, 1001) == null, "failed replacement retains historical rows without allowing their stale UID overlay");
+        s.Apply(Response(Snap("recovered", s.Revision, 0, 1, Item())));
         Check(s.Find("bag", 2, 0, 1001) != null && s.Find("bag", 0, 0, 1001) == null && s.Find("bag", 2, 0, 1002) == null, "location and template matching");
         var cmd = new EndgameRequest("socket.insert", s.Revision, old[0].UID, "9223372036854775806", 1); string serialized = cmd.Json;
         Check(s.Begin(cmd) && !s.Begin(cmd), "one pending mutation");

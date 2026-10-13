@@ -21,9 +21,13 @@ public sealed partial class PrivateServerGateway : IEndgameClient
     }
     public void TickEndgameForIndependentRuntime()
     {
-        if (!EndgameInWorld || _worldEntryAdmission != null) return;
+        if (!_host.IsHostThread || !EndgameInWorld || _worldEntryAdmission != null) return;
         Endgame.Tick(DateTime.UtcNow);
         if (!Endgame.HelloSent) SendEndgame(new EndgameRequest("hello"));
+        // Native lock/warehouse/appearance receipts need not include a sidecar.
+        // Run after this frame's Pump: a full push or an assembling push already
+        // owns recovery; otherwise issue one read for all native changes drained.
+        if (Endgame.NeedsInventorySnapshotRefresh) SendEndgame(new EndgameRequest("snapshot"));
     }
     public bool SendEndgame(EndgameRequest request)
     {

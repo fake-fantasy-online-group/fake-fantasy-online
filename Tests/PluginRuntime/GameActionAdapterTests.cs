@@ -320,6 +320,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal static bool TryGetForIndependentRuntime(int id, out GroundItems owner, out Item item) { owner = new GroundItems(); return TestItems.TryGetValue(id, out item); }
     }
     internal static class Win05 { internal sealed class SkInfo { internal float dist; } internal static SkInfo SkillInfo(int id) => new SkInfo(); }
+    // These adapter fixtures do not negotiate skill-behavior.v1. Its production
+    // provider/targeting are exercised by the skill presentation acceptance suite.
+    internal static class AuthoritativeProfessionSkill
+    {
+        internal static bool Uses(int id) => false;
+        internal static bool LearnedActive(int id) => false;
+    }
     internal static class SocialClient { internal static bool TradeActive; }
     internal static class SysMsgBox { internal static bool Visible; }
     internal sealed class InventoryDlg

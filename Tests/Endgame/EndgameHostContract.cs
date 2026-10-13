@@ -31,8 +31,15 @@ class EndgameHostContract
   int length=frame[12]|frame[13]<<8; Check(length==frame.Length-14,"actual envelope length");return Encoding.UTF8.GetString(frame,14,length);
  }
  static void Drain(BlockingCollection<byte[]> queue) { byte[] data;while(queue.TryTake(out data)){} }
+ sealed class HostContext : SynchronizationContext
+ {
+  readonly ConcurrentQueue<Action> callbacks=new ConcurrentQueue<Action>();
+  public override void Post(SendOrPostCallback callback,object state) => callbacks.Enqueue(()=>callback(state));
+  public void Drain() { Action callback;while(callbacks.TryDequeue(out callback))callback(); }
+ }
  static void Main()
  {
+  var previousContext=SynchronizationContext.Current;var hostContext=new HostContext();SynchronizationContext.SetSynchronizationContext(hostContext);
   var options=new PrivateServerOptions(new Uri("http://127.0.0.1:1/dispatch.json"),"synthetic-host");
   var host=new NativeNetClientHost(options);var view=new ClientRootView();
   host.BindOwner(new FakeFantasyOnline.Presentation.ReferenceAssets.NetClient(),view);
@@ -55,14 +62,68 @@ class EndgameHostContract
    Receipt(gateway,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
    Check(gateway.Endgame.Negotiated,"real main dispatch negotiates hello");
    Check(Json(Take(queue,key)).Contains("\"op\":\"snapshot\""),"hello requests snapshot");Check(Json(Take(queue,key)).Contains("\"op\":\"rift.state\""),"hello requests rift");
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"native-pair-old\",\"revision\":\"0\",\"chunks\":1,\"items\":[{\"uid\":\"81\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0}]}");
+   Check(gateway.Endgame.InventorySnapshotCurrent,"actual gateway publishes a complete native/sidecar pair");
+   long inventoryVersion = gateway.InventoryStateVersion;
+   Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+   Check(gateway.InventoryStateVersion > inventoryVersion && !gateway.Endgame.InventorySnapshotCurrent && gateway.Endgame.Find("bag",2,0,1001)==null,
+    "actual native inventory publisher invalidates previous sidecar UID before the next packet");
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"native-pair-next\",\"revision\":\"0\",\"chunks\":2,\"items\":[{\"uid\":\"82\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0}]}");
+   Check(gateway.Endgame.SnapshotLoading && !gateway.Endgame.InventorySnapshotCurrent,"actual dispatched partial sidecar cannot restore stale item authority");
+   gateway.TickEndgameForIndependentRuntime();Check(queue.Count==0,"assembling push does not issue a duplicate snapshot read");
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"native-pair-next\",\"revision\":\"0\",\"chunk\":1,\"chunks\":2,\"items\":[]}");
+   Check(gateway.Endgame.InventorySnapshotCurrent && gateway.Endgame.Find("bag",2,0,1001).UID=="82","actual ordered dispatch restores only the newly published same-template UID");
+   gateway.TickEndgameForIndependentRuntime();Check(queue.Count==0,"complete same-frame native/sidecar push needs no extra read");
+   foreach(string nativeOnly in new[]{"warehouse","item-lock","hair","wardrobe"})
+   {
+    // These server paths emit native inventory directly, including quantity,
+    // money, and metadata-only changes, without pushInventory's sidecar.
+    Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+    Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+    Check(!gateway.Endgame.InventorySnapshotCurrent && queue.Count==0,nativeOnly+" native batch fences immediately without per-packet sends");
+    gateway.TickEndgameForIndependentRuntime();
+    Check(Json(Take(queue,key)).Contains("\"op\":\"snapshot\"") && queue.Count==0,nativeOnly+" native-only batch requests one coalesced read");
+    gateway.TickEndgameForIndependentRuntime();gateway.TickEndgameForIndependentRuntime();
+    Check(queue.Count==0,nativeOnly+" waiting read never retries each frame");
+    Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"native-only-"+nativeOnly+"\",\"revision\":\"0\",\"chunks\":1,\"items\":[{\"uid\":\"82\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0}]}");
+    Check(gateway.Endgame.InventorySnapshotCurrent,nativeOnly+" read restores same-revision native authority");
+   }
+   Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+   gateway.TickEndgameForIndependentRuntime();Drain(queue);
+   gateway.Endgame.Tick(DateTime.UtcNow.AddSeconds(16));
+   gateway.TickEndgameForIndependentRuntime();gateway.TickEndgameForIndependentRuntime();
+   Check(gateway.Endgame.Error=="timeout" && !gateway.Endgame.InventorySnapshotCurrent && queue.Count==0,"lost recovery read times out without an automatic retry loop");
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"after-timeout\",\"revision\":\"0\",\"chunks\":1,\"items\":[]}");
+   System.Threading.Tasks.Task entryPublish=null;
+   var entryThread=new Thread(()=>entryPublish=(System.Threading.Tasks.Task)gateway.GetType().GetMethod("PublishInventoryStateOnHostAsync",Private).Invoke(gateway,new object[]{WorldInventoryState.Empty,CancellationToken.None}));
+   entryThread.Start();entryThread.Join();
+   Check(entryPublish!=null && !entryPublish.IsCompleted && gateway.Endgame.InventorySnapshotCurrent,"retained entry fallback never mutates sidecar collections on its continuation thread");
+   hostContext.Drain();entryPublish.GetAwaiter().GetResult();
+   Check(!gateway.Endgame.InventorySnapshotCurrent,"retained entry publishes its native identity fence only after host dispatch");
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"after-entry-fallback\",\"revision\":\"0\",\"chunks\":1,\"items\":[]}");
+   using(var cancelledEntry=new CancellationTokenSource())
+   {
+    entryThread=new Thread(()=>entryPublish=(System.Threading.Tasks.Task)gateway.GetType().GetMethod("PublishInventoryStateOnHostAsync",Private).Invoke(gateway,new object[]{WorldInventoryState.Empty,cancelledEntry.Token}));
+    entryThread.Start();entryThread.Join();cancelledEntry.Cancel();hostContext.Drain();
+    Check(entryPublish.IsCanceled && gateway.Endgame.InventorySnapshotCurrent,"cancelled retained entry cannot invalidate the replacement connection's sidecar state");
+   }
    var request=new EndgameRequest("socket.insert","0","9007199254740993","9223372036854775806",2);
    Check(gateway.SendEndgame(request),"real gateway accepts mutation");string original=Json(Take(queue,key));Check(original==request.Json,"real native wire preserves exact command");
    Check(!gateway.SendEndgame(new EndgameRequest("rift.start","0",tier:1)),"real gateway blocks second mutation");
    bool background=true;var thread=new Thread(()=>background=gateway.RetryEndgame());thread.Start();thread.Join();Check(!background,"nonhost retry blocked");
    Receipt(gateway,"{\"kind\":\"socket.insert\",\"requestId\":\""+request.RequestID+"\",\"ok\":false,\"error\":\"pending\"}");
    Check(gateway.Endgame.Pending && gateway.RetryEndgame(),"pending receipt permits exact retry");Check(Json(Take(queue,key))==original,"retry wire JSON identical");
+   Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+   Receipt(gateway,"{\"kind\":\"snapshot\",\"ok\":false,\"error\":\"snapshot_size\",\"message\":\"器物资料超出传输限制，请检查配置\"}");
+   gateway.Endgame.Tick(DateTime.UtcNow.AddSeconds(16));gateway.TickEndgameForIndependentRuntime();
+   Check(gateway.Endgame.Error=="snapshot_size" && !gateway.Endgame.InventorySnapshotCurrent && gateway.Endgame.Pending && queue.Count==0,"failed snapshot preserves precise error and pending mutation without timeout or auto-read");
+   Check(gateway.SendEndgame(new EndgameRequest("snapshot")),"explicit refresh remains sendable after snapshot failure");
+   Check(Json(Take(queue,key)).Contains("\"op\":\"snapshot\""),"manual recovery sends only the read request");
    Call(gateway,"DispatchReceivedPacket",null,(ushort)0x80d0,new byte[]{1,0,2,0,0xff,0xff});Check(gateway.Endgame.Error=="invalid_response" && gateway.Endgame.Pending,"malformed sidecar isolated without dropping pending");
-   Call(gateway,"ResetEndgameConnection");Check(!gateway.Endgame.Negotiated && !gateway.EndgameInWorld,"actual reset clears cache and entry fence");
+   Call(gateway,"PublishInventoryState",WorldInventoryState.Empty,CancellationToken.None);
+   Set(gateway,"endgameWorldEntered",false);gateway.TickEndgameForIndependentRuntime();
+   Check(queue.Count==0,"departure prevents a pending native-only refresh from sending");
+   Call(gateway,"ResetEndgameConnection");Check(!gateway.Endgame.Negotiated && !gateway.EndgameInWorld && !gateway.Endgame.NeedsInventorySnapshotRefresh,"actual reset clears cache, entry fence, and old native-only refresh");
    Set(gateway,"endgameCharacter","other-character");Set(gateway,"endgameWorldEntered",true);gateway.TickEndgameForIndependentRuntime();Drain(queue);
    Receipt(gateway,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");Check(!gateway.Endgame.Pending,"other character never receives uncertain request");Drain(queue);
    Call(gateway,"ResetEndgameConnection");Set(gateway,"endgameCharacter","9007199254740993");Set(gateway,"endgameWorldEntered",true);gateway.TickEndgameForIndependentRuntime();Drain(queue);
@@ -91,7 +152,7 @@ class EndgameHostContract
    }
    Set(gateway,"endgameWorldEntered",false);gateway.Endgame.Reset();gateway.TickEndgameForIndependentRuntime();Check(!gateway.Endgame.HelloSent && queue.Count==0,"title fence blocks hello even with stale native stage");
   }
-  finally { Call(host,"CloseAndRelease");peer.Close();tcp.Close();queue.Dispose(); }
+  finally { Call(host,"CloseAndRelease");peer.Close();tcp.Close();queue.Dispose();SynchronizationContext.SetSynchronizationContext(previousContext); }
   Console.WriteLine("PASS "+assertions+" actual host/gateway/crypto integration checks (Unity presentation substitutes; local loopback only).");
  }
 }
