@@ -248,6 +248,26 @@ internal static class ArtworkSkin
         finally { GUI.color = previous; }
     }
 
+    /// <summary>Single-frame title artwork keeps its baked label and native geometry.
+    /// A tint supplies feedback when no alternate frames are available; input stays
+    /// with the existing GUI.Button owner.</summary>
+    public static void SingleImageFace(Rect rect, Texture2D texture, bool hover = false,
+        bool pressed = false, bool enabled = true)
+    {
+        if (texture == null) return;
+        bool active = enabled && GUI.enabled;
+        Color previous = GUI.color;
+        try
+        {
+            Color tint = !active ? new Color(.55f, .55f, .55f, 1f)
+                : pressed ? new Color(.82f, .82f, .82f, 1f)
+                : hover ? new Color(1.16f, 1.12f, 1.04f, 1f) : Color.white;
+            GUI.color = previous * tint;
+            GUI.DrawTexture(rect, texture, ScaleMode.StretchToFill, false);
+        }
+        finally { GUI.color = previous; }
+    }
+
     private static Texture2D Frame(Texture2D[] frames, int state)
     {
         if (frames == null || frames.Length == 0) return null;

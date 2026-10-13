@@ -36,6 +36,25 @@ internal partial class NetClient : MonoBehaviour
 
     private static bool LocalNotEnoughMp(int skillId)
     {
+        // Growth skills are resolved at effective rank, after server modifiers. Legacy
+        // resource costs must never veto them, including the pre-contract V5 transition.
+        if (EndgamePanel.GrowthState != null && FakeFantasyOnline.Application.EndgameSkillRankView.IsProfessionSkill(skillId))
+        {
+            var behavior = AuthoritativeProfessionSkill.Current(skillId);
+            // Post-cap costs can alternate by one as the server carries paid
+            // fractions. A cached preview cannot veto the next cheaper cast.
+            // Only one point can differ; retain all other MP guards and the
+            // one-mana floor. The server validates the exact debit.
+            int minimum = behavior != null ? behavior.MPCost : 0;
+            var row = EndgamePanel.GrowthState.SkillRank(skillId);
+            int cap = skillId == 10018 || skillId == 10227 || skillId == 10432 ? 5
+                : skillId == 10301 ? 19 : skillId == 10305 ? 11 : skillId == 10309 || skillId == 10212 ? 10 : 0;
+            long rank;
+            if (minimum > 0 && cap > 0 && row != null &&
+                (row.EffectiveRank.Length > 10 || long.TryParse(row.EffectiveRank, out rank) && rank > cap))
+                minimum = Math.Max(1, minimum - 1);
+            return minimum > 0 && CharData.mp < minimum;
+        }
         int level;
         if (CharData.skills == null || !CharData.skills.TryGetValue(skillId, out level) || level <= 0)
         {
@@ -58,6 +77,11 @@ internal partial class NetClient : MonoBehaviour
 
     public void UseSkill(int skillId, int targetId = 0)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); return; }
+        var behavior = AuthoritativeProfessionSkill.Current(skillId);
+        if (behavior != null && behavior.PointRequired)
+        { showTip("请选择技能位置", UIScale.Factor); return; }
         if (LocalNotEnoughMp(skillId))
         {
             showTip("法力不足", UIScale.Factor);
@@ -77,6 +101,8 @@ internal partial class NetClient : MonoBehaviour
 
     public void UseSkillAt(int skillId, int x, int y, int targetId = 0)
     {
+        if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
+        { AuthoritativeProfessionSkill.Waiting(); return; }
         if (LocalNotEnoughMp(skillId))
         {
             showTip("法力不足", UIScale.Factor);

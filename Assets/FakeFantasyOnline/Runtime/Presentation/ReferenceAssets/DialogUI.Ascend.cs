@@ -8,6 +8,7 @@ public sealed partial class DialogUI
     private static bool AscendEligible(int sid, int tierLevel, out int nextLv)
     {
         nextLv = 0;
+        if (EndgamePanel.GrowthState != null) return false;
         if (sid < 10000 || sid >= 10500 || (sid - 10000) / 100 != CharData.race) return false;
         Win05.SkInfo info = Win05.SkillInfo(sid);
         if (info == null || info.levels == null) return false;
@@ -41,6 +42,12 @@ public sealed partial class DialogUI
         InSubView = true;
         optLabels.Clear();
         optActs.Clear();
+        if (EndgamePanel.GrowthState != null)
+        {
+            Greeting = "请在技能面板中使用技能点修炼职业技能。";
+            Add(new ReferenceNpcDialogOption("返回", BuildMenu));
+            return;
+        }
         int left70 = AscendTierLeft(70);
         Greeting = "你已至凡境之极。可在此把高阶功法逐级修炼至满级 —— 每习一层需经验(70级档 1 亿 / 80级档 2 亿)与【与目标级数相同数量】的强行学习丹(学到 N 级需 N 颗)。";
         int count = 0;

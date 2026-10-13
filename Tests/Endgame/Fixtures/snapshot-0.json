@@ -1,0 +1,30 @@
+{
+  "kind": "snapshot",
+  "ok": true,
+  "revision": "3",
+  "snapshotId": "fixture-v1",
+  "chunks": 2,
+  "items": [
+    {
+      "tab": 0,
+      "uid": "9007199254740993",
+      "itemId": 22211,
+      "location": "bag",
+      "slot": 99,
+      "revision": "2",
+      "uniqueId": 22211,
+      "uniqueRollBp": 10000,
+      "name": "青冥承露",
+      "socketCount": 1,
+      "sockets": [
+        {
+          "index": 0,
+          "itemId": 1900028001,
+          "uid": "9223372036854775806"
+        }
+      ],
+      "bound": false,
+      "locked": false
+    }
+  ]
+}

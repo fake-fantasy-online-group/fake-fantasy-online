@@ -1,14 +1,15 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using UnityEngine;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 
 public partial class Win05
 {
-    // Preserve authored alignment for UITip to center after wrapping and measurement.
+    // Preserve each authored row's alignment until UITip has wrapped the text and
+    // measured its actual bitmap glyphs. Padding to 32 character columns here was
+    // wider than UITip's 150px content limit and shifted short headings right.
     private static string ComposeTip(List<(string, char, bool)> rows)
     {
         var result = new StringBuilder();

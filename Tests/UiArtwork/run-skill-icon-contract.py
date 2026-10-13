@@ -30,9 +30,12 @@ if __name__ == '__main__':
     compiler = Path(os.environ['FFO_CSC'])
     framework = Path(os.environ['FFO_FRAMEWORK_DIR'])
     source = SOURCE.read_text()
-    assert 'DrawSkillIcon(iconRect, icon, currentLevel > 0, tree != null);' in source, 'Production call must pass actual tree availability'
+    ranks = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Application/EndgameSkills.cs').read_text()
+    assert 'CanCast != (EffectiveRank != "0")' in ranks, 'CanCast must remain a learned-rank flag, including passives'
+    assert 'bool canUse = UsesGrowthSkill(slot.id) ? rank?.CanCast == true : currentLevel > 0;' in source, 'Icon state must use learned rank, not active-cast admission'
+    assert 'DrawSkillIcon(iconRect, icon, canUse, tree != null);' in source, 'Production call must pass actual tree availability'
     assert source.index('if (tree)\n        {\n            GUI.DrawTexture(') < source.index('DrawSkillIcon(iconRect'), 'Authored tree must precede node overlays'
-    assert 'if (currentLevel > 0 && BitmapFont.Ready)' in source, 'Learned level display must stay enabled'
+    assert 'if (canUse && BitmapFont.Ready)' in source, 'Learned level display must stay enabled'
     assert 'if (CanShowUpgrade(slot.id))' in source, 'Upgrade behavior must remain independent of inactive artwork'
     methods = '\n'.join(method(source, signature) for signature in (
         'private static Rect Fit(', 'private static void DrawSkillIcon('))

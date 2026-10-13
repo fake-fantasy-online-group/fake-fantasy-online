@@ -46,6 +46,7 @@ public sealed partial class ClientSessionCoordinator
             TitleServerEndpoint.SetTitleServerEndpoint(host, port);
             _preferredServerIndex = directoryIndex;
             Interlocked.Exchange(ref _localPlayerStatusEffectConsumedRevision, 0);
+            ResetCombatNumberPresentation();
             _connectedServerIndex = -1;
             _characters = Array.Empty<ServerCharacterRecord>();
             TransitionTo(ClientSessionState.Offline, ServerSwitchReauthenticationCode);

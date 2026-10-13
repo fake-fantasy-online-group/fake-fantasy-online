@@ -114,7 +114,8 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
     private long lastCombatResultsVersion = -1;
     private long lastCombatNumbersVersion = -1;
     private long lastCombatResultRevision;
-    private long lastCombatNumberRevision;
+    private readonly WorldCombatNumberPresentation standaloneCombatNumbers =
+        new WorldCombatNumberPresentation();
     private long lastRemotePathsVersion = -1;
     private long lastMonsterPathsVersion = -1;
     private long lastRemoteActionsVersion = -1;
@@ -1002,7 +1003,8 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
                 combatResults,
                 combatResultsVersion,
                 combatNumbers,
-                combatNumbersVersion))
+                combatNumbersVersion,
+                session))
         {
             LastRevisionFailure = ReferenceWorldRevisionFailure.CombatRevisionRejected;
             return false;
@@ -1895,7 +1897,7 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
         lastCombatResultsVersion = -1;
         lastCombatNumbersVersion = -1;
         lastCombatResultRevision = 0;
-        lastCombatNumberRevision = 0;
+        standaloneCombatNumbers.Clear();
         lastRemotePathsVersion = -1;
         lastMonsterPathsVersion = -1;
         lastRemoteActionsVersion = -1;
@@ -2161,7 +2163,8 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
         IReadOnlyList<WorldCombatResultState> results,
         long resultsVersion,
         IReadOnlyList<WorldCombatNumberState> numbers,
-        long numbersVersion)
+        long numbersVersion,
+        ClientSessionCoordinator session = null)
     {
         ThrowIfDisposed();
         if (!built || combatFeedback == null || results == null || numbers == null ||
@@ -2243,31 +2246,52 @@ public sealed partial class ReferenceFirstWorldInitialFrame : IDisposable
             lastCombatResultsVersion = resultsVersion;
         }
 
-        if (numbersVersion != lastCombatNumbersVersion)
+        // Frames are replaced on each map load; the session retains successful consumption
+        // and retries only unresolved edges. Poll pending entries even with an unchanged
+        // receive version, and never skip to the journal tail on a new map.
+        WorldCombatNumberPresentation numberPresentation =
+            session != null ? session.CombatNumberPresentation : standaloneCombatNumbers;
+        // A dropped connection clears its journal before the disconnect prompt is dismissed.
+        // Do not retry old rewards on the frozen player while that prompt remains visible.
+        if (session != null && !session.Connected)
         {
-            for (int index = 0; index < numbers.Count; index++)
-            {
-                WorldCombatNumberState number = numbers[index];
-                if (number == null || number.Revision <= lastCombatNumberRevision)
-                {
-                    continue;
-                }
-
-                // Official case 0x800c forwards every number to CombatNumber.SpawnOn; the only
-                // gate is this revision cursor, which stops one published message from being
-                // presented twice.
-                if (!combatFeedback.TrySpawnWorldNumber(number))
-                {
-                    return false;
-                }
-
-                lastCombatNumberRevision = number.Revision;
-            }
-
-            lastCombatNumbersVersion = numbersVersion;
+            numberPresentation.Clear();
+            return true;
         }
+        numberPresentation.TryPresent(
+            numbers, Time.unscaledTime, TrySpawnCombatNumberForCurrentWorld,
+            OwnsUnshownExperienceForCurrentWorld());
+        if (numberPresentation.TakeBacklogWarning())
+            Debug.LogWarning("[飘字] 未显示经验提示超过256条，已淘汰最旧提示；实际经验不受影响。");
+        lastCombatNumbersVersion = numbersVersion;
 
         return true;
+    }
+
+    private bool OwnsUnshownExperienceForCurrentWorld()
+    {
+        // Ownership is separate from resource/anchor readiness. A live frame may
+        // own an unshown visual even when its glyphs or local anchor are missing.
+        // A receipt first seen while switching or on a superseded frame is unknown;
+        // do not assume it came from the old map or discard a real new-map reward.
+        GameBootstrap owner = NpcSpawnOwnerForIndependentRuntime;
+        return owner == null || (!owner.Switching &&
+            ReferenceEquals(owner.Window?.Frame, this));
+    }
+
+    private bool TrySpawnCombatNumberForCurrentWorld(WorldCombatNumberState number)
+    {
+        if (number.Type == WorldCombatNumberState.ExperienceType)
+        {
+            // During fade/loading the old frame can still tick and its transform can remain
+            // registered. Queue experience until the live, current frame owns the new player.
+            GameBootstrap owner = NpcSpawnOwnerForIndependentRuntime;
+            if (owner != null && (owner.Switching ||
+                !ReferenceEquals(owner.Window?.Frame, this))) return false;
+            if (player == null || player.Root == null ||
+                CombatNumber.PlayerTransform != player.Root) return false;
+        }
+        return combatFeedback.TrySpawnWorldNumber(number);
     }
 
     internal bool ObserveNativeLifeForIndependentRuntime(PlayerController owner)

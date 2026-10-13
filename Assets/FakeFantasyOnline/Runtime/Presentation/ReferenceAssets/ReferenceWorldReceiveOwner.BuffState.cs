@@ -7,6 +7,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public sealed partial class ReferenceWorldReceiveOwner : IWorldBuffReceiveOwner
 {
+    // The server sends the original status level's SmallMap, including authored zero.
+    // A refresh must not reuse a previous level's art or substitute its source skill.
+    internal static int ResolveBuffIcon(int skillId, string name, int iconId)
+    {
+        return iconId > 0 ? iconId : 0;
+    }
+
     public bool ReceiveBuffState(IWorldBuffReader reader, Func<float> clock, Func<bool> customMap)
     {
         int count = reader.U16();
@@ -25,6 +32,7 @@ public sealed partial class ReferenceWorldReceiveOwner : IWorldBuffReceiveOwner
             row.remainSec = reader.I32();
             row.name = reader.Str();
             row.desc = reader.Str();
+            row.iconId = ResolveBuffIcon(row.skillId, row.name, row.iconId);
             row.good = reader.U8() != 0;
             row.posMode = unchecked((sbyte)(byte)reader.U8());
             row.recvTime = clock != null ? clock() : Time.realtimeSinceStartup;

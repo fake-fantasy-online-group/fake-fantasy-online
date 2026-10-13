@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 
-internal static class UITip
+internal static partial class UITip
 {
     private static Texture2D pUL, pUM, pUR, pLM, pRM, pDL, pDM, pDR;
     private static bool tried;
@@ -19,6 +19,7 @@ internal static class UITip
         if (string.IsNullOrEmpty(text)) return;
         reqText = text;
         reqCmp = null;
+        reqIsSkill = false;
         reqS = s;
         reqMouse = Event.current != null ? Event.current.mousePosition :
             new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
@@ -56,13 +57,20 @@ internal static class UITip
             GUI.depth = 1;
             if (reqText != null)
             {
-                Render(reqText, reqCmp, reqS, reqMouse);
+                if (reqIsSkill) RenderSkill(reqText, reqS, reqMouse);
+                else
+                {
+                    ResetSkillScroll();
+                    Render(reqText, reqCmp, reqS, reqMouse);
+                }
                 if (Event.current.type == EventType.Repaint)
                 {
                     reqText = null;
                     reqCmp = null;
+                    reqIsSkill = false;
                 }
             }
+            else if (Event.current.type == EventType.Repaint) ResetSkillScroll();
         }
     }
 
@@ -167,6 +175,7 @@ internal static class UITip
             case 1: return new Color32(64, 224, 96, 255);
             case 2: return new Color32(82, 150, 252, 255);
             case 3: return new Color32(210, 90, 255, 255);
+            case 5: return new Color32(183, 155, 98, 255); // Endgame dark gold; ordinary rare quality stays yellow.
             case 4: return GameSettings.ColorWeak ? new Color32(255, 180, 40, 255) : new Color32(238, 222, 70, 255);
             default: return new Color32(247, 245, 245, 255);
         }

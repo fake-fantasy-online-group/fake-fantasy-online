@@ -7,6 +7,7 @@ namespace UnityEngine {
  public struct Color { public float r,g,b,a; public Color(float w,float x,float y,float z){r=w;g=x;b=y;a=z;} public static Color white=new Color(1,1,1,1),gray=new Color(.5f,.5f,.5f,1); public static Color operator *(Color x,Color y){return new Color(x.r*y.r,x.g*y.g,x.b*y.b,x.a*y.a);} }
  public class Texture2D { public int width=79,height=39; public string name; public static Texture2D whiteTexture=new Texture2D(); }
  public static class Mathf { public static int RoundToInt(float n){return (int)Math.Round(n);} public static int FloorToInt(float n){return (int)Math.Floor(n);} public static float Min(float a,float b){return Math.Min(a,b);} public static float Max(float a,float b){return Math.Max(a,b);} public static int Max(int a,int b){return Math.Max(a,b);} public static int Clamp(int n,int lo,int hi){return Math.Min(hi,Math.Max(lo,n));} }
+ public enum ScaleMode { StretchToFill }
  public enum TextAnchor { MiddleCenter } public enum TextClipping { Clip }
  public class RectOffset { public RectOffset(int a,int b,int c,int d){} }
  public class GUIContent {public string text;}
@@ -17,7 +18,7 @@ namespace UnityEngine {
  public enum EventType { Repaint,MouseDown,MouseUp,KeyDown,Used } public enum KeyCode { Space,Return,KeypadEnter,Escape } public enum FocusType { Keyboard }
  public class Event { public static Event current=new Event(); public EventType type; public int button; public Vector2 mousePosition; public KeyCode keyCode; public EventType GetTypeForControl(int id){return type;} public void Use(){type=EventType.Used;} }
  public static class GUIUtility { public static int hotControl,keyboardControl; public static int GetControlID(int hint,FocusType focus,Rect r){return 100+(int)r.x;} }
- public static class GUI {public static GUISkin skin=new GUISkin(); public static string lastLabel; public static void Label(Rect r,GUIContent c,GUIStyle st){lastLabel=c.text;} public static Color color=Color.white; public static bool enabled=true; public static List<Rect> cells=new List<Rect>(); public static Texture2D last; public static void DrawTexture(Rect r,Texture2D t){cells.Add(r);last=t;} public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv){if(uv.x < -0.0001||uv.y < -0.0001||uv.xMax>1.0001||uv.yMax>1.0001)throw new Exception("UV outside texture");DrawTexture(r,t);} }
+ public static class GUI {public static GUISkin skin=new GUISkin(); public static string lastLabel; public static void Label(Rect r,GUIContent c,GUIStyle st){lastLabel=c.text;} public static Color color=Color.white; public static bool enabled=true; public static List<Rect> cells=new List<Rect>(); public static Texture2D last; public static Color lastColor; public static void DrawTexture(Rect r,Texture2D t){cells.Add(r);last=t;lastColor=color;} public static void DrawTexture(Rect r,Texture2D t,ScaleMode mode,bool alphaBlend){DrawTexture(r,t);} public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv){if(uv.x < -0.0001||uv.y < -0.0001||uv.xMax>1.0001||uv.yMax>1.0001)throw new Exception("UV outside texture");DrawTexture(r,t);} }
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class NpcChatter { public static UnityEngine.Font CnFont(){return null;} }
@@ -44,6 +45,26 @@ class Test {
   UnityEngine.GUIUtility.keyboardControl=100;E(UnityEngine.EventType.KeyDown,k:UnityEngine.KeyCode.Return);Assert(ArtworkSkin.Button(r,"a")&&UnityEngine.Event.current.type==UnityEngine.EventType.Used,"focused keyboard activation");
   UnityEngine.GUI.enabled=false;E(UnityEngine.EventType.KeyDown);Assert(!ArtworkSkin.Button(r,"a"),"global disabled");UnityEngine.GUI.enabled=true;
   BitmapFont.Ready=false;ArtworkSkin.ButtonFace(r,"fallback label");Assert(UnityEngine.GUI.lastLabel=="fallback label","missing bitmap label fallback");BitmapFont.Ready=true; ResLoader.I=null;E(UnityEngine.EventType.Repaint);ArtworkSkin.Panel(r);Assert(true,"missing loader fallback");
+  var image=new UnityEngine.Texture2D{name="title artwork"};
+  UnityEngine.GUI.color=new UnityEngine.Color(.4f,.5f,.6f,.7f);
+  ArtworkSkin.SingleImageFace(r,image);
+  Assert(UnityEngine.GUI.last==image&&UnityEngine.GUI.lastColor.r==.4f,"single artwork identity and idle tint");
+  ArtworkSkin.SingleImageFace(r,image,hover:true);
+  Assert(UnityEngine.GUI.lastColor.r>.4f,"single artwork hover brightens");
+  Assert(UnityEngine.GUI.color.r==.4f&&UnityEngine.GUI.color.a==.7f,"single artwork restores GUI tint");
+  ArtworkSkin.SingleImageFace(r,image,hover:true,pressed:true);
+  Assert(UnityEngine.GUI.lastColor.r<.4f&&UnityEngine.GUI.lastColor.r>.3f,"single artwork pressed overrides hover");
+  ArtworkSkin.SingleImageFace(r,image,hover:true,pressed:true,enabled:false);
+  Assert(UnityEngine.GUI.lastColor.r<.3f,"single artwork disabled overrides pressed and hover");
+  UnityEngine.GUI.enabled=false;ArtworkSkin.SingleImageFace(r,image,hover:true);
+  Assert(UnityEngine.GUI.lastColor.r<.3f,"single artwork global disabled overrides hover");
+  UnityEngine.GUI.enabled=true;UnityEngine.GUI.cells.Clear();ArtworkSkin.SingleImageFace(r,null,hover:true);
+  Assert(UnityEngine.GUI.cells.Count==0,"missing single artwork draws nothing");
+  ArtworkSkin.SingleImageFace(r,image,hover:true);
+  var imageRect=UnityEngine.GUI.cells[0];
+  Assert(imageRect.x==r.x&&imageRect.y==r.y&&imageRect.width==r.width&&imageRect.height==r.height,"single artwork hover preserves geometry");
+  ArtworkSkin.ButtonFace(new UnityEngine.Rect(0,0,152,33),"申请账号",fontScale:1f);
+  Assert(BitmapFont.lastScale==1f,"native title label scale remains unscaled");
   Console.WriteLine("PASS "+count+" deterministic artwork/input contract assertions (Unity API stubs; not PlayMode)");
  }
 }

@@ -56,16 +56,17 @@ internal partial class SculpDlg : MonoBehaviour
     }
     public static bool TryDropSculp(byte tab, int bagSlot)
     {
-        if (tab != 2) return false;
+        if (tab != 2 || bagSlot < 0 || NetClient.I == null) return false;
         foreach (var item in InventoryDlg.Items[2])
-            if (item.bagIdx == bagSlot) { SocketUI.SelectBag(2, bagSlot, item.id, item.name, item.icon); break; }
-        return true;
+            if (item.bagIdx == bagSlot && item.id > 0) { SocketUI.SelectBag(2, bagSlot, item.id, item.name, item.icon); return true; }
+        return false;
     }
     public static bool TryDropRune(byte tab, int bagSlot, int holeIdx)
     {
+        if (tab >= InventoryDlg.Items.Length || bagSlot < 0 || NetClient.I == null || !SocketUI.CanInlayHole(holeIdx)) return false;
         foreach (var item in InventoryDlg.Items[tab])
-            if (item.bagIdx == bagSlot) { SocketUI.Inlay(holeIdx, tab, bagSlot); break; }
-        return true;
+            if (item.bagIdx == bagSlot && item.id > 0) { SocketUI.Inlay(holeIdx, tab, bagSlot); return true; }
+        return false;
     }
     private static string DrillDenyWhy()
     {

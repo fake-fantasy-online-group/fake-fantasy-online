@@ -16,6 +16,7 @@ public sealed partial class PrivateServerGateway : ITitleResultReceiptSource
     public void SendTitleLoginForIndependentRuntime(string account, string password)
     {
         _titleLoginResultWithoutWaiter = true;
+        endgameAccount = account;
         _netClient.Login(account, password);
     }
 

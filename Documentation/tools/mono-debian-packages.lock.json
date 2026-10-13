@@ -1,0 +1,1052 @@
+[
+  {
+    "Package": "libmono-2.0-dev",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-2.0-dev_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "fa8150d9fba0c03916d44953dcce1bfe1f743f1293329ce9ba7bcf586cef8e80",
+    "Size": "51948"
+  },
+  {
+    "Package": "libmono-accessibility4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-accessibility4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "c29caae5c73b2deaae3402e15145e531c83b209847162ff57d5d3a8f3be961fc",
+    "Size": "19460"
+  },
+  {
+    "Package": "libmono-cairo4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-cairo4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "409d077064804c5c8d446bdacb08e6359429b84aae0ce9f49d3ed98a048ea394",
+    "Size": "35568"
+  },
+  {
+    "Package": "libmono-cecil-private-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-cecil-private-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "bfe1eff53308c20b30902a82a24a0a6f96ac4153a3eca3ff0c9d2a6eac7b0cea",
+    "Size": "202736"
+  },
+  {
+    "Package": "libmono-cil-dev",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-cil-dev_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "6a9415252feb7cd8b8f0b1710193ee6eed7e79caee5caa2b2ce7fdffbf658e11",
+    "Size": "18628"
+  },
+  {
+    "Package": "libmono-codecontracts4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-codecontracts4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "4064803d6a19390c3c6a7210eea070f0d7defff654706f49342a3dafe1d82e9d",
+    "Size": "206872"
+  },
+  {
+    "Package": "libmono-compilerservices-symbolwriter4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-compilerservices-symbolwriter4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "1917573ef21d5f755334470c2c4f8c3f9159abeb4fffadc77efd02e353773850",
+    "Size": "31880"
+  },
+  {
+    "Package": "libmono-corlib4.5-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-corlib4.5-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "97a89eef249e2ae0bfe6f972fd217352670874ffbd1f430bac4618b667f129b3",
+    "Size": "16592"
+  },
+  {
+    "Package": "libmono-corlib4.5-dll",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-corlib4.5-dll_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "fcbfdadad96e8571e9fdd92085a4933490b07872ef8dd88f70299984696740a0",
+    "Size": "1254864"
+  },
+  {
+    "Package": "libmono-cscompmgd0.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-cscompmgd0.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "ff5d6355af554d45319851db0078f1e212104eeb01e5a54a22031c6047ce0934",
+    "Size": "22176"
+  },
+  {
+    "Package": "libmono-csharp4.0c-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-csharp4.0c-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "505c66fe6306051d3b17c4acd4529b95e1f7c667e5ceb7c2cd445883a95f6571",
+    "Size": "407124"
+  },
+  {
+    "Package": "libmono-custommarshalers4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-custommarshalers4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "b71f52fea8f172efc70166382d861d92aa17f791e3b25df883e687b97def6e21",
+    "Size": "20116"
+  },
+  {
+    "Package": "libmono-data-tds4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-data-tds4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2dd3ea5fd23bb61876326cf6fe6d5f875f139d46766602ac3eab25a80260cb42",
+    "Size": "49800"
+  },
+  {
+    "Package": "libmono-db2-1.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-db2-1.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "1fe28789f780290b0ce0d56ce31b9c19486a7182f3e2de18dd0f59fd406930ec",
+    "Size": "40628"
+  },
+  {
+    "Package": "libmono-debugger-soft4.0a-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-debugger-soft4.0a-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "96892ceda5bb367bdf586395f25f1cb1e3c43cd113b0715703d3c383131e2475",
+    "Size": "72296"
+  },
+  {
+    "Package": "libmono-http4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-http4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2d316f5936e446df5ab9194e5c1aedaef39b1cd239adb1b882afb9e66edc79dd",
+    "Size": "26428"
+  },
+  {
+    "Package": "libmono-i18n-cjk4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n-cjk4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "16c73c8e81611334eb6a3cadb4425df8526ce3adec9323e5d1c72f8aa4020bb2",
+    "Size": "242792"
+  },
+  {
+    "Package": "libmono-i18n-mideast4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n-mideast4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "7a90aade04d2e298f1fd890677b5b41c42e46fe13e3b4604021acb29f99602da",
+    "Size": "23652"
+  },
+  {
+    "Package": "libmono-i18n-other4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n-other4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "b60dd7609799cc54943de6f55ee7859ab6ad79b695c97561eff45ae17b17e29b",
+    "Size": "25020"
+  },
+  {
+    "Package": "libmono-i18n-rare4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n-rare4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "52a909b5c76fe72883b12fd0be97fca565148d2fccebd840d2f98e2856566bad",
+    "Size": "41300"
+  },
+  {
+    "Package": "libmono-i18n-west4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n-west4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "713443396d5841b10f8096b240a2f7b4a5ba17007a17fc2be6b2bccb61624995",
+    "Size": "29648"
+  },
+  {
+    "Package": "libmono-i18n4.0-all",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n4.0-all_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "963a7114144fa8d47aa36b62e545beec60397d62ccf05832a9b3fc46fbea8722",
+    "Size": "16096"
+  },
+  {
+    "Package": "libmono-i18n4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-i18n4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "750d157d7825d87fc4b3e838f1b8a4e8e6bde64b20db743b46e789bf7db1f8e9",
+    "Size": "26584"
+  },
+  {
+    "Package": "libmono-ldap4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-ldap4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "55c1975e5b13d4d9d8799d9e7d0cd88fda126c6a601de6641f38b3ba0db633d4",
+    "Size": "96644"
+  },
+  {
+    "Package": "libmono-management4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-management4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "5dfcf5f9d2a872f7581a15bf72c52a1c4ac35893a2a2f9e3251d7cdc17fd2dbc",
+    "Size": "20512"
+  },
+  {
+    "Package": "libmono-messaging-rabbitmq4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-messaging-rabbitmq4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "36c44a8567281fc5808102093e9969fa60881fc772f3722808f2bf205d5a181b",
+    "Size": "27840"
+  },
+  {
+    "Package": "libmono-messaging4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-messaging4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "e17e2f507a6de7060e6df091da17822f64ad6bcb91ad36f52e3618f47d66fa27",
+    "Size": "27232"
+  },
+  {
+    "Package": "libmono-microsoft-build-engine4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-build-engine4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "e2d1dff9ff965362f268743dc0b1c3639795d374d9a01841c21d36de123361ae",
+    "Size": "94592"
+  },
+  {
+    "Package": "libmono-microsoft-build-framework4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-build-framework4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "7f659db49884f372e802c6cd2df2b1f3c164510b51ba81013fae43204ac829d6",
+    "Size": "25936"
+  },
+  {
+    "Package": "libmono-microsoft-build-tasks-v4.0-4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-build-tasks-v4.0-4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "45333eef076b0709772ad23eb846341bce7566dee0f274d91077653c6370f1aa",
+    "Size": "73276"
+  },
+  {
+    "Package": "libmono-microsoft-build-utilities-v4.0-4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-build-utilities-v4.0-4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "913d7bd16778919fae80b398b9647b528979e1e859049745160009d1e6bf0a95",
+    "Size": "36156"
+  },
+  {
+    "Package": "libmono-microsoft-build4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-build4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9f3e1d5f83ebb65f5dd3d9421da6668ce88347c35bb872e9020c3f2ebc065dc4",
+    "Size": "103916"
+  },
+  {
+    "Package": "libmono-microsoft-csharp4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-csharp4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "75919f293c6c0c8ce3b8fd5eacecaa5c46d3bd6f878009db0e5ac1fd12228f06",
+    "Size": "119684"
+  },
+  {
+    "Package": "libmono-microsoft-visualc10.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-visualc10.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "ddd4765a10080db49b606856b266ebb22518c2cac57fc360a980922493ffb652",
+    "Size": "18920"
+  },
+  {
+    "Package": "libmono-microsoft-web-infrastructure1.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-microsoft-web-infrastructure1.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "3e1c51a8e6a266231ecb0dc3ce98f9d0dab36d9acce26391d4da429336b328e1",
+    "Size": "21356"
+  },
+  {
+    "Package": "libmono-oracle4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-oracle4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "67c448cd0fe0397f7173ac8540c36ba69180d71de44e42da4794a2cc1e37f062",
+    "Size": "68568"
+  },
+  {
+    "Package": "libmono-parallel4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-parallel4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "40faccf8fc57384501388962f3e168be4a9bccb11786019bbc05fe5bd806ef41",
+    "Size": "26976"
+  },
+  {
+    "Package": "libmono-peapi4.0a-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-peapi4.0a-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "be6e5a0dc68f8e9adb51a0497141c9dfb65f7f0f3840bf21f3065d788cc172ec",
+    "Size": "51388"
+  },
+  {
+    "Package": "libmono-posix4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-posix4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "e477415f0bec365074fe2a4f98f7ec4dfe2c10ce30f00368c7a5c73945d03ffc",
+    "Size": "86444"
+  },
+  {
+    "Package": "libmono-rabbitmq4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-rabbitmq4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "575ea58c1ef2e97f6f276cd065a10723f487d83eceebe736ea674731c4cb3bd9",
+    "Size": "95420"
+  },
+  {
+    "Package": "libmono-relaxng4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-relaxng4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "a8282697641a09e8955ebcb413ec596a1437bac6dfc464dc881bdfa4c1f18f73",
+    "Size": "84076"
+  },
+  {
+    "Package": "libmono-security4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-security4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2dca9fa7ad9b89d32267a2c964606da9414f3b2a749a5fbf06e41168c15a0ca1",
+    "Size": "98960"
+  },
+  {
+    "Package": "libmono-sharpzip4.84-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-sharpzip4.84-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "655735e5a42c024bc0fa9875298cc37f35fe30e9c9bf8d231c9ec451c7435003",
+    "Size": "64772"
+  },
+  {
+    "Package": "libmono-simd4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-simd4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "802256a43d38f3e4b914fb9d84d7ab00144eedb1222a73857e7a32a5d3fa558a",
+    "Size": "31200"
+  },
+  {
+    "Package": "libmono-smdiagnostics0.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-smdiagnostics0.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "a8afaafc904795fb0dc478c4fa3aab9873787203f82cc9008d84368a052a0a0d",
+    "Size": "31608"
+  },
+  {
+    "Package": "libmono-sqlite4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-sqlite4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d93a2d4a6575783abbeb1ca4a8a1c6bbf202c831e896636a7dc777e0adb4fdbc",
+    "Size": "61884"
+  },
+  {
+    "Package": "libmono-system-componentmodel-composition4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-componentmodel-composition4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "753cc25f865f64bd10a24939ac549005e6aab06f5e5543abc7bcca8203a1f7ec",
+    "Size": "100876"
+  },
+  {
+    "Package": "libmono-system-componentmodel-dataannotations4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-componentmodel-dataannotations4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "bd5bd704615c96358f6c81e992a15a3a74c2f17b4df7c9e669a42ea4d5b22b0d",
+    "Size": "41128"
+  },
+  {
+    "Package": "libmono-system-configuration-install4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-configuration-install4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "928dc3b52ffde0700f92e877e7938bfa479ac169f305f25616899016205de6e3",
+    "Size": "23600"
+  },
+  {
+    "Package": "libmono-system-configuration4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-configuration4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "346e6e82c20540b155c5ddc992f891febb73884d207407ac3dfc5c5a776be9be",
+    "Size": "58548"
+  },
+  {
+    "Package": "libmono-system-core4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-core4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "8ef1fae6d0a0287fe7801f5f45d6b75a57df04144e995816b9fae179b789b4a6",
+    "Size": "305964"
+  },
+  {
+    "Package": "libmono-system-data-datasetextensions4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data-datasetextensions4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "659723f9f295387dabe1aadbe77f14a0a93169757dc28e4a72106f5ae7e7e088",
+    "Size": "26208"
+  },
+  {
+    "Package": "libmono-system-data-entity4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data-entity4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "18d9fdd4bd0d4862af326860fe1c766162d95e870a20aa90815a583fdbf4afad",
+    "Size": "841760"
+  },
+  {
+    "Package": "libmono-system-data-linq4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data-linq4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "75258768fbe3a1e38ab6b8e6510b58b3e8b4e8e530a333e36ed817629b442271",
+    "Size": "204024"
+  },
+  {
+    "Package": "libmono-system-data-services-client4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data-services-client4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "105a5d31151579e6d07b45bbd8abf72300e1f2cce284698587c8ef33f245a0ef",
+    "Size": "143108"
+  },
+  {
+    "Package": "libmono-system-data-services4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data-services4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "308560c499e8202e5bca87230bc316cfd3f6b9ec7f40052e82ae1689dae9d42a",
+    "Size": "31560"
+  },
+  {
+    "Package": "libmono-system-data4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-data4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9b665d3a40f5510e8bcbebe59dae5b4731688af19fcbabcd4d29025268f683a5",
+    "Size": "582076"
+  },
+  {
+    "Package": "libmono-system-deployment4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-deployment4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "0302f079b1a7c2af8f5c915642a7bf03859d5894cf776f99fa9fb89daf0b5010",
+    "Size": "18836"
+  },
+  {
+    "Package": "libmono-system-design4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-design4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "65bdb3e92230ac1a8bcf0642521322487e58d29b76dea578f6c09a7ebc9baa10",
+    "Size": "107836"
+  },
+  {
+    "Package": "libmono-system-drawing-design4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-drawing-design4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "329045695a36011ddf551592f0e90b7c2c1d924b08fb86537812aa50facc1ac7",
+    "Size": "26116"
+  },
+  {
+    "Package": "libmono-system-drawing4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-drawing4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "75028e800aea53ccdb79a0206fc9190bf0aef77ffd1679bf58ca02b4c899a4e0",
+    "Size": "154328"
+  },
+  {
+    "Package": "libmono-system-dynamic4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-dynamic4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "228fcd3301b9aabd27b542db4246769032c9a7c6bd8558be8136ed012249f577",
+    "Size": "48052"
+  },
+  {
+    "Package": "libmono-system-enterpriseservices4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-enterpriseservices4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "53ef2d592af68aeab6609ff8a70df1ff604641d85b12e2303b21f8334eff81fe",
+    "Size": "30628"
+  },
+  {
+    "Package": "libmono-system-identitymodel-selectors4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-identitymodel-selectors4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "80db595d011a20f284ee6a44bed9ebd11975d7cbad4d68db196cc536834366d4",
+    "Size": "20980"
+  },
+  {
+    "Package": "libmono-system-identitymodel4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-identitymodel4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "0e8ee76d67d1975e35514d336105099a0d21e83233a736227512960dfffbbc93",
+    "Size": "57984"
+  },
+  {
+    "Package": "libmono-system-io-compression-filesystem4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-io-compression-filesystem4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d1d6f1c94276d6188194e6847931a5d60fe355dff66cb7f7fe29b5f8dfc5deff",
+    "Size": "22068"
+  },
+  {
+    "Package": "libmono-system-io-compression4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-io-compression4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "c1907e175f0efbf2c2f5d6e1c778d8d869d6ff8647dd9f63ff82d3b27b4c88b0",
+    "Size": "60472"
+  },
+  {
+    "Package": "libmono-system-json-microsoft4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-json-microsoft4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d9a1947f2397c8b09b7df4de6d8e334d436f8985184d121e04076ef089a7af61",
+    "Size": "35796"
+  },
+  {
+    "Package": "libmono-system-json4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-json4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "5e62a18d94bbd1627cb59f96ac60c9b198f068037b885c83e75f61244f95b951",
+    "Size": "26656"
+  },
+  {
+    "Package": "libmono-system-ldap-protocols4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-ldap-protocols4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "3a83e67856611311364752fff82ef06310237f4c4435ffb09e905ee6c0eaec96",
+    "Size": "34620"
+  },
+  {
+    "Package": "libmono-system-ldap4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-ldap4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "aa86edfe0273147eb52bee0a917d90d120225800caa965e3d804890a0fa573bf",
+    "Size": "45224"
+  },
+  {
+    "Package": "libmono-system-management4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-management4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2f61ac5847ba6fbb1e92b6f5d6b1557711f96820148c0d83d4e5c39659460116",
+    "Size": "30460"
+  },
+  {
+    "Package": "libmono-system-messaging4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-messaging4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "deec388a50d08eae92e6618e5a3b4c99519c2bb96d4a2f9b0f16eeb723d3a915",
+    "Size": "39484"
+  },
+  {
+    "Package": "libmono-system-net-http-formatting4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-net-http-formatting4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "3fc2332c3ad713a991f256530b2d1e4413651f3619e87ca7248f7bce2671d2b1",
+    "Size": "176580"
+  },
+  {
+    "Package": "libmono-system-net-http-webrequest4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-net-http-webrequest4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "8ed76946b8e80325a76298cf6b2818322e67db246d988f81f193a47d3f20c24c",
+    "Size": "25444"
+  },
+  {
+    "Package": "libmono-system-net-http4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-net-http4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "c5f2d364e72289dd1b80f48afc02667cfaf76339fe18b0648527a4dc50148e8e",
+    "Size": "112536"
+  },
+  {
+    "Package": "libmono-system-net4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-net4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2e6c43a00667a61cc3b8f1d094482c9a2df25dc62533cbce6a2c72cc282787bd",
+    "Size": "19724"
+  },
+  {
+    "Package": "libmono-system-numerics-vectors4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-numerics-vectors4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2c5db392b76f5d2155c68f9dc5b226733e60aab2124d9ece5e0bc14f6737303a",
+    "Size": "19136"
+  },
+  {
+    "Package": "libmono-system-numerics4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-numerics4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "05da552463579922680989ae6b857712b8e103d394c2120c70ba1f59b65c7d36",
+    "Size": "52500"
+  },
+  {
+    "Package": "libmono-system-reactive-core2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-core2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "4447dd54f7cee72dd90405fbb2f07e9d36c72fa7bdc8355c0e5af1be34c552f8",
+    "Size": "50308"
+  },
+  {
+    "Package": "libmono-system-reactive-debugger2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-debugger2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2cdd39143085b47ab94cbf2848861a4c9f3dd0d69cbfe45f397a486f5183e417",
+    "Size": "18156"
+  },
+  {
+    "Package": "libmono-system-reactive-experimental2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-experimental2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "e518d079ec9cc8965d6bae19c695fda807b8eaafdebdf0b938c0f6cc64082795",
+    "Size": "26392"
+  },
+  {
+    "Package": "libmono-system-reactive-interfaces2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-interfaces2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9a709496575762658ff9543e83ee16c15ead5fcedd2b06bfe3bf985d07deba50",
+    "Size": "19076"
+  },
+  {
+    "Package": "libmono-system-reactive-linq2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-linq2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "8251d06795f1f8cac5dac8c24718220ffeb42ca1d04711ca10e5a25e0ee61d95",
+    "Size": "162016"
+  },
+  {
+    "Package": "libmono-system-reactive-observable-aliases0.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-observable-aliases0.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "b259a2ee775060fb21e67ac480ad17c5891bd3fe1a22a0318a3538b4b62c8bc1",
+    "Size": "18968"
+  },
+  {
+    "Package": "libmono-system-reactive-platformservices2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-platformservices2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "06e9a1720677393c4436258d83e611e1b77c0eb37149045e838b199053a91bbc",
+    "Size": "25624"
+  },
+  {
+    "Package": "libmono-system-reactive-providers2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-providers2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9d36f58012f7148b51485843c602678a32683451dee69bd3edb3e7b0468961ef",
+    "Size": "55252"
+  },
+  {
+    "Package": "libmono-system-reactive-runtime-remoting2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-runtime-remoting2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "71b180684cc9cc5b09925980b5e1e4b54882a7779bdd97626cc7801ee99cfd73",
+    "Size": "19940"
+  },
+  {
+    "Package": "libmono-system-reactive-windows-forms2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-windows-forms2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "f3121f27f3e9dbe0ca9149447d7ff97eb59d39687577e00742d378f1405ffe17",
+    "Size": "20000"
+  },
+  {
+    "Package": "libmono-system-reactive-windows-threading2.2-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reactive-windows-threading2.2-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "6c09d36a1a96bdaa84ccec15c3c61ef0471de258925c4387cc4c8d9b59780ba6",
+    "Size": "21356"
+  },
+  {
+    "Package": "libmono-system-reflection-context4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-reflection-context4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "23a8c955346be5b9da1290c3aa88d8ec19c8e5f78615dc73c3ef246aa78f9fbf",
+    "Size": "19536"
+  },
+  {
+    "Package": "libmono-system-runtime-caching4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-runtime-caching4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "bdede949379c6041344227bff3b08f2bedc5d0b2ad791db8385187d367b114cd",
+    "Size": "42656"
+  },
+  {
+    "Package": "libmono-system-runtime-durableinstancing4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-runtime-durableinstancing4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "5f807dc9a152058a79060de701399ef5e819d5f22ce7f47c8fe24fb0a8335dd9",
+    "Size": "50400"
+  },
+  {
+    "Package": "libmono-system-runtime-serialization-formatters-soap4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-runtime-serialization-formatters-soap4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9adb800184c828ad3f1f6d32e6d83dbed60e6871e07dbf741a812baea994ea98",
+    "Size": "30620"
+  },
+  {
+    "Package": "libmono-system-runtime-serialization4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-runtime-serialization4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "58b38827268b381840f5ce7ddf7f406e2248261b184ccb15b983d16217bf8b81",
+    "Size": "254428"
+  },
+  {
+    "Package": "libmono-system-runtime4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-runtime4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d39e2d66cc42891008ff0407d45a5e5d2b3dbcb26fdb27d3e8f544981c6c201f",
+    "Size": "59752"
+  },
+  {
+    "Package": "libmono-system-security4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-security4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "82c2e2c785ff838bf5eb3659d70fb5906e9fb5d322fc68b82c1445c3ad5c7c01",
+    "Size": "117508"
+  },
+  {
+    "Package": "libmono-system-servicemodel-activation4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel-activation4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "6ad5984cdea7f19977c5b347c3e877df34689a96258c4b05154b9bc48c3985f7",
+    "Size": "19840"
+  },
+  {
+    "Package": "libmono-system-servicemodel-discovery4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel-discovery4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "55285d889a22709a62130dfc72861550fe546ca7ef59141189345bc70583095c",
+    "Size": "56916"
+  },
+  {
+    "Package": "libmono-system-servicemodel-internals0.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel-internals0.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "c362154c9430f086c0f913e306f0053cf6695c3dffb5fd948606aa4b33f8cf6b",
+    "Size": "85960"
+  },
+  {
+    "Package": "libmono-system-servicemodel-routing4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel-routing4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "b4bbe70d9efae1723046d4e7c118f975a183a3e176d897450d23a4f5b481d6fc",
+    "Size": "27260"
+  },
+  {
+    "Package": "libmono-system-servicemodel-web4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel-web4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "184282fc26943bc732ad9f17e89a73acbfd562d6e8d1acc70c42590eb95fd819",
+    "Size": "44192"
+  },
+  {
+    "Package": "libmono-system-servicemodel4.0a-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-servicemodel4.0a-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "4ce1ced152fec86f7d1e5a0a47327ac0f9be90d6b4013149485a7011c1efbef8",
+    "Size": "382996"
+  },
+  {
+    "Package": "libmono-system-serviceprocess4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-serviceprocess4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "8ee5a65130d0b33cbb6c1f94b15fe7246e5d1f04fd6af9a785b07aaf96bdd9e1",
+    "Size": "32416"
+  },
+  {
+    "Package": "libmono-system-threading-tasks-dataflow4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-threading-tasks-dataflow4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d97a00492eb53aebbab4bc4233b035cb313f5b63e6174ecdb420339220f6c15b",
+    "Size": "73236"
+  },
+  {
+    "Package": "libmono-system-transactions4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-transactions4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "a115dd11c7a48905ec68d98a8874600ed85ae3af49e437f8c6d59b2610d4e733",
+    "Size": "27384"
+  },
+  {
+    "Package": "libmono-system-web-abstractions4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-abstractions4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "43cff3c8c37df16e22bf3e09cce8c8dd693a90c4503893ec698cd87237c061f9",
+    "Size": "19260"
+  },
+  {
+    "Package": "libmono-system-web-applicationservices4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-applicationservices4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "75579aa7d60038e1b9b4841fc9861955f244f7815e04b63abe6119dd6047107a",
+    "Size": "26716"
+  },
+  {
+    "Package": "libmono-system-web-dynamicdata4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-dynamicdata4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "703ccef73f711900a41b266b5e29c7fe667a9a2b43fabaa59c2ecfcb4ec5103f",
+    "Size": "40768"
+  },
+  {
+    "Package": "libmono-system-web-extensions-design4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-extensions-design4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "cbc21451867b8f029a4ed6fd683855a5e84db30f0fe9a57deed4d100d9ca33cc",
+    "Size": "20252"
+  },
+  {
+    "Package": "libmono-system-web-extensions4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-extensions4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "53acc20a2748841b3e81dde5027ada6286642bdafa0531e2e8dc5b24d05edbf0",
+    "Size": "166752"
+  },
+  {
+    "Package": "libmono-system-web-http-selfhost4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-http-selfhost4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "65938696eb9b732239ff290d17d0833a1975ff074031a065fea41f50bcfbfd39",
+    "Size": "48180"
+  },
+  {
+    "Package": "libmono-system-web-http-webhost4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-http-webhost4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "ed697f5eb458a9240b6ac45cebf96747256cfdc39c6fc54736dde1299bac054c",
+    "Size": "38488"
+  },
+  {
+    "Package": "libmono-system-web-http4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-http4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2a906b379e5f5bc411f9ca79869013db24985a8f4e64f42b03891af342e07301",
+    "Size": "125788"
+  },
+  {
+    "Package": "libmono-system-web-mobile4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-mobile4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "5520feecce1ac2acb25cf451da36d766a4d508f1699ee1cc7d022d4d2df3d35b",
+    "Size": "18844"
+  },
+  {
+    "Package": "libmono-system-web-mvc3.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-mvc3.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "bd5a8c1d2d15ae1d1cfd738f1c6ed0a7bd9b6e204a888fd6a269402e0cdb439f",
+    "Size": "146032"
+  },
+  {
+    "Package": "libmono-system-web-razor2.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-razor2.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "80fa00768a30d0ccb24bdfea1b4e7fcff83247d34ea1ef9853a58af9003e0cd1",
+    "Size": "99868"
+  },
+  {
+    "Package": "libmono-system-web-regularexpressions4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-regularexpressions4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "e787fd0d689030f4a48440e0317e0ab6be2737654e2045feb44c21871275057f",
+    "Size": "18936"
+  },
+  {
+    "Package": "libmono-system-web-routing4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-routing4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "9ca7aceeb5d29794e1c9374a64705f5bc01439aa6013585e94e29c0c24ba07cb",
+    "Size": "19196"
+  },
+  {
+    "Package": "libmono-system-web-services4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-services4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "969c04665b8f6b4c17a288bcb3b1867dfe7a9fa2a684b632168c3234f560ff5b",
+    "Size": "176256"
+  },
+  {
+    "Package": "libmono-system-web-webpages-deployment2.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-webpages-deployment2.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "c130f32c9f547f266d8b55e6526bf1af3b18c7a57bc9a1faf87d67b7a40ba67e",
+    "Size": "30088"
+  },
+  {
+    "Package": "libmono-system-web-webpages-razor2.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-webpages-razor2.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "b4e01e381f87b4d75c9f99211a39e5489569c0699d68fb2c631760987e4c66d3",
+    "Size": "29528"
+  },
+  {
+    "Package": "libmono-system-web-webpages2.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web-webpages2.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2453b43da229284d521e17b37376c3decb09e00c7096fa1eb11727040a7623af",
+    "Size": "83000"
+  },
+  {
+    "Package": "libmono-system-web4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-web4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "37f868e29a808f399f34c33bdd37d6a3083be6dc7c4a767dc56561c4e1af24cc",
+    "Size": "759224"
+  },
+  {
+    "Package": "libmono-system-windows-forms-datavisualization4.0a-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-windows-forms-datavisualization4.0a-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "acdf3e5be03caf2c137fc226038d4bdf085fd0a6826d33d79ed199855a2d1b64",
+    "Size": "53308"
+  },
+  {
+    "Package": "libmono-system-windows-forms4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-windows-forms4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d7d2bddb6166e2e7482762ee9ec7be8cfc62e951c074626ded08d47ff972677a",
+    "Size": "818052"
+  },
+  {
+    "Package": "libmono-system-windows4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-windows4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "816d815051568446751afa77d303efdaed18aea8ba719f737c926ac67e71e91e",
+    "Size": "18896"
+  },
+  {
+    "Package": "libmono-system-workflow-activities4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-workflow-activities4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "cc1039d28479e5621514e2495f30134832ad016249c886d36dc85fe0e12ddd28",
+    "Size": "18948"
+  },
+  {
+    "Package": "libmono-system-workflow-componentmodel4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-workflow-componentmodel4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "43bed4293ee40143f2c977923d730792bef0399cb567001498eefdd2fb7e51c9",
+    "Size": "18928"
+  },
+  {
+    "Package": "libmono-system-workflow-runtime4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-workflow-runtime4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "dd3bc047ddc6058cb25d5e9c17f8a94c54d5904743723a95fb00de24f02b3766",
+    "Size": "18848"
+  },
+  {
+    "Package": "libmono-system-xaml4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-xaml4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "94f72c0c8a508973d478ade5c13afe335dead5448ea334888f1a40cef1bf081d",
+    "Size": "78244"
+  },
+  {
+    "Package": "libmono-system-xml-linq4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-xml-linq4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "a286eea9a8fb8c5e8c89099b88016429215a7abac4b9b62d1ec6983630f6fa7e",
+    "Size": "60992"
+  },
+  {
+    "Package": "libmono-system-xml-serialization4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-xml-serialization4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "10dcfb65471c218cf7ff55a06c927bf590056545b8bb721831d91ad997422f7d",
+    "Size": "18772"
+  },
+  {
+    "Package": "libmono-system-xml4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system-xml4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "335b77c5ed2d0a3871e9a0da789b0cd9ed4ae4f60904513d10ee96bfd6b2645d",
+    "Size": "819480"
+  },
+  {
+    "Package": "libmono-system4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-system4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "0e25eca36531e84d74ded22fbcce0688fac7b72906f619a9573e965b561c2096",
+    "Size": "806404"
+  },
+  {
+    "Package": "libmono-tasklets4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-tasklets4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "bf58ea6d40bf6d8e70326c0cb67e8c1b5980ccc82e985abe84ed4097d432d419",
+    "Size": "19176"
+  },
+  {
+    "Package": "libmono-webbrowser4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-webbrowser4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "896af64b265e4bd0ced276ed685bdf1727ac4cb703cab3c8d7d6da3da6667b2f",
+    "Size": "62100"
+  },
+  {
+    "Package": "libmono-webmatrix-data4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-webmatrix-data4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "a2fd1cdb27dd054a98d67edf1737ac41d2a80c82c439192f8bdac9a719dd38a2",
+    "Size": "22000"
+  },
+  {
+    "Package": "libmono-windowsbase4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-windowsbase4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "3d1b5e0c81613b598107f061f00a35cde546d7d775709b99f8db231eb70182fb",
+    "Size": "68440"
+  },
+  {
+    "Package": "libmono-xbuild-tasks4.0-cil",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmono-xbuild-tasks4.0-cil_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "675f0ad3cc779c677330d7ba0fdd275e16f98b17d690d4979fbff5a33fc26977",
+    "Size": "29644"
+  },
+  {
+    "Package": "libmonosgen-2.0-1",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmonosgen-2.0-1_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "e74c0c6c200a0024d7174c433d7dcca9b29b9473c1928bab2798b185d408f59d",
+    "Size": "1692772"
+  },
+  {
+    "Package": "libmonosgen-2.0-dev",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/libmonosgen-2.0-dev_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "f9dae4ec09dff704c9c7469f893bdc4dc3eef98b5b157bd03a7ee93fc6248691",
+    "Size": "1961068"
+  },
+  {
+    "Package": "mono-4.0-gac",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-4.0-gac_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "2fac93d519cc19a6a4a69a25722343fc3b06d2a3924d8ed6af22d27d1aae6266",
+    "Size": "156924"
+  },
+  {
+    "Package": "mono-devel",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-devel_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "cd3427e48ff697ab89292e886a9bfd213a8123db487f690270e763e510f54f89",
+    "Size": "23546908"
+  },
+  {
+    "Package": "mono-gac",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-gac_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "d89454254309d9cfbb7582e51574a9c0e11bc00145e03748872b2dfaacca7898",
+    "Size": "22552"
+  },
+  {
+    "Package": "mono-mcs",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-mcs_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "4a27f55a9816a9725fdd759ba4db1cae91aae526a05608befe3fbc95473643ea",
+    "Size": "541064"
+  },
+  {
+    "Package": "mono-runtime",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-runtime_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "a6f0de6e1881de8d70f3865cc8e8ec264bb45942071c2cfd3377531c90850239",
+    "Size": "18312"
+  },
+  {
+    "Package": "mono-runtime-common",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-runtime-common_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "241afbec61550c8ab7fd2c47fe3c7ae0e53e47e1014e3750f0e4a5f9367a6eb4",
+    "Size": "1196620"
+  },
+  {
+    "Package": "mono-runtime-sgen",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-runtime-sgen_6.12.0.199+dfsg-6_amd64.deb",
+    "SHA256": "4536dd1bffef20f3c32e24e707143c91ce0757e035925b5cb651cb5034d9805d",
+    "Size": "1684612"
+  },
+  {
+    "Package": "mono-xbuild",
+    "Version": "6.12.0.199+dfsg-6",
+    "Filename": "pool/main/m/mono/mono-xbuild_6.12.0.199+dfsg-6_all.deb",
+    "SHA256": "4fbb6e2488ef21fed65ad50b04f0d5fcc1e97cbb6251da5c66b0b75f52dd6823",
+    "Size": "457548"
+  }
+]

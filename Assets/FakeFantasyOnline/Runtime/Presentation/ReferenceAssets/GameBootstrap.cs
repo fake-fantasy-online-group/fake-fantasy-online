@@ -17,7 +17,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// The public/private game-state fields and SwitchMapAuthoritative/SwitchMap/TransitionTo/Fade
 /// control flow retain the official owner. The ConfigureWorld/Window members are isolated
 /// independent-runtime adapters for the source client's Application boundary and the already
-/// recovered BuildWorld graph; they do not choose maps, spawns, transition order or authority.
+/// recovered BuildWorld graph. Map switching follows the initial source-release lifecycle;
+/// the synchronous map-byte handoff avoids duplicate reads without adding another ready.
 /// </remarks>
 public partial class GameBootstrap : MonoBehaviour
 {
@@ -118,7 +119,6 @@ public partial class GameBootstrap : MonoBehaviour
     private bool configured;
     private bool nativeStartupWorld;
     private Action titleStartupForIndependentRuntime;
-
     public bool Switching => switching;
 
     internal bool HasWorldStateForIndependentRuntime =>
@@ -301,6 +301,37 @@ public partial class GameBootstrap : MonoBehaviour
         }
     }
 
+    // The transition already reads the target GSM to preserve the old world on a
+    // missing/corrupt resource. Hand that exact buffer to its one construction read
+    // instead of allocating/reading/inflating the same map a second time. This is
+    // not a map cache: a different loader/path, rollback or later build reads fresh.
+    internal sealed class PreparedMapSource
+    {
+        private readonly ResLoader loader;
+        private readonly string path;
+        private byte[] bytes;
+
+        internal PreparedMapSource(ResLoader loader, string path)
+        {
+            this.loader = loader;
+            this.path = path;
+            bytes = loader.ReadMap(path);
+        }
+
+        internal bool HasBytes => bytes != null;
+
+        internal byte[] ReadOnce(ResLoader constructionLoader, string constructionPath)
+        {
+            byte[] prepared = bytes;
+            bytes = null;
+            return prepared != null && ReferenceEquals(loader, constructionLoader) &&
+                string.Equals(path, constructionPath, StringComparison.Ordinal)
+                ? prepared : constructionLoader.ReadMap(constructionPath);
+        }
+
+        internal void Clear() => bytes = null;
+    }
+
     /// <summary>
     /// Calls the recovered BuildWorld graph through the independent-runtime window adapter.
     /// The official method is void; a rejected graph is exposed through pcRef/window and the
@@ -308,7 +339,7 @@ public partial class GameBootstrap : MonoBehaviour
     /// </summary>
     public void BuildWorld() => BuildWorldCore(transitionOwnsFailure: false);
 
-    private void BuildWorldCore(bool transitionOwnsFailure)
+    private void BuildWorldCore(bool transitionOwnsFailure, PreparedMapSource preparedMapSource = null)
     {
         switching = false;
         // Ordinary direct-world map rebuilds also observe current native appearance/state.
@@ -354,6 +385,7 @@ public partial class GameBootstrap : MonoBehaviour
         constructingWindow = candidate;
         candidate.AdoptConstructionRootForIndependentRuntime(worldRoot, transitionOwnsFailure);
         candidate.BuildCheckpointsForIndependentRuntime = checkpoints;
+        candidate.PreparedMapSourceForIndependentRuntime = preparedMapSource;
         if (!candidate.BuildForViewport(
                 viewportWidth,
                 viewportHeight,
@@ -449,6 +481,17 @@ public partial class GameBootstrap : MonoBehaviour
         StartCoroutine(TransitionTo());
     }
 
+    private void RearmRejectedPortalForIndependentRuntime(PlayerController rejectedPlayer)
+    {
+        PlayerController player = pcRef?.SourceControllerForIndependentRuntime;
+        if (worldRoot == null || window == null || !window.Built || player == null ||
+            !ReferenceEquals(player, rejectedPlayer) || !player.TransferredForIndependentRuntime) return;
+        // Keep the current gate suppressed until the player actually leaves it. A
+        // recovered resource can then be retried by a fresh leave/re-enter edge.
+        player.TransferredForIndependentRuntime = false;
+        player.WasInsideTransferForIndependentRuntime = true;
+    }
+
     private IEnumerator TransitionTo()
     {
         string backName = string.IsNullOrEmpty(_prevMapName)
@@ -459,9 +502,25 @@ public partial class GameBootstrap : MonoBehaviour
         float backX = backPlayer != null ? backPlayer.worldX : spawnX;
         float backY = backPlayer != null ? backPlayer.worldY : spawnY;
 
-        if (ResLoader.I != null &&
-            ResLoader.I.ReadMap("map/" + mapName + ".gsm") == null &&
-            Resources.Load<Texture2D>(mapName) == null)
+        // Keep the deployed synchronous single-read handoff. It changes neither the
+        // original coroutine's yield points nor when the world reports entered=1.
+        PreparedMapSource preparedMapSource = null;
+        bool sourceAvailable;
+        try
+        {
+            if (ResLoader.I != null)
+                preparedMapSource = new PreparedMapSource(ResLoader.I, "map/" + mapName + ".gsm");
+            sourceAvailable = ResLoader.I == null || preparedMapSource.HasBytes ||
+                Resources.Load<Texture2D>(mapName) != null;
+        }
+        catch (Exception exception)
+        {
+            // A synchronous resource exception rejects this attempt just like missing
+            // bytes. It must not leave the original switching latch set forever.
+            Debug.LogError("[切图] 读取目标地图失败 " + mapName + ": " + exception);
+            sourceAvailable = false;
+        }
+        if (!sourceAvailable)
         {
             Debug.LogError(string.Format("[\u5207\u56fe] \u2605\u76ee\u6807\u56fe\u8d44\u6e90\u7f3a\u5931, \u53d6\u6d88\u5207\u56fe: {0}(\u56fe{1}) \u2014\u2014 \u670d\u52a1\u7aef\u53ef\u80fd\u5df2\u6309\u65b0\u56fe\u8bb0\u8d26, \u73b0\u56de\u6eda\u56fe\u540d\u5e76\u8865\u6267\u884c\u6392\u961f\u4e2d\u7684\u670d\u52a1\u7aef\u5f3a\u5207", mapName, _pendingMapId));
             mapName = backName;
@@ -469,6 +528,7 @@ public partial class GameBootstrap : MonoBehaviour
             spawnX = backX;
             spawnY = backY;
             switching = false;
+            RearmRejectedPortalForIndependentRuntime(backPlayer);
             if (_queuedSwitch.HasValue)
             {
                 (int, float, float) queued = _queuedSwitch.Value;
@@ -486,6 +546,10 @@ public partial class GameBootstrap : MonoBehaviour
         System.Diagnostics.Stopwatch traceClock = System.Diagnostics.Stopwatch.StartNew();
         long traceMark = 0L;
 
+        // Retire only visuals owned by the outgoing scene; authoritative XP and
+        // first-time notifications received during the transition remain untouched.
+        session?.RetireCombatNumberSceneForIndependentRuntime();
+        CombatNumber.ReleaseExperienceForSceneTransition();
         _holdSkyBlack = true;
         yield return Fade(0f, 1f, fadeInSec);
         if (LoadTrace.On)
@@ -539,12 +603,17 @@ public partial class GameBootstrap : MonoBehaviour
         bool built = false;
         try
         {
-            BuildWorldCore(transitionOwnsFailure: true);
-            built = worldRoot != null;
+            BuildWorldCore(transitionOwnsFailure: true, preparedMapSource: preparedMapSource);
+            // A published root can precede a rejected/partial world construction.
+            built = worldRoot != null && window != null && window.Built;
         }
         catch (Exception exception)
         {
             Debug.LogError("[切图] 建图失败 " + backName + "→" + mapName + ": " + exception);
+        }
+        finally
+        {
+            preparedMapSource?.Clear();
         }
 
         if (built)
@@ -573,7 +642,7 @@ public partial class GameBootstrap : MonoBehaviour
             try
             {
                 BuildWorldCore(transitionOwnsFailure: true);
-                if (worldRoot != null)
+                if (worldRoot != null && window != null && window.Built)
                 {
                     CurMapId = backCurMap;
                     ReportPos(true);
@@ -689,6 +758,17 @@ public partial class GameBootstrap : MonoBehaviour
         }
     }
 
+    private void CancelMapTransitionForIndependentRuntime()
+    {
+        // Final exit cannot leave the original yielded iterator able to rebuild a
+        // world after logout. This does not serialize or acknowledge ordinary travel.
+        _queuedSwitch = null;
+        StopAllCoroutines();
+        switching = false;
+        fadeAlpha = 0f;
+        ApplyPendingSky();
+    }
+
     // Host bindings support the original bootstrap even after its world root is released.
     // Retire them only when a new entry replaces the binding or this actual owner dies.
     private void ReleaseWorldContextForIndependentRuntime()
@@ -721,6 +801,8 @@ public partial class GameBootstrap : MonoBehaviour
         bool preserveReceiptMail, bool preserveReceiptTrade, bool preserveReceiptFamilyWindows,
         bool retireNativeWorld)
     {
+        // Final exit must not leave a yielded transition able to resurrect this world.
+        CancelMapTransitionForIndependentRuntime();
         bool hadWorldState = HasWorldStateForIndependentRuntime;
         bool hadTradeOwner = DealDlg.I != null;
         // 060003f3 destroys the root and clears these references before owner cleanup.

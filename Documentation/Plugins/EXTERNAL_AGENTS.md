@@ -106,8 +106,9 @@ state changes.
 ### Observation coverage and scene safety
 
 Discover the current schema rather than assuming every domain is ready at login.
-Current domains are `world`, `player`, `entities`, `npcs`, `loot`, `inventory`,
-`equipment`, `skills`, `buffs`, `target`, `quests`, `dialogue`, `party`, and `ui`. Read the
+Current domains are `title`, `world`, `player`, `entities`, `npcs`, `loot`, `inventory`,
+`equipment`, `skills`, `buffs`, `target`, `quests`, `dialogue`, `party`, `ui`, `endgame`,
+`endgame.items`, `endgame.catalog`, `endgame.skills`, and `endgame.rift`. Read the
 availability/reason fields inside snapshots when the required native owner or
 world session is missing.
 
@@ -171,6 +172,12 @@ commands and remain sent rather than claiming delivery. Dialogue and quest actio
 require the matching observed revision guards. Some item uses open a native
 confirmation or other local UI: inspect `completionScope`, `requestSent` and
 `confirmationVisible`; local completion is not proof that an item was consumed.
+
+The shared native endgame adapter also exposes guarded catalog/socket/cube/rift
+actions and UID-safe native equipment. See [ENDGAME.md](ENDGAME.md) for exact
+argument fields, ordered rune inputs, server quote execution, pending-request
+reconciliation and connection-generation safety. Its correlated authoritative
+receipts may establish server completion; an initial send never does.
 
 ### Event cursors and resynchronization
 

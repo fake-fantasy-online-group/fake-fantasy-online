@@ -12,7 +12,7 @@ public sealed partial class PrivateServerGateway
 {
     // The local native-world return is already on the Unity host. It has no server
     // world-drain/roster handoff; preserve the original writer's own connected gate.
-    public void SendTitleWorldReturnForIndependentRuntime() => _netClient.LeaveWorld();
+    public void SendTitleWorldReturnForIndependentRuntime() { ResetEndgameConnection(); ClearCombatNumberPresentationJournal(); _netClient.LeaveWorld(); }
 
     public async Task<Result<IReadOnlyList<ServerCharacterRecord>>> LeaveWorldForTitleAsync(
         CancellationToken cancellationToken)
@@ -82,9 +82,19 @@ public sealed partial class PrivateServerGateway
 
     private void ClearDepartedPlayerSnapshots(CancellationToken cancellationToken)
     {
+        ResetEndgameConnection();
         lock (_worldStateSync)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Numbers and their retry state are character-scoped, even when the socket is
+            // reused for another character. Map-only transitions never clear this journal.
+            ClearCombatNumberPresentationJournal();
+            // 0x800a is a character-scoped observation, including its entity-0 alias.
+            // The next 0x8003 supplies fresh appearance before its world build; carrying
+            // this snapshot across a roster handoff can reject the new entity or reuse
+            // the previous character's look. Ordinary map transitions do not enter here.
+            if (Interlocked.Exchange(ref _playerAppearanceState, null) != null)
+                Interlocked.Increment(ref _playerAppearanceStateVersion);
             if (Interlocked.Exchange(ref _localPlayerLifeState, null) != null)
                 Interlocked.Increment(ref _localPlayerLifeStateVersion);
             if (Interlocked.Exchange(ref _localRidingState, null) != null)

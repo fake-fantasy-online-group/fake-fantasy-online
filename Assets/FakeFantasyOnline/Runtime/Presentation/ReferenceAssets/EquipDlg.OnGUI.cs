@@ -6,6 +6,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 internal partial class EquipDlg
 {
+    private bool additionalEquipmentOpen;
+
     // 1.5.8 06000313 / 1.6.0 0600031a: native lookup, including the full Int32 default.
     private static int SlotPart(int ui) => ui switch
     {
@@ -101,8 +103,10 @@ internal partial class EquipDlg
                         InventoryDlg.Toggle();
                 }
                 if (tab == 1) DrawAttributePage(f);
-                DrawDoll(f);
+                bool showAdditionalEquipment = DrawAdditionalEquipmentControl(f, ev);
+                if (!showAdditionalEquipment) DrawDoll(f);
                 DrawSlots(f, ev);
+                if (showAdditionalEquipment) DrawAdditionalEquipmentSlots(f, ev);
                 if (!BitmapFont.Ready) GUI.Button(f.L(0,0,257,506), GUIContent.none, GUIStyle.none);
                 else
                 {
@@ -298,11 +302,55 @@ internal partial class EquipDlg
         }
     }
 
+    // Higher server equipment slots live in the character window too. Keep the native
+    // eleven slots, doll, attribute controls and window hit bounds unchanged; only the
+    // doll area is borrowed while the player chooses to inspect additional worn gear.
+    private bool DrawAdditionalEquipmentControl(GuiFrame f, Event ev)
+    {
+        int count = 0;
+        foreach (EquippedItem item in equipped) if (item.slot >= 14 && item.slot <= 25) count++;
+        if (count == 0) additionalEquipmentOpen = false;
+        if (tab != 0 || count == 0) return false;
+        Rect control = f.L(75, 213, 108, 22);
+        Patch9(control);
+        string text = additionalEquipmentOpen ? "返回人物" : "其他装备 (" + count + ")";
+        if (BitmapFont.Ready)
+            BitmapFont.CenterOutline(f.L(75, 218, 108, 12), text,
+                new Color(230f / 255f, 210f / 255f, 150f / 255f, 1f), s);
+        else GUI.Label(control, text);
+        if (ev.type == EventType.MouseDown && ev.button == 0 && control.Contains(ev.mousePosition) &&
+            !AttrWashDlg.MouseOver())
+        {
+            additionalEquipmentOpen = !additionalEquipmentOpen;
+            ev.Use();
+        }
+        return additionalEquipmentOpen;
+    }
+
+    private void DrawAdditionalEquipmentSlots(GuiFrame f, Event ev)
+    {
+        for (int index = 0; index < 12; index++)
+        {
+            int slot = 14 + index;
+            Rect rect = f.L(79 + index % 3 * 36, 77 + index / 3 * 34, 30, 30);
+            Border(rect, new Color(183f / 255f, 155f / 255f, 98f / 255f, 0.7f));
+            int found = equipped.FindIndex(item => item.slot == slot);
+            if (found < 0) continue;
+            EquippedItem item = equipped[found];
+            if (item.icon != null) ItemIconUI.Draw(rect, item.icon, s);
+            else if (BitmapFont.Ready)
+                BitmapFont.Draw(rect.x + 3f * s, rect.y + 10f * s,
+                    item.name.Substring(0, Math.Min(2, item.name.Length)),
+                    item.quality > 0 ? (Color)UITip.QualityColor(item.quality) : Color.white, s);
+            if (rect.Contains(ev.mousePosition) && !AttrWashDlg.MouseOver()) DrawSlotAction(item, ev);
+        }
+    }
+
     private void DrawSlotAction(EquippedItem item, Event ev)
     {
         if (AvatarFuse.Active)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击将变装融合到此装备", s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { AvatarFuse.PickTarget(item.slot,item.name,item.avatar > 0); ev.Use(); }
@@ -310,7 +358,7 @@ internal partial class EquipDlg
         }
         else if (ToolTarget.Active)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击对此装备" + ToolTarget.Verb, s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { ToolTarget.PickEquip(item.slot,item.name,item.avatar > 0); ev.Use(); }
@@ -318,7 +366,7 @@ internal partial class EquipDlg
         }
         else if (AttrWashDlg.Picking)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击放入属性洗炼", s);
             if (ev.type == EventType.MouseDown && ev.button == 0)
             { AttrWashDlg.SetTarget(1,0,item.slot,item.name,item.icon); ev.Use(); }
@@ -326,7 +374,7 @@ internal partial class EquipDlg
         }
         else if (RepairDlg.Picking)
         {
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 "\n点击修理此装备(特殊档: 不掉耐久上限)", s);
             if (ev.type == EventType.MouseDown && ev.button == 0) { RepairDlg.PickSlot(item.slot); ev.Use(); }
             if (ev.type == EventType.MouseDown && ev.button == 1) { RepairDlg.CancelPick(); ev.Use(); }
@@ -340,7 +388,7 @@ internal partial class EquipDlg
                     if (pair.Key >= 14001 && pair.Key < 14020 && pair.Value >= 1)
                     { skill = pair.Key; break; }
             }
-            UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc) +
+            UITip.Show(EndgamePanel.EquippedTooltip(item, TooltipContent.Fmt(TooltipContent.QualityName(item.name,item.quality),item.desc)) +
                 (skill != 0 ? "\n左键拖法宝技到快捷栏 · 右键卸下" : "\n右键卸下"), s);
             if (ev.type == EventType.MouseDown && ev.button == 0 && InventoryDlg.ShareModHeld(ev))
             { InventoryDlg.ShareToChat(2,0,item.slot,item.name); ev.Use(); return; }

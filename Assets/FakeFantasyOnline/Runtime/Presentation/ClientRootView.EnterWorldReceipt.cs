@@ -90,6 +90,7 @@ public sealed partial class ClientRootView
         {
             _status = WorldFailureStatus(
                 ReferenceFirstWorldWindowFailure.UnexpectedConstructionFailure);
+            Debug.LogError(_status);
             if (_backgroundSessionCheckRequested)
             {
                 FinishBackgroundSessionCheck(
@@ -108,6 +109,9 @@ public sealed partial class ClientRootView
             ReferenceFirstWorldWindowFailure failure =
                 boot.LastBuildFailure;
             _status = WorldFailureStatus(failure);
+            // Foreground builds need the same actionable rejection reason as the
+            // background check. Keep the original failure and fail-closed behavior.
+            Debug.LogError(_status);
             if (_backgroundSessionCheckRequested)
             {
                 Debug.LogError(

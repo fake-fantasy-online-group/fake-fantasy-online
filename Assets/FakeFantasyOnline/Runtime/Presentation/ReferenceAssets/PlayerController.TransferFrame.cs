@@ -17,6 +17,12 @@ public partial class PlayerController
     // check of its own and the whole product arm for both is one static invocation per click.
     private static Action taoyuNormalCallback;
     private static Action taoyuHardCallback;
+    private Func<RiftPortalContinuation> waitingRiftTransfer;
+    private Func<RiftPortalContinuation> waitingSeededRiftTransfer;
+    private string seededRiftRunID;
+    private int seededRiftFloor;
+    private long seededRiftGeneration = -1;
+    private bool wasInsideSeededRiftTransfer;
 
     // Shared by the original component frame and the retained explicit movement diagnostic.
     // True is the original Update return after a fired transfer; false continues projection.
@@ -43,8 +49,26 @@ public partial class PlayerController
                 // Keep callback execution inside this List enumerator's try/finally lifetime.
                 if (wasInsideTransfer)
                 {
-                    inside = true;
-                    break;
+                    if (waitingRiftTransfer != null)
+                    {
+                        RiftPortalContinuation result = waitingRiftTransfer();
+                        if (result != RiftPortalContinuation.Waiting) waitingRiftTransfer = null;
+                        if (result == RiftPortalContinuation.Sent) return true;
+                        if (result == RiftPortalContinuation.Public) wasInsideTransfer = false;
+                    }
+                    if (wasInsideTransfer)
+                    {
+                        inside = true;
+                        break;
+                    }
+                }
+
+                // Reused scenery keeps its native gate polygons, but a private rift
+                // owns their meaning. Never begin a speculative public-map load or script.
+                if (EndgamePanel.TryTransferRiftPortalFromWorld(out waitingRiftTransfer))
+                {
+                    wasInsideTransfer = true;
+                    return true;
                 }
 
                 if (string.IsNullOrEmpty(proc.cmd))
@@ -157,9 +181,48 @@ public partial class PlayerController
 
             // The non-trigger path writes the hit result only after enumerator disposal.
             wasInsideTransfer = inside;
+            if (!inside) waitingRiftTransfer = null;
         }
 
-        return false;
+        return !transferred && AdvanceSeededRiftTransfer();
+    }
+
+    private bool AdvanceSeededRiftTransfer()
+    {
+        if (!EndgamePanel.TryGetRiftPortalFromWorld(out string runID, out int floor,
+            out long generation, out float x, out float y))
+        {
+            seededRiftRunID = null; waitingSeededRiftTransfer = null;
+            wasInsideSeededRiftTransfer = false;
+            return false;
+        }
+        float dx = worldX - x, dy = worldY - y;
+        bool inside = dx * dx + dy * dy <= 45f * 45f;
+        // A new floor/controller first observes its landing. Never auto-chain
+        // floors when a reconnect or same-map handoff spawns inside the exit.
+        if (seededRiftRunID != runID || seededRiftFloor != floor || seededRiftGeneration != generation)
+        {
+            seededRiftRunID = runID; seededRiftFloor = floor; seededRiftGeneration = generation;
+            wasInsideSeededRiftTransfer = inside; waitingSeededRiftTransfer = null;
+            return false;
+        }
+        if (!inside)
+        {
+            wasInsideSeededRiftTransfer = false; waitingSeededRiftTransfer = null;
+            return false;
+        }
+        if (wasInsideSeededRiftTransfer)
+        {
+            if (waitingSeededRiftTransfer != null)
+            {
+                RiftPortalContinuation result = waitingSeededRiftTransfer();
+                if (result != RiftPortalContinuation.Waiting) waitingSeededRiftTransfer = null;
+                return result == RiftPortalContinuation.Sent;
+            }
+            return false;
+        }
+        wasInsideSeededRiftTransfer = true;
+        return EndgamePanel.TryTransferRiftPortalFromWorld(out waitingSeededRiftTransfer);
     }
 
     private static void SendTransferGmCommandForIndependentRuntime(string cmd)

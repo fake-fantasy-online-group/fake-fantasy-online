@@ -9,6 +9,7 @@ public partial class PlayerAvatar
 {
     public static PlayerAvatar Build(int gender, int head, int hairColor, Appear ap, float ppu)
     {
+        ap.WeaponL = ReferenceAvatarWeaponPresentation.LeftModel(ap.WeaponR, ap.WeaponL);
         PlayerAvatar avatar = new PlayerAvatar();
         if (_liveAvatars.Count >= _avatarPurgeAt)
         {

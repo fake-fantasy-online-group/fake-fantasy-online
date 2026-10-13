@@ -5,6 +5,26 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
 public sealed partial class ActorEffects
 {
+    // Keep equipment aura identities separate from ordinary buffs even when
+    // their authored art reuses an existing effect package.
+    internal static string EquipmentAuraAsset(string key)
+    {
+        switch (key)
+        {
+            case "白虎守城":
+            case "白虎卫身": return "钢铁";
+            case "倒骑观火":
+            case "朱鸟衔烬":
+            case "余烬庇佑": return "火之盾";
+            case "空瓢济厄":
+            case "圣羽护佑": return "TFX074_40";
+            case "雨洗空符":
+            case "纸驴驮霜":
+            case "玄武镇门": return "TFX028_40";
+            default: return key;
+        }
+    }
+
     // 0x06000027
     public void SyncAuras(Dictionary<string, int> want)
     {
@@ -30,9 +50,11 @@ public sealed partial class ActorEffects
             int mode = pair.Value;
             if (mode < 0 || auras.ContainsKey(pair.Key)) continue;
 
+            string asset = EquipmentAuraAsset(pair.Key);
+            // Equipment aliases keep the server-selected foot/orbit placement.
             bool tfx = pair.Key?.StartsWith("TFX") ?? false;
             EffectPlayer player = EffectPlayer.PlayNamed(
-                transform.position, pair.Key, ppu, 1, -1, false, false);
+                transform.position, asset, ppu, 1, -1, false, false);
             int slot = 0;
             bool orbit = false;
             if (mode == 4 || tfx)

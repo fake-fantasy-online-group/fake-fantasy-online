@@ -8,6 +8,8 @@ internal partial class GroundItemEntity : MonoBehaviour
 
     private void Update()
     {
+        UpdateUniqueDrop();
+        if (uniqueId > 0) return;
         sparkleT += Time.deltaTime;
         if (sparkleT >= 3f)
         {
@@ -26,6 +28,7 @@ internal partial class GroundItemEntity : MonoBehaviour
     }
     private void OnDisable()
     {
+        ReleaseUniqueDrop();
         if (CursorManager.I != null) CursorManager.I.SetFetchHover(false);
     }
 }

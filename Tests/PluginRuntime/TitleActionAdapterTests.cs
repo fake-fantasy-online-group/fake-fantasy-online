@@ -76,7 +76,7 @@ internal static partial class GameActionAdapterTests
             bridge.State.ResultSequence++; bridge.State.ResultCode = code;
             Check(api.GetAction(login.ActionId).Code == "title." + code && bridge.Calls == 1, "native failure/timeout reported without retry");
         }
-        api = TitleSetup(out bridge); login = Act(api, "title.submit_login", TitleArgs(bridge)); api.TestExpireAction(login.ActionId);
+        api = TitleSetup(out bridge); login = Act(api, "title.submit_login", TitleArgs(bridge)); api.TestExpireEndgame(login.ActionId);
         Check(api.GetAction(login.ActionId).State == GameActionState.TimedOut && bridge.Calls == 1, "deadline does not cancel or retry native login");
         api = TitleSetup(out bridge); bridge.Error = "SECRET-MARKER";
         var error = Act(api, "title.submit_login", TitleArgs(bridge));

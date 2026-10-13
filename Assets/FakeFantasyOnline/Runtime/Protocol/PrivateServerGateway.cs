@@ -1313,6 +1313,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                         // A later cancelled Task reply keeps its original Task observation
                         // path; absence of an active waiter alone never grants native UI ownership.
                         _titleLoginResultWithoutWaiter = false;
+                        endgameAccount = credentials.AccountName;
                         _netClient.Login(credentials.AccountName, credentials.Password);
                     },
                     cancellationToken)
@@ -3272,6 +3273,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     public Task<Result> UpgradeSkillAsync(int skillId, CancellationToken cancellationToken)
     {
+        if (Endgame.GrowthV5 && EndgameSkillRankView.IsProfessionSkill(skillId)) return UpgradeGrowthSkillAsync(skillId, cancellationToken);
         if (!cancellationToken.CanBeCanceled && _host.IsHostThread)
         {
             _netClient.UpgradeSkill(skillId);
@@ -5393,6 +5395,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     private void Dispatch(ushort opcode, byte[] payload)
     {
+        if (TryReceiveEndgamePacket(opcode, payload)) return;
         if (TryReceiveCombatEntityTailPacket(opcode, payload)) return;
         if (TryReceiveCombatRegistryPacket(opcode, payload)) return;
         if (TryReceiveRemotePlayerTailPacket(opcode, payload)) return;
@@ -7320,6 +7323,9 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         Interlocked.Increment(ref _accountSecuritySeedVersion);
     }
 
+    private Task PublishInventoryStateOnHostAsync(WorldInventoryState state, CancellationToken cancellationToken) =>
+        _host.RunAsync(() => PublishInventoryState(state, cancellationToken), cancellationToken);
+
     private void PublishInventoryState(
         WorldInventoryState state,
         CancellationToken cancellationToken)
@@ -7336,6 +7342,9 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
             Interlocked.Increment(ref _inventoryStateVersion);
             RecordGroundLootInventoryLocked();
         }
+        // Receipt paths and the retained entry fallback publish on the host.
+        // Endgame is host-owned, not protected by the observation snapshot lock.
+        Endgame.NoteNativeInventoryPublished();
     }
 
     private void PublishWardrobeState(
@@ -9033,6 +9042,7 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     private void DisposeConnectionCore(bool closeNativeConnection)
     {
+        ResetEndgameConnection();
         lock (_worldDrainSync)
         {
             _stage = GatewayStage.Disconnected;
@@ -9288,16 +9298,8 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                 Interlocked.Increment(ref _combatResultsVersion);
             }
 
-            if (Volatile.Read(ref _combatNumbers).Count > 0)
-            {
-                Volatile.Write(
-                    ref _combatNumbers,
-                    Array.Empty<WorldCombatNumberState>());
-                Interlocked.Increment(ref _combatNumbersVersion);
-            }
-
+            ClearCombatNumberPresentationJournal();
             _combatResultRevision = 0;
-            _combatNumberRevision = 0;
 
             IReadOnlyDictionary<int, WorldRemotePathState> remotePaths =
                 Volatile.Read(ref _remotePaths);

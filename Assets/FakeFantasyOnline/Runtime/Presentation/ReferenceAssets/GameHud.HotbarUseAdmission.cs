@@ -41,6 +41,7 @@ public partial class GameHud
         GameSettings.EnsureLoaded();
         SkillTargeting.Aim aim = SkillTargeting.Resolve(skillId, out float range, out float radius,
             out float angle, out float rectL, out float rectW, out bool isTrap);
+        if (aim == SkillTargeting.Aim.Unavailable) { AuthoritativeProfessionSkill.Waiting(); return; }
         if (aim == SkillTargeting.Aim.Single)
         {
             CombatWorld.RequestSkill(skillId, range);
@@ -52,6 +53,11 @@ public partial class GameHud
                 SkillTargeting.CastImmediate(skillId, aim, range, radius, angle, rectL, rectW, isTrap);
             else
                 SkillTargeting.Begin(skillId, aim, range, radius, angle, rectL, rectW, isTrap);
+            return;
+        }
+        if (AuthoritativeProfessionSkill.Uses(skillId))
+        {
+            NetClient.I.UseSkill(skillId, 0); // Typed instant/self mode never borrows a selected enemy.
             return;
         }
         Win05.SkInfo info = Win05.SkillInfo(skillId);

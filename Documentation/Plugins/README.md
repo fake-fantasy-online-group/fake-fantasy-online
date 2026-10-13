@@ -10,6 +10,7 @@
 - 外部智能体在管理器开启连接后，使用 `examples/agents/game_agent.py`。默认连接运行客户端的同一台机器上的 `127.0.0.1:17845`。
 - 插件目录、生命周期、Lua API 和配置说明见 [ADDONS.md](ADDONS.md)。
 - 外部协议、Python 用法及行为说明见 [EXTERNAL_AGENTS.md](EXTERNAL_AGENTS.md)。通过 `describe` 获取当前查询及动作定义、参数和可用性。
+- 原生演劫系统的共享观察、目录/嵌篆/问鼎/洞天动作、精确 UID 与回执重试说明见 [ENDGAME.md](ENDGAME.md)。
 
 ## 实现分层
 

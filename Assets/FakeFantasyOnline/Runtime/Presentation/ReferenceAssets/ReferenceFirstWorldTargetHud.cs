@@ -203,7 +203,7 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
 
     public static Rect TargetBarRect(float scale)
     {
-        return ScaleRect(72f, 108f, 128f, 40f, scale);
+        return ScaleRect(72f, 108f + EndgamePanel.RiftTargetHudOffset, 128f, 40f, scale);
     }
 
     /// <summary>
@@ -215,17 +215,17 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
     /// </summary>
     public static Rect TargetNameRect(float scale)
     {
-        return ScaleRect(100f, 113f, 94f, 12f, scale);
+        return ScaleRect(100f, 113f + EndgamePanel.RiftTargetHudOffset, 94f, 12f, scale);
     }
 
     public static Rect TargetLevelRect(float scale)
     {
-        return ScaleRect(74f, 122f, 20f, 20f, scale);
+        return ScaleRect(74f, 122f + EndgamePanel.RiftTargetHudOffset, 20f, 20f, scale);
     }
 
     public static Rect TargetHitPointRect(float scale)
     {
-        return ScaleRect(96f, 130f, 102f, 12f, scale);
+        return ScaleRect(96f, 130f + EndgamePanel.RiftTargetHudOffset, 102f, 12f, scale);
     }
 
     public static Rect TargetStatusRect(int visibleIndex, float scale)
@@ -237,7 +237,7 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
 
         return ScaleRect(
             72f + 44f + visibleIndex * 13f,
-            108f + 37f,
+            108f + 37f + EndgamePanel.RiftTargetHudOffset,
             12f,
             12f,
             scale);
@@ -352,7 +352,7 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
             return ReferenceFirstWorldTargetHudAction.None;
 
         float left = 72f * scale;
-        float top = 108f * scale;
+        float top = (108f + EndgamePanel.RiftTargetHudOffset) * scale;
         Rect P(float x, float y, float width, float height) =>
             new Rect(left + x * scale, top + y * scale, width * scale, height * scale);
 

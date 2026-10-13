@@ -33,15 +33,25 @@ public static class PrivateServerGroundItemCodec
             byte owned = reader.ReadByte();
             int lockMilliseconds = reader.ReadInt32();
             byte kind = reader.ReadByte();
+            int tailLength = reader.Remaining;
+            if (tailLength != 0 && tailLength != 1 && tailLength != 15) return false;
             byte quality = 0;
-            if (reader.Remaining == 1)
-            {
+            int uniqueId = 0;
+            bool freshDrop = false;
+            long dropToken = 0;
+            if (reader.Remaining == 1 || reader.Remaining == 15)
                 quality = reader.ReadByte();
-            }
-            else if (reader.Remaining != 0)
+            if (reader.Remaining == 14)
             {
-                return false;
+                byte version = reader.ReadByte();
+                byte flags = reader.ReadByte();
+                uniqueId = reader.ReadInt32();
+                dropToken = reader.ReadInt64();
+                if (version != 1 || (flags & ~1) != 0 || uniqueId < 0 || dropToken < 0 ||
+                    ((flags & 1) != 0 && dropToken == 0)) return false;
+                freshDrop = (flags & 1) != 0;
             }
+            else if (reader.Remaining != 0) return false;
 
             reader.EnsureFinished();
             if (groundId <= 0 || itemId <= 0 || count <= 0 || owned > 1 ||
@@ -60,7 +70,7 @@ public static class PrivateServerGroundItemCodec
                 owned != 0,
                 lockMilliseconds,
                 kind,
-                quality);
+                quality, uniqueId, freshDrop, dropToken);
             return true;
         }
         catch (Exception exception) when (

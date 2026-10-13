@@ -94,6 +94,7 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
         _worldReceiveOwner?.ReceiveSelfDataIdentity(entityId);
         reader.U8(); // compatibility byte
         string name = reader.Str();
+        endgameCharacter = "";
         mapId = reader.I32();
         float x = reader.F32();
         float y = reader.F32();
@@ -118,6 +119,8 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
         if (reader.Remaining >= 8)
         {
             persistentCharacterId = reader.I64();
+            if (persistentCharacterId.Value > 0)
+                endgameCharacter = persistentCharacterId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (reader.Remaining >= 1)
@@ -354,7 +357,10 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
 
         if (response.InventoryState != null)
         {
-            PublishInventoryState(response.InventoryState, cancellationToken);
+            // The retained startup reader may resume off-host after earlier
+            // ConfigureAwait(false) calls. Publish the native/sidecar identity
+            // boundary through the same host executor as other entry owners.
+            await PublishInventoryStateOnHostAsync(response.InventoryState, cancellationToken).ConfigureAwait(false);
         }
 
         if (response.WardrobeState != null)
@@ -388,6 +394,7 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
             Volatile.Write(ref _currentWorldEntityId, entityId);
             admission.ReturnedEntry = entry;
             _stage = GatewayStage.InWorld;
+            endgameWorldEntered = true;
         }
         // Return the adapted entry to its host while the common inbox remains fenced.
         // The host acknowledges a normally returned BuildWorld attempt, then the same

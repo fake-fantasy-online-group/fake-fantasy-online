@@ -1,0 +1,8 @@
+{
+  "kind": "hello",
+  "ok": true,
+  "revision": "0",
+  "capabilities": [
+    "endgame.v1"
+  ]
+}

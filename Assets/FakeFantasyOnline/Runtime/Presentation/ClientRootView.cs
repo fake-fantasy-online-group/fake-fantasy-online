@@ -66,10 +66,13 @@ public sealed partial class ClientRootView : MonoBehaviour, IWorldReceiveContext
     private string _worldStatus = string.Empty;
     private string _status
     {
-        get => _titleLogin != null ? _titleLogin.netMsg : _worldStatus;
+        // Destroy(title) is deferred until the end of the frame. World diagnostics must
+        // already use their surviving owner during the synchronous entry callback.
+        get => !HasWorldForIndependentRuntime && _titleLogin != null
+            ? _titleLogin.netMsg : _worldStatus;
         set
         {
-            if (_titleLogin != null) _titleLogin.netMsg = value;
+            if (!HasWorldForIndependentRuntime && _titleLogin != null) _titleLogin.netMsg = value;
             else _worldStatus = value;
         }
     }

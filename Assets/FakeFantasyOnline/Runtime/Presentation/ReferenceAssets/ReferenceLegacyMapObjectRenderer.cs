@@ -197,6 +197,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
             if (parent != null) objectParent.parent = parent;
         }
 
+        PreparePortalAnchors(sourceMap);
         HashSet<int> blocked = receiver?.CreateObjectBlockListForIndependentRuntime();
         int tileOrder = FirstTileSortingOrder;
         int index = 0;
@@ -271,6 +272,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
 
         foreach (Sprite sprite in embeddedSprites) DestroyOwned(sprite);
         foreach (Texture2D texture in embeddedTextures) DestroyOwned(texture);
+        DisposePortalApertures();
         DisposeFootprintStrips();
         embeddedSprites.Clear();
         embeddedTextures.Clear();
@@ -314,6 +316,14 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
             image.clipArr != null && image.clipArr.Length > 1 && image.clipWidth > 0)
         {
             PlaceSlices(receiver, value, parent, pixelsPerUnit, worldWidth, worldHeight, kind, objectIndex, path, image);
+            receiver?.NoteMapObjectForIndependentRuntime(value.Id);
+            return;
+        }
+
+        if (requestedSortingOrder == int.MinValue &&
+            TryPlacePortalAperture(receiver, value, parent, pixelsPerUnit, worldWidth,
+                worldHeight, kind, objectIndex, image))
+        {
             receiver?.NoteMapObjectForIndependentRuntime(value.Id);
             return;
         }
@@ -391,6 +401,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
         string path,
         ResLoader.ObjSprite image)
     {
+        int rearPlaneLimit = PortalBackplaneOrderLimit(value, image, kind);
         if (!ReferenceEquals(receiver, null))
         {
             var group = new List<SpriteRenderer>();
@@ -410,7 +421,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
                 int rectangleX = sprite != null ? (int)sprite.rect.x : 0;
                 int rectangleWidth = sprite != null ? (int)sprite.rect.width : 0;
                 PlaceSpriteCore(receiver, value, parent, pixelsPerUnit, worldWidth, worldHeight, kind, objectIndex, path, image, rectangleX, rectangleWidth,
-                    value.SourceY + slice.Item3, false, sprite, slice.Item2,
+                    Math.Min(value.SourceY + slice.Item3, rearPlaneLimit), false, sprite, slice.Item2,
                     nativePlacement: true);
                 SpriteRenderer renderer = renderers[renderers.Count - 1];
                 group.Add(renderer);
@@ -464,7 +475,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
                     image,
                     rectangleX,
                     rectangleEnd - rectangleX,
-                    value.SourceY + clipY,
+                    Math.Min(value.SourceY + clipY, rearPlaneLimit),
                     false);
             }
 

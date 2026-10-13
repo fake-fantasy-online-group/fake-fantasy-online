@@ -28,6 +28,34 @@ public partial class CombatWorld
     {
         Ensure();
         if (!I.pluginResumingQueuedSkill) I.pluginSkillIntentRevision++;
+        if (AuthoritativeProfessionSkill.Uses(skillId))
+        {
+            var behavior = AuthoritativeProfessionSkill.Current(skillId);
+            if (behavior == null || !AuthoritativeProfessionSkill.LearnedActive(skillId))
+            { AuthoritativeProfessionSkill.Waiting(); return; }
+            rangePx = behavior.CastDistance > 0 ? behavior.CastDistance : float.PositiveInfinity;
+            if (AuthoritativeProfessionSkill.TryFriendlyOrSelf(skillId, out int friendly, out string error))
+            {
+                if (error != null) I.skillTipForIndependentRuntime(error, UIScale.Factor);
+                else NetClient.I?.UseSkill(skillId, friendly);
+                return;
+            }
+            if (behavior.InputMode != "entity")
+            {
+                if ((behavior.InputMode == "point" || behavior.InputMode == "direction") && TargetWorldPx(out int gx, out int gy))
+                    RequestGroundCast(skillId, gx, gy, rangePx);
+                else I.skillTipForIndependentRuntime(behavior.InputMode == "trapEntity" ? "请选择可见的陷阱" : "请选择技能位置", UIScale.Factor);
+                return;
+            }
+            // This server capability does not advertise PvP targets.
+            if (I.pvpTarget != null || TargetSelect.CurrentSourceForIndependentRuntime is RemotePlayer)
+            { I.skillTipForIndependentRuntime("不能对该目标使用技能", UIScale.Factor); return; }
+            if (I.target != null)
+            {
+                string targetError = AuthoritativeProfessionSkill.ValidateTarget(skillId, I.target);
+                if (targetError != null) { I.skillTipForIndependentRuntime(targetError, UIScale.Factor); return; }
+            }
+        }
         if (I.pvpTarget != null && !I.pvpTarget.IsDead)
         {
             if (NetClient.I != null) NetClient.I.UseSkill(skillId, I.pvpTarget.id);

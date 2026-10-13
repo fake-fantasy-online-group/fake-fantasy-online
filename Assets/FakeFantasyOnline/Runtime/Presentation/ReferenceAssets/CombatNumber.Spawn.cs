@@ -7,7 +7,14 @@ public partial class CombatNumber
 {
     public static void Spawn(Vector3 headWorldPos, int value, int type, float ppu, Transform anchor = null)
     {
-        if (value <= 0) return;
+        TrySpawnForIndependentRuntime(headWorldPos, value, type, ppu, anchor);
+    }
+
+    internal static bool TrySpawnForIndependentRuntime(
+        Vector3 headWorldPos, int value, int type, float ppu, Transform anchor = null)
+    {
+        // Non-positive inputs are intentional native no-ops, rather than retryable failure.
+        if (value <= 0) return true;
         if (!overlayMat)
         {
             Shader shader = Shader.Find("Overlay/NameTag");
@@ -55,7 +62,8 @@ public partial class CombatNumber
                 child.color = color;
                 x += widths[i] - overlap;
             }
-            return;
+            number.TrackExperienceScene();
+            return true;
         }
         if (BitmapFont.Ready)
         {
@@ -75,10 +83,12 @@ public partial class CombatNumber
                 child.color = tint;
                 number._ownedTex = texture;
                 number._ownedSp = sprite;
-                return;
+                number.TrackExperienceScene();
+                return true;
             }
         }
         number.ReturnToPool();
+        return false;
     }
 }
 

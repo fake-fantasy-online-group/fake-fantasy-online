@@ -313,6 +313,7 @@ internal partial class InventoryDlg
             return;
         }
         string text = TooltipContent.Fmt(TooltipContent.QualityName(it.name, it.quality), it.desc);
+        text = EndgamePanel.BagTooltip(tab, it, text);
         if (it.locked) text += "\n【已加锁】不能卖店/交易/摆摊/邮寄/丢弃 (Shift+右键 解锁)";
         string comparison = null;
         if (it.slot >= 0 && !it.cosmetic)
@@ -321,8 +322,8 @@ internal partial class InventoryDlg
             {
                 if (equipped.id <= 0) continue;
                 if (equipped.slot != it.slot && !(IsWeap(it.slot) && IsWeap(equipped.slot))) continue;
-                comparison = "\u0007\u0006（当前穿戴）\n" + TooltipContent.Fmt(
-                    TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc);
+                comparison = "\u0007\u0006（当前穿戴）\n" + EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(
+                    TooltipContent.QualityName(equipped.name, equipped.quality), equipped.desc));
                 break;
             }
         }

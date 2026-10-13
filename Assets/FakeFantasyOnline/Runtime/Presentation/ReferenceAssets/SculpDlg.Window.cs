@@ -27,7 +27,7 @@ internal partial class SculpDlg
             if (BitmapFont.Ready) BitmapFont.CenterOutline(L(155, 45, 156, 12), title, CraftUI.GOLD, s);
             if (!SocketUI.HasTarget)
             {
-                if (BitmapFont.Ready) BitmapFont.CenterOutline(L(168, 235, 132, 12), "把要打孔的装备从背包拖进来", CraftUI.GRAY, s);
+                if (BitmapFont.Ready) BitmapFont.CenterOutline(L(168, 235, 132, 12), "从背包拖入装备", CraftUI.GRAY, s);
             }
             else
             {
@@ -82,7 +82,7 @@ internal partial class SculpDlg
             if (InventoryDlg.HasHeld && Event.current.type == EventType.MouseDown && Event.current.button == 0)
             {
                 for (int i = 0; i < holes && i < 5; i++)
-                    if (SocketUI.Sockets[i] == 0 && HoleAbs(i).Contains(mp))
+                    if (SocketUI.CanInlayHole(i) && HoleAbs(i).Contains(mp))
                     {
                         if (TryDropRune((byte)InventoryDlg.HeldTab, InventoryDlg.HeldBagSlot, i)) InventoryDlg.ClearHeld();
                         Event.current.Use(); break;

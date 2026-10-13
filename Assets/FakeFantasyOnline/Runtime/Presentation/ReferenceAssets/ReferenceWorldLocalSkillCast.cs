@@ -226,6 +226,20 @@ public sealed class ReferenceSkillEffectCatalog : IDisposable
                 return false;
             }
 
+            if (NativeSwordSkillTargeting.TryGet(row.id, out var original))
+            {
+                if (!original.SelfCentered)
+                {
+                    row.castkind = original.CastKind;
+                    if (original.CanEnemy != 0) row.dist = original.Distance;
+                }
+                row.tgt = original.TargetKind;
+                row.shape = original.Shape;
+                row.canSelf = original.CanSelf;
+                row.canFriendly = 0;
+                row.canEnemy = original.CanEnemy;
+            }
+
             parsedRules.Add(
                 row.id,
                 new SkillAimRule(

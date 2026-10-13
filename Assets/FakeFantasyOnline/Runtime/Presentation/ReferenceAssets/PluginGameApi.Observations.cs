@@ -16,6 +16,11 @@ public sealed partial class PluginGameApi
         RequireMainThread();
         return new List<GameQueryDefinition>
         {
+            QueryDefinition("endgame", "Native endgame negotiation/session/revision, pending immutable request, quote, wallet and active formations."),
+            QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
+            QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes or formations. No network request is implicit.", "catalog:string", "offset:integer"),
+            QueryDefinition("endgame.skills", "Authoritative V5 skill hard/granted/soft/effective ranks, contributions, current/next effects and investment eligibility. Rank strings preserve all digits.", "skillId:integer", "offset:integer"),
+            QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
             QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
             QueryDefinition("player", "Local player position, authoritative vitals, attributes, pet and local movement/combat state."),
@@ -46,10 +51,11 @@ public sealed partial class PluginGameApi
             string[] parts = field.Split(':');
             var fieldSchema = Values("type", parts[1]);
             if (parts[0] == "offset") { fieldSchema["minimum"] = 0; fieldSchema["maximum"] = 4096; }
+            if (parts[0] == "catalog") fieldSchema["enum"] = new object[] { "uniques", "runes", "formations" };
             properties.Add(parts[0], fieldSchema);
         }
         return new GameQueryDefinition(domain, description,
-            Values("type", "object", "properties", properties, "additionalProperties", false));
+            Values("type", "object", "properties", properties, "required", domain == "endgame.catalog" ? new object[] { "catalog" } : new object[0], "additionalProperties", false));
     }
 
     /// <summary>
@@ -65,6 +71,7 @@ public sealed partial class PluginGameApi
         string domain = (query.Domain ?? string.Empty).Trim().ToLowerInvariant();
         ValidateObservationArguments(domain, query.Arguments);
         var args = new ObservationArguments(query.Arguments);
+        if (domain == "endgame.catalog" && args.Catalog == null) throw new ArgumentException("catalog is required.");
         string key = ObservationQueryKey(domain, query.Arguments);
         if (args.Radius.HasValue && !args.X.HasValue)
         {
@@ -85,12 +92,13 @@ public sealed partial class PluginGameApi
             ClientSessionCoordinator s = Session;
             if (!IsObservationDomain(domain))
                 data = Unavailable("unknown_domain", "This observation domain is not implemented.");
-            else if (domain != "title" && domain != "world" && domain != "ui" && !ObservationWorldReady(s))
+            else if (domain != "title" && domain != "world" && domain != "ui" && !domain.StartsWith("endgame", StringComparison.Ordinal) && !ObservationWorldReady(s))
                 data = Unavailable("not_in_world", "An active, built world is required for this observation.");
             else
             {
                 switch (domain)
                 {
+                    case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": data = ObserveEndgame(domain, args); break;
                     case "title": data = ObserveTitle(args); break;
                     case "world": data = ObserveWorld(s); break;
                     case "player": data = ObservePlayer(s); break;
@@ -136,7 +144,7 @@ public sealed partial class PluginGameApi
     {
         var frame = ObservationFrame;
         bool ready = ObservationWorldReady(s);
-        return Values("available", true, "connected", s != null && s.Connected,
+        return Values("available", true, "apiInstanceId", apiInstanceId, "connected", s != null && s.Connected,
             "sessionState", s == null ? "Offline" : s.State.ToString(), "worldReady", ready,
             "mapId", frame == null ? 0 : GameBootstrap.CurMapId,
             "mapName", frame == null ? null : BoundText(GameBootstrap.CurMapName),
@@ -309,6 +317,8 @@ public sealed partial class PluginGameApi
 
     private Dictionary<string, object> ObserveSkills(ClientSessionCoordinator s, ObservationArguments args)
     {
+        var growth = s.EndgameClientForPlugins?.Endgame;
+        bool v5 = growth != null && growth.GrowthV5;
         var state = s.SkillBookState;
         if (state == null) return Unavailable("not_received", "The learned skill book has not been published.");
         var rows = new List<object>();
@@ -319,11 +329,20 @@ public sealed partial class PluginGameApi
             matched++;
             if (rows.Count >= args.Limit) continue;
             state.DamageBonuses.TryGetValue(p.Id, out int bonus);
-            rows.Add(Values("skillId", p.Id, "level", p.Level, "damageBonus", bonus,
-                "cooldownSeconds", GameHud.ObserveSkillCooldownSecondsForPlugins(p.Id)));
+            var row = Values("skillId", p.Id, "level", p.Level, "damageBonus", bonus,
+                "cooldownSeconds", GameHud.ObserveSkillCooldownSecondsForPlugins(p.Id));
+            if (v5 && EndgameSkillRankView.IsProfessionSkill(p.Id))
+            {
+                var rank = growth.SkillRank(p.Id);
+                row["rankAuthority"] = "endgame.skills";
+                row["ranks"] = rank == null ? null : ObserveEndgameSkill(rank);
+            }
+            rows.Add(row);
         }
         var data = ListResult("skills", rows, matched, args.Limit);
-        data["skillPoints"] = state.SkillPoints;
+        data["skillPoints"] = v5 ? growth.UnspentSkillPoints : state.SkillPoints;
+        data["growthV5"] = v5;
+        if (v5) { data["skillRanksRevision"] = growth.SkillRanksRevision; data["hasSkillRanks"] = growth.HasSkillRanks; }
         data["metadataAvailable"] = false;
         data["metadataUnavailableReason"] = "Names, range and targeting requirements are not exposed by this learned-skill receipt.";
         var cast = s.SkillCastState;
@@ -574,7 +593,8 @@ public sealed partial class PluginGameApi
         {
             case "title": case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
-            case "party": case "quests": case "dialogue": case "ui": return true;
+            case "party": case "quests": case "dialogue": case "ui":
+            case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": return true;
             default: return false;
         }
     }
@@ -584,6 +604,10 @@ public sealed partial class PluginGameApi
         string specific;
         switch (domain)
         {
+            case "endgame.items": specific = "|uid|location|tab|itemId|name|offset|"; break;
+            case "endgame.catalog": specific = "|catalog|offset|"; break;
+            case "endgame.rift": specific = "|offset|"; break;
+            case "endgame.skills": specific = "|offset|skillId|"; break;
             case "title": case "party": specific = "|offset|"; break;
             case "entities": specific = "|radius|x|y|kind|entityId|name|"; break;
             case "npcs": specific = "|radius|x|y|entityId|name|"; break;
@@ -605,6 +629,7 @@ public sealed partial class PluginGameApi
     private sealed class ObservationArguments
     {
         internal int Limit = 128, Offset;
+        internal string UID, Location, Catalog;
         internal int? Tab, ItemId, SkillId, TaskId;
         internal double? X, Y, Radius;
         internal string Kind, EntityId, Name, SinceQueryKey;
@@ -615,8 +640,11 @@ public sealed partial class PluginGameApi
             {
                 switch (pair.Key)
                 {
-                    case "limit": Limit = Math.Max(1, Math.Min(MaximumRows, Integer(pair.Value, pair.Key))); break;
+                    case "uid": UID = EndgameIdentity(Text(pair.Value, pair.Key), pair.Key); break;
+                    case "location": Location = Text(pair.Value, pair.Key); if (Location != "bag" && Location != "equipped" && Location != "warehouse" && Location != "changeset") throw new ArgumentException("Unknown endgame item location."); break;
+                    case "catalog": Catalog = EndgameCatalogName(Text(pair.Value, pair.Key)); break;
                     case "offset": Offset = Integer(pair.Value, pair.Key); if (Offset < 0 || Offset > 4096) throw new ArgumentException("offset must be between 0 and 4096."); break;
+                    case "limit": Limit = Math.Max(1, Math.Min(MaximumRows, Integer(pair.Value, pair.Key))); break;
                     case "tab": Tab = Integer(pair.Value, pair.Key); break;
                     case "itemId": ItemId = Integer(pair.Value, pair.Key); break;
                     case "skillId": SkillId = Integer(pair.Value, pair.Key); break;

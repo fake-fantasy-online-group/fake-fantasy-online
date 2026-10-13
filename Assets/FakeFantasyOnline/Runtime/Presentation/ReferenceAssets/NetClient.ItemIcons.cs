@@ -93,7 +93,7 @@ internal partial class NetClient
             texture = loader.LoadGsa(string.Format("res/peticon/M{0}.gsa", model));
             if (texture != null) return texture;
         }
-        return null;
+        return LoadEndgameIconFallback(itemId, loader);
     }
 }
 

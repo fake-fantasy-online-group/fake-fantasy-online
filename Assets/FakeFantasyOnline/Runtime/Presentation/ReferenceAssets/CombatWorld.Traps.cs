@@ -14,14 +14,17 @@ public partial class CombatWorld
         I.trapPos[id] = position;
         I.trapSkill[id] = skillId;
         Win05.SkInfo skill = Win05.SkillInfo(skillId);
-        float baseRadius = skill != null && skill.radius > 0 ? skill.radius : 100f;
+        float baseRadius = AuthoritativeProfessionSkill.Uses(skillId)
+            ? AuthoritativeProfessionSkill.Current(skillId)?.Area.Radius ?? 0
+            : skill != null && skill.radius > 0 ? skill.radius : 100f;
         float scale = 1f;
-        if (radiusPx > 0 && baseRadius > 0f) scale = Mathf.Clamp(radiusPx / baseRadius, 1f, 4f);
+        if (radiusPx > 0 && baseRadius > 0f) scale = AuthoritativeProfessionSkill.Uses(skillId)
+            ? radiusPx / baseRadius : Mathf.Clamp(radiusPx / baseRadius, 1f, 4f);
         I.trapScale[id] = scale;
         GameObject root = new GameObject(string.Format("Trap:{0}", id));
         root.transform.position = position;
         root.AddComponent<TrapVisual>().Load(581, I.ppu, y);
-        if (scale > 1f) root.transform.localScale *= scale;
+        if (scale > 0f && scale != 1f) root.transform.localScale *= scale;
         I.trapObj[id] = root;
     }
 

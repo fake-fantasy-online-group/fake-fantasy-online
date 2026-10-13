@@ -58,6 +58,7 @@ public partial class Win05
                     // never emits a null element, but the `if (skill != null)` guard that used to
                     // stand here translated an official throw into a silent skip.
                     SkInfo skill = database.skills[index];
+                    NativeSwordSkillTargeting.Apply(skill);
                     skInfo[skill.id] = skill;
                 }
             }
@@ -110,6 +111,7 @@ public partial class Win05
                 for (int index = 0; index < database.skills.Length; index++)
                 {
                     SkInfo skill = database.skills[index];
+                    NativeSwordSkillTargeting.Apply(skill);
                     skInfo[skill.id] = skill;
                 }
             }
@@ -125,12 +127,17 @@ public partial class Win05
     // hotbar-icon time - a second, earlier read point DrawSkill 06001025 does not have.
     public static int SkillIconId(int id)
     {
+        // Negotiated gameplay can arrive before its optional artwork metadata. A missing
+        // contract/icon must not hide the installed skill art used by buff HUD fallback.
+        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative) &&
+            authoritative != null && authoritative.icon > 0) return authoritative.icon;
         LoadStatic();
         return skInfo != null && skInfo.TryGetValue(id, out SkInfo info) ? info.icon : 0;
     }
 
     public static SkInfo SkillInfo(int id)
     {
+        if (AuthoritativeProfessionSkill.TryInfo(id, out SkInfo authoritative)) return authoritative;
         LoadSkillData();
         SkInfo result;
         return skInfo.TryGetValue(id, out result) ? result : null;

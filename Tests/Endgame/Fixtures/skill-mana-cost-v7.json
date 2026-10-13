@@ -1,0 +1,261 @@
+[
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+640点当前生命。",
+      "消耗: 59点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 1秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 59,
+      "prepareMs": 0,
+      "cooldownMs": 1000,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 19
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+670点当前生命。",
+      "消耗: 58点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.98秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 58,
+      "prepareMs": 0,
+      "cooldownMs": 981,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 20
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+700点当前生命。",
+      "消耗: 57点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.96秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 57,
+      "prepareMs": 0,
+      "cooldownMs": 962,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 21
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+970点当前生命。",
+      "消耗: 49点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.82秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 49,
+      "prepareMs": 0,
+      "cooldownMs": 820,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 30
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+1570点当前生命。",
+      "消耗: 37点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.62秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 37,
+      "prepareMs": 0,
+      "cooldownMs": 618,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 50
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+3070点当前生命。",
+      "消耗: 23点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0.38秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 23,
+      "prepareMs": 0,
+      "cooldownMs": 382,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 100
+  },
+  {
+    "id": 10301,
+    "lines": [
+      "目标恢复最大生命的100%+30000070点当前生命。",
+      "消耗: 1点法力",
+      "技能吟唱: 瞬发",
+      "技能间隔: 0秒"
+    ],
+    "name": "治愈术",
+    "payload": {
+      "mpCost": 1,
+      "prepareMs": 0,
+      "cooldownMs": 1,
+      "castDistance": 450,
+      "usable": true,
+      "requiresInvisible": false,
+      "requiredWeaponType": 0,
+      "inputMode": "entity",
+      "pointRequired": false,
+      "selfFallback": true,
+      "targetSelf": true,
+      "targetEnemy": false,
+      "targetTeam": true,
+      "allowsDeadTarget": false,
+      "deadTargetOnly": false,
+      "groundEffect": false,
+      "area": {
+        "shape": "none",
+        "center": "none",
+        "radius": 0,
+        "length": 0,
+        "width": 0,
+        "angle": 0
+      }
+    },
+    "rank": 1000000
+  }
+]

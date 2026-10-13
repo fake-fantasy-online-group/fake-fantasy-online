@@ -11,13 +11,6 @@ using FakeFantasyOnline.Presentation.ReferenceAssets;
 
 internal static partial class GameActionAdapterTests
 {
-    private static IReadOnlyDictionary<string, object> Object(object value) => (IReadOnlyDictionary<string, object>)value;
-    private static IReadOnlyList<object> Rows(object value) => (IReadOnlyList<object>)value;
-    private static GameActionDefinition Definition(PluginGameApi api, string name)
-    {
-        foreach (var definition in api.GetActions()) if (definition.Name == name) return definition;
-        throw new Exception("Missing action definition: " + name);
-    }
     private static int checks;
     private static Dictionary<string, object> Map(params object[] pairs)
     { var d = new Dictionary<string, object>(); for (int i = 0; i < pairs.Length; i += 2) d.Add((string)pairs[i], pairs[i + 1]); return d; }
@@ -156,6 +149,7 @@ internal static partial class GameActionAdapterTests
             RunTitleTests();
             RunPartyTests();
             RunPartyObservationTests();
+            RunEndgameTests();
             Console.WriteLine("Game action adapter passed: " + checks + " assertions (native substitutes; no gameplay executed).");
             return 0;
         }
@@ -181,7 +175,7 @@ namespace FakeFantasyOnline.Application
         public bool ContainsEntity(int id) => id != 0 && Members.Exists(m => m.EntityId == id);
     }
     public sealed class WorldGroundItemState { public int X, Y; }
-    public sealed class WorldNpcState { public int EntityId; public string DisplayName; }
+    public sealed class WorldNpcState { public int EntityId; public string DisplayName, Script; }
     public sealed class WorldNpcTaskOfferState { public int TaskId; }
     public sealed class WorldNpcTaskOffersState { public List<WorldNpcTaskOfferState> Offers = new List<WorldNpcTaskOfferState>(); }
     public sealed class WorldTaskLogState { public object FindActive(int id) => id == 7 ? new object() : null; }
@@ -195,6 +189,7 @@ namespace FakeFantasyOnline.Application
     {
         public bool Connected = true;
         public ClientSessionState State = ClientSessionState.InWorld;
+        public IEndgameClient EndgameClientForPlugins;
         public WorldInventoryState InventoryState = new WorldInventoryState();
         public WorldSkillBookState SkillBookState = new WorldSkillBookState();
         public WorldNpcTaskOffersState NpcTaskOffersState = new WorldNpcTaskOffersState();
@@ -239,12 +234,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     public sealed partial class PluginGameApi
     {
-        private sealed class ObservationArguments { internal int Offset, Limit = 128; }
-        public void TestExpireAction(string actionId) { actions[actionId].Deadline = 0; }
-        private static Dictionary<string, object> Values(params object[] pairs)
-        { var result = new Dictionary<string, object>(); for (int i = 0; i < pairs.Length; i += 2) result.Add((string)pairs[i], pairs[i + 1]); return result; }
-        private string BoundText(string text, int maximum = 512) => text == null ? "" : text.Length <= maximum ? text : text.Substring(0, maximum);
-        private string EntityReference(string kind, int id) => kind + ":" + TestScene + ":" + id;
+        private readonly string apiInstanceId = Guid.NewGuid().ToString("N");
         public ClientSessionCoordinator TestSession; public long TestScene = 1;
         private ClientSessionCoordinator Session => TestSession;
         private long sceneRevision => TestScene;
@@ -254,8 +244,20 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void Emit(string name, IReadOnlyDictionary<string, object> data) { }
         private long CurrentDialogueRevision() => DialogUI.I.Revision;
     }
-    internal sealed class GameBootstrap { internal static GameBootstrap I; internal Window Window; }
-    internal sealed class Window { internal ReferenceFirstWorldInitialFrame Frame; }
+    internal sealed class GameBootstrap { internal static int CurMapId; internal static GameBootstrap I; internal Window Window; }
+    internal sealed class Window
+    {
+        internal ReferenceFirstWorldInitialFrame Frame;
+        internal WorldNpcState NpcStateForIndependentRuntime(NpcInteract npc)
+        { foreach (var actor in Frame.NpcActors.Values) if (ReferenceEquals(actor.SelectableOwner, npc)) return actor.State; return null; }
+        internal bool IsNpcStateCurrentForIndependentRuntime(WorldNpcState npc) => Frame.NpcActors.TryGetValue(npc.EntityId, out var actor) && ReferenceEquals(actor.State, npc);
+    }
+    internal static class EndgamePanel
+    {
+        internal static EndgameClientState WorldState;
+        internal static bool TryOpenCubeFromNpc(int map, int entity, string script, Func<bool> current) => current();
+        internal static bool TryOpenRiftFromNpc(int map, int entity, string name, string script, Func<bool> current) => current();
+    }
     internal sealed class ReferenceFirstWorldInitialFrame
     {
         internal bool Built = true;
@@ -313,15 +315,23 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal sealed class ReferenceWorldRemotePlayerActor { internal RemotePlayer SourceIdentityForIndependentRuntime; internal RemoteState State = new RemoteState(); }
     internal static class ReferenceWorldTargetSelectionMath { internal static bool IsFriendly(int a, int b, bool hostile) => !hostile; }
     internal sealed class ReferenceWorldNpcActor { internal NpcInteract SelectableOwner; internal WorldNpcState State; }
-    internal sealed class NpcInteract { internal void Show() { DialogUI.I.Visible = true; } }
-    internal sealed class ReferenceNpcDialogOption { internal string Label; }
-    internal sealed class DialogUI
+    internal sealed class NpcInteract { internal void Show() { DialogUI.I.CaptureForTest(GameBootstrap.I.Window.NpcStateForIndependentRuntime(this)); DialogUI.I.Visible = true; } }
+    internal sealed class ReferenceNpcDialogOption
+    {
+        internal string Label; internal Action Action;
+        internal ReferenceNpcDialogOption() { }
+        internal ReferenceNpcDialogOption(string label, Action action) { Label = label; Action = action; }
+    }
+    public sealed partial class DialogUI
     {
         internal static DialogUI I; internal static bool VisibleS => I != null && I.Visible;
         internal bool Visible; internal int CurrentNpcEntityId; internal long Revision; internal int Activations;
         internal List<ReferenceNpcDialogOption> Options = new List<ReferenceNpcDialogOption>();
         internal bool ActivateOption(ReferenceNpcDialogOption option) { Activations++; return true; }
         internal void Close() { Visible = false; }
+        private void Add(ReferenceNpcDialogOption row) => Options.Add(row);
+        private void ShowSay(string text) { }
+        internal void CaptureForTest(WorldNpcState npc) { CurrentNpcEntityId = npc?.EntityId ?? 0; CaptureRiftEntrance(npc); CaptureCubeWorkbench(npc); }
     }
     internal sealed class GroundItems
     {
@@ -330,6 +340,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal static bool TryGetForIndependentRuntime(int id, out GroundItems owner, out Item item) { owner = new GroundItems(); return TestItems.TryGetValue(id, out item); }
     }
     internal static class Win05 { internal sealed class SkInfo { internal float dist; } internal static SkInfo SkillInfo(int id) => new SkInfo(); }
+    // These adapter fixtures do not negotiate skill-behavior.v1. Its production
+    // provider/targeting are exercised by the skill presentation acceptance suite.
+    internal static class AuthoritativeProfessionSkill
+    {
+        internal static bool Uses(int id) => false;
+        internal static bool LearnedActive(int id) => false;
+    }
     internal static class SocialClient { internal static bool TradeActive; }
     internal static class SysMsgBox { internal static bool Visible; }
     internal sealed class InventoryDlg

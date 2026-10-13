@@ -9,16 +9,22 @@ trap 'rm -rf "$OUT"' EXIT
   -out:"$OUT/GameActionAdapterTests.exe" \
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/PluginApi/*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
+  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/Result.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Actions.cs" \
   "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Title.*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TitleFlow.PluginBridge.Contracts.cs" \
+  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Endgame*.cs \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Actions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PluginGameApi.Party.Observations.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/PlayerController.PluginActions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/CombatWorld.PluginActions.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/NetClient.PluginActions.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.RiftEntrance.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.Cube.cs" \
   "$ROOT/Tests/PluginRuntime/GameActionAdapterTests.cs" \
+  "$ROOT/Tests/PluginRuntime/EndgameActionAdapterTests.cs" \
   "$ROOT/Tests/PluginRuntime/PartyActionAdapterTests.cs" \
   "$ROOT/Tests/PluginRuntime/PartyObservationAdapterTests.cs" \
   "$ROOT/Tests/PluginRuntime/TitleActionAdapterTests.cs"
