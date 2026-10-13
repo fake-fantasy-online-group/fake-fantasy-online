@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
-// Visual apertures of individually audited doorway models, in untrimmed
+// Visual apertures and upper faces of audited models, in untrimmed
 // logical pixels. Collision masks are deliberately NOT modified or interpreted
 // as rear-wall geometry. Pixels outside the rear and explicitly preserved
 // foreground polygons keep their old depth. Only the four JXMG foreground
@@ -59,6 +59,40 @@ internal static class ReferencePortalApertureProfile
     };
     private static readonly int[] HJ2401 = { 222, 260, 230, 223, 245, 202, 267, 189, 287, 190, 314, 209, 338, 234, 365, 255, 399, 271, 407, 288, 418, 322, 397, 344, 363, 365, 327, 390, 285, 407, 271, 370, 272, 354, 254, 327, 236, 306, 225, 284 };
 
+    // Original wooden upper faces, verified against the map's walkable cells
+    // and legacy trigger polygons. These are support surfaces, not tree walls.
+    // Their lips, side walls, flowers and foliage keep the original depth.
+    private static readonly int[] HYYSC2101 = { 213, 0, 476, 0, 476, 178,
+        451, 177, 425, 173, 401, 165, 379, 155, 358, 140, 344, 123,
+        337, 111, 328, 108, 329, 99, 338, 88, 350, 81, 338, 80,
+        322, 86, 310, 99, 297, 117, 287, 119, 292, 108, 287, 97,
+        292, 84, 284, 75, 282, 66, 272, 54, 279, 45, 263, 35,
+        247, 30, 235, 32, 224, 25, 210, 27, 200, 22 };
+    private static readonly int[] HYYSC2102 = { 0, 0, 44, 7, 83, 16,
+        108, 29, 121, 41, 120, 45, 134, 54, 142, 68, 143, 86,
+        139, 101, 132, 114, 123, 123, 116, 136, 88, 146,
+        43, 154, 0, 158 };
+    private static readonly int[][] HYYSC2102Front = {
+        new int[] { 110, 112, 115, 108, 121, 113, 126, 117, 131, 119,
+            129, 126, 124, 127, 132, 134, 145, 137, 146, 145,
+            135, 150, 115, 154, 91, 155, 83, 151, 84, 146,
+            95, 140, 88, 137, 87, 132, 95, 130, 103, 133,
+            109, 127, 102, 124, 102, 119 }
+    };
+    private static readonly int[] HYYSC1602 = { 190, 253, 202, 226,
+        225, 206, 252, 191, 279, 181, 301, 178, 323, 179, 339, 183,
+        354, 191, 393, 197, 422, 209, 448, 225, 465, 241,
+        464, 250, 453, 258, 451, 268, 447, 281, 436, 293,
+        422, 308, 399, 316, 372, 323, 341, 327, 306, 330,
+        271, 329, 236, 325, 219, 317, 209, 303, 199, 283, 192, 266 };
+    private static readonly int[][] HYYSC1602Front = {
+        new int[] { 196, 293, 202, 286, 209, 289, 214, 296, 225, 297,
+            228, 304, 236, 304, 242, 309, 240, 316, 232, 319,
+            247, 321, 248, 326, 239, 330, 216, 332, 199, 327,
+            192, 320, 184, 318, 182, 313, 190, 308, 201, 307,
+            198, 302, 192, 300 }
+    };
+
     internal static bool TryGet(int id, string path, out int[] polygon)
         => TryGet(id, path, out polygon, out _, out _);
 
@@ -100,6 +134,15 @@ internal static class ReferencePortalApertureProfile
         else if (id == 0x0c2d0961 && path != null &&
             path.EndsWith("/JZ_HJ_2401.gso", StringComparison.OrdinalIgnoreCase))
         { polygon = HJ2401; width = 615; height = 530; }
+        else if (id == 0x1f2d0835 && path != null &&
+            path.EndsWith("/JZ_HYYSC_2101.gso", StringComparison.OrdinalIgnoreCase))
+        { polygon = HYYSC2101; width = 477; height = 457; }
+        else if (id == 0x1f2d0836 && path != null &&
+            path.EndsWith("/JZ_HYYSC_2102.gso", StringComparison.OrdinalIgnoreCase))
+        { polygon = HYYSC2102; width = 463; height = 528; }
+        else if (id == 0x1f2d0642 && path != null &&
+            path.EndsWith("/JZ_HYYSC_1602.gso", StringComparison.OrdinalIgnoreCase))
+        { polygon = HYYSC1602; width = 777; height = 534; }
         return polygon != null;
     }
 
@@ -111,6 +154,8 @@ internal static class ReferencePortalApertureProfile
         if (ReferenceEquals(polygon, JXMG0125)) return JXMG0125Front;
         if (ReferenceEquals(polygon, JXMG0126)) return JXMG0126Front;
         if (ReferenceEquals(polygon, JXMG0127)) return JXMG0127Front;
+        if (ReferenceEquals(polygon, HYYSC2102)) return HYYSC2102Front;
+        if (ReferenceEquals(polygon, HYYSC1602)) return HYYSC1602Front;
         return Array.Empty<int[]>();
     }
 
@@ -148,9 +193,37 @@ internal static class ReferencePortalApertureProfile
             case 0x172d125d:
                 return portalId == 0x013000c9 || portalId == 0x01300709 || portalId == 0x0130076d;
             case 0x062d0515: case 0x1c2d007c: case 0x1c2d007d: case 0x1c2d007e: case 0x1c2d007f: case 0x0c2d0961:
+            case 0x1f2d0835: case 0x1f2d0836: case 0x1f2d0642:
                 return portalId == 0x013006a5;
             default: return false;
         }
+    }
+
+    internal static bool IsSupportSurface(int id) =>
+        id == 0x1f2d0835 || id == 0x1f2d0836 || id == 0x1f2d0642;
+
+    internal static bool AcceptsAnchor(int id, int[] polygon, int x, int y,
+        int width, int height)
+    {
+        if (IsSupportSurface(id))
+        {
+            // 2101/2102 are authored adjoining halves of one upper face. A
+            // 219px-wide FY1701 centered just left of 2102 can overlap its
+            // left edge. Bound that support continuation to half the portal
+            // width and the actual shared face height; never an entire image.
+            if (id == 0x1f2d0836 && x >= -109 && x < 0 && y >= 0 && y < 158)
+                return true;
+            if (x < 0 || x >= width || y < 0 || y >= height) return false;
+            // Unlike an arch, a support-surface anchor must lie inside an
+            // actual upper-face interval, not merely below its upper edge.
+            var crossings = new List<float>();
+            ColumnIntersections(polygon, x, crossings);
+            for (int i = 0; i + 1 < crossings.Count; i += 2)
+                if (y >= crossings[i] && y < crossings[i + 1]) return true;
+            return false;
+        }
+        return x >= 0 && x < width && y >= 0 && y < height &&
+            Column(polygon, x, out float top, out _) && y >= top;
     }
 
     // Half-open edge samples, sorted into even/odd interior intervals. A rear

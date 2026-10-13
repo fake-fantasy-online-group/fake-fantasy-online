@@ -92,11 +92,10 @@ public sealed partial class ReferenceLegacyMapObjectRenderer
             if (!ReferencePortalApertureProfile.CanPair(value.Id, portal.Id)) continue;
             int localX = portal.X - value.SourceX;
             int localY = portal.ScreenY - (value.SourceY - value.PivotZ);
-            // Pair only an actual portal anchored within this doorway image.
+            // Pair only an actual portal in this profile's doorway/support region.
             // No map number, player position, or global effect order is involved.
-            if (localX >= 0 && localX < value.Width && localY >= 0 && localY < value.Height &&
-                ReferencePortalApertureProfile.Column(polygon, localX, out float top, out float bottom) &&
-                localY >= top)
+            if (ReferencePortalApertureProfile.AcceptsAnchor(value.Id, polygon,
+                localX, localY, value.Width, value.Height))
             {
                 portalOrder = portal.Order;
                 matches++;

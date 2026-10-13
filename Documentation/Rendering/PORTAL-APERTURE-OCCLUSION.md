@@ -59,16 +59,57 @@ profiles left upper-platform clipping on the four rock doors and were refined
 against the full original animation frames. Normal foreground occlusion is
 preserved, rather than using a zero-covered-pixel acceptance rule.
 
-Five main-manifest positions still lack enough evidence for an additional repair:
+### 2026-10-13 follow-up on the five uncertain positions
 
-- qw0086 library572/573: ice-wing material intersects the effect; a transparent
-  doorway and solid foreground ice must be distinguished before changing depth.
-- qw0154 library1207/1469 and qw0349 library433: tree/platform occlusion requires
-  terrain, path and live-fade context.
+Original map `.msk`, `.link` and `.prc` bytes were recovered from the already
+cached package region, without downloading resources. Original GSO pixels,
+collision masks and freshly compiled production placement establish:
+
+- **qw0086 library572/573: normal solid-foreground occlusion in this static
+  reconstruction.** The authored trigger polygons occupy the visible transparent
+  doorway. The overlapping side ice wings are real opaque art and blocked
+  terrain, not a wrongly foregrounded rear wall. They remain unchanged.
+- **qw0154 library1207/1469: confirmed upper-surface ordering defects, repaired.**
+  The legacy trigger polygons and walkable map cells occupy the wooden stump's
+  upper face. Treating the whole tree's collision-column front edge as depth
+  covers that support surface with the effect behind it. Exact HYYSC2101,
+  HYYSC2102 and HYYSC1602 profiles lower only traced upper-face pixels. The
+  source front lip, side wall, roots, flowers and foliage retain original depth.
+  The repair applies only to a unique paired FY1701 with verified dimensions.
+  Unlike an arch, its anchor must be inside the surface interval. HYYSC2102 is
+  the adjoining right half of the same surface: its shared left-edge continuation
+  accepts an anchor at most 109 logical pixels left and within its 158-pixel
+  shared face height, so an effect spanning the asset seam is not cut in two.
+- **qw0349 library433: still inconclusive; unchanged.** Original PZ is -655;
+  the portal's world anchor (2756,3171) is walkable but its screen-projected
+  anchor (2756,3826) is blocked and overlaps real tree branches. The four
+  occluding flower-tree assets have empty object masks and retain their authored
+  pivot depth. The available link declarations lack matching original trigger
+  polygons. Neither drawing the entire effect above the trees nor silently
+  changing its authored PZ is justified by this evidence.
+
+Scope regression compiles and executes actual placement for all 47 occurrences
+of the three stump models across four maps. Only the three intended objects
+around the two qw0154 portals change; 44 unpaired occurrences are identical.
+All 15 FY1701 frames at each repaired position were reconstructed using original
+DecodeAnim pixels and offsets. Every changed final pixel lies inside that frame's
+portal alpha. Compositing the scene with the portal omitted gives **zero changed
+pixels**, preserving the surrounding artwork rather than just improving a
+portal-visibility score.
+
+A rejected broad surface-lowering experiment exposed roots previously behind the
+platform; the final implementation retains `min(originalOrder, portalOrder - 1)`
+and excludes the front bevel. This is a portal repair, not a general actor-floor
+sorting redesign. Actors at the paired portal foot sort above the lowered upper
+face; the old side-wall/foliage order is retained. Arbitrary positions behind that
+foot on the platform and live walking/fade still need separate Player acceptance.
+Static footprint and pivot-fallback branches do not currently register the
+player-dependent fade owner, so a promised fade cannot be used to dismiss these
+cases.
 
 The server's teleport_links JSON was inaccessible. Supplemental SQL declarations
 and static map art do not establish dynamic-NPC presence or runtime transport
-behavior. Neither these limits nor the five unresolved cases are counted as a
+behavior. Neither these limits nor the remaining inconclusive case is counted as a
 complete-world pass.
 
 ## Automated checks and Player boundary
@@ -77,7 +118,8 @@ complete-world pass.
 profile and footprint code. It verifies independent double-precision polygon
 classification, concave gaps, exactly-once source-pixel partition, triangles,
 1x/2x/4x scale and trimming, old-four-profile pixel identity, real-world coordinate
-pair admission, identity/size/clip guards, ambiguous/unpaired rejection, original
+pair admission, identity/size/clip guards, bounded support-face and adjoining-edge anchors,
+ambiguous/unpaired rejection, original
 SWS pivot preservation, TTD native-clip guards, geometry reuse and disposal.
 Three-part production placement also checks that promoted pixels belong only to
 the explicit foreground silhouettes and that front/back actor-order extrema are

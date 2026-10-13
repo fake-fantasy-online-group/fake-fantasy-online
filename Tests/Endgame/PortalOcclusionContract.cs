@@ -43,7 +43,7 @@ class PortalOcclusionContract {
   }
  }
  static void NewGeometry(){
-  string[] names={"SWS_4701","DFYW_1301","JXMG_0124","JXMG_0125","JXMG_0126","JXMG_0127","HJ_2401"};int[] ids={0x172d125d,0x062d0515,0x1c2d007c,0x1c2d007d,0x1c2d007e,0x1c2d007f,0x0c2d0961};
+  string[] names={"SWS_4701","DFYW_1301","JXMG_0124","JXMG_0125","JXMG_0126","JXMG_0127","HJ_2401","HYYSC_2101","HYYSC_2102","HYYSC_1602"};int[] ids={0x172d125d,0x062d0515,0x1c2d007c,0x1c2d007d,0x1c2d007e,0x1c2d007f,0x0c2d0961,0x1f2d0835,0x1f2d0836,0x1f2d0642};
   for(int i=0;i<ids.Length;i++){string path="object/JZ/JZ_"+names[i]+".gso";Check(ReferencePortalApertureProfile.TryGet(ids[i],path,out var p,out int w,out int h),"audited identity resolves");Check(!ReferencePortalApertureProfile.TryGet(ids[i],"object/JZ/other.gso",out _),"identity rejects other path");
    foreach(int scale in new[]{1,2,4}){Coverage(ids[i],path,h-1,scale,0,0,w-1);GeometryOracle(p,w-1,h-1,scale,3,7);}
   }
@@ -61,8 +61,39 @@ class PortalOcclusionContract {
    int frontActor=Math.Max(oy+h+500,py+foot+500),rearActor=Math.Min(oy-500,py-500);Check(frontActor>result.Order&&rearActor<result.Order,"actor front/back ordering extrema preserved");
   }
   foreach(byte n in pixels)Check(n==1,"three production meshes partition each source pixel exactly once");
+  if(ReferencePortalApertureProfile.IsSupportSurface(id)){
+   var originals=new List<ReferenceLegacyMapObjectRenderer.Placed>(renderer.Results);var oldV=v;var oldG=g;
+   v.SourceX+=137;v.SourceY+=211;v.PivotY+=211;v.PivotZ+=61;g.sx+=137;g.sy+=211;g.pz+=61;map.libObjs[0]=g;renderer.Prepare(map);
+   Check(renderer.Place(v,im),"translated support pair with matching elevation remains admitted");Check(renderer.Results.Count==originals.Count,"translated support mesh count stable");
+   for(int j=0;j<originals.Count;j++){Check(renderer.Results[j].Sprite==originals[j].Sprite,"support geometry reuses source texture cache");Check(renderer.Results[j].Order==originals[j].Order+211,"support order follows translation only");}
+   g.pz+=600;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"displaced support effect cannot borrow an upper face");v=oldV;g=oldG;map.libObjs[0]=g;renderer.Prepare(map);
+   im.nLeft=2;Check(!renderer.Place(v,im),"oversize trimmed upper-face image rejected");im.nLeft=0;
+   GameBootstrap.UseIsoY=true;Check(!renderer.Place(v,im),"support repair leaves alternate depth mode unchanged");GameBootstrap.UseIsoY=false;
+   Check(!renderer.Place(v,im,ReferenceMapObjectKind.Tile),"support repair never rewrites tile layers");
+  }
   r.Portal.path="object/DH/other.gso";renderer.Prepare(map);Check(!renderer.Place(v,im),"portal identity path required");r.Portal.path=pp;r.Portal.clipBy++;renderer.Prepare(map);Check(!renderer.Place(v,im),"actual decoded portal foot required");r.Portal.clipBy=foot;g.xl++;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"portal logical dimensions required");g.xl=pw;g.id=0x01300c1d;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"decorative or unrelated model excluded");g.id=pid;map.libObjs[0]=g;renderer.Prepare(map);
   v.Width++;Check(!renderer.Place(v,im),"new door width guarded");v.Width=w;v.Height++;Check(!renderer.Place(v,im),"new door height guarded");v.Height=h;im.clipArr=new[]{1};Check(!renderer.Place(v,im),"new profiles do not override authored clips");im.clipArr=null;map.libObjs.Add(g);renderer.Prepare(map);Check(!renderer.Place(v,im),"new pair ambiguity rejected");map.libObjs.Clear();renderer.Prepare(map);Check(!renderer.Place(v,im),"new unpaired doors unchanged");renderer.Clean();
+ }
+ static void SupportSurfaces(){
+  int[] ids={0x1f2d0835,0x1f2d0836,0x1f2d0642};string[] names={"2101","2102","1602"};
+  int[] xs={413,-63,314},ys={158,117,311};
+  for(int n=0;n<ids.Length;n++){
+   Check(ReferencePortalApertureProfile.TryGet(ids[n],"object/JZ/JZ_HYYSC_"+names[n]+".gso",out var poly,out int w,out int h),"support source identity");
+   Check(ReferencePortalApertureProfile.AcceptsAnchor(ids[n],poly,xs[n],ys[n],w,h),"real trigger-supported upper face anchor");
+   Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[n],poly,xs[n],h-1,w,h),"anchor below upper face cannot lower a trunk");
+   Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[n],poly,-110,ys[n],w,h),"unrelated adjoining portal excluded");
+   Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[n],poly,w,ys[n],w,h),"outside right edge excluded");
+   Check(!ReferencePortalApertureProfile.CanPair(ids[n],ReferencePortalApertureProfile.PortalId),"other FY family excluded from support surfaces");
+   Check(!ReferencePortalApertureProfile.ContinuousForeground(ids[n]),"support surface never promotes original foreground");
+  }
+  ReferencePortalApertureProfile.TryGet(ids[0],"object/JZ/JZ_HYYSC_2101.gso",out var first);
+  Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[0],first,413,189,477,457),"front lip is not a support-anchor region");
+  ReferencePortalApertureProfile.TryGet(ids[1],"object/JZ/JZ_HYYSC_2102.gso",out var adjoining);
+  Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[1],adjoining,-63,158,463,528),"shared-face continuation has bounded height");
+  Check(!ReferencePortalApertureProfile.AcceptsAnchor(ids[1],adjoining,-63,-1,463,528),"shared-face continuation has bounded upper edge");
+  // The gate/ice and ordinary tree silhouettes remain entirely outside this repair.
+  foreach(int id in new[]{0x1b2d04b1,0x1b2d0515,0x0a2d0095,0x0a2d009c})
+   Check(!ReferencePortalApertureProfile.IsSupportSurface(id),"solid foreground is never reclassified as a floor");
  }
  static void Backplane(){
   var r=new ResLoader();ResLoader.I=r;r.Portal=new ResLoader.ObjSprite{path="object/DH/DH_FY_0201.gso",tex=new Texture2D(191,176),frames=60,clipBy=176};var renderer=new ReferenceLegacyMapObjectRenderer(r);
@@ -100,7 +131,7 @@ class PortalOcclusionContract {
   map.libObjs.Add(gate);renderer.Prepare(map);image.clipArr=new[]{395};Check(!renderer.Place(value,image),"authored arch depth preserved");image.clipArr=null;GameBootstrap.UseIsoY=true;Check(!renderer.Place(value,image),"alternate depth mode excluded for arches");GameBootstrap.UseIsoY=false;Check(!renderer.Place(value,image,ReferenceMapObjectKind.Tile),"arch tile cannot use library profile");renderer.Clean();
  }
  static void Main(){
-  NewGeometry(); Backplane();
+  NewGeometry(); Backplane(); SupportSurfaces();
   NewPair(0x172d125d,"object/JZ/JZ_SWS_4701.gso",6902,2340,2621,0,401,322,0x0130076d,"object/DH/DH_FY_1901.gso",6931,2450,0,145,156,136);
   NewPair(0x062d0515,"object/JZ/JZ_DFYW_1301.gso",11157,2610,3074,0,695,531,0x013006a5,"object/DH/DH_FY_1701.gso",11393,2748,0,219,282,246);
   NewPair(0x1c2d007c,"object/JZ/JZ_JXMG_0124.gso",12947,3200,3643,0,565,507,0x013006a5,"object/DH/DH_FY_1701.gso",13047,3405,0,219,282,246);
@@ -108,6 +139,9 @@ class PortalOcclusionContract {
   NewPair(0x1c2d007e,"object/JZ/JZ_JXMG_0126.gso",5267,5766,6150,0,549,439,0x013006a5,"object/DH/DH_FY_1701.gso",5556,5910,0,219,282,246);
   NewPair(0x1c2d007f,"object/JZ/JZ_JXMG_0127.gso",8018,5815,6197,0,467,437,0x013006a5,"object/DH/DH_FY_1701.gso",8050,5968,0,219,282,246);
   NewPair(0x0c2d0961,"object/JZ/JZ_HJ_2401.gso",3298,2628,3091,0,615,530,0x013006a5,"object/DH/DH_FY_1701.gso",3494,2740,0,219,282,246);
+  NewPair(0x1f2d0835,"object/JZ/JZ_HYYSC_2101.gso",6566,809,1208,0,477,457,0x013006a5,"object/DH/DH_FY_1701.gso",6870,721,0,219,282,246);
+  NewPair(0x1f2d0836,"object/JZ/JZ_HYYSC_2102.gso",7042,850,1312,0,463,528,0x013006a5,"object/DH/DH_FY_1701.gso",6870,721,0,219,282,246);
+  NewPair(0x1f2d0642,"object/JZ/JZ_HYYSC_1602.gso",12144,3338,3805,-61,777,534,0x013006a5,"object/DH/DH_FY_1701.gso",12349,3464,0,219,282,246);
   foreach(int scale in new[]{1,2,4}){Coverage(0x182d012d,"object/JZ/JZ_DXWG_0301.gso",304,scale);Coverage(0x182d0c1e,"object/JZ/JZ_DXWG_3102.gso",305,scale);Coverage(0x182d012d,"object/JZ/JZ_DXWG_0301.gso",304,scale,3,7);}
   foreach(int scale in new[]{1,2,4})foreach(int id in new[]{0x182d01f5,0x182d01f6}){string path="object/JZ/JZ_DXWG_"+(id==0x182d01f5?"0501":"0502")+".gso";Coverage(id,path,451,scale,0,0,426);Coverage(id,path,451,scale,3,7,426);}
   // Actual library-object coordinates for both directions and the raised 923 gate.
