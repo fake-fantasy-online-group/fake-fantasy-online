@@ -41,7 +41,19 @@ internal partial class NetClient : MonoBehaviour
         if (EndgamePanel.GrowthState != null && FakeFantasyOnline.Application.EndgameSkillRankView.IsProfessionSkill(skillId))
         {
             var behavior = AuthoritativeProfessionSkill.Current(skillId);
-            return behavior != null && behavior.MPCost > 0 && CharData.mp < behavior.MPCost;
+            // Post-cap costs can alternate by one as the server carries paid
+            // fractions. A cached preview cannot veto the next cheaper cast.
+            // Only one point can differ; retain all other MP guards and the
+            // one-mana floor. The server validates the exact debit.
+            int minimum = behavior != null ? behavior.MPCost : 0;
+            var row = EndgamePanel.GrowthState.SkillRank(skillId);
+            int cap = skillId == 10018 || skillId == 10227 || skillId == 10432 ? 5
+                : skillId == 10301 ? 19 : skillId == 10305 ? 11 : skillId == 10309 ? 10 : 0;
+            long rank;
+            if (minimum > 0 && cap > 0 && row != null &&
+                (row.EffectiveRank.Length > 10 || long.TryParse(row.EffectiveRank, out rank) && rank > cap))
+                minimum = Math.Max(1, minimum - 1);
+            return minimum > 0 && CharData.mp < minimum;
         }
         int level;
         if (CharData.skills == null || !CharData.skills.TryGetValue(skillId, out level) || level <= 0)

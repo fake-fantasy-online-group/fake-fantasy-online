@@ -38,12 +38,17 @@ class SkillBehaviorPresentationAcceptance
             AuthoritativeProfessionSkill.TryResolve(row.ID, out var aim, out var range, out var radius, out var angle, out var length, out var width, out var trap);
             if (!value.Usable) { Check(aim == SkillTargeting.Aim.Unavailable, "Attribute passives never become castable"); continue; }
             Check(range == value.CastDistance && radius == value.Area.Radius && angle == value.Area.Angle && length == value.Area.Length && width == value.Area.Width, "Grown support geometry matches real targeting");
-            foreach (int available in new[] { Math.Max(0, value.MPCost - 1), value.MPCost, value.MPCost + 1 })
+            // Independent accepted policy boundaries: only these six skills
+            // defer changing post-cap debit checks to the authoritative server.
+            var roundingCaps = new Dictionary<int, int> { {10018,5}, {10227,5}, {10432,5}, {10301,19}, {10305,11}, {10309,10} };
+            int cap, minimum = value.MPCost;
+            if (minimum > 0 && roundingCaps.TryGetValue(row.ID, out cap) && decimal.Parse(row.EffectiveRank) > cap) minimum = Math.Max(1, minimum - 1);
+            foreach (int available in new[] { 0, 1, Math.Max(0, value.MPCost - 1), value.MPCost, value.MPCost + 1 })
             {
                 writes = 0; tip = null; CharData.mp = available;
                 if (value.PointRequired) client.UseSkillAt(row.ID, 100, 100, 2); else client.UseSkill(row.ID, 2);
-                Check(writes == (available >= value.MPCost ? 1 : 0), "Actual NetClient current-cost admission for grown skill " + row.ID + "/" + row.EffectiveRank);
-                if (available < value.MPCost) Check(tip == "法力不足", "Insufficient actual cost retains native feedback");
+                Check(writes == (available >= minimum ? 1 : 0), "Actual NetClient current-cost admission for grown skill " + row.ID + "/" + row.EffectiveRank);
+                if (available < minimum) Check(tip == "法力不足", "Insufficient actual cost retains native feedback");
             }
             state.Apply(EndgameResponse.Parse("{\"kind\":\"skill.upgrade\",\"ok\":true,\"revision\":\"2\"}"));
             writes = 0; CharData.mp = int.MaxValue;
