@@ -13,6 +13,8 @@ public sealed partial class EndgamePanel
 
     internal static EndgameClientState WorldState => WorldEntryAvailable ? Current.State : null;
 
+    private bool RiftEntryContextAvailable => State != null && State.RiftContextKnown && !State.RiftInInstance;
+
     private int riftEntranceMapID, riftEntranceEntityID;
     private string riftEntranceNpc, riftEntranceScript;
     private Func<bool> riftEntranceSourceCurrent;
@@ -20,7 +22,7 @@ public sealed partial class EndgamePanel
 
     internal static bool RiftEntranceAvailable(int mapID, int entityID, string npc, string script)
     {
-        if (!WorldEntryAvailable || mapID != GameBootstrap.CurMapId || entityID == 0) return false;
+        if (!WorldEntryAvailable || !Current.RiftEntryContextAvailable || mapID != GameBootstrap.CurMapId || entityID == 0) return false;
         foreach (var entrance in Current.State.RiftEntrances)
             if (entrance.Matches(mapID, npc, script)) return true;
         return false;
@@ -48,7 +50,7 @@ public sealed partial class EndgamePanel
         return valid;
     }
 
-    // HUD review carries no NPC authority. Only fresh paid entry requires a live entrance dialog.
+    // Outside-run entry/recovery carries no NPC authority. Fresh paid entry requires a live entrance dialog.
     internal static bool TryOpenRiftFromWorld() => TryOpenWorldView(EndgameModule.Rift);
     internal static bool TryOpenCubeFromWorld() => false;
     internal static bool TryOpenCubeFromNpc(int mapID, int entityID, string script, Func<bool> sourceCurrent)
@@ -62,7 +64,7 @@ public sealed partial class EndgamePanel
     private static bool TryOpenWorldView(EndgameModule targetModule)
     {
         // Recheck on activation: a dialog row may outlive a disconnect or negotiation.
-        if (!WorldEntryAvailable) return false;
+        if (!WorldEntryAvailable || targetModule == EndgameModule.Rift && !Current.RiftEntryContextAvailable) return false;
         EndgamePanel panel = Current;
         if (panel.generation != panel.State.Generation)
         {

@@ -22,7 +22,7 @@ contains('Protocol/PrivateServerGateway.Endgame.cs', 'IEndgameClient', '_host.Is
          'endgameRetryJournal.Remember', 'RestoreUncertainRequest', '_netClient.EquipItem(item.Slot)',
          '_netClient.UnequipItem(item.Slot)', 'row.ItemId == item.ItemID', 'current.UID != item.UID')
 contains('Protocol/PrivateServerEndgameCodec.cs', '0x10d0', '0x80d0', 'new UTF8Encoding(false, true)')
-contains('Presentation/ReferenceAssets/EndgamePanel.cs', 'NpcChatter.CnFont()', 'ArtworkSkin.Panel(', 'WinZ.Forget(this)',
+contains('Presentation/ReferenceAssets/EndgamePanel.cs', 'NpcChatter.CnFont()', 'DrawCube()', 'WinZ.Forget(this)',
          'KeyCode.Escape', 'EndgameModule.Cube', 'EndgameModule.Rift', 'ClearSelection()', 'State?.InvalidateQuote()', 'client.RetryEndgame()',
          'State.Rift.RunID', 'PlayerController.SuppressWorldClick()')
 contains('Presentation/ReferenceAssets/EndgamePanel.Items.cs', 'NetClient.LoadItemIcon(', 'MatchesNative(item)', 'bagOnly')
@@ -39,8 +39,8 @@ checks += 1
 contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'State.Materials', 'cubeInputs: CubeInputs()', 'SyncCubeInputs()',
          'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID, npcEntityID: cubeNpcEntityID)')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'DrawRiftTierSelector(rift)', 'DrawRiftActions(rift, selectedTierValid)', 'rift.Claimable', '"reward_pending"',
-         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', '"rift.leave"', 'DrawRiftMarkers', 'rift.Globes', 'rift.Transitioning', 'RiftDepth', 'aura.Affixes')
-contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'NewbieTipBox.PushText(notice)', 'if (!transition && !floorTransition) return;')
+         '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', 'DrawRiftMarkers', 'rift.Transitioning', 'RiftDepth')
+contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'NewbieTipBox.PushText(RiftCompletionNotice)', 'completedNoticeRuns.Add(rift.RunID)', '拾妥所得，可与归元道使交谈离境。')
 rift_ui = (runtime / 'Presentation/ReferenceAssets/EndgamePanel.Rift.cs').read_text(encoding='utf-8')
 assert '"rift.advance"' not in rift_ui and 'AdvanceRift(' not in rift_ui, 'Only physical gate entry may initiate a UI floor transfer'
 checks += 1
@@ -48,7 +48,15 @@ for path in ('EndgamePanel.cs', 'EndgamePanel.Rift.cs'):
     source = (runtime / 'Presentation/ReferenceAssets' / path).read_text(encoding='utf-8')
     assert 'DrawRiftAnnouncement' not in source and 'announcementUntil' not in source, 'Rift notices must use the native queue without a separate announcement renderer or lifetime'
     checks += 1
-contains('Presentation/ReferenceAssets/EndgamePanel.RiftTelegraphs.cs', 'DrawRiftArea', 'DrawRiftRing', 'DrawRiftLine', 'TelegraphRemainingMS', 'tell.InnerRadius', 'tell.RemainingMS', 'GUI.matrix = matrix', 'Texture2D.whiteTexture')
+contains('Presentation/ReferenceAssets/EndgamePanel.RiftTelegraphs.cs', 'BuildRiftTelegraphPixels', 'EffectPlayer.GetMagicFrames(341)', 'TelegraphRemainingMS', 'tell.InnerRadius', 'tell.RemainingMS', 'GUI.matrix = matrix', 'FilterMode.Point')
+contains('Presentation/ReferenceAssets/EndgamePanel.RiftWorldVisuals.cs', 'rift.Globes', 'aura.OriginalName', 'RiftGlobeMagic = 5202', 'EffectPlayer.GetMagicFramesAll(magic)', 'RiftArrivalLightning = "TFX303"', 'RiftArrivalFirstFutureStrike', 'State.RiftInInstance', 'rift.Phase == "active"')
+contains('Presentation/ReferenceAssets/MonsterEntity.Rift.cs', '（精英）', '（首领）', '（镇境劫影）', 'GlowLayerMat(classification == 1 ? 8 : 5)', 'ClearRiftIdentity')
+for path in ('EndgamePanel.Rift.cs', 'EndgamePanel.RiftTelegraphs.cs', 'EndgamePanel.RiftWorldVisuals.cs'):
+    source = (runtime / 'Presentation/ReferenceAssets' / path).read_text(encoding='utf-8')
+    for removed in ('◆ 蓝煞', '◆ 金煞', '◇ 镇煞灵珠', '离开直线', '避开圆环', '离开圆圈', 'tell.Ability +', 'Texture2D.whiteTexture'):
+        assert removed not in source, f'{path}: removed world label/primitive {removed}'
+        checks += 1
+contains('Presentation/ReferenceAssets/ReferenceWorldReceiveOwner.RemotePlayerTails.cs', 'state.HasAim && ppu > 0 && EndgamePanel.IsRiftMonsterCast(state.CasterEntityId)', 'state.AimX - GameBootstrap.CurWorldW')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.BagTooltip(')
 contains('Presentation/ReferenceAssets/InventoryDlg.OnGUI.cs', 'EndgamePanel.EquippedTooltip(equipped, TooltipContent.Fmt(')
 contains('Presentation/ReferenceAssets/UITip.cs', 'case 5: return new Color32(183, 155, 98, 255)', 'case 4: return GameSettings.ColorWeak', 'BitmapFont.Measure', 'BitmapFont.Draw')

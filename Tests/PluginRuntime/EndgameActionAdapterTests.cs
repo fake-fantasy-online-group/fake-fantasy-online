@@ -124,7 +124,7 @@ internal static partial class GameActionAdapterTests
         var arraySchema = Property(Definition(api, "endgame.cube.quote"), "itemUids");
         Check(Convert.ToInt32(arraySchema["maxItems"]) == 5 && (bool)arraySchema["uniqueItems"] && (string)Object(arraySchema["items"])["type"] == "string", "schema advertises bounded unique ordered UID array");
         var cubeSchema = Property(Definition(api, "endgame.cube.quote"), "cubeInputs");
-        Check(Convert.ToInt32(cubeSchema["minItems"]) == 1 && Convert.ToInt32(cubeSchema["maxItems"]) == 12 && Rows(Object(cubeSchema["items"])["oneOf"]).Count == 2, "cube input schema admits bounded UID/count or itemId/count objects");
+        Check(Convert.ToInt32(cubeSchema["minItems"]) == 1 && Convert.ToInt32(cubeSchema["maxItems"]) == EndgameCubeInput.Capacity && Rows(Object(cubeSchema["items"])["oneOf"]).Count == 2, "cube input schema admits bounded UID/count or itemId/count objects");
         var cubeFields = Object(Definition(api, "endgame.cube.quote").Arguments["properties"]);
         Check(!cubeFields.ContainsKey("recipeId") && !cubeFields.ContainsKey("targetUid") && !cubeFields.ContainsKey("runeUid"), "cube action cannot bypass input matching with recipe or target shortcuts");
         Check((bool)Property(Definition(api, "endgame.rift.leave"), "confirmLeave")["const"], "leave schema requires explicit true confirmation");
@@ -258,7 +258,7 @@ internal static partial class GameActionAdapterTests
             Check(EndAct(api, "cube.quote", shortcutArgs).Code == "arguments.invalid", "recipe and target shortcuts are rejected");
         }
         foreach (object invalid in new object[] {
-            new object[0], new object[13], new object[] { Map("uid", FirstRuneUID, "count", 0) },
+            new object[0], new object[36], new object[] { Map("uid", FirstRuneUID, "count", 0) },
             new object[] { Map("uid", FirstRuneUID, "count", 2) }, new object[] { Map("uid", FirstRuneUID, "count", 1.5) },
             new object[] { Map("uid", "01", "count", 1) }, new object[] { Map("uid", 9007199254740994L, "count", 1) },
             new object[] { Map("itemId", 1900028201, "count", -1) }, new object[] { Map("itemId", 1900028201, "count", 2147483648L) },
@@ -276,6 +276,8 @@ internal static partial class GameActionAdapterTests
         Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("uid", EquipmentUID, "count", 1) }, "itemUids", new object[] { FirstRuneUID })).Code == "endgame.rune_stale", "installed ordering cannot draw runes from bag");
         var twelve = new object[12]; for (int i = 0; i < twelve.Length; i++) twelve[i] = Map("uid", (100+i).ToString(), "count", 1);
         Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", twelve)).Code == "endgame.item_stale", "twelve slots pass structural bounds before inventory validation");
+        var fullGrid = new object[35]; for (int i = 0; i < fullGrid.Length; i++) fullGrid[i] = Map("uid", (100+i).ToString(), "count", 1);
+        Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", fullGrid)).Code == "endgame.item_stale", "35 native grid slots pass structural bounds before inventory validation");
         DialogUI.I.Visible = false;
         Check(Definition(api, "endgame.cube.quote").Available && (string)api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == "npc:1:3", "opening native container may close dialog while retaining live workbench authority");
         OpenCube(api); GameBootstrap.CurMapId = 8;

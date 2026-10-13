@@ -4,6 +4,7 @@ namespace FakeFantasyOnline.Application
 // A local reservation. Only a successful server transaction removes bag items.
 public sealed class EndgameCubeInput
 {
+    public const int Capacity = 35;
     public string UID { get; }
     public int ItemID { get; }
     public int Count { get; }

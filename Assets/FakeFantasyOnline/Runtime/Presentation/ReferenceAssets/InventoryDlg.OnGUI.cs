@@ -389,6 +389,13 @@ internal partial class InventoryDlg
             return true;
         }
 
+        // The live 周天鼎 reserves this bag row locally instead of activating it.
+        if (!isPet && EndgamePanel.CubeContainerOpen)
+        {
+            EndgamePanel.TryPutCubeBagItem(tab, it.bagIdx);
+            ev.Use(); consumed = true; return true;
+        }
+
         // 2. A warehouse window that is showing takes the row as a deposit.
         //    WarehouseMove(0, tab, bagIdx, StoreDlg.CurTab, count, -1); the -1 is 0xffffffff.
         if (!isPet && StoreDlg.Visible && NetClient.I != null)

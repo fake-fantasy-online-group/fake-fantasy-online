@@ -15,7 +15,7 @@ internal static class SkillAudioContract
     }
     private static void Reset(int category=1)
     {
-        SoundManager.Calls.Clear();
+        SoundManager.Calls.Clear(); EndgamePanel.RiftMonsterID = 0; SkillCaster.Ground = null;
         CombatNumber.Count=MissFx.Count=EffectPlayer.Impacts=EffectPlayer.Projectiles=SkillCaster.Casts=0;
         CharData.weaponCType=category;CharData.atkDist=category==16?400:75;CharData.riding=false;
         NetClient.SelfEntityId=1;NetClient.PendingCastSkill=0;NetClient.PendingCastGround=null;
@@ -131,10 +131,28 @@ internal static class SkillAudioContract
         PlayerController.I.PlayAttackForIndependentRuntime(new Vector3(1,0,0),1);
         Check(SoundManager.Calls.Count==0,"existing riding guard retained");
     }
+    private static void RiftMonsterAimScope()
+    {
+        Reset();
+        Func<WorldSkillCastState> cast = () => new WorldSkillCastState { SkillId = 10501, Phase = 1, CasterEntityId = 10, TargetEntityId = 0, HasAim = true, AimX = 800, AimY = 650 };
+        ReferenceWorldReceiveOwner.ReceiveSkillCastForIndependentRuntime(cast());
+        Check(!SkillCaster.Ground.HasValue, "ordinary monster explicit Aim keeps historical no-target behavior");
+        EndgamePanel.RiftMonsterID = 10;
+        ReferenceWorldReceiveOwner.ReceiveSkillCastForIndependentRuntime(cast());
+        Check(SkillCaster.Ground.HasValue && SkillCaster.Ground.Value.x == 3 && SkillCaster.Ground.Value.y == -1.5f, "rift monster explicit Aim projects to exact authoritative map point");
+        var noAim = cast(); noAim.HasAim = false;
+        ReferenceWorldReceiveOwner.ReceiveSkillCastForIndependentRuntime(noAim);
+        Check(!SkillCaster.Ground.HasValue, "rift monster without Aim keeps native fallback");
+        var targeted = cast(); targeted.HasAim = false; targeted.TargetEntityId = 1;
+        CombatNumber.PlayerTransform.position = new Vector3(4, 5, 0);
+        ReferenceWorldReceiveOwner.ReceiveSkillCastForIndependentRuntime(targeted);
+        Check(SkillCaster.Ground.HasValue && SkillCaster.Ground.Value.x == 4 && SkillCaster.Ground.Value.y == 5, "targeted non-Aim monster skills still use the resolved target");
+        EndgamePanel.RiftMonsterID = 0;
+    }
     public static void Main()
     {
         GameTables.Text="{\"sounds\":[{\"id\":10201,\"cast\":31010,\"cd\":25,\"fire\":[31020,31021],\"fd\":[0,80]},{\"id\":10501,\"cast\":31010,\"cd\":25,\"fire\":[31020,31021],\"fd\":[0,80]}]}";
-        LocalSkillPhasesAndDamage();BasicAttackFlagsAndPvp();RemoteAndMonsterSkillAudio();MissingSkillSoundAndRiding();
+        LocalSkillPhasesAndDamage();BasicAttackFlagsAndPvp();RemoteAndMonsterSkillAudio();MissingSkillSoundAndRiding();RiftMonsterAimScope();
         Console.WriteLine("PASS skill audio: "+assertions+" production-owner assertions (managed substitutes; no audible Unity validation)");
     }
 }

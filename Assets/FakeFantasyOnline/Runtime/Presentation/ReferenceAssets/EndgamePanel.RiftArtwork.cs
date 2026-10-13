@@ -85,7 +85,7 @@ public sealed partial class EndgamePanel
         if (rift == null) return 0;
         // Reserved time has not started. Successful completion and all terminal
         // snapshots keep the server's exact result, including during reward saving.
-        if (rift.Phase != "active" && rift.Phase != "boss") return rift.RemainingSeconds;
+        if (rift.Phase != "active" && rift.Phase != "boss_arriving" && rift.Phase != "boss") return rift.RemainingSeconds;
         double elapsed = Math.Max(0, (now - received).TotalSeconds);
         return (int)Math.Max(0, rift.RemainingSeconds - Math.Min(int.MaxValue, Math.Floor(elapsed)));
     }

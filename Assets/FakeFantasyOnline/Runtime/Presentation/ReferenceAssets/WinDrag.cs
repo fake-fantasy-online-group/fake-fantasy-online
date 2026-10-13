@@ -37,6 +37,14 @@ internal static class WinDrag
         return false;
     }
 
+    // Close/reset must release only this window's in-flight native title drag.
+    public static void Forget(object owner)
+    {
+        if (!object.ReferenceEquals(cur, owner)) return;
+        dragging = false;
+        cur = null;
+    }
+
     public static void Handle(object owner, Rect hit, ref float x, ref float y)
     {
         Event e = Event.current;

@@ -1,0 +1,560 @@
+{
+  "arrival": {
+    "kind": "rift.state",
+    "ok": true,
+    "rift": {
+      "guardianArrival": {
+        "id": "seeded-floor-lifecycle/1/guardian",
+        "seed": "9061258474713031719",
+        "anchorCharId": "100",
+        "x": 719,
+        "y": 794,
+        "startedAtMS": 1000000,
+        "deadlineMS": 1005000,
+        "durationMS": 5000,
+        "remainingMS": 5000
+      },
+      "seed": "9927367068280346772",
+      "generatorVersion": 2,
+      "floorIndex": 1,
+      "mapName": "测试地图",
+      "exitX": 100,
+      "exitY": 100,
+      "maxTier": 150,
+      "unlockedTier": 1,
+      "name": "演劫洞天",
+      "keyCount": 3,
+      "keyItemId": 1900028101,
+      "runId": "seeded-floor-lifecycle",
+      "revision": "4",
+      "phase": "boss_arriving",
+      "tier": 7,
+      "progress": 10000,
+      "progressMax": 10000,
+      "remainingSeconds": 895,
+      "totalSeconds": 900,
+      "bossName": "镇境劫影",
+      "members": [
+        {
+          "name": "甲",
+          "charId": "100",
+          "level": 60,
+          "eligible": false,
+          "claimed": false
+        }
+      ],
+      "claimable": false
+    }
+  },
+  "bagFull": {
+    "kind": "rift.reward",
+    "ok": false,
+    "error": "bag_full",
+    "revision": "1",
+    "rift": {
+      "pendingLoot": 5,
+      "maxTier": 150,
+      "unlockedTier": 5,
+      "name": "演劫洞天",
+      "keyCount": 0,
+      "keyItemId": 1900028101,
+      "auras": [
+        {
+          "originalName": "妖影",
+          "entityId": "134217813",
+          "class": 1
+        },
+        {
+          "entityId": "134217731",
+          "class": 0
+        },
+        {
+          "entityId": "134217756",
+          "class": 0
+        },
+        {
+          "entityId": "134217770",
+          "class": 0
+        },
+        {
+          "entityId": "134217771",
+          "class": 0
+        },
+        {
+          "entityId": "134217779",
+          "class": 0
+        },
+        {
+          "entityId": "134217783",
+          "class": 0
+        },
+        {
+          "entityId": "134217789",
+          "class": 0
+        },
+        {
+          "entityId": "134217803",
+          "class": 0
+        },
+        {
+          "entityId": "134217760",
+          "class": 0
+        },
+        {
+          "entityId": "134217806",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217811",
+          "class": 1
+        },
+        {
+          "entityId": "134217782",
+          "class": 0
+        },
+        {
+          "entityId": "134217805",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217822",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217829",
+          "class": 2
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217831",
+          "class": 2
+        },
+        {
+          "entityId": "134217750",
+          "class": 0
+        },
+        {
+          "entityId": "134217758",
+          "class": 0
+        },
+        {
+          "entityId": "134217763",
+          "class": 0
+        },
+        {
+          "entityId": "134217798",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217812",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217814",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217815",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217817",
+          "class": 1
+        },
+        {
+          "entityId": "134217729",
+          "class": 0
+        },
+        {
+          "entityId": "134217743",
+          "class": 0
+        },
+        {
+          "entityId": "134217746",
+          "class": 0
+        },
+        {
+          "entityId": "134217747",
+          "class": 0
+        },
+        {
+          "entityId": "134217776",
+          "class": 0
+        },
+        {
+          "entityId": "134217800",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217818",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217821",
+          "class": 1
+        },
+        {
+          "entityId": "134217734",
+          "class": 0
+        },
+        {
+          "entityId": "134217745",
+          "class": 0
+        },
+        {
+          "entityId": "134217767",
+          "class": 0
+        },
+        {
+          "entityId": "134217788",
+          "class": 0
+        },
+        {
+          "entityId": "134217791",
+          "class": 0
+        },
+        {
+          "entityId": "134217793",
+          "class": 0
+        },
+        {
+          "entityId": "134217804",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217824",
+          "class": 1
+        },
+        {
+          "entityId": "134217778",
+          "class": 0
+        },
+        {
+          "entityId": "134217795",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217819",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217825",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217832",
+          "class": 2
+        },
+        {
+          "entityId": "134217732",
+          "class": 0
+        },
+        {
+          "entityId": "134217742",
+          "class": 0
+        },
+        {
+          "entityId": "134217761",
+          "class": 0
+        },
+        {
+          "entityId": "134217764",
+          "class": 0
+        },
+        {
+          "entityId": "134217775",
+          "class": 0
+        },
+        {
+          "entityId": "134217790",
+          "class": 0
+        },
+        {
+          "entityId": "134217807",
+          "class": 0
+        },
+        {
+          "entityId": "134217735",
+          "class": 0
+        },
+        {
+          "entityId": "134217751",
+          "class": 0
+        },
+        {
+          "entityId": "134217762",
+          "class": 0
+        },
+        {
+          "entityId": "134217777",
+          "class": 0
+        },
+        {
+          "entityId": "134217796",
+          "class": 0
+        },
+        {
+          "entityId": "134217753",
+          "class": 0
+        },
+        {
+          "entityId": "134217773",
+          "class": 0
+        },
+        {
+          "entityId": "134217780",
+          "class": 0
+        },
+        {
+          "entityId": "134217799",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217828",
+          "class": 2
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217830",
+          "class": 2
+        },
+        {
+          "entityId": "134217730",
+          "class": 0
+        },
+        {
+          "entityId": "134217733",
+          "class": 0
+        },
+        {
+          "entityId": "134217744",
+          "class": 0
+        },
+        {
+          "entityId": "134217765",
+          "class": 0
+        },
+        {
+          "entityId": "134217792",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217810",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217816",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217826",
+          "class": 1
+        },
+        {
+          "entityId": "134217749",
+          "class": 0
+        },
+        {
+          "entityId": "134217754",
+          "class": 0
+        },
+        {
+          "entityId": "134217757",
+          "class": 0
+        },
+        {
+          "entityId": "134217766",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217820",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217827",
+          "class": 2
+        },
+        {
+          "entityId": "134217736",
+          "class": 0
+        },
+        {
+          "entityId": "134217752",
+          "class": 0
+        },
+        {
+          "entityId": "134217772",
+          "class": 0
+        },
+        {
+          "entityId": "134217774",
+          "class": 0
+        },
+        {
+          "entityId": "134217808",
+          "class": 0
+        },
+        {
+          "entityId": "134217738",
+          "class": 0
+        },
+        {
+          "entityId": "134217739",
+          "class": 0
+        },
+        {
+          "entityId": "134217740",
+          "class": 0
+        },
+        {
+          "entityId": "134217784",
+          "class": 0
+        },
+        {
+          "entityId": "134217801",
+          "class": 0
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217809",
+          "class": 1
+        },
+        {
+          "originalName": "妖影",
+          "entityId": "134217823",
+          "class": 1
+        },
+        {
+          "entityId": "134217741",
+          "class": 0
+        },
+        {
+          "entityId": "134217748",
+          "class": 0
+        },
+        {
+          "entityId": "134217759",
+          "class": 0
+        },
+        {
+          "entityId": "134217768",
+          "class": 0
+        },
+        {
+          "entityId": "134217769",
+          "class": 0
+        },
+        {
+          "entityId": "134217785",
+          "class": 0
+        },
+        {
+          "entityId": "134217787",
+          "class": 0
+        },
+        {
+          "entityId": "134217794",
+          "class": 0
+        },
+        {
+          "entityId": "134217737",
+          "class": 0
+        },
+        {
+          "entityId": "134217755",
+          "class": 0
+        },
+        {
+          "entityId": "134217781",
+          "class": 0
+        },
+        {
+          "entityId": "134217786",
+          "class": 0
+        },
+        {
+          "entityId": "134217797",
+          "class": 0
+        },
+        {
+          "entityId": "134217802",
+          "class": 0
+        }
+      ],
+      "runId": "test-rift",
+      "revision": "5",
+      "phase": "completed",
+      "tier": 1,
+      "progress": 0,
+      "progressMax": 10000,
+      "remainingSeconds": 899,
+      "totalSeconds": 900,
+      "bossName": "镇境劫影",
+      "members": [
+        {
+          "name": "甲",
+          "charId": "100",
+          "level": 60,
+          "eligible": true,
+          "claimed": false
+        }
+      ],
+      "claimable": false
+    }
+  },
+  "interrupted": {
+    "kind": "rift.state",
+    "ok": true,
+    "rift": {
+      "seed": "9927367068280346772",
+      "generatorVersion": 2,
+      "floorIndex": 1,
+      "mapName": "测试地图",
+      "exitX": 100,
+      "exitY": 100,
+      "maxTier": 150,
+      "unlockedTier": 1,
+      "name": "演劫洞天",
+      "keyCount": 3,
+      "keyItemId": 1900028101,
+      "runId": "seeded-floor-lifecycle",
+      "revision": "4",
+      "phase": "interrupted",
+      "tier": 7,
+      "progress": 10000,
+      "progressMax": 10000,
+      "remainingSeconds": 895,
+      "totalSeconds": 900,
+      "bossName": "镇境劫影",
+      "members": [
+        {
+          "name": "甲",
+          "charId": "100",
+          "level": 60,
+          "eligible": false,
+          "claimed": false
+        }
+      ],
+      "claimable": true
+    }
+  }
+}

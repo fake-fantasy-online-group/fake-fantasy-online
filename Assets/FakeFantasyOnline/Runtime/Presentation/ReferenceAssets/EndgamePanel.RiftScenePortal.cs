@@ -36,8 +36,6 @@ public sealed partial class EndgamePanel
         riftPortalRun = null; riftPortalGeneration = -1; riftPortalFloor = 0;
     }
 
-    private void OnDisable() => ClearRiftScenePortal();
-
     private void SyncRiftScenePortal()
     {
         if (Current != this) { ClearRiftScenePortal(); return; }

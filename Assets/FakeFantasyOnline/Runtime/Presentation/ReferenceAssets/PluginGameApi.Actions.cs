@@ -176,7 +176,7 @@ public sealed partial class PluginGameApi
             else if (request.Name == "endgame.cube.quote" && argument.Key == "cubeInputs")
             {
                 var inputs = argument.Value as IReadOnlyList<object>;
-                if (inputs == null || inputs.Count < 1 || inputs.Count > 12) return ActionRejected(request, "arguments.invalid", "cubeInputs must contain 1..12 input objects.");
+                if (inputs == null || inputs.Count < 1 || inputs.Count > FakeFantasyOnline.Application.EndgameCubeInput.Capacity) return ActionRejected(request, "arguments.invalid", "cubeInputs must contain 1..35 input objects.");
                 foreach (object input in inputs)
                 {
                     var row = input as IReadOnlyDictionary<string, object>;

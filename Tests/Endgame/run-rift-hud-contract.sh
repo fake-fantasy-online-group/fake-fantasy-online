@@ -14,7 +14,7 @@ class RiftHudRunner
     static void Main()
     {
         var type = typeof(EndgameUiContract);
-        foreach (string name in new[] { "RiftHudProgressContracts", "NativeRiftNoticeContracts" })
+        foreach (string name in new[] { "RiftHudProgressContracts", "NativeRiftNoticeContracts", "QuietRiftLifecycleContracts", "QuietRiftRecoveryContracts", "GuardianArrivalSchemaContracts", "GuardianServerWireContracts" })
             type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
         var client = type.GetNestedType("Client", BindingFlags.NonPublic).GetConstructor(Type.EmptyTypes).Invoke(null);
         var panel = new EndgamePanel(); panel.Bind((IEndgameClient)client);
@@ -30,6 +30,6 @@ CS
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TooltipContent.Get.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/GameHud.BasicHit.cs" \
- "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$OUT/Runner.cs"
-"$MONO/bin/mono" "$OUT/RiftHudContract.exe"
+ "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$ROOT/Tests/Endgame/RiftQuietUiContract.cs" "$ROOT/Tests/Endgame/RiftWorldVisualContract.cs" "$OUT/Runner.cs"
+FFO_RIFT_WIRE_FIXTURES="${FFO_RIFT_WIRE_FIXTURES:-$ROOT/Tests/Endgame/Fixtures/rift79-quiet-wire.json}" "$MONO/bin/mono" "$OUT/RiftHudContract.exe"
 python3 "$ROOT/Tests/Endgame/rift_hud_source_contract.py"

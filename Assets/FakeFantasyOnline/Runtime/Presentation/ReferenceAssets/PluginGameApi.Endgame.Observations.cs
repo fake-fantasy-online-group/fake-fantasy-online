@@ -133,13 +133,17 @@ public sealed partial class PluginGameApi
         var data = Values("runId", row.RunID, "revision", row.Revision, "phase", row.Phase, "name", BoundText(row.Name), "tier", row.Tier,
             "seed", row.Seed, "generatorVersion", row.GeneratorVersion, "floorIndex", row.FloorIndex, "mapName", BoundText(row.MapName),
             "canAdvance", row.CanAdvance, "transitioning", row.Transitioning, "exitX", row.ExitX, "exitY", row.ExitY, "maxTier", row.MaxTier, "unlockedTier", row.UnlockedTier,
-            "progress", row.Progress, "progressMax", row.ProgressMax, "remainingSeconds", row.RemainingSeconds,
+            "progress", row.Progress, "progressMax", row.ProgressMax, "remainingSeconds", row.RemainingSeconds, "totalSeconds", row.TotalSeconds,
             "receivedUtc", state.RiftReceivedUtc.ToString("o", CultureInfo.InvariantCulture), "bossName", BoundText(row.BossName),
-            "keyCount", row.KeyCount, "keyItemId", row.KeyItemID, "claimable", row.Claimable,
+            "keyCount", row.KeyCount, "keyItemId", row.KeyItemID, "claimable", row.Claimable, "pendingLoot", row.PendingLoot,
             "members", EndgameRows(row.Members, m => Values("charId", m.CharID, "name", BoundText(m.Name), "level", m.Level, "eligible", m.Eligible, "claimed", m.Claimed)));
+        var arrival = row.GuardianArrival;
+        data["guardianArrival"] = arrival == null ? null : Values("id", arrival.ID, "seed", arrival.Seed, "anchorCharId", arrival.AnchorCharID,
+            "x", arrival.X, "y", arrival.Y, "startedAtMS", arrival.StartedAtMS, "deadlineMS", arrival.DeadlineMS,
+            "durationMS", arrival.DurationMS, "remainingMS", arrival.RemainingMS);
         if (!includeMarkers) return data;
         var auras = new List<object>(); var globes = new List<object>(); var telegraphs = new List<object>();
-        EndgamePageRows(auras, row.Auras, args, a => Values("entityId", a.EntityID, "targetEntityId", EntityReference("monster", a.NativeEntityID), "nativeEntityId", a.NativeEntityID, "class", a.Class, "affixes", new List<string>(a.Affixes)));
+        EndgamePageRows(auras, row.Auras, args, a => Values("entityId", a.EntityID, "targetEntityId", EntityReference("monster", a.NativeEntityID), "nativeEntityId", a.NativeEntityID, "class", a.Class, "originalName", BoundText(a.OriginalName), "affixes", new List<string>(a.Affixes)));
         EndgamePageRows(globes, row.Globes, args, g => Values("entityId", g.EntityID, "x", g.X, "y", g.Y, "value", g.Value));
         EndgamePageRows(telegraphs, row.Telegraphs, args, t => Values("id", t.ID, "entityId", t.EntityID, "ability", BoundText(t.Ability), "shape", t.Shape,
             "x", t.X, "y", t.Y, "endX", t.EndX, "endY", t.EndY, "radius", t.Radius, "innerRadius", t.InnerRadius, "remainingMS", t.RemainingMS));

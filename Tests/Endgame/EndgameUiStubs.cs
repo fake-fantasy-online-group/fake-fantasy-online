@@ -4,10 +4,10 @@ using System.Collections.Generic;
 namespace UnityEngine
 {
     public class Object { public bool destroyed; public static void Destroy(Object value) { if (value != null) value.destroyed = true; } }
-    public class MonoBehaviour : Object { public bool isActiveAndEnabled = true; public Transform transform = new Transform(); }
-    public class Transform { public Vector3 position, localPosition; public Transform parent; }
+    public class MonoBehaviour : Object { public bool isActiveAndEnabled = true; public Transform transform = new Transform(); public GameObject gameObject; }
+    public class Transform { public Vector3 position, localPosition; public Transform parent; public Vector3 localScale; public void SetParent(Transform value, bool worldPositionStays) { parent = value; } }
     public class GameObject : Object { public readonly string name; public Transform transform = new Transform(); public bool active = true; public readonly Dictionary<Type, object> components = new Dictionary<Type, object>(); public GameObject(string name) { this.name = name; } public void SetActive(bool value) { active = value; } public T AddComponent<T>() where T : new() { var result = new T(); components[typeof(T)] = result; return result; } }
-    public class Sprite : Object { }
+    public class Sprite : Object { public Texture2D texture = new Texture2D(); }
     public class Material : Object { }
     public class SpriteRenderer { public Sprite sprite; public Material sharedMaterial; public int sortingOrder; }
     public struct Vector2
@@ -89,7 +89,7 @@ namespace UnityEngine
     public static class GUIUtility { public static void RotateAroundPivot(float angle, Vector2 pivot) { } }
     public static class GUI
     {
-        public static GUISkin skin = new GUISkin(); public static int depth; public static Color color; public static Matrix4x4 matrix;
+        public static bool enabled = true; public static GUISkin skin = new GUISkin(); public static int depth; public static Color color; public static Matrix4x4 matrix;
         public static List<string> labels = new List<string>();
         public static List<Rect> textures = new List<Rect>();
         public static string nextText;
@@ -123,6 +123,20 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static Dictionary<string, Texture2D[]> frameTextures = new Dictionary<string, Texture2D[]>();
         public static Texture2D[] Frames(string path, int count = 4) => frameTextures.TryGetValue(path, out var value) ? value : null;
     }
+    internal static class SysMsgBox
+    {
+        public static bool Visible; public static string text; public static Action confirm;
+        public static void Show(string value, Action yes, Action no) { text = value; confirm = yes; Visible = true; }
+        public static void Finish(bool yes) { var action = confirm; Visible = false; confirm = null; if (yes) action?.Invoke(); }
+    }
+    internal static class CraftUI
+    {
+        public static bool Click(Rect rect, Vector2 mouse)
+        {
+            if (SysMsgBox.Visible || Event.current.type != EventType.MouseDown || Event.current.button != 0 || !rect.Contains(mouse)) return false;
+            Event.current.Use(); return true;
+        }
+    }
     internal static class NativeScroll
     {
         public static int calls;
@@ -134,13 +148,20 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static readonly List<string> notices = new List<string>();
         public static void PushText(string text) { notices.Add(text); }
     }
-    internal static class BitmapFont { public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
+    internal static class BitmapFont { public static bool Ready => true; public static string Elide(string text, float width, float scale) => text; public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
     internal static class UIScale { public static float Factor = 1; }
     internal static class WinZ
     {
         public static int forgotten; public static Rect lastFrame;
         public static (int, bool) Frame(object owner, Rect r, int depth) { lastFrame = r; return (depth, false); }
         public static void Forget(object owner) { forgotten++; }
+    }
+    internal static class WinDrag
+    {
+        public static int calls, forgotten;
+        public static void Forget(object owner) { forgotten++; }
+        public static bool Stale(float x, ref int generation) { int next = Screen.width * 65536 + Screen.height; bool stale = float.IsNaN(x) || generation != next; generation = next; return stale; }
+        public static void Handle(object owner, Rect rect, ref float x, ref float y) { calls++; }
     }
     internal static class UITip { public static string last; public static Vector2 mouse; public static float scale; public static void Show(string text, float s) { last = text; scale = s; } public static void ShowAtForIndependentRuntime(string text, float s, Vector2 pointer) { Show(text, s); mouse = pointer; } }
     internal static partial class TooltipContent { public static string QualityName(string name, int quality) => "\u0003" + quality + name; public static string Fmt(string name, string desc) => "\u0007" + name + "\n" + desc; }
@@ -151,6 +172,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public struct Item { public int id, bagIdx, quality; public string name, desc; }
         public static IEnumerable<Item>[] Items => new IEnumerable<Item>[] { rows.Values, rows.Values, rows.Values, rows.Values };
         public static Dictionary<int, Item> rows = new Dictionary<int, Item>();
+        public static bool IsOpen, HasHeld; public static int HeldTab, HeldBagSlot;
+        public static bool IsLocked(byte tab, int slot) => locked.Contains(slot);
+        public static HashSet<int> locked = new HashSet<int>();
+        public static void Toggle() { IsOpen = !IsOpen; }
+        public static void ClearHeld() { HasHeld = false; }
         public static Item ItemAt(int tab, int slot) => rows.TryGetValue(slot, out var value) ? value : default;
     }
     internal static class EquipDlg
@@ -163,5 +189,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     public class ResLoader { public static ResLoader I; public int Loads, AnimLoads, LastID, LastWidth, LastHeight; public float LastPpu; public ObjSprite Image; public ObjAnim Animation; public struct ObjSprite { public Texture2D tex; public int nLeft, nTop, clipBy, frames; } public struct ObjAnim { public Sprite[] frames; public int[] nLeft, nTop; } public ObjSprite LoadObj(int id, int w, int h) { Loads++; LastID = id; LastWidth = w; LastHeight = h; return Image; } public ObjAnim LoadObjAnim(int id, float ppu) { AnimLoads++; LastID = id; LastPpu = ppu; return Animation; } }
     public class FrameAnimator { public float frameMs; public bool loop; public Func<(Sprite[], Vector3[])> loader; }
     public partial class CombatWorld { private static CombatWorld I; private Dictionary<int, MonsterEntity> monsters = new Dictionary<int, MonsterEntity>(); }
-    public class MonsterEntity { public Transform transform = new Transform(); }
+    public class MonsterEntity { public Transform transform = new Transform(); public int RiftKind, Clears; public string RiftName; public void UpdateRiftIdentity(int kind, string name) { RiftKind = kind; RiftName = name; } public void ClearRiftIdentity() { RiftKind = 0; Clears++; } }
+    public class EffectPlayer : MonoBehaviour { public static readonly List<EffectPlayer> Played = new List<EffectPlayer>(); public static readonly Material AlphaMaterial = new Material(), AdditiveMaterial = new Material(); public static Material BorrowAlphaMaterial() => AlphaMaterial; public static Material BorrowAdditiveMaterial() => AdditiveMaterial; public static float NextScale = 1f; public static Sprite[] MagicFrames; public static Sprite[] GetMagicFramesAll(int id) => MagicFrames; public static Sprite[] GetMagicFrames(int id) => MagicFrames; public static EffectPlayer PlayNamed(Vector3 position, string effect, float ppu) { var result = new EffectPlayer { gameObject = new GameObject(effect) }; result.transform.position = position; Played.Add(result); return result; } }
 }

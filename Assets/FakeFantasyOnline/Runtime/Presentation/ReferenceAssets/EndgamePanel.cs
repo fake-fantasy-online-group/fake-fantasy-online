@@ -15,7 +15,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
     internal static EndgameClientState GrowthState => WorldEntryAvailable && Current.State.GrowthV5 ? Current.State : null;
     internal static bool RetryGrowthRequest() => GrowthState?.PendingRequest?.Op == "skill.upgrade" && Current.client.RetryEndgame();
     internal static bool RefreshGrowthSkills() => GrowthState != null && Current.client.SendEndgame(new EndgameRequest("skill.ranks"));
-    private bool open, confirmLeave;
+    private bool open;
     private EndgameModule module;
     private int tier = 1;
     private string selectedUID = "", selectedRuneUID = "";
@@ -37,21 +37,22 @@ public sealed partial class EndgamePanel : MonoBehaviour
 
     public void Bind(IEndgameClient source)
     {
-        if (!ReferenceEquals(client, source)) { ClearRiftScenePortal(); client = source; ClearSelection(); open = false; generation = -1; observedGeneration = -1; }
+        if (!ReferenceEquals(client, source)) { ClearRiftScenePortal(); ClearRiftWorldVisuals(); client = source; ClearSelection(); open = false; generation = -1; observedGeneration = -1; }
         Current = this;
     }
     public void Unbind(IEndgameClient source)
     {
         if (!ReferenceEquals(client, source)) return;
-        ClearRiftScenePortal(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); client = null; open = false; observedGeneration = -1; ClearSelection();
+        ClearRiftScenePortal(); ClearRiftWorldVisuals(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); client = null; open = false; observedGeneration = -1; ClearSelection();
     }
-    private void OnDestroy() { ClearRiftScenePortal(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); if (Current == this) Current = null; }
+    private void OnDestroy() { ClearRiftScenePortal(); ClearRiftWorldVisuals(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); if (Current == this) Current = null; }
+    private void OnDisable() { ClearRiftScenePortal(); ClearRiftWorldVisuals(); WinZ.Forget(this); open = false; observedGeneration = -1; }
     private void ClearSelection()
     {
         ClearRiftEntrance();
         ResetRiftTierDropdown();
         ClearCubeInputs();
-        selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null; confirmLeave = false;
+        selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null;
         itemScroll = detailScroll = runeScroll = Vector2.zero;
     }
     private void Close() { WinZ.Forget(this); open = false; ClearSelection(); State?.InvalidateQuote(); }
@@ -59,10 +60,10 @@ public sealed partial class EndgamePanel : MonoBehaviour
     {
         SyncRiftScenePortal();
         if (State == null || !client.EndgameInWorld)
-        { if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; observedGeneration = -1; return; }
+        { ClearRiftWorldVisuals(); if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; observedGeneration = -1; return; }
         if (generation != State.Generation)
         {
-            generation = State.Generation; ClearSelection(); open = false;
+            generation = State.Generation; ClearRiftWorldVisuals(); ClearSelection(); WinZ.Forget(this); open = false;
             skillBehaviorRefreshRevision = null; skillBehaviorRefreshAttempts = 0; nextSkillBehaviorRefresh = 0;
         }
         RiftEntranceCurrent();
@@ -79,6 +80,9 @@ public sealed partial class EndgamePanel : MonoBehaviour
             }
         }
         ObserveRiftPhase();
+        RecoverPendingRiftRequest(DateTime.UtcNow);
+        UpdateRiftWorldVisuals();
+        if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         if (open && module == EndgameModule.Cube && !CubeSourceCurrent()) Close();
         if (open && Input.GetKeyDown(KeyCode.Escape))
         { if (riftTierOpen) ResetRiftTierDropdown(); else Close(); }
@@ -112,16 +116,18 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private void OnGUI()
     {
         if (client == null || !client.EndgameInWorld) return;
+        if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         EnsureStyles();
-        float width = module == EndgameModule.Rift ? RiftWindowWidth : W;
-        float height = module == EndgameModule.Rift ? RiftWindowHeight : H;
+        float width = module == EndgameModule.Rift ? RiftWindowWidth : CubeWindowWidth;
+        float height = module == EndgameModule.Rift ? RiftWindowHeight : CubeWindowHeight;
         float scale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / width, (Screen.height - 20f) / height)));
         GUI.depth = -15;
         if (!State.Negotiated) return;
         float hudScale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / W, (Screen.height - 20f) / H)));
         DrawRiftHud(hudScale); DrawRiftMarkers(hudScale);
         if (!open) return;
-        Rect window = new Rect((Screen.width - width * scale) * .5f, (Screen.height - height * scale) * .5f, width * scale, height * scale);
+        Rect window = module == EndgameModule.Cube ? CubeScreenRect(scale) :
+            new Rect((Screen.width - width * scale) * .5f, (Screen.height - height * scale) * .5f, width * scale, height * scale);
         var frame = WinZ.Frame(this, window, 4); GUI.depth = frame.Item1;
         Vector2 oldMouse = Event.current.mousePosition;
         panelScreenMouse = oldMouse; panelScale = scale;
@@ -129,29 +135,24 @@ public sealed partial class EndgamePanel : MonoBehaviour
         Matrix4x4 previous = GUI.matrix;
         try
         {
+            if (module == EndgameModule.Cube) HandleCubeDrag(window, scale);
             GUI.matrix = Matrix4x4.TRS(new Vector3(window.x, window.y, 0f), Quaternion.identity, new Vector3(scale, scale, 1f));
-            if (module == EndgameModule.Rift)
+            if (module == EndgameModule.Cube) DrawCube();
+            else
             {
                 DrawRiftWindowArtwork(new Rect(0, 0, width, height));
                 if (Event.current.type != EventType.Repaint) DrawRiftTierDropdown();
+                Text(new Rect(26, 17, width - 82, 32), "演劫洞天", heading);
+                Text(new Rect(27, 52, width - 74, 25), "持符钥开启洞天；队友需在队长附近。", small);
+                if (ArtworkSkin.Button(new Rect(width - 48, 18, 27, 27), "×")) Close();
+                DrawRift();
+                string status = State.Pending ? "结果确认中。" : State.SnapshotLoading ? "正在查询…" : State.Error.Length > 0 ? State.Message : "";
+                float statusY = height - 64;
+                Text(new Rect(30, statusY, width - 290, 36), status, small, State.Error.Length > 0 ? new Color(1f, .6f, .48f) : Jade);
+                if (State.Pending && ArtworkSkin.Button(new Rect(width - 254, statusY, 105, 25), "查询原请求")) client.RetryEndgame();
+                if (ArtworkSkin.Button(new Rect(width - 140, statusY, 108, 25), "刷新")) Refresh();
+                if (Event.current.type == EventType.Repaint) DrawRiftTierDropdown();
             }
-            else
-            {
-                ArtworkSkin.Panel(new Rect(0, 0, width, height), highlighted: true);
-                ArtworkSkin.Panel(new Rect(9, 9, width - 18, 79));
-            }
-            Text(new Rect(26, 17, module == EndgameModule.Rift ? width - 82 : 760, 32), module == EndgameModule.Cube ? "周天鼎" : "演劫洞天", heading);
-            Text(new Rect(27, 52, module == EndgameModule.Rift ? width - 74 : 790, 25), module == EndgameModule.Cube ? "将背包物品放入鼎中，问鼎后确认炼化。" : "持符钥开启洞天；队友需在队长附近。", small);
-            if (ArtworkSkin.Button(new Rect(width - 48, 18, 27, 27), "×")) Close();
-            if (module == EndgameModule.Cube) DrawCube();
-            else DrawRift();
-            if (module != EndgameModule.Rift) ArtworkSkin.Panel(new Rect(19, height - 58, width - 38, 39));
-            string status = State.Pending ? "结果确认中：" + State.PendingRequest.Op + "。查询会沿用同一请求。" : State.SnapshotLoading ? "正在拼合完整星图…" : State.Message;
-            float statusY = module == EndgameModule.Rift ? height - 64 : height - 50;
-            Text(new Rect(30, statusY, module == EndgameModule.Rift ? width - 290 : 645, module == EndgameModule.Rift ? 36 : 26), status, small, State.Error.Length > 0 ? new Color(1f, .6f, .48f) : Jade);
-            if (State.Pending && ArtworkSkin.Button(new Rect(width - 254, statusY, 105, 25), "查询原请求")) client.RetryEndgame();
-            if (ArtworkSkin.Button(new Rect(width - 140, statusY, 108, 25), "刷新")) Refresh();
-            if (module == EndgameModule.Rift && Event.current.type == EventType.Repaint) DrawRiftTierDropdown();
             if (Event.current.type == EventType.MouseDown && new Rect(0, 0, width, height).Contains(Event.current.mousePosition))
             { Event.current.Use(); PlayerController.SuppressWorldClick(); }
         }

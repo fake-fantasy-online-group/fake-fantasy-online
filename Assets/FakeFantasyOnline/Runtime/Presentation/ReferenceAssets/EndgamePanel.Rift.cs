@@ -9,20 +9,16 @@ public sealed partial class EndgamePanel
 {
     private void DrawRift()
     {
+        if (!RiftEntryContextAvailable) return;
         EndgameRiftView rift = State.Rift;
         bool selectedTierValid = true;
-        if (rift != null && rift.RunID.Length > 0 && (State.RiftInInstance || PollRun(rift) || rift.Claimable || rift.Phase == "interrupted"))
+        bool reenter = CanReenter(rift);
+        bool recovery = rift != null && rift.RunID.Length > 0 && (rift.Claimable || rift.Phase == "interrupted" || rift.Phase == "reward_pending");
+        if (reenter || recovery)
         {
-            Text(new Rect(32, 92, 536, 44), rift.Name + " · " + RiftDepth(rift) + " · " + PhaseName(rift.Phase), label, Gold);
-            Text(new Rect(32, 140, 536, 26), (rift.MapName.Length > 0 ? rift.MapName : "洞天地图") + (ActiveRun(rift) ? " · 余时 " + Remaining(rift) : ""), label, Jade);
-            DrawProgress(new Rect(33, 169, 534, 34), rift.Progress, rift.ProgressMax);
-            Text(new Rect(32, 207, 536, 44), RiftObjective(rift), label);
-            if (rift.Phase == "active" || rift.Transitioning)
-            {
-                Text(new Rect(32, 257, 536, 47), rift.Transitioning ? "正在前往下一层，请稍候。" : "开启者走入本层出口传送门后可换层。阶数、余时延续；跳过余敌，未拾灵珠不计进度。", small);
-            }
-            else if (rift.Phase == "completed" || rift.Phase == "closed")
-                Text(new Rect(32, 261, 536, 43), RiftUnlockSummary(rift), label, Gold);
+            Text(new Rect(32, 92, 536, 44), (rift.Name.Length > 0 ? rift.Name : "演劫洞天") + " · 第 " + rift.Tier + " 阶", label, Gold);
+            Text(new Rect(32, 145, 536, 48), reenter ? "可重返已有洞天。" : rift.Claimable ? "仍可领取已保存的所得。" : "等待服务器确认。", label);
+            Text(new Rect(32, 207, 536, 44), RiftUnlockSummary(rift), small, Jade);
         }
         else
         {
@@ -31,23 +27,23 @@ public sealed partial class EndgamePanel
             Text(new Rect(378, 96, 190, 29), "洞天符钥：" + (rift == null ? "查询中" : rift.KeyCount.ToString()) + " 把", label, Gold);
             Text(new Rect(302, 139, 266, 46), RiftUnlockSummary(rift), small, Jade);
             selectedTierValid = rift != null && tier >= 1 && tier <= RiftTierLimit(rift);
-            Text(new Rect(32, 199, 536, 84), "每场随机安排地图、敌群与出口。可换层寻找敌群，镇煞至满后劫影现身。\n换层不升阶、不重置时间，也不额外耗钥。败退、离场不会自动返钥。\n通关后按剩余整3分钟开放更高阶数，至少+1阶，最高150阶。", small);
+            Text(new Rect(32, 199, 536, 64), "开启消耗一把洞天符钥。队友需在开启者附近。\n通关可开放更高阶数，最高150阶。", small);
         }
         if (rift != null && rift.Members.Count > 0)
         {
             var text = new StringBuilder("同道：");
-            foreach (var member in rift.Members) text.Append(member.Name.Length > 0 ? member.Name : member.CharID).Append('(').Append(member.Level).Append(") ").Append(member.Claimed ? "已领 " : " ");
+            foreach (var member in rift.Members) text.Append(member.Name.Length > 0 ? member.Name : member.CharID).Append('(').Append(member.Level).Append(") ");
             Text(new Rect(32, 306, 536, 30), text.ToString(), small);
         }
         DrawRiftActions(rift, selectedTierValid);
     }
     private void DrawRiftActions(EndgameRiftView rift, bool selectedTierValid)
     {
+        if (!RiftEntryContextAvailable) return;
         bool reenter = CanReenter(rift), waiting = rift != null && (rift.Transitioning || rift.Phase == "reward_pending" || rift.Phase == "interrupted" || rift.Claimable && !reenter);
-        bool showStart = !State.RiftInInstance && (reenter || !waiting);
-        bool showClaim = rift != null && rift.Claimable && !LiveCompletedRift(rift);
-        bool showLeave = rift != null && rift.RunID.Length > 0 && (State.RiftInInstance || rift.Phase != "closed");
-        int count = (showStart ? 1 : 0) + (showClaim ? 1 : 0) + (showLeave ? 1 : 0);
+        bool showStart = reenter || !waiting;
+        bool showClaim = rift != null && rift.Claimable && !reenter;
+        int count = (showStart ? 1 : 0) + (showClaim ? 1 : 0);
         float width = count > 0 ? Mathf.Min(250f, (536f - (count - 1) * 12f) / count) : 0;
         float x = 32 + (536f - count * width - Math.Max(0, count - 1) * 12f) * .5f;
         if (showStart)
@@ -56,25 +52,19 @@ public sealed partial class EndgamePanel
                 Send(new EndgameRequest("rift.start", State.Revision, runID: reenter ? rift.RunID : "", tier: reenter ? rift.Tier : tier, npcEntityID: reenter ? 0 : riftEntranceEntityID));
             x += width + 12;
         }
-        if (showClaim)
-        {
-            if (ArtworkSkin.Button(new Rect(x, 339, width, 34), rift.Phase == "interrupted" ? "领取补偿符钥" : "领取我的洞天所得", enabled: !State.Pending))
-                Send(new EndgameRequest("rift.claim", State.Revision, runID: rift.RunID));
-            x += width + 12;
-        }
-        if (showLeave && ArtworkSkin.Button(new Rect(x, 339, width, 34), confirmLeave ? "确认离境 · 无自动返钥" : "离开洞天", enabled: !State.Pending && !rift.Transitioning))
-        { if (confirmLeave) { Send(new EndgameRequest("rift.leave", State.Revision, runID: rift.RunID)); confirmLeave = false; } else confirmLeave = true; }
+        if (showClaim && ArtworkSkin.Button(new Rect(x, 339, width, 34), rift.Phase == "interrupted" ? "领取补偿符钥" : "领取我的洞天所得", enabled: !State.Pending))
+            Send(new EndgameRequest("rift.claim", State.Revision, runID: rift.RunID));
     }
     private static string RiftDepth(EndgameRiftView rift) => "第 " + rift.Tier + " 阶" + (rift.FloorIndex > 0 ? " · 第 " + rift.FloorIndex + " 层" : "");
     private bool LiveCompletedRift(EndgameRiftView rift) => State.RiftInInstance && rift != null && (rift.Phase == "completed" || rift.Phase == "closed");
-    private static bool ActiveRun(EndgameRiftView rift) => rift != null && (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss");
+    private static bool ActiveRun(EndgameRiftView rift) => rift != null && (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss_arriving" || rift.Phase == "boss");
     private static bool CanReenter(EndgameRiftView rift) => ActiveRun(rift) || rift != null && rift.Phase == "completed";
     private static bool PollRun(EndgameRiftView rift) => CanReenter(rift) || rift != null && rift.Phase == "reward_pending";
     private static string PhaseName(string phase)
     {
         switch (phase)
         {
-            case "reserved": return "同道集结"; case "active": return "镇煞"; case "boss": return "镇境劫影";
+            case "reserved": return "同道集结"; case "active": return "镇煞"; case "boss_arriving": return "劫影将至"; case "boss": return "镇境劫影";
             case "reward_pending": return "战果保存中"; case "completed": return "洞天功成"; case "closed": return "洞天已闭";
             case "failed": return "演劫未竟"; case "aborted": return "洞天中断"; case "interrupted": return "洞天中断 · 可领补偿";
             default: return "静候开境";
@@ -91,26 +81,59 @@ public sealed partial class EndgamePanel
         Text(new Rect(bar.xMax + 8f * scale, rect.y + 8f * scale, rect.width - bar.width - 8f * scale, 22f * scale),
             "镇煞 " + progress + " / " + target + " · 余时 " + RiftClock(remaining), small, Jade);
     }
+    private const string RiftCompletionNotice = "拾妥所得，可与归元道使交谈离境。";
     private string observedRun = "", observedPhase = "";
     private long observedGeneration = -1;
-    private int observedFloor;
-    // Phase notices are presentation only. A restored snapshot sets the baseline, never replays a victory.
+    private bool observedInside;
+    private readonly System.Collections.Generic.HashSet<string> completedNoticeRuns = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+    // Only a live completion edge may announce the exit. Restored/replayed snapshots
+    // establish a silent baseline, including completion observed while outside.
     private void ObserveRiftPhase()
     {
         if (observedGeneration != State.Generation)
-        { observedGeneration = State.Generation; observedRun = observedPhase = ""; observedFloor = 0; }
+        {
+            observedGeneration = State.Generation; observedRun = observedPhase = ""; observedInside = false;
+            completedNoticeRuns.Clear();
+        }
         var rift = State.Rift;
         if (rift == null || rift.RunID.Length == 0)
-        { observedRun = observedPhase = ""; observedFloor = 0; return; }
-        bool transition = observedRun == rift.RunID && observedPhase.Length > 0 && observedPhase != rift.Phase;
-        bool floorTransition = observedRun == rift.RunID && observedFloor > 0 && rift.FloorIndex > observedFloor;
-        if (observedRun != rift.RunID || floorTransition) confirmLeave = false;
-        observedRun = rift.RunID; observedPhase = rift.Phase; observedFloor = rift.FloorIndex;
-        if (!transition && !floorTransition) return;
-        // Emit once at the state edge, not during OnGUI or every polling snapshot.
-        // Native NPC mode-5 notices use this same bottom-right queue, artwork and lifetime.
-        string notice = floorTransition && !transition ? "抵达第 " + rift.FloorIndex + " 层 · " + rift.MapName + " · 难度与余时延续" : RiftObjective(rift);
-        NewbieTipBox.PushText(notice);
+        { observedRun = observedPhase = ""; observedInside = false; return; }
+        bool inside = State.RiftContextKnown && State.RiftInInstance;
+        bool completion = observedRun == rift.RunID && observedInside && inside && observedPhase.Length > 0 && observedPhase != "completed" && rift.Phase == "completed";
+        observedRun = rift.RunID; observedPhase = rift.Phase; observedInside = inside;
+        if (rift.Phase != "completed" && rift.Phase != "closed") return;
+        bool firstCompletion = completedNoticeRuns.Add(rift.RunID);
+        if (completion && firstCompletion) NewbieTipBox.PushText(RiftCompletionNotice);
+    }
+    private string riftRecoveryRequestID = "";
+    private EndgameClientState riftRecoveryState;
+    private long riftRecoveryGeneration = -1;
+    private int riftRecoveryAttempts;
+    private DateTime riftRecoveryNextUtc;
+    // Entry/floor receipts may be lost after the native map has already changed.
+    // Keep reconciling the exact authorized nonce without bringing back a modal.
+    private void RecoverPendingRiftRequest(DateTime now)
+    {
+        EndgameRequest request = State?.PendingRequest;
+        if (client == null || !client.EndgameInWorld || !State.Negotiated || !State.RiftContextKnown || !State.RiftInInstance ||
+            request == null || !request.Op.StartsWith("rift.", StringComparison.Ordinal))
+        { riftRecoveryRequestID = ""; riftRecoveryState = null; riftRecoveryAttempts = 0; return; }
+        if (!ReferenceEquals(riftRecoveryState, State) || riftRecoveryGeneration != State.Generation || riftRecoveryRequestID != request.RequestID)
+        {
+            riftRecoveryState = State; riftRecoveryGeneration = State.Generation; riftRecoveryRequestID = request.RequestID;
+            riftRecoveryAttempts = 0; riftRecoveryNextUtc = State.PendingSinceUtc.AddSeconds(3);
+        }
+        if (now < riftRecoveryNextUtc) return;
+        client.RetryEndgame();
+        riftRecoveryAttempts = Math.Min(4, riftRecoveryAttempts + 1);
+        riftRecoveryNextUtc = now.AddSeconds(Math.Min(30, 3 * (1 << riftRecoveryAttempts)));
+    }
+    private static int RiftArrivalRemainingMS(EndgameRiftView rift, DateTime received, DateTime now)
+    {
+        var arrival = rift?.GuardianArrival;
+        if (rift?.Phase != "boss_arriving" || arrival == null) return 0;
+        double elapsed = Math.Max(0, (now - received).TotalMilliseconds);
+        return (int)Math.Max(0, arrival.RemainingMS - Math.Min(int.MaxValue, Math.Floor(elapsed)));
     }
     private string RiftObjective(EndgameRiftView rift)
     {
@@ -120,9 +143,12 @@ public sealed partial class EndgamePanel
         {
             case "reserved": return "同道集结：队友选择进入已有洞天。";
             case "active": return rift.CanAdvance ? "可换层：收取灵珠，或走入出口传送门。" : rift.FloorIndex > 0 ? "镇煞：收取灵珠；开启者可走入出口传送门换层。" : "镇煞：击败敌人，靠近灵珠收取进度。";
-            case "boss": return "劫影现身：" + (rift.FloorIndex > 0 ? "前往本层出口，击败" : "击败") + (rift.BossName.Length > 0 ? rift.BossName : "镇境劫影") + "。";
+            case "boss_arriving":
+                int arrivalRemaining = RiftArrivalRemainingMS(rift, State.RiftReceivedUtc, DateTime.UtcNow);
+                return arrivalRemaining > 0 ? "劫影将至：" + Math.Ceiling(arrivalRemaining / 1000d).ToString("0") + "秒。" : "劫影将至。";
+            case "boss": return "劫影现身：击败" + (rift.BossName.Length > 0 ? rift.BossName : "镇境劫影") + "。";
             case "reward_pending": return "劫影已退，战果正在保存；请稍候。";
-            case "completed": return LiveCompletedRift(rift) ? "洞天已成：拾妥所得，可与归元道使交谈离境。" : "洞天仍在，可重返拾取；收束后可补领。";
+            case "completed": return LiveCompletedRift(rift) ? RiftCompletionNotice : "洞天仍在，可重返拾取；收束后可补领。";
             case "interrupted": return rift.Claimable ? "洞天中断：可领取服务器确认的补偿符钥。" : "洞天中断：请查询服务器结算。";
             case "failed": return rift.Claimable ? "演劫未竟：仍有服务器确认的所得可领取。" : "演劫未竟：本次已结束，可返回龙城八仙使者处再战。";
             case "closed": return State.RiftInInstance ? "洞天已成，可与归元道使交谈离境。" : rift.Claimable ? "洞天已闭：战果已保存，仍可领取你的所得。" : "洞天已闭：所得请在背包查看，炼化可拜访巧匠左慈。";
@@ -139,51 +165,36 @@ public sealed partial class EndgamePanel
         int remaining = RiftRemainingSeconds(rift, State.RiftReceivedUtc, DateTime.UtcNow);
         float progress = rift.ProgressMax > 0 ? Mathf.Clamp01((float)rift.Progress / rift.ProgressMax) : 0;
         DrawRiftProgressArtwork(bar, progress, RiftElapsedRatio(rift, remaining));
-        // Keep only the slot. Details are available on hover, and phase changes
-        // still use the native bottom-right notice queue.
+        // Keep only the native slot. Details, including arrival timing, stay on hover.
         if (bar.Contains(Event.current.mousePosition))
             UITip.Show("演劫 " + RiftDepth(rift) + " · " + PhaseName(rift.Phase) +
                 "\n绿色：镇煞 " + rift.Progress + " / " + rift.ProgressMax +
                 "\n白色：已用时间" + (rift.TotalSeconds > 0 ? " " + RiftClock(Math.Max(0, rift.TotalSeconds - remaining)) + " / " + RiftClock(rift.TotalSeconds) : "（等待服务器总时长）") +
-                "\n余时 " + RiftClock(remaining) + "\n" + RiftObjective(rift), scale);
+                "\n余时 " + RiftClock(remaining) + (rift.PendingLoot > 0 ? "\n待拾取：" + rift.PendingLoot : "") + "\n" + RiftObjective(rift), scale);
     }
     private void DrawRiftMarkers(float scale)
     {
         var rift = State.Rift; Camera camera = Camera.main;
-        if (rift == null || !State.RiftContextKnown || !State.RiftInInstance || !ActiveRun(rift) || rift.Transitioning || camera == null || GameBootstrap.CurPpu <= 0) return;
+        if (!RiftWorldVisualsReady(rift) || camera == null) return;
         DrawRiftTelegraphs(rift, camera, scale);
-        foreach (var aura in rift.Auras)
+        if (rift.Phase == "boss_arriving" && rift.GuardianArrival != null)
         {
-            Transform entity = CombatWorld.EndgameMonsterTransform(aura.NativeEntityID); if (entity == null) continue;
-            Vector3 point = camera.WorldToScreenPoint(entity.position + Vector3.up * .9f); if (point.z <= 0) continue;
-            Color color = aura.Class == 1 ? new Color(.4f, .66f, 1f) : aura.Class == 2 ? Gold : new Color(1f, .45f, .38f);
-            string name = aura.Class == 1 ? "◆ 蓝煞" : aura.Class == 2 ? "◆ 金煞" : aura.Class == 3 ? "◆ 镇境劫影" : "";
-            if (aura.Affixes.Count > 0) name += " · " + string.Join(" / ", aura.Affixes);
-            if (name.Length > 0) BitmapFont.CenterOutline(new Rect(point.x - 150 * scale, Screen.height - point.y, 300 * scale, 18 * scale), name, color, scale);
-        }
-        if (rift.Phase == "boss" && State.RiftContextKnown && State.RiftInInstance && rift.FloorIndex > 0)
-        {
-            Vector3 exit = RiftScreenPoint(camera, rift.ExitX, rift.ExitY);
-            if (exit.z > 0)
-            {
-                DrawRiftRing(camera, rift.ExitX, rift.ExitY, 45, Gold, scale);
-                BitmapFont.CenterOutline(new Rect(exit.x - 135 * scale, exit.y - 33 * scale, 270 * scale, 24 * scale), "◆ 镇境劫影 · 本层出口", Gold, scale);
-            }
-        }
-        foreach (var globe in rift.Globes)
-        {
-            Vector3 point = RiftScreenPoint(camera, globe.X, globe.Y);
-            if (point.z <= 0) continue;
-            BitmapFont.CenterOutline(new Rect(point.x - 70 * scale, point.y - 19 * scale, 140 * scale, 18 * scale), "◇ 镇煞灵珠 +" + globe.Value, Jade, scale);
+            int remaining = RiftArrivalRemainingMS(rift, State.RiftReceivedUtc, DateTime.UtcNow);
+            Vector3 point = RiftScreenPoint(camera, rift.GuardianArrival.X, rift.GuardianArrival.Y);
+            if (remaining > 0 && point.z > 0)
+                BitmapFont.CenterOutline(new Rect(point.x - 20 * scale, point.y - 48 * scale, 40 * scale, 30 * scale),
+                    ((remaining + 999) / 1000).ToString(), Gold, scale * 1.6f);
         }
     }
+
 }
 public partial class CombatWorld
 {
-    internal static Transform EndgameMonsterTransform(int id)
+    internal static MonsterEntity EndgameMonster(int id)
     {
-        if (I != null && I.monsters.TryGetValue(id, out MonsterEntity entity) && entity != null) return entity.transform;
+        if (I != null && I.monsters.TryGetValue(id, out MonsterEntity entity) && entity != null) return entity;
         return null;
     }
+    internal static Transform EndgameMonsterTransform(int id) => EndgameMonster(id)?.transform;
 }
 }

@@ -41,11 +41,12 @@ public sealed class EndgameRiftAuraView
     public string EntityID { get; }
     public int NativeEntityID { get; }
     public int Class { get; }
+    public string OriginalName { get; }
     public IReadOnlyList<string> Affixes { get; }
     internal EndgameRiftAuraView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "entityId", "class", "affixes");
-        EntityID = EndgameData.ID(d, "entityId"); Class = EndgameData.Int(d, "class");
+        EndgameData.Keys(d, "entityId", "class", "affixes", "originalName");
+        EntityID = EndgameData.ID(d, "entityId"); Class = EndgameData.Int(d, "class"); OriginalName = EndgameData.String(d, "originalName", 128);
         if (!uint.TryParse(EntityID, NumberStyles.None, CultureInfo.InvariantCulture, out uint id) || id == 0 || Class < 0 || Class > 3) throw new FormatException("Invalid rift aura.");
         NativeEntityID = unchecked((int)id);
         Affixes = EndgameData.List(d, "affixes", 8, v => EndgameData.Text(v, "affixes", 64));
@@ -90,6 +91,33 @@ public sealed class EndgameRiftTelegraphView
             throw new FormatException("Invalid rift telegraph.");
     }
 }
+/// <summary>Durable server-authored guardian arrival; snapshots never restart its five-second clock.</summary>
+public sealed class EndgameRiftGuardianArrivalView
+{
+    public string ID { get; }
+    public string Seed { get; }
+    public string AnchorCharID { get; }
+    public int X { get; }
+    public int Y { get; }
+    public long StartedAtMS { get; }
+    public long DeadlineMS { get; }
+    public int DurationMS { get; }
+    public int RemainingMS { get; private set; }
+    internal void LimitRemainingMS(int remaining) => RemainingMS = Math.Min(RemainingMS, Math.Max(0, remaining));
+    internal EndgameRiftGuardianArrivalView(IReadOnlyDictionary<string, object> d)
+    {
+        EndgameData.Keys(d, "id", "seed", "anchorCharId", "x", "y", "startedAtMS", "deadlineMS", "durationMS", "remainingMS");
+        ID = EndgameData.String(d, "id", 128); Seed = EndgameData.String(d, "seed", 20); AnchorCharID = EndgameData.ID(d, "anchorCharId");
+        X = EndgameData.Int(d, "x"); Y = EndgameData.Int(d, "y");
+        StartedAtMS = EndgameData.Long(d, "startedAtMS"); DeadlineMS = EndgameData.Long(d, "deadlineMS");
+        DurationMS = EndgameData.Int(d, "durationMS"); RemainingMS = EndgameData.Int(d, "remainingMS");
+        if (ID.Length == 0 || AnchorCharID.Length == 0 || AnchorCharID == "0" || Seed.Length == 0 ||
+            (Seed.Length > 1 && Seed[0] == '0') || !ulong.TryParse(Seed, NumberStyles.None, CultureInfo.InvariantCulture, out _) ||
+            DurationMS != 5000 || RemainingMS < 0 || RemainingMS > DurationMS || StartedAtMS <= 0 ||
+            StartedAtMS > long.MaxValue - DurationMS || DeadlineMS != StartedAtMS + DurationMS)
+            throw new FormatException("Invalid guardian arrival.");
+    }
+}
 public sealed class EndgameRiftView
 {
     public string RunID { get; }
@@ -116,27 +144,31 @@ public sealed class EndgameRiftView
     public int KeyCount { get; }
     public int KeyItemID { get; }
     public bool Claimable { get; }
+    public int PendingLoot { get; }
     public IReadOnlyList<EndgameRiftMemberView> Members { get; }
     public IReadOnlyList<EndgameRiftAuraView> Auras { get; }
     public IReadOnlyList<EndgameRiftGlobeView> Globes { get; }
     public IReadOnlyList<EndgameRiftTelegraphView> Telegraphs { get; }
+    public EndgameRiftGuardianArrivalView GuardianArrival { get; }
     internal EndgameRiftView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "runId", "revision", "phase", "name", "tier", "progress", "progressMax", "remainingSeconds", "totalSeconds", "bossName", "keyCount", "keyItemId", "claimable", "members", "auras", "globes", "seed", "generatorVersion", "floorIndex", "mapName", "canAdvance", "transitioning", "exitX", "exitY", "maxTier", "unlockedTier", "telegraphs");
+        EndgameData.Keys(d, "runId", "revision", "phase", "name", "tier", "progress", "progressMax", "remainingSeconds", "totalSeconds", "bossName", "keyCount", "keyItemId", "claimable", "members", "auras", "globes", "seed", "generatorVersion", "floorIndex", "mapName", "canAdvance", "transitioning", "exitX", "exitY", "maxTier", "unlockedTier", "telegraphs", "guardianArrival", "pendingLoot");
         RunID = EndgameData.String(d, "runId", 128); Revision = EndgameData.ID(d, "revision"); Phase = EndgameData.String(d, "phase", 32); Name = EndgameData.String(d, "name");
         Seed = EndgameData.String(d, "seed", 20); GeneratorVersion = EndgameData.Int(d, "generatorVersion"); FloorIndex = EndgameData.Int(d, "floorIndex");
         MapName = EndgameData.String(d, "mapName", 256); CanAdvance = EndgameData.Bool(d, "canAdvance"); Transitioning = EndgameData.Bool(d, "transitioning");
         ExitX = EndgameData.Int(d, "exitX"); ExitY = EndgameData.Int(d, "exitY");
         MaxTier = EndgameData.Int(d, "maxTier"); UnlockedTier = EndgameData.Int(d, "unlockedTier");
         Tier = EndgameData.Int(d, "tier"); Progress = EndgameData.Int(d, "progress"); ProgressMax = EndgameData.Int(d, "progressMax"); RemainingSeconds = EndgameData.Int(d, "remainingSeconds"); TotalSeconds = EndgameData.Int(d, "totalSeconds");
-        BossName = EndgameData.String(d, "bossName"); KeyCount = EndgameData.Int(d, "keyCount"); KeyItemID = EndgameData.Int(d, "keyItemId"); Claimable = EndgameData.Bool(d, "claimable");
+        BossName = EndgameData.String(d, "bossName"); KeyCount = EndgameData.Int(d, "keyCount"); KeyItemID = EndgameData.Int(d, "keyItemId"); Claimable = EndgameData.Bool(d, "claimable"); PendingLoot = EndgameData.Int(d, "pendingLoot");
         Members = EndgameData.List(d, "members", 5, v => new EndgameRiftMemberView(EndgameData.Object(v)));
         Auras = EndgameData.List(d, "auras", 2048, v => new EndgameRiftAuraView(EndgameData.Object(v)));
         Globes = EndgameData.List(d, "globes", 1024, v => new EndgameRiftGlobeView(EndgameData.Object(v)));
         Telegraphs = EndgameData.List(d, "telegraphs", 128, v => new EndgameRiftTelegraphView(EndgameData.Object(v)));
+        GuardianArrival = EndgameData.Optional(d, "guardianArrival", v => new EndgameRiftGuardianArrivalView(EndgameData.Object(v)));
+        if (Phase != "boss_arriving" && GuardianArrival != null) throw new FormatException("Invalid guardian arrival phase.");
         if (Seed.Length > 0 && (Seed.Length > 1 && Seed[0] == '0' || !ulong.TryParse(Seed, NumberStyles.None, CultureInfo.InvariantCulture, out _))) throw new FormatException("Invalid rift seed.");
         if (GeneratorVersion < 0 || FloorIndex < 0 || MaxTier < 0 || MaxTier > 150 || UnlockedTier < 0 || UnlockedTier > 150) throw new FormatException("Invalid rift floor metadata.");
-        if (Tier < 0 || Tier > 150 || Progress < 0 || ProgressMax < 0 || RemainingSeconds < 0 || TotalSeconds < 0 || KeyCount < 0) throw new FormatException("Invalid rift state.");
+        if (Tier < 0 || Tier > 150 || Progress < 0 || ProgressMax < 0 || RemainingSeconds < 0 || TotalSeconds < 0 || KeyCount < 0 || PendingLoot < 0) throw new FormatException("Invalid rift state.");
     }
 }
 }

@@ -16,8 +16,9 @@ partial class EndgameUiContract
         public bool EndgameInWorld { get; set; } = true;
         public List<EndgameRequest> Sent = new List<EndgameRequest>();
         public int Retries, Equips, Unequips;
+        public readonly List<EndgameRequest> Retried = new List<EndgameRequest>();
         public bool SendEndgame(EndgameRequest request) { if (!Endgame.Begin(request)) return false; Sent.Add(request); return true; }
-        public bool RetryEndgame() { Retries++; return Endgame.Pending; }
+        public bool RetryEndgame() { Retries++; Retried.Add(Endgame.PendingRequest); return Endgame.Pending; }
         public bool EquipEndgameItem(EndgameItemView item) { Equips++; return true; }
         public bool UnequipEndgameItem(EndgameItemView item) { Unequips++; return true; }
         public EndgameRequest Last => Sent[Sent.Count - 1];
@@ -163,81 +164,53 @@ partial class EndgameUiContract
         Set(p, "tier", 150); Draw(p);
         Check((int)Get(p, "tier") == 150 && UnityEngine.GUI.labels.Exists(t => t.Contains("阶")) && !ArtworkSkin.enableds.ContainsKey("+"), "dropdown selection reaches150 without stepper controls");
         Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Json.Contains("\"tier\":150") && !c.Last.Json.Contains("floorIndex"), "fresh paid entry chooses difficulty independently of run floor"); Receipt(c);
-        int before;
+        QuietNegotiate(c); RiftContext(c, true);
         string floor = ",\"floorIndex\":3,\"seed\":\"18446744073709551615\",\"generatorVersion\":1,\"mapName\":\"秘林\",\"canAdvance\":true,\"exitX\":700,\"exitY\":850";
         int notices = NewbieTipBox.notices.Count;
-        Rift(c, "multifloor", "active", extra: floor); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices, "restored floor does not invent a native arrival notice");
-        Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.Contains("第 2 阶") && t.Contains("第 3 层")) && UnityEngine.GUI.labels.Exists(t => t.Contains("走入本层出口传送门")), "UI separates difficulty and floor and explains physical gate entry");
-        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌");
-        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "modal has no next-floor transfer button or click mutation");
+        Rift(c, "multifloor", "active", extra: floor); Call(p, "Update"); Draw(p);
+        Check(!(bool)Get(p, "open") && !UnityEngine.GUI.labels.Exists(t => t.Contains("走入本层出口传送门")), "active floor retains no modal objective");
         var pending = new EndgameRequest("rift.advance", c.Endgame.Revision, runID: "multifloor", floorIndex: 3);
-        Check(c.SendEndgame(pending), "fixture stages a pending request originating at the physical gate");
-        before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌"); Check(c.Sent.Count == before, "modal does not add another gate request while pending");
-        Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending), "closing retains uncertain floor transition");
-        Set(p, "open", true); Draw(p, "查询原请求"); Check(ReferenceEquals(c.Endgame.PendingRequest, pending), "manual floor retry retains nonce"); Receipt(c);
-        Set(p, "confirmLeave", true); Rift(c, "multifloor", "active", extra: floor.Replace("\"floorIndex\":3", "\"floorIndex\":4")); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("第 4 层") && !(bool)Get(p, "confirmLeave") && c.Endgame.Rift.Tier == 2, "native arrival notice preserves floor, tier and clears old leave confirmation");
-        Call(p, "Update"); Draw(p); Draw(p);
-        Check(NewbieTipBox.notices.Count == notices + 1, "same floor and repeated GUI passes do not replay native arrival");
-        Rift(c, "multifloor", "active", extra: floor + ",\"transitioning\":true"); Draw(p);
-        Check(!ArtworkSkin.enableds.ContainsKey("正在前往下一层…") && UnityEngine.GUI.labels.Exists(t => t == "正在前往下一层，请稍候。") && !Enabled("进入已有洞天"), "native transition shows passive status and blocks reentry");
-        Rift(c, "multifloor", "boss", extra: floor); ArtworkSkin.enableds.Clear(); Draw(p);
-        Check(!ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "guardian phase cannot offer skipping");
-        string tells = ",\"telegraphs\":[{\"id\":\"circle\",\"entityId\":\"1\",\"ability\":\"烈焰爆裂\",\"shape\":\"circle\",\"x\":500,\"y\":500,\"radius\":105,\"remainingMS\":1500},{\"id\":\"ring\",\"entityId\":\"2\",\"ability\":\"震环冲击\",\"shape\":\"ring\",\"x\":500,\"y\":500,\"radius\":220,\"innerRadius\":85,\"remainingMS\":1800},{\"id\":\"line\",\"entityId\":\"3\",\"ability\":\"裂地斩\",\"shape\":\"line\",\"x\":500,\"y\":500,\"endX\":700,\"endY\":500,\"radius\":38,\"remainingMS\":1400}]";
-        c.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.rift-portals.v1\"]}");
-        Apply(c, "{\"kind\":\"rift.context\",\"ok\":true,\"result\":{\"inInstance\":\"true\"}}");
-        UnityEngine.Camera.main = new UnityEngine.Camera(); Rift(c, "multifloor", "active", extra: floor + tells);
-        Set(p, "open", false); BitmapFont.labels.Clear(); UnityEngine.GUI.textures.Clear(); Draw(p);
-        before = c.Sent.Count; Draw(p, "下一层 · 出口 (700, 850)");
-        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !ArtworkSkin.enableds.ContainsKey("查看洞天"), "compact HUD has no transfer or workbench button");
-        Check(BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") && t.Contains("秒") && t.Contains("离开圆圈")) && BitmapFont.labels.Exists(t => t.Contains("震环冲击") && t.Contains("避开圆环")) && BitmapFont.labels.Exists(t => t.Contains("裂地斩") && t.Contains("离开直线")), "all danger shapes show readable ability, countdown and dodge hint");
-        Check(UnityEngine.GUI.textures.Count > 100, "native overlay draws danger geometry without a center HUD block");
-        Rift(c, "multifloor", "boss", extra: floor); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); before = c.Sent.Count; Draw(p, "下一层 · 出口 (700, 850)");
-        Check(BitmapFont.labels.Exists(t => t == "◆ 镇境劫影 · 本层出口") && !BitmapFont.labels.Exists(t => t.Contains("前往本层出口，击败")), "guardian phase retains its world spawn marker without duplicating a permanent objective panel");
-        Check(c.Sent.Count == before && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)") && !BitmapFont.labels.Exists(t => t.Contains("下一层出口")), "guardian location is informational and cannot advance the floor");
-        Rift(c, "multifloor", "active", extra: floor.Replace("\"canAdvance\":true", "\"canAdvance\":false")); BitmapFont.labels.Clear(); ArtworkSkin.enableds.Clear(); Draw(p);
-        Check(!ArtworkSkin.enableds.ContainsKey("查看洞天") && !ArtworkSkin.enableds.ContainsKey("下一层 · 出口 (700, 850)"), "faraway players do not gain a HUD advance button");
-        Rift(c, "multifloor", "active", extra: floor + tells);
-        typeof(EndgameClientState).GetField("<RiftReceivedUtc>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, DateTime.UtcNow.AddSeconds(-4));
-        BitmapFont.labels.Clear(); Draw(p); Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("震环冲击") || t.Contains("裂地斩")), "elapsed tells disappear without fabricating impact or damage");
-        Rift(c, "multifloor", "active", extra: floor + tells + ",\"transitioning\":true"); BitmapFont.labels.Clear(); Draw(p);
-        Check(!BitmapFont.labels.Exists(t => t.Contains("烈焰爆裂") || t.Contains("下一层出口")), "transition suppresses old map danger and exit geometry");
-        UnityEngine.Camera.main = null;
+        Check(c.SendEndgame(pending), "physical gate may stage authoritative floor request");
+        int before = c.Sent.Count; Draw(p, "前往下一层 · 跳过余敌");
+        Check(c.Sent.Count == before && ReferenceEquals(c.Endgame.PendingRequest, pending) && !ArtworkSkin.enableds.ContainsKey("前往下一层 · 跳过余敌"), "quiet HUD neither duplicates gate request nor adds modal floor controls"); Receipt(c);
+        Rift(c, "multifloor", "active", extra: floor.Replace("\"floorIndex\":3", "\"floorIndex\":4")); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices && c.Endgame.Rift.Tier == 2, "floor change silently preserves difficulty without restoring exit controls");
+        Rift(c, "multifloor", "active", extra: floor + ",\"transitioning\":true"); Call(p, "Update"); Draw(p);
+        Check(!(bool)Get(p, "open") && !UnityEngine.GUI.labels.Exists(t => t.Contains("正在前往下一层")), "floor transition never revives progress modal");
+        Rift(c, "multifloor", "boss", extra: floor); Call(p, "Update"); Draw(p);
+        Check(NewbieTipBox.notices.Count == notices && !ArtworkSkin.enableds.ContainsKey("查看洞天"), "boss transition has no phase popup or workbench button");
+        RiftContext(c, false);
     }
     static void NativeRiftNoticeContracts()
     {
-        var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
-        c.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); QuietNegotiate(c); RiftContext(c, true);
         int notices = NewbieTipBox.notices.Count;
         Rift(c, "notice-run", "active", extra: ",\"floorIndex\":1"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices, "binding a restored run does not enqueue a native notice");
-        Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("劫影现身"), "simultaneous phase and floor change emits one meaningful native notice");
-        for (int i = 0; i < 10; i++)
+        foreach (string phase in new[] { "reserved", "active", "boss", "reward_pending" })
         {
-            Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2,\"progress\":" + i + ",\"canAdvance\":" + (i % 2 == 0 ? "true" : "false"));
-            Call(p, "Update");
+            Rift(c, "notice-run", phase, extra: ",\"floorIndex\":2"); Call(p, "Update");
+            Check(NewbieTipBox.notices.Count == notices, "non-completion phase stays quiet: " + phase);
         }
-        Check(NewbieTipBox.notices.Count == notices + 1, "polling progress and eligibility changes do not fill the native notice queue");
-        c.EndgameInWorld = false; Call(p, "Update");
-        Rift(c, "notice-run", "reward_pending", extra: ",\"floorIndex\":2"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1, "phase changes outside the world do not enqueue notices");
-        c.EndgameInWorld = true; Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1, "world reentry silently restores the current phase");
-        Rift(c, "notice-run", "completed", true, extra: ",\"floorIndex\":2"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 2 && NewbieTipBox.notices[notices + 1].Contains("可重返拾取"), "new authoritative completion after reentry still produces its native notice");
-        p.Unbind(c); Rift(c, "notice-run", "closed", true, extra: ",\"floorIndex\":2");
-        p.Bind(c); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 2, "rebind never replays transitions missed while detached");
-        c.Endgame.Reset(); c.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
-        Rift(c, "notice-run", "boss", extra: ",\"floorIndex\":2"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 2, "new connection generation silently restores even the same run ID");
-        Rift(c, "notice-run", "failed", extra: ",\"floorIndex\":2"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 3 && NewbieTipBox.notices[notices + 2].Contains("演劫未竟"), "genuine failure after restoration produces a native notice");
+        Rift(c, "notice-run", "completed", true); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices] == "拾妥所得，可与归元道使交谈离境。", "live completion emits only the exact approved native sentence");
+        foreach (string phase in new[] { "completed", "closed", "failed", "aborted", "interrupted", "reward_pending", "completed" })
+        {
+            Rift(c, "notice-run", phase); Call(p, "Update"); Draw(p); Draw(p);
+            Check(NewbieTipBox.notices.Count == notices + 1, "duplicates and terminal transitions never add or replay notices: " + phase);
+        }
+        c.EndgameInWorld = false; Call(p, "Update"); Rift(c, "offline-run", "completed", true); c.EndgameInWorld = true; Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "restoring a completion missed offline remains silent");
+        p.Unbind(c); p.Bind(c); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "rebinding never replays completion");
+        c.Endgame.Reset(); QuietNegotiate(c); RiftContext(c, true); Rift(c, "notice-run", "completed", true); Call(p, "Update");
+        Rift(c, "notice-run", "boss"); Call(p, "Update"); Rift(c, "notice-run", "completed", true); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "reconnect baseline consumes restored completion even if older phases replay");
+        RiftContext(c, false); Rift(c, "outside-run", "boss"); Call(p, "Update"); Rift(c, "outside-run", "completed", true); Call(p, "Update");
+        RiftContext(c, true); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 1, "completion observed outside does not notify on reentry");
+        Rift(c, "fresh-run", "boss"); Call(p, "Update"); Rift(c, "fresh-run", "completed", true); Call(p, "Update");
+        Check(NewbieTipBox.notices.Count == notices + 2 && NewbieTipBox.notices[notices + 1] == "拾妥所得，可与归元道使交谈离境。", "a genuinely new run may emit its own one-time completion prompt");
+        Rift(c, "", "closed"); Call(p, "Update"); Check((string)Get(p, "observedRun") == "", "empty run clears observation baseline");
         p.Unbind(c);
     }
     static EndgameItemView TooltipItem(string fields) => EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"items\":[{" + fields + "}]}").Items[0];
@@ -405,17 +378,17 @@ partial class EndgameUiContract
             var put = typeof(EndgamePanel).GetMethod("PutCubeItem", BindingFlags.NonPublic | BindingFlags.Instance);
             put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
             put.Invoke(p, new object[] { "", 1900028201, "星髓" });
-            Set(p, "cubeQuantity", "4"); Draw(p, "确认数量"); Draw(p, "问鼎"); var request = c.Last;
+            Set(p, "cubeQuantity", "4"); Draw(p, "确认数量"); Call(p, "SubmitCube"); var request = c.Last;
             Check(request.Op == "cube.quote" && request.Json.Contains("cubeInputs") && !request.Json.Contains("recipeId") && request.Json.Contains("9007199254740901"), "container sends only selected identities and quantities");
-            int sent = c.Sent.Count; Draw(p, "问鼎"); Check(c.Sent.Count == sent && !Enabled("炼化"), "pending match cannot repeat or execute");
+            int sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent && !SysMsgBox.Visible, "pending match cannot repeat or execute");
             string preview = "随机开出1至" + capacity + "孔，每种孔数概率1/" + capacity + "；已有孔不可重开。";
             Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":0,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\"}}");
-            Draw(p); Check(UnityEngine.GUI.labels.Exists(t => t.StartsWith(preview) && t.Contains("铜币：5000")), "matched risk and fee remain server-authored");
+            Draw(p); Check(SysMsgBox.Visible && SysMsgBox.text.StartsWith(preview) && SysMsgBox.text.Contains("铜币：5000"), "matched risk and fee remain server-authored");
             Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "container and match never spend inventory");
-            Draw(p, "炼化"); var execute = c.Last;
+            SysMsgBox.Finish(true); var execute = c.Last;
             Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && execute.Json.Contains("npcEntityId") && !execute.Json.Contains("cubeInputs") && !execute.Json.Contains("recipeId"), "execute binds quote and live workbench only");
-            sent = c.Sent.Count; Draw(p, "炼化"); Check(c.Sent.Count == sent, "double click cannot duplicate or reroll");
-            Draw(p, "×"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity"); Receipt(c);
+            sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent, "double click cannot duplicate or reroll");
+            Call(p, "Close"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity"); Receipt(c);
         }
     }
     static void NativeStatTooltipContracts(Client c, EndgamePanel p)
@@ -808,79 +781,13 @@ partial class EndgameUiContract
         Check(!Enum.IsDefined(typeof(EndgameModule), "Runes") && typeof(EndgamePanel).GetMethod("TryOpenRunesFromWorld", BindingFlags.Static | BindingFlags.NonPublic) == null, "standalone rune module and opener are removed");
         string tooltip = EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], "legacy details"); Check(tooltip.Contains("\u00035飞鹤遗音") && tooltip.Contains("legacy details") && !tooltip.Contains("宿序"), "dark-gold tooltip retains native description without duplicate socket block");
         Check(EndgamePanel.BagTooltip(0, InventoryDlg.rows[0], "legacy") == "legacy", "wrong tab cannot overlay");
-        EndgamePanel.TryOpenRiftFromWorld();
-        var pending = new EndgameRequest("rift.claim", c.Endgame.Revision, runID: "pending-close"); c.SendEndgame(pending);
-        int count = c.Sent.Count; Draw(p, "查询原请求"); Check(c.Retries == 1 && c.Sent.Count == count, "retry uses pending request");
-        Draw(p, "×"); Check(!(bool)Get(p, "open") && ReferenceEquals(c.Endgame.PendingRequest, pending) && WinZ.forgotten > 0, "close retains nonce and removes hit region"); Receipt(c);
-        Set(p, "open", true);
-        Set(p, "module", EndgameModule.Rift); Rift(c, "invited-run", "reserved"); Call(p, "Refresh"); Check(c.Last.Json.Contains("invited-run"), "refresh preserves invitation run");
-        UnityEngine.Time.unscaledTime = 10; Call(p, "Update"); Check(c.Last.Json.Contains("invited-run"), "poll preserves invitation run");
-        Rift(c, "invited-run", "reward_pending", keys: 1); Draw(p); Check(!Enabled("领取我的洞天所得") && !Enabled("消耗一钥 · 开启洞天"), "reward saving disables claim and start");
-        Rift(c, "old-paid", "interrupted", true, ok: false); Check(c.Endgame.Rift.RunID == "old-paid", "rejected join surfaces prior run");
-        Draw(p, "领取补偿符钥"); Check(c.Last.Op == "rift.claim" && c.Last.Json.Contains("old-paid"), "compensation claims exact run"); Receipt(c);
-        Rift(c, "completed-run", "completed", true); Draw(p, "进入已有洞天"); Check(c.Last.Op == "rift.start" && c.Last.Json.Contains("completed-run") && !c.Last.Json.Contains("npcEntityId"), "live completed run reentry preserves the original NPC-independent run contract"); Receipt(c);
-        int beforeLeave = c.Sent.Count; Draw(p, "离开洞天"); Check(c.Sent.Count == beforeLeave, "leave requires confirmation"); Draw(p, "确认离境 · 无自动返钥"); Check(c.Last.Op == "rift.leave", "confirmed leave reaches server"); Receipt(c);
-        OpenEntrance(c); Rift(c, "completed-run", "closed", keys: 1); Draw(p, "消耗一钥 · 开启洞天"); Check(c.Last.Op == "rift.start" && !c.Last.Json.Contains("runId"), "closed run permits new paid run");
-        Receipt(c);
+        QuietRiftLifecycleContracts();
+        QuietRiftRecoveryContracts();
+        p.Bind(c); MultiFloorContracts(c, p);
         int notices = NewbieTipBox.notices.Count;
-        Rift(c, "stages", "active"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices, "restored active run establishes silent native notice baseline");
-        Rift(c, "stages", "boss"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1 && NewbieTipBox.notices[notices].Contains("劫影现身"), "authoritative boss transition uses the native bottom-right notice API");
-        UnityEngine.Time.unscaledTime += 1; Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 1, "repeated snapshot does not replay native phase announcement");
-        Rift(c, "stages", "reward_pending"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices + 2 && NewbieTipBox.notices[notices + 1].Contains("正在保存"), "native saving notice never promises claimable rewards");
-        Rift(c, "stages", "completed", true); Call(p, "Update"); Set(p, "open", false);
-        int mutations = c.Sent.FindAll(r => r.Mutates).Count;
-        Draw(p, "查看战果 · 领取");
-        Check(!(bool)Get(p, "open") && !ArtworkSkin.enableds.ContainsKey("查看战果 · 领取") && c.Sent.FindAll(r => r.Mutates).Count == mutations, "passive HUD neither opens review nor claims automatically");
-        Check(EndgamePanel.TryOpenRiftFromWorld(), "existing world review route remains available"); Draw(p);
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("可重返拾取")), "completed panel outside the instance describes reentry instead of paid entry instructions");
-        ArtworkSkin.enableds.Clear(); Draw(p);
-        Check(!ArtworkSkin.enableds.ContainsKey("查看战果 · 领取"), "open panel suppresses overlapping HUD controls");
-        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, true);
-        int beforeClaim = c.Sent.Count; ArtworkSkin.enableds.Clear(); Draw(p, "领取我的洞天所得");
-        Check(c.Sent.Count == beforeClaim && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得") && !Enabled("就地拾取洞天所得"), "completed live instance replaces bulk claim with noninteractive native pickup hint");
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("拾妥所得") && t.Contains("归元道使")), "completed instance objective points to native loot pickup and the exit NPC");
-        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, false);
-        Rift(c, "stages", "completed", false); Draw(p);
-        Check(!Enabled("领取我的洞天所得") && Enabled("进入已有洞天"), "server live-instance projection prevents remote bulk claim and permits native reentry");
-        Rift(c, "stages", "closed", true); Draw(p);
-        Check(Enabled("领取我的洞天所得"), "server closed-instance projection restores durable recovery claim");
-        Rift(c, "stages", "closed", true, keys: 1); Call(p, "Update"); Draw(p);
-        Check(!Enabled("消耗一钥 · 开启洞天") && Enabled("领取我的洞天所得"), "durable closed unclaimed run cannot start another paid run");
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("仍可领取")), "closed unclaimed result does not claim loot is already in bag");
-        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, true);
-        Rift(c, "stages", "closed", false, keys: 1); Set(p, "confirmLeave", false); Draw(p);
-        Check(Enabled("离开洞天") && !ArtworkSkin.enableds.ContainsKey("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得"), "logical closed run still inside retains its leave escape and never offers a fresh paid run");
-        Check(!UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")) && UnityEngine.GUI.labels.Exists(t => t.Contains("归元道使")), "closed instance keeps completion and NPC exit view instead of reopening the tier selector");
-        Set(p, "open", false); Draw(p, "查看洞天");
-        Check(!(bool)Get(p, "open") && !ArtworkSkin.enableds.ContainsKey("查看洞天"), "closed occupied instance keeps HUD passive");
-        Check(EndgamePanel.TryOpenRiftFromWorld(), "existing world review retains the closed-instance leave route"); Draw(p);
-        int beforeClosedLeave = c.Sent.FindAll(r => r.Mutates).Count; Draw(p, "离开洞天");
-        Check(c.Sent.FindAll(r => r.Mutates).Count == beforeClosedLeave, "closed instance leave still requires the existing confirmation");
-        Draw(p, "确认离境 · 无自动返钥");
-        Check(c.Last.Op == "rift.leave" && c.Last.Json.Contains("\"runId\":\"stages\""), "confirmed escape from closed occupied instance leaves the exact run"); Receipt(c);
-        typeof(EndgameClientState).GetField("<RiftInInstance>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(c.Endgame, false);
-        OpenEntrance(c); Rift(c, "stages", "closed", false, keys: 1); Draw(p);
-        Check(Enabled("消耗一钥 · 开启洞天") && !ArtworkSkin.enableds.ContainsKey("离开洞天"), "departed closed and fully claimed run permits new paid entry instead of stale leave");
-        Rift(c, "stages", "failed", keys: 1); Draw(p);
-        Check(UnityEngine.GUI.labels.Exists(t => t.Contains("选择劫数")), "failed nonclaimable run keeps next-run tier selector");
-        notices = NewbieTipBox.notices.Count;
-        Rift(c, "other-run", "boss"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices, "different run does not replay old native phase transition");
-        Rift(c, "other-run", "completed", true); Call(p, "Update");
-        notices = NewbieTipBox.notices.Count;
-        Rift(c, "", "closed"); Call(p, "Update");
-        Check(NewbieTipBox.notices.Count == notices && (string)Get(p, "observedRun") == "", "empty run clears phase baseline without adding a native notice");
-        UnityEngine.Event.current.mousePosition = new UnityEngine.Vector2(811, 477); Draw(p);
-        typeof(EndgamePanel).GetMethod("ShowPanelTooltip", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(p, new object[] { "screen hover" });
-        Check(UITip.mouse.x == 811 && UITip.mouse.y == 477 && UITip.scale == (float)Get(p, "panelScale"), "panel tooltip forwards original screen pointer and window scale");
-        UnityEngine.Event.current.mousePosition = new UnityEngine.Vector2(-9000, -9000);
-        MultiFloorContracts(c, p);
-        notices = NewbieTipBox.notices.Count;
-        c.Endgame.Reset(); Call(p, "Update"); Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection"); Check(NewbieTipBox.notices.Count == notices && (string)Get(p, "observedRun") == "", "reset clears phase baseline without replaying native notices"); Draw(p, "演劫 · F8"); Check(!(bool)Get(p, "open"), "new negotiation required");
+        c.Endgame.Reset(); Call(p, "Update");
+        Check(!(bool)Get(p, "open") && (string)Get(p, "selectedUID") == "", "reset clears selection");
+        Check(NewbieTipBox.notices.Count == notices && (string)Get(p, "observedRun") == "", "reset clears phase baseline without replaying notices");
         var requirement = EndgameResponse.Parse("{\"kind\":\"catalog.uniques\",\"ok\":true,\"items\":[{\"itemId\":1001,\"uniqueId\":1001,\"profession\":24,\"uniqueRollBp\":10000}]}").Items[0];
         string catalogTip = EndgamePanel.ItemDescription(requirement, true); Check(catalogTip.Contains("药师/术士") && catalogTip.Contains("图鉴基准"), "profession bitmask and catalog baseline labels");
         TooltipContracts(c, p);
@@ -897,6 +804,9 @@ partial class EndgameUiContract
         InventoryIdentityContracts(c, p);
         NativeRiftNoticeContracts();
         RiftHudProgressContracts();
+        GuardianArrivalSchemaContracts();
+        GuardianServerWireContracts();
+        RiftWorldVisualContracts();
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }

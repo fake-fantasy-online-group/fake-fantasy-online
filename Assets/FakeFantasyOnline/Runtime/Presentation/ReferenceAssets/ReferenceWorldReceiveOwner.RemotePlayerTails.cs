@@ -89,6 +89,9 @@ public sealed partial class ReferenceWorldReceiveOwner : IRemotePlayerTailReceiv
         Transform castTarget = target ? target : caster;
         float ppu = CombatNumber.Ppu;
         Vector3? ground = target ? target.position : (Vector3?)null;
+        if (state.HasAim && ppu > 0 && EndgamePanel.IsRiftMonsterCast(state.CasterEntityId))
+            ground = new Vector3((state.AimX - GameBootstrap.CurWorldW * .5f) / ppu,
+                (GameBootstrap.CurWorldH * .5f - state.AimY) / ppu, 0);
         SkillCaster.Cast(state.SkillId, caster, castTarget, ppu, ground, false);
         SkillSoundDB.PlayFire(state.SkillId);
         CombatWorld.MonsterPlayAttack(state.CasterEntityId);

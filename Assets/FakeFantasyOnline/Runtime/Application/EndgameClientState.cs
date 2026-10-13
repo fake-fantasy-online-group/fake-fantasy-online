@@ -233,7 +233,17 @@ public sealed partial class EndgameClientState
         bool receipt = PendingRequest != null && response.RequestID == PendingRequest.RequestID;
         // A rejected admission can still return the authoritative prior run to claim.
         if (response.Rift != null && (Rift == null || Rift.RunID != response.Rift.RunID || CompareRevision(response.Rift.Revision, Rift.Revision) >= 0))
-        { Rift = response.Rift; RiftReceivedUtc = DateTime.UtcNow; }
+        {
+            DateTime received = DateTime.UtcNow;
+            var previousArrival = Rift?.GuardianArrival;
+            var nextArrival = response.Rift.GuardianArrival;
+            if (Rift != null && Rift.RunID == response.Rift.RunID && previousArrival != null && nextArrival != null && previousArrival.ID == nextArrival.ID)
+            {
+                double elapsed = Math.Max(0, (received - RiftReceivedUtc).TotalMilliseconds);
+                nextArrival.LimitRemainingMS((int)Math.Max(0, previousArrival.RemainingMS - Math.Min(int.MaxValue, Math.Floor(elapsed))));
+            }
+            Rift = response.Rift; RiftReceivedUtc = received;
+        }
         // Leave receipts precede the native teleport; do not keep intercepting public gates.
         if (!hasRiftSceneContext && receipt && response.OK && response.Kind == "rift.leave") RiftInInstance = false;
         if (!response.OK)

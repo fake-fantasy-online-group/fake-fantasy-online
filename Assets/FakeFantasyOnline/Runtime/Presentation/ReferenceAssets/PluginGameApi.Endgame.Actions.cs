@@ -39,7 +39,7 @@ public sealed partial class PluginGameApi
     }
 
     private static bool ExistingEndgameRift(EndgameRiftView rift) => rift != null &&
-        (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss" || rift.Phase == "completed");
+        (rift.Phase == "reserved" || rift.Phase == "active" || rift.Phase == "boss_arriving" || rift.Phase == "boss" || rift.Phase == "completed");
 
     private static GameActionDefinition EndgameDefinition(string name, string description, bool available, string reason, params string[] fields)
     {
@@ -65,7 +65,7 @@ public sealed partial class PluginGameApi
             }
             if (key == "cubeInputs")
             {
-                schema["minItems"] = 1; schema["maxItems"] = 12; schema["uniqueItems"] = true;
+                schema["minItems"] = 1; schema["maxItems"] = EndgameCubeInput.Capacity; schema["uniqueItems"] = true;
                 schema["items"] = new Dictionary<string, object> { { "oneOf", new object[] {
                     new Dictionary<string, object> { { "type", "object" }, { "required", new object[] { "uid", "count" } }, { "additionalProperties", false },
                         { "properties", new Dictionary<string, object> {
@@ -112,8 +112,8 @@ public sealed partial class PluginGameApi
     }
     private static List<EndgameCubeInput> EndgameCubeInputs(IReadOnlyDictionary<string, object> args)
     {
-        if (!args.TryGetValue("cubeInputs", out object value) || !(value is IReadOnlyList<object> rows) || rows.Count < 1 || rows.Count > 12)
-            throw new ArgumentException("cubeInputs must contain 1..12 input objects.");
+        if (!args.TryGetValue("cubeInputs", out object value) || !(value is IReadOnlyList<object> rows) || rows.Count < 1 || rows.Count > EndgameCubeInput.Capacity)
+            throw new ArgumentException("cubeInputs must contain 1..35 input objects.");
         var inputs = new List<EndgameCubeInput>(); var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (object row in rows)
         {

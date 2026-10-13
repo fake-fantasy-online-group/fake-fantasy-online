@@ -69,7 +69,7 @@ public sealed class EndgameRequest
         }
         if (cubeInputs != null)
         {
-            if (op != "cube.quote" || recipeID != 0 || targetUID.Length != 0 || runeUID.Length != 0 || cubeInputs.Count < 1 || cubeInputs.Count > 12) throw new ArgumentException("Invalid cube input request.");
+            if (op != "cube.quote" || recipeID != 0 || targetUID.Length != 0 || runeUID.Length != 0 || cubeInputs.Count < 1 || cubeInputs.Count > EndgameCubeInput.Capacity) throw new ArgumentException("Invalid cube input request.");
             var inputs = new List<object>(); var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var input in cubeInputs)
             {

@@ -184,7 +184,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public partial class SkillEffectDB { public static bool IsPhysical(int id) => id==10201; }
     public static partial class SkillElementDB { public static string ChargeEff(int id) => null; }
-    public static class SkillCaster { public static int Casts;public static void Cast(int skill,Transform caster,Transform target,float ppu,Vector3? ground,bool support) { Casts++; } }
+    public static class SkillCaster { public static int Casts; public static Vector3? Ground; public static void Cast(int skill,Transform caster,Transform target,float ppu,Vector3? ground,bool support) { Casts++; Ground = ground; } }
+    public static class EndgamePanel { public static int RiftMonsterID; public static bool IsRiftMonsterCast(int id) => id == RiftMonsterID; }
+    public static class GameBootstrap { public static float CurWorldW = 1000, CurWorldH = 1000; }
     public static class SkillTargeting { public static bool SelfCenteredCircle(Win05.SkInfo info) => false; }
     public static class SkillRangeRing { public static void Show(Vector3 at,int radius,float ppu) { } }
     public static class AuthoritativeProfessionSkill { public static bool Uses(int id) => false;public static bool SelfCentered(int id) => false; }
