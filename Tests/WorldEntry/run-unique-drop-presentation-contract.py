@@ -20,7 +20,7 @@ if framework:refs+=['-nostdlib+']+['-r:'+str(Path(framework)/n) for n in ['mscor
 with tempfile.TemporaryDirectory(prefix='unique-drop-contract-')as d:
  out=Path(d);prod=out/'Extracted.cs'
  prod.write_text('using System;using System.Collections;using System.Collections.Generic;using System.Threading;using FakeFantasyOnline.Application;using UnityEngine;using UnityEngine.Networking;\nnamespace FakeFantasyOnline.Application{'+state+'}\nnamespace FakeFantasyOnline.Protocol{public sealed partial class PrivateServerGateway{'+receive+'}}\nnamespace FakeFantasyOnline.Presentation.ReferenceAssets{public partial class SoundManager{'+audio+'}}')
- files=[prod,Path(__file__).with_name('UniqueDropPresentationContract.cs')]+[base/p for p in ['Application/IGroundItemReceiveContext.cs','Application/WorldUniqueDropPresentation.cs','Protocol/WireBuffer.cs','Protocol/PrivateServerGroundItemCodec.cs','Presentation/ReferenceAssets/GroundItemEntity.UniqueDrop.cs','Presentation/ReferenceAssets/EffectPlayer.GroundAttachment.cs','Presentation/ReferenceAssets/SoundManager.Guarded.cs']]
+ files=[prod,Path(__file__).with_name('UniqueDropPresentationContract.cs'),Path(__file__).with_name('UniqueLootBeamCProfileContract.cs')]+[base/p for p in ['Application/IGroundItemReceiveContext.cs','Application/WorldUniqueDropPresentation.cs','Protocol/WireBuffer.cs','Protocol/PrivateServerGroundItemCodec.cs','Presentation/ReferenceAssets/GroundItemEntity.UniqueDrop.cs','Presentation/ReferenceAssets/EffectPlayer.GroundAttachment.cs','Presentation/ReferenceAssets/EffectPlayer.UniqueBeamC.cs','Presentation/ReferenceAssets/UniqueLootBeamCProfile.cs','Presentation/ReferenceAssets/SoundManager.Guarded.cs']]
  exe=out/'Contract.exe';compiler=[mono,csc]if csc.endswith('.exe')else[csc]
  subprocess.run(compiler+refs+['-nologo','-langversion:9.0','-target:exe','-out:'+str(exe)]+list(map(str,files)),check=True)
  subprocess.run([mono,str(exe)],check=True)
@@ -32,3 +32,8 @@ visual=(base/'Presentation/ReferenceAssets/GroundItemEntity.Visuals.cs').read_te
 entry=(base/'Protocol/NetClient.EnterGame.cs').read_text();assert entry.index('SendClientCaps();')<entry.index('Send(ProtocolOpcodes.EnterWorldRequest')
 items=(base/'Presentation/ReferenceAssets/GroundItems.Item.cs').read_text();assert 'CancelUniqueDrop();'in items
 print('PASS native spawn, projection, disable, and pre-entry capability wiring')
+
+prewarm=(base/'Presentation/ReferenceAssets/ResLoader.UniqueBeamPrewarm.cs').read_text();assert 'if (I == this) EffectPlayer.PrewarmUniqueBeamC();' in prewarm
+update=(base/'Presentation/ReferenceAssets/EffectPlayer.Update.cs').read_text();assert '(uniqueBeamC ? 0 : index) + attachSort.sortingOrder' in update
+play=(base/'Presentation/ReferenceAssets/EffectPlayer.Play.cs').read_text();assert 'player.uniqueBeamC = false;' in play
+print('PASS C startup prewarm, uniform item-relative sorting, and pool-reset wiring')

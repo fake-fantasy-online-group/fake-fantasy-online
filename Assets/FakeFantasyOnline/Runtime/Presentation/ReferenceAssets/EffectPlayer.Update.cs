@@ -68,7 +68,7 @@ public partial class EffectPlayer : MonoBehaviour
 
             if (attachSort)
             {
-                renderer.sortingOrder = index + attachSort.sortingOrder +
+                renderer.sortingOrder = (uniqueBeamC ? 0 : index) + attachSort.sortingOrder +
                     LayerPlaneOffset(layer);
             }
 

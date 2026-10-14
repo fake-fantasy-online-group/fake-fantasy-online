@@ -105,6 +105,7 @@ public partial class EffectPlayer : MonoBehaviour
         EffectPlayer player = Rent(effName);
         player.transform.position = worldPos;
         player.tpl = template;
+        player.uniqueBeamC = false;
         player.ppu = ppu;
         player.spawnPos = worldPos;
         player.facingSign = facingSign >> 31 | 1;

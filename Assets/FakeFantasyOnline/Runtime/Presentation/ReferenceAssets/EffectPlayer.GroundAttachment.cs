@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
@@ -6,49 +5,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 public partial class EffectPlayer
 {
     internal const string UniqueGroundBeamResource = "object/DH/DH_FY_1501.gso";
-    internal const float UniqueGroundBeamScale = 0.65f;
+    internal const float UniqueGroundBeamScale = 1f;
     internal const float UniqueGroundBeamFrameMilliseconds = 200f;
-    private const string UniqueGroundBeamCacheKey = "ground-unique:DH_FY_1501";
+    private const string UniqueGroundBeamCacheKey = "ground-unique:approved-C";
 
-    // Reuse the original gold column's complete twenty-frame animation and foot anchor.
+    // Approved C keeps the native twenty-frame light filaments inside a tall soft taper.
     // It borrows the normal effect cache/materials, independently of map portal state/layers.
     internal static EffectPlayer PlayAttachedGround(Transform owner, SpriteRenderer sort, float ppu)
     {
         if (owner == null || ResLoader.I == null) return null;
-        if (!spriteCache.TryGetValue(UniqueGroundBeamCacheKey, out Sprite[] sprites) ||
-            sprites == null || sprites.Length == 0 || sprites[0] == null)
-        {
-            // Missing resources are not cached: a late resource mount can recover on the next retry.
-            byte[] bytes = ReadRes(UniqueGroundBeamResource);
-            if (bytes == null) return null;
-            DimgDecoder.Anim animation = DimgDecoder.DecodeAnim(bytes);
-            if (!animation.ok || animation.f == null || animation.f.Length == 0) return null;
-            var loaded = new List<Sprite>();
-            foreach (DimgDecoder.FrameTex frame in animation.f)
-            {
-                if (frame.tex == null) continue;
-                loaded.Add(MakeSprite(frame.tex, animation.boundCx, animation.boundCy,
-                    frame.nLeft, frame.nTop, animation.scale));
-            }
-            if (loaded.Count == 0) return null;
-            sprites = loaded.ToArray();
-            spriteCache[UniqueGroundBeamCacheKey] = sprites;
-            NoteFx(UniqueGroundBeamCacheKey, sprites);
-            tplCache.Remove(UniqueGroundBeamCacheKey);
-        }
-        if (!tplCache.ContainsKey(UniqueGroundBeamCacheKey))
-        {
-            var layer = new Layer { sprite = UniqueGroundBeamCacheKey, speed = UniqueGroundBeamFrameMilliseconds,
-                blendMode = 0, cField = -1f };
-            float duration = sprites.Length * UniqueGroundBeamFrameMilliseconds;
-            layer.kfs.Add(new KF { t = 0f, pos = Vector3.zero,
-                scale = new Vector2(UniqueGroundBeamScale, UniqueGroundBeamScale), rgb = Color.white });
-            layer.kfs.Add(new KF { t = duration, pos = Vector3.zero,
-                scale = new Vector2(UniqueGroundBeamScale, UniqueGroundBeamScale), rgb = Color.white });
-            var template = new Template { lifeMs = duration };
-            template.layers.Add(layer);
-            tplCache[UniqueGroundBeamCacheKey] = template;
-        }
+        if (!EnsureUniqueBeamC()) return null;
         EffectPlayer beam;
         float pendingScale = NextScale;
         try
@@ -61,12 +27,17 @@ public partial class EffectPlayer
         beam.transform.SetParent(owner, true);
         beam.attachSort = sort;
         beam.attachUnder = true;
+        beam.uniqueBeamC = true;
         // Play populates at the general over-world order. Set the item-relative order immediately,
         // rather than exposing a single initial frame above every actor before its first Update.
-        foreach (SpriteRenderer renderer in beam.rends)
+        for (int index = 0; index < beam.rends.Length; index++)
         {
+            SpriteRenderer renderer = beam.rends[index];
             if (renderer == null) continue;
             renderer.transform.localScale = new Vector3(UniqueGroundBeamScale, UniqueGroundBeamScale, 1f);
+            KF initial = beam.Sample(beam.tpl.layers[index], 0f);
+            renderer.transform.localPosition = new Vector3(initial.pos.x / ppu, initial.pos.z / ppu, 0f);
+            renderer.color = initial.rgb;
             if (sort != null) renderer.sortingOrder = sort.sortingOrder - 10;
         }
         return beam;
