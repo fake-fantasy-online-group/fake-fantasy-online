@@ -34,9 +34,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void ShowSay(string message) => Message = message;
         public void OpenForTest(WorldNpcState source)
         {
-            CaptureRiftEntrance(source); Options.Clear(); Closed = false; Message = null;
+            CaptureRiftEntrance(source); CaptureCubeWorkbench(source); Options.Clear(); Closed = false; Message = null;
             Add(new ReferenceNpcDialogOption("原生任务和服务", () => {}));
-            AddRiftEntranceOption();
+            AddRiftEntranceOption(); AddCubeWorkbenchOption();
         }
     }
 }

@@ -17,17 +17,16 @@ public sealed partial class EndgamePanel
     private readonly List<CubeSlot> cubeSlots = new List<CubeSlot>();
     private object cubeInventory;
     private string cubeQuantity = "1", cubeAwaitingQuote;
-    private int cubeEditing = -1, cubeNpcEntityID, cubeMapID;
+    private int cubeEditing = -1, cubeMapID, cubeItemID, cubeItemTab, cubeItemSlot;
     private bool cubeBagOpened;
-    private Func<bool> cubeSourceCurrent;
     private void ClearCubeInputs()
     {
         WinDrag.Forget(this);
         cubeSlots.Clear(); cubeInventory = null; cubeEditing = -1; cubeQuantity = "1";
-        cubeNpcEntityID = cubeMapID = 0; cubeSourceCurrent = null; cubeAwaitingQuote = null; cubeBagOpened = false;
+        cubeMapID = cubeItemID = 0; cubeItemTab = cubeItemSlot = -1; cubeAwaitingQuote = null; cubeBagOpened = false;
     }
-    private bool CubeSourceCurrent() => State != null && State.CubeInputsV1 && cubeNpcEntityID != 0 &&
-        cubeMapID == GameBootstrap.CurMapId && cubeSourceCurrent != null && cubeSourceCurrent();
+    private bool CubeSourceCurrent() => client != null && client.EndgameInWorld && State != null && generation == State.Generation && cubeItemID > 0 &&
+        State.CubeItemID == cubeItemID && cubeMapID == GameBootstrap.CurMapId && CubeBagItemCurrent(State, cubeItemTab, cubeItemSlot);
     private bool CubeEditable => open && module == EndgameModule.Cube && CubeSourceCurrent() &&
         State.InventorySnapshotCurrent && !State.Pending && !State.QuotePending;
     private void ChangedCubeInputs()
@@ -58,7 +57,7 @@ public sealed partial class EndgamePanel
     private void PutCubeItem(string uid, int itemID, string name) => ReserveCubeItem(uid, itemID, name, -1);
     private bool ReserveCubeItem(string uid, int itemID, string name, int cell)
     {
-        if (!CubeEditable || cubeSlots.Count >= EndgameCubeInput.Capacity || CubeHas(uid, itemID)) return false;
+        if (!CubeEditable || itemID == State.CubeItemID || cubeSlots.Count >= EndgameCubeInput.Capacity || CubeHas(uid, itemID)) return false;
         if (uid.Length == 0) { if (CubeOwnedMaterial(itemID) < 1) return false; }
         else
         {
@@ -79,7 +78,7 @@ public sealed partial class EndgamePanel
     {
         if (!WorldEntryAvailable || SysMsgBox.Visible || !Current.CubeEditable || InventoryDlg.IsLocked((byte)tab, bagSlot)) return false;
         var native = InventoryDlg.ItemAt(tab, bagSlot);
-        if (native.id == 0) return false;
+        if (native.id == 0 || native.id == Current.State.CubeItemID) return false;
         Current.SyncCubeInputs();
         foreach (var item in Current.State.Items)
             if (item.Tab == tab && item.Slot == bagSlot && item.Location == "bag" && item.ItemID == native.id)
@@ -108,10 +107,10 @@ public sealed partial class EndgamePanel
         var quote = State.Quote; var inputs = quotedInputs;
         SysMsgBox.Show(quote.Description + "\n铜币：" + quote.Money + "\n\n确认合成？", () =>
         {
-            // The native prompt can outlive a close, NPC-range loss, inventory update,
+            // The native prompt can outlive a close, tool loss or map change, inventory update,
             // expiry or a different selection. Never execute its stale captured quote.
             if (!ReferenceEquals(quotedInputs, inputs) || !ReferenceEquals(State?.Quote, quote) || !CubeQuoteFresh()) return;
-            Send(new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID, npcEntityID: cubeNpcEntityID));
+            Send(new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID));
         }, null);
     }
     private void SubmitCube()
@@ -119,7 +118,7 @@ public sealed partial class EndgamePanel
         if (SysMsgBox.Visible || !CubeEditable || !CubeQuantitiesReady || cubeSlots.Count == 0) return;
         if (CubeQuoteFresh()) { ConfirmCubeQuote(); return; }
         var request = new EndgameRequest("cube.quote", State.Revision, itemUIDs: orderedRunes.Count > 0 ? orderedRunes : null,
-            npcEntityID: cubeNpcEntityID, cubeInputs: CubeInputs());
+            cubeInputs: CubeInputs());
         if (Send(request)) { quotedInputs = request; cubeAwaitingQuote = request.RequestID; }
     }
     private void DrawCube()

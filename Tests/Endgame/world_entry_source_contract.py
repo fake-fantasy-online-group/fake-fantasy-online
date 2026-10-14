@@ -24,9 +24,12 @@ for snippet in checks:
 assert '星篆 · 镶嵌取出' not in source and 'EndgameModule.Runes' not in source
 assert 'CaptureCubeWorkbench(npc);' in source
 cube = (root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.Cube.cs').read_text()
-assert 'EndgamePanel.TryOpenCubeFromNpc' in cube and 'source.Script == "Nzhoutianding"' in cube
+assert 'EndgamePanel.TryOpenCubeFromNpc' not in cube and 'Nzhoutianding' not in cube
+assert 'source.DisplayName == state.CubeNPC' in cube and 'state.CubeLore' in cube
+assert '关于周天鼎' in cube and '寻回周天鼎' in cube and 'EndgamePanel.RecoverCubeFromNpc' in cube
+assert 'CubeWorkbenchEntityForIndependentRuntime(EndgameClientState state) => 0;' in cube
 assert 'IsNpcStateCurrentForIndependentRuntime(source)' in cube and 'state.CubeInputsV1' in cube
-print(f'PASS {len(checks) + 2} NPC menu wiring guards; native trial, life-skill and furnace paths retained.')
+print(f'PASS {len(checks) + 6} NPC menu wiring guards; cube NPC offers lore/recovery only; native paths retained.')
 
 branch = source[source.index('if (NpcName.Contains("妖魔结界守卫")'):source.index('if (NpcName.Contains("试炼大仙")')]
 assert 'OpenEndgameView' not in branch and 'WorldEntryAvailable' not in branch

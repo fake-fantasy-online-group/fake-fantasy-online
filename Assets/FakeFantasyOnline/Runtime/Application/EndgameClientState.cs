@@ -30,6 +30,9 @@ public sealed partial class EndgameClientState
     public static double MonotonicMS => (double)System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency;
     public IReadOnlyList<EndgameRiftEntranceView> RiftEntrances { get; private set; } = Array.Empty<EndgameRiftEntranceView>();
     public bool CubeInputsV1 { get; private set; }
+    public int CubeItemID { get; private set; }
+    public string CubeNPC { get; private set; } = "";
+    public string CubeLore { get; private set; } = "";
     public bool RiftPortalsV1 { get; private set; }
     public bool RiftInInstance { get; private set; }
     public bool RiftContextKnown { get; private set; }
@@ -64,6 +67,7 @@ public sealed partial class EndgameClientState
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
         responses.Clear(); responseOrder.Clear(); RiftHazards.Reset(); ResetRiftHazardContext();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
+        CubeItemID = 0; CubeNPC = CubeLore = "";
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
         RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
@@ -208,6 +212,14 @@ public sealed partial class EndgameClientState
             {
                 bool previousVariants = SkillVariantsV1;
                 CubeInputsV1 = accepted && cubeInputs;
+                CubeItemID = 0; CubeNPC = CubeLore = "";
+                if (CubeInputsV1 && response.Result.TryGetValue("cubeItemId", out string cubeID) &&
+                    int.TryParse(cubeID, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int parsedCubeID) && parsedCubeID > 0)
+                {
+                    CubeItemID = parsedCubeID;
+                    if (response.Result.TryGetValue("cubeNPC", out string npc)) CubeNPC = npc;
+                    if (response.Result.TryGetValue("cubeLore", out string lore)) CubeLore = lore;
+                }
                 RiftPortalsV1 = accepted && riftPortals;
                 if (RiftPortalsV1 && !hasRiftSceneContext) RiftContextKnown = false;
                 Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth;

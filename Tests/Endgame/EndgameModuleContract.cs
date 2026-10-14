@@ -30,16 +30,79 @@ class EndgameModuleContract
     static IList Slots(object panel) => (IList)Get(panel,"cubeSlots");
     static int Value(object slot,string name) => (int)slot.GetType().GetField(name).GetValue(slot);
     static void Quote(Client c,EndgameRequest request,string id="q",string expiry="2099-01-01T00:00:00Z") => Apply(c,"{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\""+request.RequestID+"\",\"quote\":{\"quoteId\":\""+id+"\",\"revision\":\"1\",\"expiresAt\":\""+expiry+"\",\"description\":\"服务器结果与概率\",\"money\":\"5000\"}}");
+    const int CubeItemID = 1900028301, CubeTab = 1, CubeBagSlot = 7;
+    static void GiveCube()
+    {
+        InventoryDlg.rows[CubeBagSlot] = new InventoryDlg.Item { id = CubeItemID, bagIdx = CubeBagSlot, count = 1, name = "周天鼎" };
+        InventoryDlg.rowTabs[CubeBagSlot] = CubeTab;
+        InventoryDlg.locked.Remove(CubeBagSlot);
+    }
+    static bool OpenCube() => EndgamePanel.TryOpenCubeFromItem(CubeTab, CubeBagSlot);
+    static void Negotiate(Client c)
+    {
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"],\"result\":{\"cubeItemId\":\"1900028301\"}}");
+    }
+    static void SourceLifecycleContracts()
+    {
+        foreach (string reason in new[] { "map", "missing", "locked", "empty", "replacement", "moved", "reconnect", "left world" })
+        {
+            var c = new Client(); var p = new EndgamePanel(); p.Bind(c); GameBootstrap.CurMapId = 7;
+            SysMsgBox.Finish(false); GiveCube(); Negotiate(c);
+            Check(OpenCube(), "portable cube opens on an ordinary map: " + reason); Snapshot(c,"lifecycle-" + reason); Draw(p);
+            Call(p,"PutCubeItem","",1900028201,"星髓"); Click(p,130,455); var quote = c.Sent[c.Sent.Count - 1];
+            Quote(c,quote); Draw(p); Check(SysMsgBox.Visible, "fixture captures native confirmation: " + reason);
+            int sent = c.Sent.Count;
+            switch (reason)
+            {
+                case "map": GameBootstrap.CurMapId = 8; break;
+                case "missing": InventoryDlg.rows.Remove(CubeBagSlot); break;
+                case "locked": InventoryDlg.locked.Add(CubeBagSlot); break;
+                case "empty": var empty = InventoryDlg.rows[CubeBagSlot]; empty.count = 0; InventoryDlg.rows[CubeBagSlot] = empty; break;
+                case "replacement": var other = InventoryDlg.rows[CubeBagSlot]; other.id++; InventoryDlg.rows[CubeBagSlot] = other; break;
+                case "moved": var moved = InventoryDlg.rows[CubeBagSlot]; moved.bagIdx = 8; InventoryDlg.rows[8] = moved; InventoryDlg.rows.Remove(CubeBagSlot); break;
+                case "reconnect": c.Endgame.Reset(); Negotiate(c); break;
+                case "left world": c.EndgameInWorld = false; break;
+            }
+            // The captured callback must be harmless even before the next frame notices the loss.
+            SysMsgBox.Finish(true);
+            Check(c.Sent.Count == sent && !c.Endgame.Pending, "stale confirmation cannot execute before Update: " + reason);
+            Call(p,"Update");
+            Check(!(bool)Get(p,"open") && Slots(p).Count == 0 && !EndgamePanel.CubeContainerOpen, "source invalidation closes and releases reservations: " + reason);
+            p.Unbind(c); InventoryDlg.rows.Remove(8);
+        }
+        foreach (bool reconnect in new[] { false, true })
+        {
+            var c = new Client(); var p = new EndgamePanel(); p.Bind(c); GameBootstrap.CurMapId = 7; GiveCube(); Negotiate(c);
+            Check(OpenCube(), "late quote fixture opens"); Snapshot(c,"late"); Draw(p);
+            Call(p,"PutCubeItem","",1900028201,"星髓"); Click(p,130,455); var quote = c.Sent[c.Sent.Count - 1];
+            if (reconnect) { c.Endgame.Reset(); Negotiate(c); } else InventoryDlg.rows.Remove(CubeBagSlot);
+            Call(p,"Update"); int sent = c.Sent.Count;
+            Quote(c,quote,"late"); Draw(p); SysMsgBox.Finish(true);
+            Check(c.Endgame.Quote == null && !SysMsgBox.Visible && !c.Endgame.Pending && c.Sent.Count == sent,
+                "late quote after " + (reconnect ? "reconnect" : "item loss") + " cannot revive confirmation");
+            p.Unbind(c);
+        }
+        InventoryDlg.rows.Remove(CubeBagSlot); InventoryDlg.rowTabs.Remove(CubeBagSlot); InventoryDlg.locked.Clear();
+    }
     static void Main()
     {
-        var c=new Client();var p=new EndgamePanel();p.Bind(c);GameBootstrap.CurMapId=506;
+        var c=new Client();var p=new EndgamePanel();p.Bind(c);GameBootstrap.CurMapId=506; GiveCube();
         c.Endgame.Begin(new EndgameRequest("hello"));Apply(c,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
         Check(!EndgamePanel.TryOpenCubeFromWorld(),"no arbitrary global cube entry");
-        Check(!EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true),"older server does not open new input protocol");
-        c.Endgame.Begin(new EndgameRequest("hello"));Apply(c,"{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"]}");
+        Check(!OpenCube(),"older server does not open new input protocol");
+        Negotiate(c);
         Check(!EndgamePanel.TryOpenCubeFromNpc(506,77,"N611FY",()=>true),"artisan cannot impersonate dedicated cube");
-        Check(!EndgamePanel.TryOpenCubeFromNpc(7,77,"Nzhoutianding",()=>true),"stale map cannot open cube");
-        bool current=true;Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>current),"dedicated live cube opens");Snapshot(c,"one");Draw(p);
+        Check(!EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true),"retired scene workbench cannot open cube");
+        InventoryDlg.rows.Remove(CubeBagSlot); int beforeEntry=c.Sent.Count; Check(!OpenCube()&&c.Sent.Count==beforeEntry,"missing portable cube cannot open or send"); GiveCube();
+        Check(!EndgamePanel.TryOpenCubeFromItem(2,CubeBagSlot)&&!EndgamePanel.TryOpenCubeFromItem(CubeTab,8)&&!EndgamePanel.TryOpenCubeFromItem(-1,CubeBagSlot)&&!EndgamePanel.TryOpenCubeFromItem(CubeTab,-1),"entry requires exact valid native tab and slot");
+        InventoryDlg.locked.Add(CubeBagSlot); Check(!OpenCube(),"locked portable cube cannot open"); InventoryDlg.locked.Clear();
+        Check(OpenCube(),"owned portable cube opens");Snapshot(c,"one");Draw(p);
+        Check(!EndgamePanel.TryPutCubeBagItem(CubeTab,CubeBagSlot) && Slots(p).Count==0,"permanent cube cannot reserve itself as an ingredient");
+        Check(!EndgamePanel.HandleCubeItemForIndependentRuntime(1900028201,CubeTab,CubeBagSlot),"ordinary item cannot impersonate portable entry");
+        Call(p,"Close"); InventoryDlg.locked.Add(CubeBagSlot); beforeEntry=c.Sent.Count;
+        Check(EndgamePanel.HandleCubeItemForIndependentRuntime(CubeItemID,CubeTab,CubeBagSlot) && !(bool)Get(p,"open") && c.Sent.Count==beforeEntry,"locked configured item is handled without consumable fallthrough");
+        InventoryDlg.locked.Clear(); Check(EndgamePanel.HandleCubeItemForIndependentRuntime(CubeItemID,CubeTab,CubeBagSlot)&&(bool)Get(p,"open"),"native item wrapper opens same 35-cell workbench");Draw(p);
         Check(WinZ.lastFrame.width==450&&WinZ.lastFrame.height==484,"native furnace dimensions without landscape dashboard");
         Check(WinDrag.calls>0,"native title drag path retained");
         Screen.width=360;Screen.height=640;Draw(p);Check(WinZ.lastFrame.width<=340&&WinZ.lastFrame.height<=620,"portrait scale fits small viewport");Screen.width=1280;Screen.height=900;Draw(p);
@@ -51,13 +114,13 @@ class EndgameModuleContract
         Set(p,"cubeQuantity","101");Draw(p);int sent=c.Sent.Count;Click(p,130,455);Check(!ArtworkSkin.enableds["确认数量"]&&c.Sent.Count==sent,"quantity above bag count cannot confirm or submit");
         Set(p,"cubeQuantity","30");Draw(p);Click(p,130,455);Check(c.Sent.Count==sent,"unconfirmed quantity cannot match");
         Draw(p,"确认数量");Click(p,130,455);var quote=c.Sent[c.Sent.Count-1];
-        Check(quote.Json.Contains("cubeInputs")&&quote.Json.Contains("\"count\":30")&&!quote.Json.Contains("recipeId"),"only placed quantities identify matching request");
+        Check(quote.Json.Contains("cubeInputs")&&quote.Json.Contains("\"count\":30")&&!quote.Json.Contains("recipeId")&&!quote.Json.Contains("npcEntityId"),"only placed quantities identify matching request");
         Click(p,130,455);Check(ReferenceEquals(c.Sent[c.Sent.Count-1],quote),"repeated match disabled");
         Apply(c,"{\"kind\":\"cube.quote\",\"ok\":false,\"requestId\":\""+quote.RequestID+"\",\"error\":\"no_match\",\"message\":\"没有反应\"}");Draw(p);
         Check(Slots(p).Count==1&&c.Endgame.Materials[0].Count==100&&!SysMsgBox.Visible,"no match preserves inventory and inputs");
         Click(p,285,455);Check(Slots(p).Count==0&&c.Endgame.Materials[0].Count==100,"native cancel releases reservation without return packets");
-        Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>current),"reopen succeeds");Draw(p);
-        InventoryDlg.rows[0]=new InventoryDlg.Item{id=1900028201,bagIdx=0,name="星髓"};InventoryDlg.HasHeld=true;InventoryDlg.HeldTab=1;InventoryDlg.HeldBagSlot=0;
+        Check(OpenCube(),"reopen succeeds");Draw(p);
+        InventoryDlg.rows[0]=new InventoryDlg.Item{id=1900028201,bagIdx=0,count=100,name="星髓"};InventoryDlg.HasHeld=true;InventoryDlg.HeldTab=1;InventoryDlg.HeldBagSlot=0;
         Click(p,300,355);Check(Slots(p).Count==1&&Value(Slots(p)[0],"Cell")==34&&!InventoryDlg.HasHeld,"native drag fills actual last grid cell and clears only held cursor");
         Click(p,300,355,1);Check(Slots(p).Count==0&&c.Endgame.Materials[0].Count==100,"native right click returns reservation without consuming");
         InventoryDlg.locked.Add(0);Check(!EndgamePanel.TryPutCubeBagItem(1,0),"locked native input rejected");InventoryDlg.locked.Clear();
@@ -67,18 +130,18 @@ class EndgameModuleContract
         Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);
         Check(SysMsgBox.Visible&&SysMsgBox.text.Contains("服务器结果与概率")&&SysMsgBox.text.Contains("5000"),"full server preview and price in native confirmation");
         SysMsgBox.Finish(false);Check(!c.Endgame.Pending&&Slots(p).Count==1,"cancel confirmation keeps reservations");
-        Click(p,130,455);Check(SysMsgBox.Visible,"same fresh quote can be reviewed again");current=false;Call(p,"Update");SysMsgBox.Finish(true);
-        Check(!c.Endgame.Pending&&Slots(p).Count==0,"NPC range loss rejects captured confirmation");
-        current=true;EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>current);Draw(p);Call(p,"PutCubeItem","",1900028201,"星髓");Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);
+        Click(p,130,455);Check(SysMsgBox.Visible,"same fresh quote can be reviewed again");InventoryDlg.rows.Remove(CubeBagSlot);Call(p,"Update");SysMsgBox.Finish(true);
+        Check(!c.Endgame.Pending&&Slots(p).Count==0,"portable item loss rejects captured confirmation");
+        GiveCube();OpenCube();Draw(p);Call(p,"PutCubeItem","",1900028201,"星髓");Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);
         Snapshot(c,"two");Draw(p);SysMsgBox.Finish(true);Check(!c.Endgame.Pending&&Slots(p).Count==0,"new authoritative inventory invalidates pending confirmation");
         Call(p,"PutCubeItem","",1900028201,"星髓");Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote,"expired","2000-01-01T00:00:00Z");Draw(p);Check(!SysMsgBox.Visible&&!c.Endgame.Pending,"expired quote cannot open commit confirmation");
         Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);SysMsgBox.Finish(true);var execute=c.Sent[c.Sent.Count-1];
-        Check(execute.Op=="cube.execute"&&execute.Json.Contains("npcEntityId")&&!execute.Json.Contains("cubeInputs"),"native confirmation commits only captured authoritative quote");
+        Check(execute.Op=="cube.execute"&&!execute.Json.Contains("npcEntityId")&&!execute.Json.Contains("cubeInputs"),"native confirmation commits only captured authoritative quote");
         sent=c.Sent.Count;Click(p,130,455);Click(p,300,355,1);Check(c.Sent.Count==sent&&Slots(p).Count==1,"in-flight execution blocks repeated commit and edits");
         Click(p,125,425);Check(c.Retries==1&&ReferenceEquals(c.Endgame.PendingRequest,execute),"query retries original uncertain transaction");
         Click(p,350,49);Check(Slots(p).Count==0&&ReferenceEquals(c.Endgame.PendingRequest,execute),"close preserves in-flight request identity");
         Apply(c,"{\"kind\":\"cube.execute\",\"ok\":false,\"requestId\":\""+execute.RequestID+"\",\"error\":\"requirements\",\"message\":\"材料已变化\"}");
-        EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>current);Draw(p);Check(Slots(p).Count==0&&!c.Endgame.Pending,"rejected transaction safely reopens empty container");
+        OpenCube();Draw(p);Check(Slots(p).Count==0&&!c.Endgame.Pending,"rejected transaction safely reopens empty container");
         var mats=new List<string>();for(int i=0;i<36;i++)mats.Add("{\"itemId\":"+(1000+i)+",\"name\":\"材料\",\"count\":99}");
         Apply(c,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"capacity\",\"chunks\":1,\"revision\":\"1\",\"materials\":["+string.Join(",",mats)+"]}");Draw(p);
         for(int i=0;i<36;i++)Call(p,"PutCubeItem","",1000+i,"材料");Check(Slots(p).Count==35&&Value(Slots(p)[34],"Cell")==34,"all 35 displayed cells usable; 36th denied");
@@ -86,7 +149,8 @@ class EndgameModuleContract
         var over=new List<EndgameCubeInput>(inputs);over.Add(new EndgameCubeInput("",1035,1));bool rejected=false;try{new EndgameRequest("cube.quote","1",cubeInputs:over);}catch(ArgumentException){rejected=true;}Check(rejected,"wire rejects 36 inputs");
         rejected=false;try{new EndgameRequest("cube.quote","1",cubeInputs:new[]{new EndgameCubeInput("",123,1),new EndgameCubeInput("",123,1)});}catch(ArgumentException){rejected=true;}Check(rejected,"wire rejects duplicate identities");
         Input.pressed=KeyCode.Escape;Call(p,"Update");Input.pressed=null;Check(!(bool)Get(p,"open")&&Slots(p).Count==0,"Escape releases all reservations");
-        EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>current);Draw(p);Call(p,"PutCubeItem","",1000,"材料");c.Endgame.Reset();Call(p,"Update");Check(!(bool)Get(p,"open")&&Slots(p).Count==0,"reconnect clears selection without duplication");
-        Console.WriteLine("PASS "+count+" native cube grid/module contracts.");
+        OpenCube();Draw(p);Call(p,"PutCubeItem","",1000,"材料");c.Endgame.Reset();Call(p,"Update");Check(!(bool)Get(p,"open")&&Slots(p).Count==0,"reconnect clears selection without duplication");
+        p.Unbind(c); SourceLifecycleContracts();
+        Console.WriteLine("PASS "+count+" native portable-cube grid/module contracts.");
     }
 }

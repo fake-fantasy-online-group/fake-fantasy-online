@@ -30,6 +30,9 @@ internal static partial class GameActionAdapterTests
         session.NpcTaskOffersState.Offers.Add(new WorldNpcTaskOfferState { TaskId = 7 });
         session.GroundItems[10] = new WorldGroundItemState { X = 100, Y = 100 };
         GroundItems.TestItems.Clear(); GroundItems.TestItems[10] = new GroundItems.Item { go = new object(), owned = true };
+        foreach (var bag in InventoryDlg.Items) bag.Clear();
+        InventoryDlg.Items[0].Add(new InventoryDlg.Item { id = 44, bagIdx = 1, count = 10 });
+        InventoryDlg.Items[2].Add(new InventoryDlg.Item { id = 45, bagIdx = 2, count = 1 });
         return new PluginGameApi(session);
     }
     private static GameActionReceipt Act(PluginGameApi api, string name, Dictionary<string, object> args = null, string id = null, long? scene = 1) =>
@@ -255,7 +258,19 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class EndgamePanel
     {
         internal static EndgameClientState WorldState;
-        internal static bool TryOpenCubeFromNpc(int map, int entity, string script, Func<bool> current) => current();
+        internal static bool CubeItemAvailableForIndependentRuntime(EndgameClientState state) => CubeItemIDForIndependentRuntime(state) != 0;
+        internal static int CubeItemIDForIndependentRuntime(EndgameClientState state)
+        {
+            if (state == null || !state.Negotiated || !state.CubeInputsV1 || state.CubeItemID <= 0) return 0;
+            for (int tab = 0; tab < InventoryDlg.Items.Length; tab++)
+                foreach (var item in InventoryDlg.Items[tab])
+                {
+                    var current = InventoryDlg.ItemAt(tab, item.bagIdx);
+                    if (current.id == state.CubeItemID && current.count > 0 && !InventoryDlg.IsLocked(tab, item.bagIdx)) return current.id;
+                }
+            return 0;
+        }
+        internal static bool RecoverCubeFromNpc(EndgameClientState state, int entity) => false;
         internal static bool TryOpenRiftFromNpc(int map, int entity, string name, string script, Func<bool> current) => current();
     }
     internal sealed class ReferenceFirstWorldInitialFrame
@@ -351,8 +366,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class SysMsgBox { internal static bool Visible; }
     internal sealed class InventoryDlg
     {
-        internal struct Item { internal int id; }
-        internal static Item ItemAt(int tab, int slot) => new Item { id = 44 };
+        internal struct Item { internal int id, count, bagIdx; internal bool locked; }
+        internal static readonly List<Item>[] Items = { new List<Item>(), new List<Item>(), new List<Item>(), new List<Item>() };
+        internal static Item ItemAt(int tab, int slot)
+        {
+            if (tab >= 0 && tab < Items.Length) foreach (var item in Items[tab]) if (item.bagIdx == slot) return item;
+            return default(Item);
+        }
+        internal static bool IsLocked(int tab, int slot) => ItemAt(tab, slot).locked;
         internal static InventoryDlg EnsureOwnerForIndependentRuntime() => new InventoryDlg();
         internal void ActivateOrdinaryItemForIndependentRuntime(ref int tab, Item item) { }
     }

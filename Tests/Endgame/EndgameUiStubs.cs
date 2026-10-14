@@ -190,15 +190,18 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class PlayerController { public static void SuppressWorldClick() { } }
     internal static class InventoryDlg
     {
-        public struct Item { public int id, bagIdx, quality; public string name, desc; }
+        public struct Item { public int id, bagIdx, quality, count; public string name, desc; }
         public static IEnumerable<Item>[] Items => new IEnumerable<Item>[] { rows.Values, rows.Values, rows.Values, rows.Values };
         public static Dictionary<int, Item> rows = new Dictionary<int, Item>();
+        // Existing tooltip fixtures use tab-agnostic rows; entry fixtures opt into an exact native tab.
+        public static Dictionary<int, int> rowTabs = new Dictionary<int, int>();
         public static bool IsOpen, HasHeld; public static int HeldTab, HeldBagSlot;
         public static bool IsLocked(byte tab, int slot) => locked.Contains(slot);
         public static HashSet<int> locked = new HashSet<int>();
         public static void Toggle() { IsOpen = !IsOpen; }
         public static void ClearHeld() { HasHeld = false; }
-        public static Item ItemAt(int tab, int slot) => rows.TryGetValue(slot, out var value) ? value : default;
+        public static Item ItemAt(int tab, int slot) => tab >= 0 && tab < 4 && slot >= 0 &&
+            (!rowTabs.TryGetValue(slot, out var actualTab) || actualTab == tab) && rows.TryGetValue(slot, out var value) ? value : default;
     }
     internal static class EquipDlg
     {

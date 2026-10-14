@@ -18,7 +18,7 @@ public sealed partial class PluginGameApi
         EndgameClientState state = owner?.Endgame;
         bool ready = owner != null && owner.EndgameInWorld && state.Negotiated;
         bool writable = ready && state.InventorySnapshotCurrent && !state.Pending;
-        bool cubeReady = writable && state.CubeInputsV1 && (DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0) != 0;
+        bool cubeReady = writable && state.CubeInputsV1 && EndgamePanel.CubeItemAvailableForIndependentRuntime(state);
         const string unavailable = "The native world must negotiate endgame.v1 before this operation.";
         const string mutation = "A complete server snapshot and no uncertain mutation are required. Observe endgame; use endgame.retry only for the exact pending request.";
         definitions.Add(EndgameDefinition("endgame.skill.refresh", "Request authoritative hard, granted, soft and effective skill ranks, effects and unspent points.", ready && state.GrowthV5, "The server must negotiate endgame.growth.v5."));
@@ -26,8 +26,8 @@ public sealed partial class PluginGameApi
         definitions.Add(EndgameDefinition("endgame.refresh", "Request an authoritative inventory/material/active-formation snapshot through the native endgame owner.", ready, unavailable));
         definitions.Add(EndgameDefinition("endgame.catalog.request", "Request one server catalog page. Omitted cursor uses the observed next cursor. Observe endgame.catalog for page/load state.", ready, unavailable, "catalog:string", "cursor?:string"));
         definitions.Add(EndgameDefinition("endgame.socket.insert", "Insert an observed bag rune into an observed empty socket; only the correlated server receipt establishes the outcome.", writable, mutation, "expectedRevision:string", "targetUid:string", "runeUid:string", "socket:integer"));
-        definitions.Add(EndgameDefinition("endgame.cube.quote", "Reserve observed bag items and material quantities in the live 周天鼎 input container; the server matches the inputs and quotes costs, outcome and expiry. Optional itemUids orders installed socket runes only.", cubeReady && !state.QuotePending, "Interact with a live 周天鼎 and observe a complete snapshot with endgame.cube-inputs.v1 negotiated.", "expectedRevision:string", "cubeInputs:array", "itemUids?:array"));
-        definitions.Add(EndgameDefinition("endgame.cube.execute", "Execute exactly the currently observed unexpired server quote. Costs/risks are in endgame.quote; no implicit quote or reroll.", cubeReady && state.Quote != null && !state.QuotePending, "An observed quote and live 周天鼎 dialog are required.", "expectedRevision:string", "quoteId:string"));
+        definitions.Add(EndgameDefinition("endgame.cube.quote", "Reserve observed bag items and material quantities in the permanent 周天鼎 item's 35-slot input container; the server verifies ownership and unlock status, matches inputs and quotes costs, outcome and expiry. Optional itemUids orders installed socket runes only; opening the native UI is not required.", cubeReady && !state.QuotePending, "Own the unlocked 周天鼎 item in the native bag and observe a complete snapshot with endgame.cube-inputs.v1 negotiated.", "expectedRevision:string", "cubeInputs:array", "itemUids?:array"));
+        definitions.Add(EndgameDefinition("endgame.cube.execute", "Execute exactly the currently observed unexpired server quote while holding the permanent 周天鼎 item. The server rechecks ownership and unlock status; costs/risks are in endgame.quote, with no implicit quote or reroll.", cubeReady && state.Quote != null && !state.QuotePending, "An observed quote and an unlocked 周天鼎 item in the native bag are required.", "expectedRevision:string", "quoteId:string"));
         definitions.Add(EndgameDefinition("endgame.rift.refresh", "Request authoritative rift state, invitation, combat markers and reward eligibility.", ready, unavailable));
         definitions.Add(EndgameDefinition("endgame.rift.start", "Spend a key for a fresh run, or enter the observed invitation/run with its exact runId. For a fresh run use npc.interact on a configured entrance first; admitted-run reentry retains its existing runId path.", writable && state.Rift != null && (ExistingEndgameRift(state.Rift) || DialogUI.I != null && DialogUI.I.RiftEntranceEntityForIndependentRuntime(state) != 0), "Interact with a live NPC listed in endgame.riftEntrances, then observe the current snapshot.", "expectedRevision:string", "tier:integer", "runId?:string"));
         definitions.Add(EndgameDefinition("endgame.rift.advance", "Use the observed floor exit to skip remaining packs. Preserves run, difficulty tier, timer and earned progress; runId and floorIndex guard stale navigation. The server checks run opener/exit proximity.", writable && state.Rift != null && state.Rift.CanAdvance && state.Rift.RunID.Length > 0 && state.Rift.FloorIndex > 0 && !state.Rift.Transitioning && state.Rift.Phase == "active", "Observe an active, non-transitioning floor with canAdvance=true and no uncertain native mutation.", "expectedRevision:string", "runId:string", "floorIndex:integer"));
@@ -208,8 +208,8 @@ public sealed partial class PluginGameApi
                 rune = EndgameIdentity(ActionString(args, "runeUid"), "runeUid"); EndgameItem(rune, "bag");
                 break;
             case "cube.quote":
-                npcEntityID = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
-                if (!state.CubeInputsV1 || npcEntityID == 0) throw new ActionFailure("endgame.workbench_required", "Interact with the current 周天鼎 before preparing inputs.");
+                if (!state.CubeInputsV1 || !EndgamePanel.CubeItemAvailableForIndependentRuntime(state))
+                    throw new ActionFailure("endgame.cube_item_required", "An unlocked permanent 周天鼎 item must be present in the native bag before preparing inputs.");
                 cubeInputs = EndgameCubeInputs(args); itemUIDs = EndgameUIDs(args);
                 EndgameItemView cubeTarget = null;
                 foreach (var input in cubeInputs)
@@ -238,8 +238,8 @@ public sealed partial class PluginGameApi
                 }
                 break;
             case "cube.execute":
-                npcEntityID = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
-                if (!state.CubeInputsV1 || npcEntityID == 0) throw new ActionFailure("endgame.workbench_required", "Interact with the current 周天鼎 before executing its quote.");
+                if (!state.CubeInputsV1 || !EndgamePanel.CubeItemAvailableForIndependentRuntime(state))
+                    throw new ActionFailure("endgame.cube_item_required", "An unlocked permanent 周天鼎 item must be present in the native bag before executing its quote.");
                 quote = EndgameString(args, "quoteId");
                 if (state.Quote == null || state.Quote.QuoteID != quote || state.Quote.Revision != revision ||
                     !DateTimeOffset.TryParse(state.Quote.ExpiresAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset expires) || expires <= DateTimeOffset.UtcNow)

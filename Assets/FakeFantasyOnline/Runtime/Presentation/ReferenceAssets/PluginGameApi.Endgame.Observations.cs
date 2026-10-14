@@ -32,8 +32,9 @@ public sealed partial class PluginGameApi
         switch (domain)
         {
             case "endgame":
-                int cubeEntity = DialogUI.I?.CubeWorkbenchEntityForIndependentRuntime(state) ?? 0;
-                data["cubeWorkbenchEntityId"] = cubeEntity == 0 ? null : EntityReference("npc", cubeEntity);
+                data["cubeWorkbenchEntityId"] = null; // Retained for clients predating the permanent inventory item.
+                data["cubeItemAvailable"] = EndgamePanel.CubeItemAvailableForIndependentRuntime(state);
+                data["cubeItemId"] = EndgamePanel.CubeItemIDForIndependentRuntime(state);
                 data["combatStats"] = ObserveEndgameCombatStats(state.CombatStats);
                 data["combatStatsVersion"] = state.CombatStatsVersion; data["combatStatsRevision"] = state.CombatStatsRevision;
                 data["combatStatsReceivedUtc"] = state.CombatStatsReceivedUtc.ToString("o", CultureInfo.InvariantCulture);

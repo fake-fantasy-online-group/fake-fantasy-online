@@ -4,6 +4,7 @@ internal static partial class ItemActions
 {
     internal static bool HandleWindowPrefixForIndependentRuntime(int id, byte tab, int slot, string name, System.Action<byte> beginRepairSelection)
     {
+        if (EndgamePanel.HandleCubeItemForIndependentRuntime(id, tab, slot)) return true;
         if (id == 0x350c)
         {
             SysMsgBox.Show("【魔法衣橱提取凭证】不能直接双击。\n请打开魔法衣橱, 在要取出的外形上【右键】, 即可取出(每次消耗1个)。", () => { }, null);

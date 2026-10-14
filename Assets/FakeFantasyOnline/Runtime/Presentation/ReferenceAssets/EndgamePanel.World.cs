@@ -53,12 +53,48 @@ public sealed partial class EndgamePanel
     // Outside-run entry/recovery carries no NPC authority. Fresh paid entry requires a live entrance dialog.
     internal static bool TryOpenRiftFromWorld() => TryOpenWorldView(EndgameModule.Rift);
     internal static bool TryOpenCubeFromWorld() => false;
-    internal static bool TryOpenCubeFromNpc(int mapID, int entityID, string script, Func<bool> sourceCurrent)
+    // Legacy scene workbenches no longer authorize the portable tool.
+    internal static bool TryOpenCubeFromNpc(int mapID, int entityID, string script, Func<bool> sourceCurrent) => false;
+
+    internal static bool CubeItemAvailableForIndependentRuntime(EndgameClientState state) => CubeItemIDForIndependentRuntime(state) > 0;
+    internal static int CubeItemIDForIndependentRuntime(EndgameClientState state)
     {
-        if (!WorldEntryAvailable || !Current.State.CubeInputsV1 || mapID != GameBootstrap.CurMapId || entityID == 0 || script != "Nzhoutianding" || sourceCurrent == null || !sourceCurrent()) return false;
+        if (state == null || !state.Negotiated || !state.CubeInputsV1 || state.CubeItemID <= 0) return 0;
+        for (int tab = 0; tab < InventoryDlg.Items.Length; tab++)
+            foreach (var item in InventoryDlg.Items[tab])
+                if (CubeBagItemCurrent(state, tab, item.bagIdx)) return state.CubeItemID;
+        return 0;
+    }
+    private static bool CubeBagItemCurrent(EndgameClientState state, int tab, int slot)
+    {
+        if (state == null || !state.Negotiated || !state.CubeInputsV1 || state.CubeItemID <= 0 ||
+            tab < 0 || tab >= InventoryDlg.Items.Length || slot < 0) return false;
+        var item = InventoryDlg.ItemAt(tab, slot);
+        return item.id == state.CubeItemID && item.count > 0 && !InventoryDlg.IsLocked((byte)tab, slot);
+    }
+    internal static bool TryOpenCubeFromItem(int tab, int bagSlot)
+    {
+        if (!WorldEntryAvailable || SysMsgBox.Visible || !CubeBagItemCurrent(Current.State, tab, bagSlot)) return false;
         if (!TryOpenWorldView(EndgameModule.Cube)) return false;
-        Current.cubeNpcEntityID = entityID; Current.cubeMapID = mapID; Current.cubeSourceCurrent = sourceCurrent;
+        Current.cubeMapID = GameBootstrap.CurMapId;
+        Current.cubeItemID = Current.State.CubeItemID; Current.cubeItemTab = tab; Current.cubeItemSlot = bagSlot;
         return true;
+    }
+    // Handled means this is the configured permanent tool, even if opening is blocked.
+    // Never fall through to an ordinary consumable or start its item cooldown.
+    internal static bool HandleCubeItemForIndependentRuntime(int id, int tab, int slot)
+    {
+        if (Current?.State == null || id <= 0 || id != Current.State.CubeItemID) return false;
+        TryOpenCubeFromItem(tab, slot);
+        return true;
+    }
+    internal static bool RecoverCubeFromNpc(EndgameClientState state, int entityID)
+    {
+        if (!WorldEntryAvailable || !ReferenceEquals(Current.State, state) || state.CubeItemID <= 0 || entityID == 0) return false;
+        // The item is absent during recovery, so the artisan must also provide the
+        // same immutable-request retry path that an open container would offer.
+        if (state.Pending) return state.PendingRequest.Op == "cube.recover" && Current.client.RetryEndgame();
+        return state.InventorySnapshotCurrent && Current.Send(new EndgameRequest("cube.recover", state.Revision, npcEntityID: entityID));
     }
 
     private static bool TryOpenWorldView(EndgameModule targetModule)

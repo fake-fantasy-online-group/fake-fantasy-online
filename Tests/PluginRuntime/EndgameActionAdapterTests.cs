@@ -14,6 +14,7 @@ internal static partial class GameActionAdapterTests
     private const string SecondRuneUID = "9223372036854775807";
     private const string EquippedUID = "9007199254740995";
     private const string TestRevision = "9007199254740996";
+    private const int TestCubeItemID = 1900099001;
 
     private static GameActionReceipt EndAct(PluginGameApi api, string suffix, Dictionary<string, object> args = null, string id = null)
     { return Act(api, "endgame." + suffix, args, id ?? "test-" + Guid.NewGuid().ToString("N")); }
@@ -126,7 +127,7 @@ internal static partial class GameActionAdapterTests
         var cubeSchema = Property(Definition(api, "endgame.cube.quote"), "cubeInputs");
         Check(Convert.ToInt32(cubeSchema["minItems"]) == 1 && Convert.ToInt32(cubeSchema["maxItems"]) == EndgameCubeInput.Capacity && Rows(Object(cubeSchema["items"])["oneOf"]).Count == 2, "cube input schema admits bounded UID/count or itemId/count objects");
         var cubeFields = Object(Definition(api, "endgame.cube.quote").Arguments["properties"]);
-        Check(!cubeFields.ContainsKey("recipeId") && !cubeFields.ContainsKey("targetUid") && !cubeFields.ContainsKey("runeUid"), "cube action cannot bypass input matching with recipe or target shortcuts");
+        Check(!cubeFields.ContainsKey("recipeId") && !cubeFields.ContainsKey("targetUid") && !cubeFields.ContainsKey("runeUid") && !cubeFields.ContainsKey("npcEntityId"), "cube action cannot bypass input matching or supply obsolete NPC authority");
         Check((bool)Property(Definition(api, "endgame.rift.leave"), "confirmLeave")["const"], "leave schema requires explicit true confirmation");
         Check(Rows(Property(Definition(api, "endgame.catalog.request"), "catalog")["enum"]).Count == 3, "catalog schema excludes recipe dumps");
         Check(!(bool)definitionInsert.Arguments["additionalProperties"], "endgame action schemas reject unknown fields");
@@ -249,13 +250,15 @@ internal static partial class GameActionAdapterTests
         EndgameNative native; var api = SetupEndgame(out native);
         var materialInput = new object[] { Map("itemId", 1900028201, "count", 10) };
         var basic = Map("expectedRevision", TestRevision, "cubeInputs", materialInput);
-        Check(!Definition(api, "endgame.cube.quote").Available && EndAct(api, "cube.quote", basic).Code == "action.unavailable", "agent must interact with live 周天鼎 before quoting");
-        OpenCube(api);
-        Check((bool)api.TestObserveEndgame("endgame")["cubeInputsV1"] && (string)api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == "npc:1:3", "cube capability and exact interacted NPC are observed");
-        foreach (string shortcut in new[] { "recipeId", "targetUid", "runeUid" })
+        Check(!Definition(api, "endgame.cube.quote").Available && EndAct(api, "cube.quote", basic).Code == "action.unavailable", "agent must hold the permanent 周天鼎 item before quoting");
+        Check(!(bool)api.TestObserveEndgame("endgame")["cubeItemAvailable"] && (int)api.TestObserveEndgame("endgame")["cubeItemId"] == 0 && api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == null, "missing permanent item is observed without inventing a workbench");
+        GiveCube();
+        var owned = api.TestObserveEndgame("endgame");
+        Check((bool)owned["cubeInputsV1"] && (bool)owned["cubeItemAvailable"] && (int)owned["cubeItemId"] == TestCubeItemID && owned["cubeWorkbenchEntityId"] == null && Definition(api, "endgame.cube.quote").Available, "server-configured permanent item unlocks plugin quoting without opening a native UI");
+        foreach (string shortcut in new[] { "recipeId", "targetUid", "runeUid", "npcEntityId" })
         {
             var shortcutArgs = Map("expectedRevision", TestRevision, "cubeInputs", materialInput); shortcutArgs[shortcut] = "1";
-            Check(EndAct(api, "cube.quote", shortcutArgs).Code == "arguments.invalid", "recipe and target shortcuts are rejected");
+            Check(EndAct(api, "cube.quote", shortcutArgs).Code == "arguments.invalid", "recipe, target and obsolete NPC shortcuts are rejected");
         }
         foreach (object invalid in new object[] {
             new object[0], new object[36], new object[] { Map("uid", FirstRuneUID, "count", 0) },
@@ -278,25 +281,36 @@ internal static partial class GameActionAdapterTests
         Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", twelve)).Code == "endgame.item_stale", "twelve slots pass structural bounds before inventory validation");
         var fullGrid = new object[35]; for (int i = 0; i < fullGrid.Length; i++) fullGrid[i] = Map("uid", (100+i).ToString(), "count", 1);
         Check(EndAct(api, "cube.quote", Map("expectedRevision", TestRevision, "cubeInputs", fullGrid)).Code == "endgame.item_stale", "35 native grid slots pass structural bounds before inventory validation");
-        DialogUI.I.Visible = false;
-        Check(Definition(api, "endgame.cube.quote").Available && (string)api.TestObserveEndgame("endgame")["cubeWorkbenchEntityId"] == "npc:1:3", "opening native container may close dialog while retaining live workbench authority");
-        OpenCube(api); GameBootstrap.CurMapId = 8;
-        Check(!Definition(api, "endgame.cube.quote").Available, "map changes invalidate cube workbench");
-        GameBootstrap.CurMapId = 7; OpenCube(api);
-        var originalNpc = GameBootstrap.I.Window.Frame.NpcActors[3].State;
-        GameBootstrap.I.Window.Frame.NpcActors[3].State = new WorldNpcState { EntityId = 3, Script = "Nzhoutianding", DisplayName = "周天鼎" };
-        Check(!Definition(api, "endgame.cube.quote").Available, "recycled NPC entity cannot inherit cube dialog authority");
-        GameBootstrap.I.Window.Frame.NpcActors[3].State = originalNpc; OpenCube(api);
-        DialogUI.I.CurrentNpcEntityId = 4;
-        Check(!Definition(api, "endgame.cube.quote").Available, "changing current NPC invalidates captured workbench authority");
-        OpenCube(api);
-        native.Endgame.Reset(); Negotiate(native); PublishItems(native);
-        Check(!Definition(api, "endgame.cube.quote").Available, "new session generation requires a fresh workbench interaction");
-        OpenCube(api);
+        var originalDialog = DialogUI.I;
+        DialogUI.I = null; GameBootstrap.CurMapId = 8;
+        Check(Definition(api, "endgame.cube.quote").Available && (bool)api.TestObserveEndgame("endgame")["cubeItemAvailable"], "permanent item works on another map without a dialog or workbench interaction");
+        DialogUI.I = originalDialog; DialogUI.I.CurrentNpcEntityId = 4;
+        Check(Definition(api, "endgame.cube.quote").Available, "changing NPC does not change permanent item authority");
+        GiveCube(id: TestCubeItemID + 1);
+        Check(!Definition(api, "endgame.cube.quote").Available && !(bool)api.TestObserveEndgame("endgame")["cubeItemAvailable"], "unrelated item cannot substitute for database-configured cube ID");
+        GiveCube(count: 0);
+        Check(!Definition(api, "endgame.cube.quote").Available, "zero-count native item cannot grant cube authority");
+        GiveCube(locked: true);
+        Check(!Definition(api, "endgame.cube.quote").Available, "locked permanent item cannot grant cube authority");
+        InventoryDlg.Items[3].Clear();
+        Check(!Definition(api, "endgame.cube.quote").Available && EndAct(api, "cube.quote", basic).Code == "action.unavailable" && native.Sent.Count == 0, "removing the permanent item withdraws plugin authority without sending");
+        Check((bool)owned["cubeItemAvailable"] && (int)owned["cubeItemId"] == TestCubeItemID, "published ownership observation remains immutable after native inventory changes");
+        GiveCube(); native.Endgame.NoteNativeInventoryPublished();
+        Check(!Definition(api, "endgame.cube.quote").Available, "native inventory change requires a fresh complete sidecar snapshot");
+        PublishItems(native);
+        Check(Definition(api, "endgame.cube.quote").Available, "fresh complete snapshot restores permanent item action authority");
+        native.Endgame.Reset();
+        Check(!Definition(api, "endgame.cube.quote").Available, "session reset withdraws permanent item negotiation");
+        Negotiate(native); PublishItems(native);
+        Check(Definition(api, "endgame.cube.quote").Available, "new session snapshot restores held-item authority without a new NPC interaction");
         native.Endgame.Reset(); native.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1" })); PublishItems(native); OpenCube(api);
+        Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1" }, "result", Map("cubeItemId", TestCubeItemID.ToString()))); PublishItems(native);
         Check(!Definition(api, "endgame.cube.quote").Available && !(bool)api.TestObserveEndgame("endgame")["cubeInputsV1"], "legacy negotiation cannot unlock agent cube inputs");
-        native.Endgame.Reset(); Negotiate(native); PublishItems(native); OpenCube(api);
+        native.Endgame.Reset(); Negotiate(native, cubeItemID: 0); PublishItems(native);
+        Check(!Definition(api, "endgame.cube.quote").Available, "missing database cube item ID cannot unlock an arbitrary held item");
+        native.Endgame.Reset(); Negotiate(native, cubeItemID: TestCubeItemID + 123); PublishItems(native); GiveCube(id: TestCubeItemID + 123);
+        Check(Definition(api, "endgame.cube.quote").Available && (int)api.TestObserveEndgame("endgame")["cubeItemId"] == TestCubeItemID + 123, "alternate database cube item ID works without a client identity constant");
+        native.Endgame.Reset(); Negotiate(native); PublishItems(native); GiveCube();
         var first = Map("uid", SecondRuneUID, "count", 1);
         var ordered = new object[] { first, Map("uid", FirstRuneUID, "count", 1), Map("itemId", 1900028201, "count", 10) };
         var requestArgs = Map("expectedRevision", TestRevision, "cubeInputs", ordered);
@@ -304,7 +318,7 @@ internal static partial class GameActionAdapterTests
         first["uid"] = "1"; ordered[0] = Map("uid", "2", "count", 1);
         var sent = SentArguments(native); var inputs = Rows(sent["cubeInputs"]);
         Check((string)Object(inputs[0])["uid"] == SecondRuneUID && (string)Object(inputs[1])["uid"] == FirstRuneUID && (long)Object(inputs[2])["count"] == 10 && !command.Mutates, "quote freezes nested input values and preserves source order without spending inventory");
-        Check((long)sent["npcEntityId"] == 3 && !sent.ContainsKey("recipeId") && !sent.ContainsKey("targetUid") && native.Endgame.Materials[0].Count == 50, "cube quote binds live NPC and only reserves materials visually");
+        Check(!sent.ContainsKey("npcEntityId") && !sent.ContainsKey("recipeId") && !sent.ContainsKey("targetUid") && native.Endgame.Materials[0].Count == 50, "portable cube quote has no NPC authority and does not spend materials");
         var retryArgs = Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("count", 1m, "uid", SecondRuneUID), Map("uid", FirstRuneUID, "count", 1m), Map("itemId", 1900028201m, "count", 10m) });
         Check(EndAct(api, "cube.quote", retryArgs, "ordered-quote").ActionId == quoted.ActionId && native.Sent.Count == 1, "equivalent nested values and numeric types replay idempotently");
         retryArgs["cubeInputs"] = new object[] { Map("uid", FirstRuneUID, "count", 1), Map("uid", SecondRuneUID, "count", 1), Map("itemId", 1900028201, "count", 10) };
@@ -316,19 +330,40 @@ internal static partial class GameActionAdapterTests
         Check(!Object(api.TestObserveEndgame("endgame")["quote"]).ContainsKey("recipeId"), "agent quote keeps server recipe selection opaque");
         Check(EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "wrong")).Code == "endgame.quote_stale", "execution requires exact current quote ID");
         DialogUI.I.Visible = false;
-        Check(Definition(api, "endgame.cube.execute").Available, "native dialog closing into container retains quote execution authority");
-        OpenCube(api);
+        Check(Definition(api, "endgame.cube.execute").Available, "quote execution requires no visible native dialog");
+        InventoryDlg.Items[3].Clear();
+        int sendsBeforeMissingItem = native.Sent.Count;
+        Check(!Definition(api, "endgame.cube.execute").Available && EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current")).Code == "action.unavailable" && native.Sent.Count == sendsBeforeMissingItem, "losing permanent item after quoting blocks execution without a native send");
+        GiveCube(locked: true);
+        Check(!Definition(api, "endgame.cube.execute").Available, "locking permanent item after quoting blocks execution");
+        GiveCube();
         var execute = EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current")); sent = SentArguments(native);
-        Check(execute.State == GameActionState.Sent && native.Last.Mutates && (string)sent["quoteId"] == "quote-current" && (long)sent["npcEntityId"] == 3 && !sent.ContainsKey("cubeInputs") && !sent.ContainsKey("itemUids") && !sent.ContainsKey("recipeId"), "execution binds opaque quote and current NPC without reinterpreting inputs");
+        Check(execute.State == GameActionState.Sent && native.Last.Mutates && (string)sent["quoteId"] == "quote-current" && !sent.ContainsKey("npcEntityId") && !sent.ContainsKey("cubeInputs") && !sent.ContainsKey("itemUids") && !sent.ContainsKey("recipeId"), "execution binds only the opaque quote without NPC authority or reinterpreting inputs");
         ApplyReceipt(native, native.Last);
         Check(native.Endgame.Quote == null && api.GetAction(execute.ActionId).State == GameActionState.Completed && (string)api.GetAction(execute.ActionId).Data["serverKind"] == "cube.result", "actual server cube.result completes execution and invalidates quote");
-        api = SetupEndgame(out native); OpenCube(api);
+        api = SetupEndgame(out native); GiveCube();
         var installedArgs = Map("expectedRevision", TestRevision, "cubeInputs", new object[] { Map("uid", EquipmentUID, "count", 1) }, "itemUids", new object[] { "9007199254740997" });
         Check(EndAct(api, "cube.quote", installedArgs).State == GameActionState.Sent && (string)Rows(SentArguments(native)["itemUids"])[0] == "9007199254740997", "optional itemUids preserves installed socket order");
         PublishQuote(native, native.Last, expiry: "2000-01-01T00:00:00Z");
         Check(EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current")).Code == "endgame.quote_stale" && native.Sent.Count == 1, "expired quote never executes");
         PublishItems(native);
         Check(!Definition(api, "endgame.cube.execute").Available, "new complete snapshot invalidates quote availability");
+
+        api = SetupEndgame(out native); GiveCube(); DialogUI.I = null;
+        var refusedQuote = EndAct(api, "cube.quote", basic);
+        Check(refusedQuote.State == GameActionState.Sent && !SentArguments(native).ContainsKey("npcEntityId"), "portable quote sends without any native dialog instance");
+        ApplyReceipt(native, native.Last, false, "tool_required");
+        Check(api.GetAction(refusedQuote.ActionId).State == GameActionState.Rejected && api.GetAction(refusedQuote.ActionId).Code == "endgame.server.tool_required" && !native.Endgame.QuotePending,
+            "server possession or unlock refusal rejects quote despite the locally observed item");
+        var approvedQuote = EndAct(api, "cube.quote", basic);
+        PublishQuote(native, native.Last);
+        Check(api.GetAction(approvedQuote.ActionId).State == GameActionState.Completed, "fresh correlated server quote can follow an authoritative refusal");
+        var refusedExecute = EndAct(api, "cube.execute", Map("expectedRevision", TestRevision, "quoteId", "quote-current"));
+        Check(refusedExecute.State == GameActionState.Sent && !SentArguments(native).ContainsKey("npcEntityId"), "portable execution sends without any native dialog instance");
+        ApplyReceipt(native, native.Last, false, "tool_required");
+        Check(api.GetAction(refusedExecute.ActionId).State == GameActionState.Rejected && api.GetAction(refusedExecute.ActionId).Code == "endgame.server.tool_required" &&
+            (bool)api.GetAction(refusedExecute.ActionId).Data["serverOutcomeKnown"] && !native.Endgame.Pending && InventoryDlg.Items[3][0].count == 1,
+            "execution surfaces fresh server possession or unlock refusal without consuming the permanent item locally");
 
         api = SetupEndgame(out native);
         Check(EndAct(api, "equipment.equip", Map("expectedRevision", TestRevision, "targetUid", EquipmentUID)).Code == "equipment.binding_confirmation_required" && native.Equips == 0, "unbound endgame equipment requires explicit binding intent");
@@ -510,19 +545,19 @@ internal static partial class GameActionAdapterTests
         if (negotiated && snapshot) PublishItems(native);
         return api;
     }
-    private static void OpenCube(PluginGameApi api)
+    private static void GiveCube(int id = TestCubeItemID, int count = 1, bool locked = false)
     {
-        var source = GameBootstrap.I.Window.Frame.NpcActors[3].State;
-        source.DisplayName = "周天鼎"; source.Script = "Nzhoutianding";
-        Check(Act(api, "npc.interact", Map("entityId", "npc:1:3")).State == GameActionState.Completed, "native interaction opens 周天鼎 context");
+        InventoryDlg.Items[3].Clear();
+        InventoryDlg.Items[3].Add(new InventoryDlg.Item { id = id, count = count, locked = locked, bagIdx = 7 });
     }
     private static void Apply(EndgameNative native, Dictionary<string, object> response)
     { native.Endgame.Apply(EndgameResponse.Parse(BoundedJson.Serialize(response))); }
-    private static void Negotiate(EndgameNative native)
+    private static void Negotiate(EndgameNative native, int cubeItemID = TestCubeItemID)
     {
         native.Endgame.Begin(new EndgameRequest("hello"));
         Apply(native, Map("kind", "hello", "ok", true, "capabilities", new object[] { "endgame.v1", "endgame.rift-entrance.v1", "endgame.cube-inputs.v1" },
-            "riftEntrances", new object[] { Map("mapId", 7, "npcId", 83, "npc", "八仙使者", "script", "Nbaxian") }));
+            "riftEntrances", new object[] { Map("mapId", 7, "npcId", 83, "npc", "八仙使者", "script", "Nbaxian") },
+            "result", Map("cubeItemId", cubeItemID.ToString(), "cubeNPC", "Synthetic keeper", "cubeLore", "Synthetic cube lore")));
     }
     private static Dictionary<string, object> EndgameItem(string uid, int item, string location, int tab, int slot, bool locked = false)
     { return Map("uid", uid, "itemId", item, "location", location, "tab", tab, "slot", slot, "revision", TestRevision, "name", "Synthetic item", "locked", locked); }

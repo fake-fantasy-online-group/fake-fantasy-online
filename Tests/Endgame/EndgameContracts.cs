@@ -43,8 +43,44 @@ class EndgameContracts
         byte[] payload = new byte[bytes.Length - 2]; Buffer.BlockCopy(bytes, 2, payload, 0, payload.Length);
         return PrivateServerEndgameCodec.Decode(payload);
     }
+    static void PortableCubeContracts()
+    {
+        var s = new EndgameClientState();
+        Action<string, bool> hello = (result, capable) =>
+        {
+            s.Begin(new EndgameRequest("hello"));
+            s.Apply(Response("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"" + (capable ? ",\"endgame.cube-inputs.v1\"" : "") + "],\"result\":{" + result + "}}"));
+        };
+        hello("\"cubeItemId\":\"1900028301\",\"cubeNPC\":\"游方巧匠\",\"cubeLore\":\"旧鼎随身。\"", true);
+        Check(s.CubeItemID == 1900028301 && s.CubeNPC == "游方巧匠" && s.CubeLore == "旧鼎随身。", "hello supplies server-owned portable item and recovery lore");
+        hello("\"cubeItemId\":\"1900028399\"", true);
+        Check(s.CubeItemID == 1900028399 && s.CubeNPC == "" && s.CubeLore == "", "portable identity is server-configured and omitted lore never inherits old metadata");
+        foreach (string invalid in new[] { "", "0", "-1", "+1900028301", "1900028301 ", "not-an-id", "2147483648" })
+        {
+            hello("\"cubeItemId\":\"" + invalid + "\",\"cubeNPC\":\"游方巧匠\",\"cubeLore\":\"旧鼎随身。\"", true);
+            Check(s.CubeItemID == 0 && s.CubeNPC == "" && s.CubeLore == "", "invalid portable ID fails closed: " + invalid);
+        }
+        hello("", true); Check(s.CubeItemID == 0, "missing portable ID fails closed");
+        hello("\"cubeItemId\":\"1900028301\"", false); Check(!s.CubeInputsV1 && s.CubeItemID == 0, "unnegotiated result cannot grant portable entry");
+        hello("\"cubeItemId\":\"1900028301\"", true); s.Reset();
+        Check(!s.CubeInputsV1 && s.CubeItemID == 0 && s.CubeNPC == "" && s.CubeLore == "", "reset removes portable identity and NPC metadata");
+        Reject(() => new EndgameRequest("cube.recover", "1"), "recovery without native NPC");
+        Reject(() => new EndgameRequest("cube.recover", npcEntityID: 7), "recovery without revision");
+        Reject(() => new EndgameRequest("cube.recover", "invalid", npcEntityID: 7), "recovery with malformed revision");
+        var recover = new EndgameRequest("cube.recover", "42", npcEntityID: -1);
+        Check(recover.Mutates && recover.Json.Contains("\"npcEntityId\":4294967295") && recover.Json.Contains("\"expectedRevision\":\"42\""), "recovery freezes unsigned native NPC identity and revision");
+        hello("\"cubeItemId\":\"1900028301\"", true); Check(s.Begin(recover), "negotiated recovery enters mutation tracking");
+        string frozen = recover.Json;
+        s.Apply(Response("{\"kind\":\"cube.result\",\"ok\":true,\"requestId\":\"" + recover.RequestID + "\"}"));
+        Check(ReferenceEquals(s.PendingRequest,recover), "cube execution receipt cannot finish recovery");
+        s.Apply(Response("{\"kind\":\"cube.recover\",\"ok\":false,\"error\":\"storage\",\"requestId\":\"" + recover.RequestID + "\"}"));
+        Check(ReferenceEquals(s.PendingRequest,recover) && recover.Json == frozen, "uncertain recovery retains exact nonce and payload");
+        s.Apply(Response("{\"kind\":\"cube.recover\",\"ok\":true,\"requestId\":\"" + recover.RequestID + "\",\"revision\":\"43\"}"));
+        Check(!s.Pending, "correlated recovery success ends pending state");
+    }
     static void Main(string[] args)
     {
+        PortableCubeContracts();
         var s = State(); Check(s.Negotiated, "hello negotiated");
         foreach (string error in new[] { "snapshot_size", "storage" })
         {

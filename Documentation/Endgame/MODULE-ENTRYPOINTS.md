@@ -9,25 +9,25 @@ This correction removes the player-facing F8/global launcher, universal tab stri
 | Inspect/equip bag equipment | Existing inventory actions and hover | `InventoryDlg.ActivateOrdinaryItem` / existing native equip path; `EndgamePanel.BagTooltip` and `OverlayTooltip` supplement the original tooltip in place. No separate gear dashboard. |
 | Inspect/remove worn equipment | Existing character equipment window | `EquipDlg.DrawSlots` and `DrawSlotAction` keep the original slots/actions. `DrawAdditionalEquipmentControl` optionally replaces the doll area with `DrawAdditionalEquipmentSlots` for occupied server slots 14–25, using the same icon/tooltip/remove/share/repair/wash/tool routes. |
 | Insert a star rune | Original 镶嵌炉 | `SculpDlg.TryDropSculp` queries native equipment; `SculpDlg.TryDropRune` → `SocketUI.Inlay` submits the existing `InlayForIndependentRuntime` packet using bag positions and a zero-based empty hole. No standalone rune module, extraction button or advertised plugin removal action. |
-| Cube crafting | Native doorway behind 左慈 → 商会 interior → 周天鼎 | `DialogUI.AddCubeWorkbenchOption` → `TryOpenCubeFromNpc` → `DrawCube`. Actual bag instances/material quantities go into a 35-slot (5×7) local reservation container in the original 450×484 furnace artwork; DB recipes are matched only by the server. No recipe/operation/output chooser or catalog paging. |
+| Cube crafting | Permanent 周天鼎 in native bag → right-click | `ItemActions` → `TryOpenCubeFromItem` → `DrawCube`. Actual bag instances/material quantities go into a 35-slot (5×7) local reservation container in the original 450×484 furnace artwork; DB recipes are matched only by the server. No recipe/operation/output chooser or catalog paging. |
 | Open/join/review a rift | 龙城八仙使者 → 演劫洞天 · 查看符钥与开境 | `DialogUI.BuildMenu` → `AddRiftEntranceOption` → `TryOpenRiftFromNpc` → `DrawRift`. All existing start/join/reentry/claim/compensation/leave/advance requests remain. |
 | Active-rift progress and result review | Existing active-run HUD | `DrawRiftHud`, `DrawRiftMarkers`, `DrawRiftAnnouncement` retain progress, optional floor exit, telegraphs, globes and feedback. The HUD opens only the rift view through `TryOpenRiftFromWorld`, without auto-claiming. |
 | Native furnace functions | Existing 合成炉/加工炉/镶嵌炉/打孔炉 interactions | Existing `DialogUI` exact-name dispatch remains intact; `ComposeDlg` and `SculpDlg` paths are unchanged. Incremental native drilling is distinct from random zero-hole cube opening. |
 | Native trial/life skills | Existing trial and artisan dialogue | Existing `AddTrialOption` and `Win05.OpenLifeLearn` remain; optional trial key-use advice stays. |
 
-`TryOpenWorldView` is a shared lifecycle helper, not a player navigation hub. It rechecks world/negotiation, synchronizes the connection generation, clears previous module selection/quote, opens only the requested workbench, and refreshes its relevant data. NPC presentation availability does not grant server authority. Rift admission remains server NPC-checked; input-driven cube matching and execution also validate the dedicated live workbench, dialogue, map and range.
+`TryOpenWorldView` is a shared lifecycle helper, not a player navigation hub. It rechecks world/negotiation, synchronizes the connection generation, clears previous module selection/quote, opens only the requested workbench, and refreshes its relevant data. NPC presentation availability does not grant server authority. Rift admission remains server NPC-checked; input-driven cube matching and execution validate the configured permanent tool and quest prerequisites on the server.
 
-`Update` keeps Escape, disconnect/reset cleanup, active-run polling, and dedicated cube NPC validity. It has no F8 action. `OnGUI` has no global launcher or module tabs. `Close` clears selection and quotes while retaining any uncertain mutation identity for explicit retry.
+`Update` keeps Escape, disconnect/reset cleanup, active-run polling, and captured cube bag-slot/map validity. It has no F8 action. `OnGUI` has no global launcher or module tabs. `Close` clears selection and quotes while retaining any uncertain mutation identity for explicit retry.
 
 ## Input-driven cube functions
 
-All 66 existing database recipes remain covered by matching tests. The player puts real items and exact material quantities into the container. Equipment type, installed sockets, selected rune order, material types/counts and the authoritative operation checks determine whether a recipe matches.
+62 enabled database recipes remain available; migration83 retires 1007, 1008, 1009 and 1012. Their legacy IDs and old input combinations are rejected by the server. The player puts real items and exact material quantities into the container. Equipment type, installed sockets, selected rune order, material types/counts and the authoritative operation checks determine whether a recipe matches.
 
 Identical-input definitions within one operation and cost form an equal-probability output pool. In particular, inscription and conversion no longer use a desired-output selector. Different-operation/cost ambiguity fails closed. Input matching does not use random values or expose recipe lists. See [the full container contract](CUBE-CONTAINER.md).
 
 The original inventory supplies drag/drop and right-click input; no duplicate bag browser is rendered. Every visible grid cell accepts a real selection. Stack counts remain editable, grid right-click returns a reservation, and the native confirmation dialog shows the entire server result and cost before execution.
 
-`cube.quote` carries `cubeInputs`, the current revision and the clicked NPC entity. Its matched result/risk and copper cost are server-authored. `cube.execute` carries only frozen quote identity/revision and workbench identity. Only durable atomic success changes real inventory. Quote changes, full bags, cancel, disconnect, repeated clicks and original-request replay cannot duplicate or lose materials.
+`cube.quote` carries `cubeInputs`, the current revision and no NPC entity. Its matched result/risk and copper cost are server-authored. `cube.execute` carries only frozen quote identity/revision and current portable-tool ownership. Only durable atomic success changes real inventory. Quote changes, full bags, cancel, disconnect, repeated clicks and original-request replay cannot duplicate or lose materials.
 
 ## Verification and limits
 
@@ -36,7 +36,7 @@ The original inventory supplies drag/drop and right-click input; no duplicate ba
 - `run-world-entry-contract.sh`: world negotiation, independent NPC entry, stale/reset/out-of-world gates, Escape and absent F8.
 - `run-loot-context-contract.sh`: preserved native owned-item tooltips and original-furnace guidance, with no standalone rune renderer.
 - `run-native-inlay-furnace-contract.sh`: actual native equipment/rune drag handlers, unchanged writer arguments, invalid/stale/occupied-hole rejection, target switching and reopen reset.
-- `run-module-contract.sh`: container selection/quantities, no recipe catalog, failed matching, close/reopen, inventory invalidation, stale NPC/map and reconnect cleanup. Server `TestCubeInputs*` covers all 66 definitions.
+- `run-module-contract.sh`: container selection/quantities, no recipe catalog, failed matching, close/reopen, inventory invalidation, stale item/map and reconnect cleanup. Server `TestCubeInputs*` covers historical definitions and rejects retired recipes.
 - `run-additional-equipment-contract.py`: actual native character-window source with deterministic Unity/network substitutes, covering all higher slots and original action routes.
 
 These source/managed tests do not establish rendered layout, font/art availability or live gameplay. No Unity Editor launch, cloud Player build, Mac access or asset upload was used.

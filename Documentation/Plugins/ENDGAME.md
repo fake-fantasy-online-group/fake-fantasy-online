@@ -67,7 +67,7 @@ Unknown argument fields are rejected.
 | `endgame.refresh` | none | Snapshot request |
 | `endgame.catalog.request` | `catalog`, optional `cursor` | One catalog page; omitted cursor uses the observed next cursor |
 | `endgame.socket.insert` | `expectedRevision`, `targetUid`, `runeUid`, `socket` | Insert observed bag rune into observed empty socket |
-| `endgame.cube.quote` | `expectedRevision`, `cubeInputs`; optional installed-socket `itemUids` | Current dedicated 周天鼎 input match/preview only |
+| `endgame.cube.quote` | `expectedRevision`, `cubeInputs`; legacy optional `itemUids` (reordering disabled) | Owned portable 周天鼎 input match/preview only |
 | `endgame.cube.execute` | `expectedRevision`, `quoteId` | Execute exact current unexpired server quote through the same live workbench |
 | `endgame.rift.refresh` | none | Authoritative rift state request preserving the observed invitation/run ID |
 | `endgame.rift.start` | `expectedRevision`, `tier`, optional `runId` | Fresh entry or exact observed invitation/run reentry |
@@ -89,9 +89,9 @@ respects observed nonzero `maxTier`/`unlockedTier` limits. Opaque IDs/cursors ar
 
 `cubeInputs` contains 1–12 selected inputs. An instance is exactly `{uid:"...",count:1}`; a stackable material is exactly `{itemId:123,count:4}`. UID strings are canonical Int64 values; quantities are positive Int32 values. Unknown fields, duplicate identities and mixed forms are rejected. Inputs must belong to the current authoritative bag snapshot and not exceed owned amounts. These nested objects are frozen for request/retry identity.
 
-`itemUids` is an optional ordered array of at most five distinct positive UID strings for already installed runes on selected equipment. Loose bag runes are ordered by their position in `cubeInputs`. Both orders are significant for retry equality.
+`itemUids` is an optional ordered array of at most five distinct positive UID strings for already installed runes on selected equipment. Loose bag runes are ordered by their position in `cubeInputs`. Both orders are significant for retry equality. Installed-socket reordering is disabled by server migration83; retaining this field does not enable the retired operation.
 
-First interact with the dedicated 周天鼎 inside the original 商会 room behind 左慈. `endgame.cube-inputs.v1`, `cubeInputsV1` and a non-null `cubeWorkbenchEntityId` confirm capability/current dialogue. Closing the dialogue into the container preserves that source; actor replacement, another NPC, map/session changes or capability loss invalidate it. The adapter resolves and sends the native entity ID itself on quote/execute. No caller-supplied NPC identity bypass is exposed.
+Own the database-configured permanent 周天鼎 in an unlocked native bag slot. `endgame.cube-inputs.v1`, `cubeInputsV1` and `cubeItemAvailable` confirm capability and observed tool availability; `cubeItemId` reports its currently usable ID (zero when unavailable). The legacy `cubeWorkbenchEntityId` field remains present as null. No NPC interaction or open panel is needed for quote/execute, and neither request carries an NPC entity. The server independently checks current ownership and eligibility before quoting or committing. Tool loss/locking or a stale inventory snapshot disables the adapter. Exact request replay remains unchanged.
 
 Locked or stale items cannot mutate. Equipping an unbound item needs explicit
 `allowBind:true`; trade blocks native equipment activation. The underlying native

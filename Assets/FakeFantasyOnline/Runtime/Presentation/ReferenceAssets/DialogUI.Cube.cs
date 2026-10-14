@@ -5,6 +5,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 public sealed partial class DialogUI
 {
     private WorldNpcState cubeWorkbenchNpc;
+    private int cubeLoreIndex;
+    private string cubeLoreText;
     private int cubeWorkbenchMapID;
     private EndgameClientState cubeWorkbenchState;
     private long cubeWorkbenchGeneration;
@@ -18,25 +20,29 @@ public sealed partial class DialogUI
     {
         var state = EndgamePanel.WorldState;
         return source != null && ReferenceEquals(cubeWorkbenchNpc, source) && source.EntityId != 0 &&
-            source.Script == "Nzhoutianding" && state != null && state.CubeInputsV1 &&
+            state != null && state.CubeInputsV1 && state.CubeItemID > 0 && state.CubeNPC.Length > 0 &&
+            source.DisplayName == state.CubeNPC &&
             ReferenceEquals(state, cubeWorkbenchState) && state.Generation == cubeWorkbenchGeneration &&
             cubeWorkbenchMapID == GameBootstrap.CurMapId && GameBootstrap.I?.Window?.IsNpcStateCurrentForIndependentRuntime(source) == true;
     }
-    internal int CubeWorkbenchEntityForIndependentRuntime(EndgameClientState state)
-    {
-        return state != null && state.Negotiated && ReferenceEquals(state, cubeWorkbenchState) &&
-            CurrentNpcEntityId == cubeWorkbenchNpc?.EntityId && CubeWorkbenchCurrent(cubeWorkbenchNpc)
-            ? cubeWorkbenchNpc.EntityId : 0;
-    }
+    // Retained compatibility surface: portable cube recipes never use NPC authority.
+    internal int CubeWorkbenchEntityForIndependentRuntime(EndgameClientState state) => 0;
     private void AddCubeWorkbenchOption()
     {
         var source = cubeWorkbenchNpc;
         if (!CubeWorkbenchCurrent(source)) return;
-        Add(new ReferenceNpcDialogOption("打开周天鼎", () =>
+        var state = cubeWorkbenchState;
+        if (state.CubeLore.Length > 0)
+            Add(new ReferenceNpcDialogOption("关于周天鼎", () =>
+            {
+                if (!CubeWorkbenchCurrent(source)) return;
+                if (cubeLoreText != state.CubeLore) { cubeLoreText = state.CubeLore; cubeLoreIndex = 0; }
+                var passages = state.CubeLore.Split(new[] { '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (passages.Length > 0) ShowSay(passages[cubeLoreIndex++ % passages.Length].Trim());
+            }));
+        Add(new ReferenceNpcDialogOption(state.PendingRequest?.Op == "cube.recover" ? "查询寻回结果" : "寻回周天鼎", () =>
         {
-            bool opened = EndgamePanel.TryOpenCubeFromNpc(cubeWorkbenchMapID, source.EntityId, source.Script, () => CubeWorkbenchCurrent(source));
-            if (opened) Close();
-            else ShowSay("请重新与周天鼎交谈。");
+            if (CubeWorkbenchCurrent(source) && EndgamePanel.RecoverCubeFromNpc(state, source.EntityId)) Close();
         }));
     }
 }

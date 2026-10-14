@@ -21,16 +21,17 @@ public sealed class EndgameRequest
     public string Json { get; }
     public string Catalog { get; }
     public string Cursor { get; }
-    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade";
+    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "cube.recover" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade";
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
         IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0, int npcEntityID = 0, IReadOnlyList<EndgameCubeInput> cubeInputs = null)
     {
-        if (Array.IndexOf(new[] { "skill.ranks", "skill.upgrade", "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
+        if (Array.IndexOf(new[] { "skill.ranks", "skill.upgrade", "hello", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "cube.recover", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
         if (RequestID.Length < 16 || RequestID.Length > 64) throw new ArgumentException("Invalid request ID.");
         foreach (char c in RequestID) if (c < 33 || c > 126) throw new ArgumentException("Invalid request ID.");
         if (socket < 0 || socket > 4 || tier < 0 || tier > 150 || recipeID < 0 || floorIndex < 0) throw new ArgumentException("Command is out of range.");
+        if (op == "cube.recover" && (npcEntityID == 0 || string.IsNullOrEmpty(revision))) throw new ArgumentException("Cube recovery requires the current NPC and revision.");
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
@@ -52,7 +53,7 @@ public sealed class EndgameRequest
         if (op == "rift.advance") data.Add("floorIndex", floorIndex);
         if (npcEntityID != 0)
         {
-            if (op != "rift.start" && op != "cube.quote" && op != "cube.execute") throw new ArgumentException("npcEntityId is not valid for this operation.");
+            if (op != "rift.start" && op != "cube.quote" && op != "cube.execute" && op != "cube.recover") throw new ArgumentException("npcEntityId is not valid for this operation.");
             data.Add("npcEntityId", (long)unchecked((uint)npcEntityID));
         }
         if (itemUIDs != null)

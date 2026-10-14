@@ -37,7 +37,10 @@ contains('Presentation/ReferenceAssets/SculpDlg.Window.cs', 'TryDropRune((byte)I
 assert 'endgame.socket.remove' not in (runtime / 'Presentation/ReferenceAssets/PluginGameApi.Endgame.Actions.cs').read_text()
 checks += 1
 contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'State.Materials', 'cubeInputs: CubeInputs()', 'SyncCubeInputs()',
-         'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID, npcEntityID: cubeNpcEntityID)')
+         'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
+cube_source = (runtime / 'Presentation/ReferenceAssets/EndgamePanel.Cube.cs').read_text(encoding='utf-8')
+assert 'npcEntityID:' not in cube_source and 'cubeNpcEntityID' not in cube_source, 'portable cube quote/execute never carries a scene NPC'
+checks += 1
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'DrawRiftTierSelector(rift)', 'DrawRiftActions(rift, selectedTierValid)', 'rift.Claimable', '"reward_pending"',
          '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', 'DrawRiftMarkers', 'rift.Transitioning', 'RiftDepth')
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'NewbieTipBox.PushText(RiftCompletionNotice)', 'completedNoticeRuns.Add(rift.RunID)', '拾妥所得，可与归元道使交谈离境。')

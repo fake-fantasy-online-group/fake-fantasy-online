@@ -12,7 +12,7 @@ partial class EndgameUiContract
     static void QuietNegotiate(Client c)
     {
         c.Endgame.Begin(new EndgameRequest("hello"));
-        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.rift-portals.v1\",\"endgame.rift-entrance.v1\",\"endgame.cube-inputs.v1\"],\"riftEntrances\":[{\"mapId\":7,\"npcId\":83,\"npc\":\"八仙使者\",\"script\":\"Nbaxian\"}]}");
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.rift-portals.v1\",\"endgame.rift-entrance.v1\",\"endgame.cube-inputs.v1\"],\"result\":{\"cubeItemId\":\"1900028301\"},\"riftEntrances\":[{\"mapId\":7,\"npcId\":83,\"npc\":\"八仙使者\",\"script\":\"Nbaxian\"}]}");
     }
     static void RiftContext(Client c, bool inside) => Apply(c, "{\"kind\":\"rift.context\",\"ok\":true,\"result\":{\"inInstance\":\"" + (inside ? "true" : "false") + "\"}}");
     static void QuietRiftLifecycleContracts()
@@ -48,9 +48,10 @@ partial class EndgameUiContract
             Check(!(bool)Get(p, "open") && !ArtworkSkin.enableds.ContainsKey("离开洞天") && !ArtworkSkin.enableds.ContainsKey("领取我的洞天所得") && !GUI.labels.Exists(t => t.Contains("正在前往下一层")), "stale open flag cannot revive objective/leave/reward modal for " + phase);
         }
         Check(c.Sent.Count == sends, "blocked in-run open attempts send no requests");
-        // Cube is an independent NPC workbench; the rift-only guard must not close it.
+        // Cube is a portable bag-item workbench; the rift-only guard must not close it.
         GameBootstrap.CurMapId = 7;
-        Check(EndgamePanel.TryOpenCubeFromNpc(7, 77, "Nzhoutianding", () => true), "rift occupancy does not suppress independent cube dialogue");
+        InventoryDlg.rows[7] = new InventoryDlg.Item { id=1900028301, bagIdx=7, count=1, name="周天鼎" }; InventoryDlg.rowTabs[7] = 1;
+        Check(EndgamePanel.TryOpenCubeFromItem(1,7), "rift occupancy does not suppress owned portable cube entry");
         Call(p, "Update"); Check((bool)Get(p, "open") && (EndgameModule)Get(p, "module") == EndgameModule.Cube, "rift lifecycle leaves an independently opened cube intact");
         Call(p, "Close"); RiftContext(c, false); Rift(c, "quiet-run", "completed", false);
         Check(EndgamePanel.TryOpenRiftFromWorld(), "authoritative exit allows explicit reentry choice"); Draw(p);

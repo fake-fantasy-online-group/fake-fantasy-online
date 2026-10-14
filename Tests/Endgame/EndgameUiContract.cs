@@ -370,24 +370,25 @@ partial class EndgameUiContract
         for (int capacity = 1; capacity <= 5; capacity++)
         {
             var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
-            c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"]}");
+            c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"],\"result\":{\"cubeItemId\":\"1900028301\"}}");
             string gear = "{\"uid\":\"9007199254740901\",\"itemId\":2001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"无孔装备\",\"socketCount\":0}";
             Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"socket-base\",\"chunks\":1,\"revision\":\"1\",\"items\":[" + gear + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":8}]}");
             InventoryDlg.rows[0] = new InventoryDlg.Item { id = 2001, bagIdx = 0 }; GameBootstrap.CurMapId = 506;
-            Check(EndgamePanel.TryOpenCubeFromNpc(506, 77, "Nzhoutianding", () => true), "dedicated cube NPC opens container");
+            InventoryDlg.rows[7] = new InventoryDlg.Item { id = 1900028301, bagIdx = 7, count = 1, name = "周天鼎" }; InventoryDlg.rowTabs[7] = 1;
+            Check(EndgamePanel.TryOpenCubeFromItem(1,7), "owned portable cube opens existing container");
             Draw(p);
             var put = typeof(EndgamePanel).GetMethod("PutCubeItem", BindingFlags.NonPublic | BindingFlags.Instance);
             put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
             put.Invoke(p, new object[] { "", 1900028201, "星髓" });
             Set(p, "cubeQuantity", "4"); Draw(p, "确认数量"); Call(p, "SubmitCube"); var request = c.Last;
-            Check(request.Op == "cube.quote" && request.Json.Contains("cubeInputs") && !request.Json.Contains("recipeId") && request.Json.Contains("9007199254740901"), "container sends only selected identities and quantities");
+            Check(request.Op == "cube.quote" && request.Json.Contains("cubeInputs") && !request.Json.Contains("npcEntityId") && !request.Json.Contains("recipeId") && request.Json.Contains("9007199254740901"), "container sends only selected identities and quantities");
             int sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent && !SysMsgBox.Visible, "pending match cannot repeat or execute");
             string preview = "随机开出1至" + capacity + "孔，每种孔数概率1/" + capacity + "；已有孔不可重开。";
             Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":0,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\"}}");
             Draw(p); Check(SysMsgBox.Visible && SysMsgBox.text.StartsWith(preview) && SysMsgBox.text.Contains("铜币：5000"), "matched risk and fee remain server-authored");
             Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "container and match never spend inventory");
             SysMsgBox.Finish(true); var execute = c.Last;
-            Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && execute.Json.Contains("npcEntityId") && !execute.Json.Contains("cubeInputs") && !execute.Json.Contains("recipeId"), "execute binds quote and live workbench only");
+            Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && !execute.Json.Contains("npcEntityId") && !execute.Json.Contains("cubeInputs") && !execute.Json.Contains("recipeId"), "execute binds authoritative quote without scene NPC identity");
             sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent, "double click cannot duplicate or reroll");
             Call(p, "Close"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity"); Receipt(c);
         }

@@ -4,7 +4,7 @@ using System.Reflection;
 using FakeFantasyOnline.Application;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
-// Executes the real EndgamePanel partials; NPC menu wiring is checked separately below.
+// Executes real panel entry partials; native bag and NPC menu wiring are checked separately.
 class EndgameWorldEntryContract
 {
     static int assertions;
@@ -16,7 +16,8 @@ class EndgameWorldEntryContract
         public List<EndgameRequest> Sent = new List<EndgameRequest>();
         public bool SendEndgame(EndgameRequest request)
         { if (!Endgame.Begin(request)) return false; Sent.Add(request); return true; }
-        public bool RetryEndgame() => false;
+        public int Retries; public EndgameRequest Retried;
+        public bool RetryEndgame() { Retries++; Retried = Endgame.PendingRequest; return Endgame.Pending; }
         public bool EquipEndgameItem(EndgameItemView item) => false;
         public bool UnequipEndgameItem(EndgameItemView item) => false;
     }
@@ -25,7 +26,7 @@ class EndgameWorldEntryContract
     static void Negotiate(Client c)
     {
         c.Endgame.Begin(new EndgameRequest("hello"));
-        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"]}"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"],\"result\":{\"cubeItemId\":\"1900028301\"}}"));
     }
     const string Entrance = "{\"mapId\":7,\"npcId\":83,\"npc\":\"八仙使者\",\"script\":\"Nbaxian\"}";
     static void EntranceHello(Client c, string entrance = Entrance, bool capability = true)
@@ -89,39 +90,88 @@ class EndgameWorldEntryContract
             Reject("{\"kind\":\"hello\",\"riftEntrances\":[" + invalid + "]}", "malformed entrance rejects entire DTO");
         Reject("{\"kind\":\"hello\",\"riftEntrances\":[" + string.Join(",", System.Linq.Enumerable.Repeat(Entrance, 33)) + "]}", "entrance list is bounded");
         bool invalidCommand = false; try { new EndgameRequest("rift.claim", npcEntityID: 5); } catch (ArgumentException) { invalidCommand = true; }
-        Check(invalidCommand && !new EndgameRequest("rift.state").Json.Contains("npcEntityId"), "NPC identity is restricted to rift.start");
+        Check(invalidCommand && !new EndgameRequest("rift.state").Json.Contains("npcEntityId"), "rift review and unrelated mutation cannot carry NPC identity");
         p.Unbind(c); ArtworkSkin.click = null;
+    }
+    static void CubeRecoveryContracts()
+    {
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); GameBootstrap.CurMapId = 7;
+        InventoryDlg.rows.Remove(7);
+        var npc = new WorldNpcState { EntityId = -1, DisplayName = "游方巧匠", Script = "Ncustom" };
+        GameBootstrap.I = new GameBootstrap(); GameBootstrap.I.Window.Current = npc;
+        var dialog = new DialogUI();
+        Negotiate(c); dialog.OpenForTest(npc);
+        Check(dialog.Options.Count == 1, "no server recovery NPC means no invented recovery menu");
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\",\"endgame.cube-inputs.v1\"],\"result\":{\"cubeItemId\":\"1900028301\",\"cubeNPC\":\"游方巧匠\",\"cubeLore\":\"旧鼎随身，星河入袖。\\n二曰辨物。\\n三曰借火。\\n四曰归真。\"}}"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"recover\",\"chunks\":1,\"revision\":\"42\"}"));
+        dialog.OpenForTest(npc);
+        Check(dialog.Options.Count == 3 && dialog.Options[0].Label == "原生任务和服务" && dialog.Options[1].Label == "关于周天鼎" && dialog.Options[2].Label == "寻回周天鼎",
+            "configured NPC appends lore and recovery without a scene-workbench entry");
+        dialog.Options[1].Action();
+        Check(dialog.Message == "旧鼎随身，星河入袖。" && !(bool)Get(p,"open"), "recovery NPC shows exact server-authored lore without opening cube");
+        foreach (string passage in new[] { "二曰辨物。", "三曰借火。", "四曰归真。", "旧鼎随身，星河入袖。" })
+        {
+            dialog.Options[1].Action(); Check(dialog.Message == passage, "about action rotates one server-authored passage at a time");
+        }
+        Check(dialog.CubeWorkbenchEntityForIndependentRuntime(c.Endgame) == 0, "NPC can never lend scene authority to cube quote or execute");
+        npc.DisplayName += "分身"; dialog.OpenForTest(npc); Check(dialog.Options.Count == 1, "recovery NPC uses exact configured name");
+        npc.DisplayName = "游方巧匠"; dialog.OpenForTest(npc);
+        int sent = c.Sent.Count; var stale = dialog.Options[2];
+        GameBootstrap.CurMapId = 8; stale.Action();
+        Check(c.Sent.Count == sent, "map departure invalidates recovery action"); GameBootstrap.CurMapId = 7;
+        GameBootstrap.I.Window.Current = new WorldNpcState { EntityId = -1, DisplayName = npc.DisplayName, Script = npc.Script }; stale.Action();
+        Check(c.Sent.Count == sent, "replacement actor with reused ID invalidates recovery action");
+        GameBootstrap.I.Window.Current = npc; dialog.OpenForTest(npc); dialog.Options[2].Action();
+        var request = c.Endgame.PendingRequest;
+        Check(dialog.Closed && !(bool)Get(p,"open") && request != null && request.Op == "cube.recover" && request.Mutates && request.Json.Contains("\"npcEntityId\":4294967295") && request.Json.Contains("\"expectedRevision\":\"42\""),
+            "recover sends exact live NPC and authoritative revision without opening workbench");
+        sent = c.Sent.Count; int retries = c.Retries; string frozen = request.Json;
+        stale.Action(); Check(c.Sent.Count == sent && c.Retries == retries + 1 && ReferenceEquals(c.Endgame.PendingRequest,request) && ReferenceEquals(c.Retried,request), "repeated recovery queries the exact pending request without a new nonce");
+        dialog.OpenForTest(npc); Check(dialog.Options[2].Label == "查询寻回结果" && !EndgamePanel.CubeItemAvailableForIndependentRuntime(c.Endgame), "missing cube still has an explicit recovery-result query menu");
+        dialog.Options[2].Action();
+        Check(dialog.Closed && c.Retries == retries + 2 && c.Sent.Count == sent && ReferenceEquals(c.Retried,request) && request.Json == frozen, "recovery query retains exact original NPC revision and request ID");
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"cube.recover\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"revision\":\"43\"}"));
+        Check(!c.Endgame.Pending, "correlated recovery result releases pending transaction");
+        var unrelated = new EndgameRequest("rift.start", "43", tier: 1); c.Endgame.Begin(unrelated); retries = c.Retries;
+        dialog.OpenForTest(npc); dialog.Options[2].Action();
+        Check(!dialog.Closed && c.Retries == retries && c.Sent.Count == sent && ReferenceEquals(c.Endgame.PendingRequest,unrelated), "recovery menu cannot retry or replace another pending mutation");
+        dialog.OpenForTest(npc); stale = dialog.Options[2]; c.Endgame.Reset(); Negotiate(c); stale.Action();
+        Check(c.Sent.Count == sent, "reconnect never revives a captured recovery menu");
+        p.Unbind(c);
     }
     static void Main()
     {
-        Check(!EndgamePanel.WorldEntryAvailable && !EndgamePanel.TryOpenRiftFromWorld(), "unbound entry is unavailable");
+        Check(!EndgamePanel.WorldEntryAvailable && !EndgamePanel.TryOpenRiftFromWorld() && !EndgamePanel.TryOpenCubeFromItem(1,7), "unbound entry is unavailable");
         var p = new EndgamePanel(); var c = new Client(); p.Bind(c);
-        Check(!EndgamePanel.TryOpenRiftFromWorld() && !EndgamePanel.TryOpenCubeFromWorld() && c.Sent.Count == 0, "legacy server entry sends nothing");
+        InventoryDlg.rows[7] = new InventoryDlg.Item { id=1900028301, bagIdx=7, count=1, name="周天鼎" }; InventoryDlg.rowTabs[7] = 1;
+        Check(!EndgamePanel.TryOpenRiftFromWorld() && !EndgamePanel.TryOpenCubeFromWorld() && !EndgamePanel.TryOpenCubeFromItem(1,7) && c.Sent.Count == 0, "legacy server entry sends nothing");
         Negotiate(c); c.EndgameInWorld = false;
-        Check(!EndgamePanel.WorldEntryAvailable && !EndgamePanel.TryOpenRiftFromWorld() && c.Sent.Count == 0, "out-of-world entry sends nothing");
+        Check(!EndgamePanel.WorldEntryAvailable && !EndgamePanel.TryOpenRiftFromWorld() && !EndgamePanel.TryOpenCubeFromItem(1,7) && c.Sent.Count == 0, "out-of-world entry sends nothing");
         c.EndgameInWorld = true;
         Check(EndgamePanel.WorldEntryAvailable && EndgamePanel.TryOpenRiftFromWorld(), "HUD opens negotiated rift review");
         Check((bool)Get(p, "open") && (EndgameModule)Get(p, "module") == EndgameModule.Rift, "HUD opens only rift controls");
         Check((long)Get(p, "generation") == c.Endgame.Generation, "world open synchronizes generation before first update");
         Check(c.Sent.Exists(r => r.Op == "snapshot") && c.Sent.Exists(r => r.Op == "rift.state"), "world open requests real snapshot and run");
         Check(c.Sent.TrueForAll(r => r.Op == "snapshot" || r.Op == "rift.state" || r.Op == "catalog"), "entry does not spend keys or authorize mutations");
-        Update(p); Check((bool)Get(p, "open"), "first update keeps NPC-opened panel visible");
-        Check(!EndgamePanel.TryOpenCubeFromWorld(), "generic world opener cannot bypass cube NPC identity");
+        Update(p); Check((bool)Get(p, "open"), "first update keeps explicitly opened panel visible");
+        Check(!EndgamePanel.TryOpenCubeFromWorld(), "generic world opener cannot bypass owned cube item");
         GameBootstrap.CurMapId = 506;
         Check(!EndgamePanel.TryOpenCubeFromNpc(7,77,"Nzhoutianding",()=>true) && !EndgamePanel.TryOpenCubeFromNpc(506,0,"Nzhoutianding",()=>true) &&
-            !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nartisan",()=>true) && !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>false), "cube entry requires current map, entity, exact script and live source");
-        Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true) && (EndgameModule)Get(p, "module") == EndgameModule.Cube, "native cube NPC opens only cube controls");
+            !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nartisan",()=>true) && !EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>false), "all retired scene cube entry routes remain rejected");
+        Check(!EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true), "exact former scene NPC no longer opens cube");
+        Check(EndgamePanel.TryOpenCubeFromItem(1,7) && (EndgameModule)Get(p, "module") == EndgameModule.Cube, "native bag item opens only cube controls");
         Check(!c.Sent.Exists(r => r.Catalog == "recipes"), "ingredient-driven cube does not load recipe menu catalog");
         var pending = new EndgameRequest("rift.start", tier: 1); c.SendEndgame(pending);
         Check(EndgamePanel.TryOpenRiftFromWorld() && ReferenceEquals(c.Endgame.PendingRequest, pending), "opening a view preserves uncertain mutation identity");
         c.Endgame.Reset(); int before = c.Sent.Count;
-        Check(!EndgamePanel.TryOpenCubeFromWorld() && c.Sent.Count == before, "stale NPC option cannot bypass reset negotiation");
+        Check(!EndgamePanel.TryOpenCubeFromWorld() && !EndgamePanel.TryOpenCubeFromItem(1,7) && c.Sent.Count == before, "owned bag item cannot bypass reset negotiation");
         Update(p); Check(!(bool)Get(p, "open"), "reset closes old view");
         Negotiate(c);
-        Check(EndgamePanel.TryOpenCubeFromNpc(506,77,"Nzhoutianding",()=>true), "renegotiated native cube entry opens before update");
+        Check(EndgamePanel.TryOpenCubeFromItem(1,7), "renegotiated native cube item opens before update");
         Update(p); Check((bool)Get(p, "open"), "renegotiated open survives update");
         UnityEngine.Input.pressed = UnityEngine.KeyCode.F8; Update(p);
-        Check((bool)Get(p, "open"), "F8 cannot toggle an NPC-opened workbench");
+        Check((bool)Get(p, "open"), "F8 cannot toggle an item-opened workbench");
         UnityEngine.Input.pressed = UnityEngine.KeyCode.Escape; Update(p);
         Check(!(bool)Get(p, "open"), "Escape closes standalone workbench");
         UnityEngine.Input.pressed = UnityEngine.KeyCode.F8; Update(p);
@@ -131,7 +181,7 @@ class EndgameWorldEntryContract
         UnityEngine.Input.pressed = null;
         p.Unbind(c); before = c.Sent.Count;
         Check(!EndgamePanel.TryOpenRiftFromWorld() && c.Sent.Count == before, "detached row sends nothing");
-        EntranceContracts();
-        Console.WriteLine("PASS " + assertions + " NPC world-entry contracts; actual panel logic, deterministic Unity substitutes.");
+        EntranceContracts(); CubeRecoveryContracts();
+        Console.WriteLine("PASS " + assertions + " bag/NPC world-entry contracts; actual panel logic, deterministic Unity substitutes.");
     }
 }
