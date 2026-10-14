@@ -12,6 +12,7 @@ internal partial class InventoryDlg
             Items[t].Clear();
             Items[t].AddRange(list);
         }
+        if (I != null) I.ClearMobileSelection();
         _lockReqAt = 0f;
     }
 }

@@ -68,7 +68,7 @@ public partial class CursorManager : MonoBehaviour
     // Product-only overload: it only supplies the reference asset root for the running runtime and
     // carries no official token of its own. Awake and every other caller use the single-argument form.
     private Texture2D Build(string name) => Build(
-        referenceRootForIndependentRuntime ?? Path.Combine(UnityEngine.Application.streamingAssetsPath, "ReferenceClient"), name);
+        referenceRootForIndependentRuntime ?? Path.Combine(ResourceFileRoot.Path, "ReferenceClient"), name);
 
     // Official 0x060001c0, instance UnityEngine.Texture2D CursorManager.Build(System.String). A cursor
     // png is located under <referenceRoot>/Cursor, decoded, magnified by the cursor scale and returned

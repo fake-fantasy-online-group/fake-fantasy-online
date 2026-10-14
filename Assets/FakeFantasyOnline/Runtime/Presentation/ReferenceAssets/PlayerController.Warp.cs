@@ -27,6 +27,7 @@ public partial class PlayerController
 {
     public void Warp(float x, float y)
     {
+        CancelMobileInput();
         worldX = Mathf.Clamp(x, 0f, worldW);
         worldY = Mathf.Clamp(y, 0f, worldH);
         path.Clear();

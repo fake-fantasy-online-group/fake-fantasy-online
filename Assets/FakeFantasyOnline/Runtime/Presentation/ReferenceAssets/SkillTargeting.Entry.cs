@@ -49,12 +49,12 @@ public sealed partial class SkillTargeting
         if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
         { AuthoritativeProfessionSkill.Waiting(); return; }
         if (pc == null || Camera.main == null) return;
-        if (GameHud.I != null && GameHud.I.MouseOverHud()) return;
+        if (!MobileClientPresentation.Enabled && GameHud.I != null && GameHud.I.MouseOverHud()) return;
 
         float worldW = pc.worldW;
         float worldH = pc.worldH;
         float ppu = pc.ppu;
-        Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(ClientInput.AimPosition);
         float gx = Mathf.Clamp(pointerWorld.x * ppu + worldW * 0.5f, 0f, worldW);
         float gy = Mathf.Clamp(worldH * 0.5f - pointerWorld.y * ppu, 0f, worldH);
         float effectiveRange = AuthoritativeProfessionSkill.Uses(skillId)
@@ -97,6 +97,12 @@ public sealed partial class SkillTargeting
     private void Update()
     {
         if (!Active) return;
+        if (MobileClientPresentation.Enabled)
+        {
+            ClientInput.Refresh(); // lifecycle/viewport gates must not depend on component Update order
+            if (!Active) return;
+            if (MobileClientPresentation.ModalOpen || MobileClientPresentation.DiagramOpen) { End(); return; }
+        }
         if (AuthoritativeProfessionSkill.Uses(skillId) && !AuthoritativeProfessionSkill.LearnedActive(skillId))
         { AuthoritativeProfessionSkill.Waiting(); End(); return; }
 
@@ -121,13 +127,13 @@ public sealed partial class SkillTargeting
         float worldW = pc.worldW;
         float worldH = pc.worldH;
         float ppu = pc.ppu;
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+        if (ClientInput.AimCancel)
         {
             End();
             return;
         }
 
-        Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(ClientInput.AimPosition);
         float gx = Mathf.Clamp(pointerWorld.x * ppu + worldW * 0.5f, 0f, worldW);
         float gy = Mathf.Clamp(worldH * 0.5f - pointerWorld.y * ppu, 0f, worldH);
         float playerX = pc.worldX;
@@ -144,15 +150,19 @@ public sealed partial class SkillTargeting
             UpdateCircle(gx, gy, ppu, worldW, worldH);
         }
 
-        bool overHud = GameHud.I != null && GameHud.I.MouseOverHud();
-        if (!Input.GetMouseButtonDown(0) || overHud) return;
+        bool overHud = MobileClientPresentation.Enabled
+            ? !ClientInput.MobileSkillGestureActive && MobileClientPresentation.IsPointerOverUi(ClientInput.AimPosition)
+            : GameHud.I != null && GameHud.I.MouseOverHud();
+        if (!ClientInput.AimConfirm || overHud) return;
 
+        bool mobileConfirmation = MobileClientPresentation.Enabled && ClientInput.MobileSkillGestureActive;
+        ClientInput.ConsumeAimConfirm();
         PlayerController.SuppressWorldClick();
         int roundedX = Mathf.RoundToInt(gx);
         int roundedY = Mathf.RoundToInt(gy);
         if (mode == Aim.Trap)
         {
-            if (CastTrapAtPointer(skillId, roundedX, roundedY)) End();
+            if (CastTrapAtPointer(skillId, roundedX, roundedY) || mobileConfirmation) End();
             return;
         }
         bool approach = false;
@@ -182,6 +192,7 @@ public sealed partial class SkillTargeting
     private void End()
     {
         Active = false;
+        ClientInput.ClearSkillAim();
         Show(false);
         if (CursorManager.I != null) CursorManager.I.SetCastMode(false);
     }

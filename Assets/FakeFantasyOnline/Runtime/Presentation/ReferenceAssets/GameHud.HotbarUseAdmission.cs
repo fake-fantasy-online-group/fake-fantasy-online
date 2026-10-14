@@ -49,7 +49,7 @@ public partial class GameHud
         }
         if (aim != SkillTargeting.Aim.Instant)
         {
-            if (GameSettings.SmartCast)
+            if (GameSettings.SmartCast && !ClientInput.MobileSkillGestureActive)
                 SkillTargeting.CastImmediate(skillId, aim, range, radius, angle, rectL, rectW, isTrap);
             else
                 SkillTargeting.Begin(skillId, aim, range, radius, angle, rectL, rectW, isTrap);

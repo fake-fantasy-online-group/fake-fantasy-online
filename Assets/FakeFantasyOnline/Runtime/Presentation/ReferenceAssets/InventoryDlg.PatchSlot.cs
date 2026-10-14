@@ -6,6 +6,7 @@ internal partial class InventoryDlg
     public static void PatchSlot(int tab, int bagIdx, int itemId, Item newItem, bool lockAuthoritative = false)
     {
         if (tab < 0 || tab > 3) return;
+        if (I != null) I.ClearMobileSelection();
         var bag = Items[tab];
         int index = bag.FindIndex(item => item.bagIdx == bagIdx);
         if (itemId <= 0)

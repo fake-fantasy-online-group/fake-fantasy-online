@@ -142,6 +142,7 @@ public sealed class ReferenceFirstWorldInventoryDialog : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        InventoryDlg.ClearMobileSelectionForWorldChange();
         state = WorldInventoryState.Empty;
         // Only the borrower ends. No native close/held/split/tool reset, no root destruction,
         // no resource replacement and no change of Unity's automatic callback ownership.

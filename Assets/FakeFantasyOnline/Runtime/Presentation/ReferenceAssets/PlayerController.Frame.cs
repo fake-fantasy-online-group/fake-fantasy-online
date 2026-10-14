@@ -25,6 +25,7 @@ public partial class PlayerController
 
         if (dead)
         {
+            CancelMobileInput();
             UpdateDeadMovementForIndependentRuntime();
             UpdateAnim(0f, 0f, false);
             UpdateBuffAura();
@@ -32,6 +33,7 @@ public partial class PlayerController
         }
         if (CharData.rideAnchorId != 0)
         {
+            CancelMobileInput();
             FollowRideAnchor();
             path.Clear();
             moveToTarget = false;
@@ -45,6 +47,7 @@ public partial class PlayerController
         }
         if (workSkill != 0)
         {
+            CancelMobileInput();
             UpdateWork();
             if (Input.GetMouseButtonDown(1) && !SysMsgBox.Visible && !OverAnyUI())
                 SysMsgBox.Show("是否要结束打工？", CancelWork, null);
@@ -53,6 +56,7 @@ public partial class PlayerController
         }
         if (CharData.immobile != 0)
         {
+            CancelMobileInput();
             path.Clear();
             moveToTarget = false;
             pathIdx = 0;
@@ -73,6 +77,7 @@ public partial class PlayerController
         UpdateSittingForIndependentRuntime();
 
         UpdatePointerFrame();
+        UpdateMobileMovement();
         ApplyChantMovementForIndependentRuntime();
         ApplyApproachForIndependentRuntime();
         AdvanceFollowForIndependentRuntime();

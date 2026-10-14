@@ -103,12 +103,13 @@ public class MusicManager : MonoBehaviour
 
     private string ResolveMusicDir()
     {
-        string primary = Path.Combine(UnityEngine.Application.streamingAssetsPath, "Music");
+        string primary = Path.Combine(ResourceFileRoot.Path, "Music");
         if (Directory.Exists(primary))
         {
             return primary;
         }
 
+        if (UnityEngine.Application.isMobilePlatform) return primary;
         return Path.GetFullPath(
             Path.Combine(UnityEngine.Application.dataPath, "../../game_res/audio/Music"));
     }

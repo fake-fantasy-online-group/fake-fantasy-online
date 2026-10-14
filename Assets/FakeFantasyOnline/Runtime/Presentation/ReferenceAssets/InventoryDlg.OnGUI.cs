@@ -32,9 +32,11 @@ internal partial class InventoryDlg
     {
         DragCursorOverlay.Ensure();
         if (Event.current.type == EventType.Repaint) TickLockWatchdog();
-        if (!open) return;
+        if (!open) { ClearMobileSelection(); MobileClientPresentation.RemovePanel(this); return; }
         if (!loaded) Load();
         if (bk == null) return;
+        if (MobileClientPresentation.Enabled) { DrawMobileInventory(Event.current); return; }
+        MobileClientPresentation.RemovePanel(this);
         s = UIScale.Factor;
         if (!placed)
         {

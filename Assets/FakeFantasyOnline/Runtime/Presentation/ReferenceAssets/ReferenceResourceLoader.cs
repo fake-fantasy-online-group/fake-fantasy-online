@@ -78,7 +78,7 @@ public sealed class ReferenceResourceLoader : IDisposable
         // Official StreamingAssets/gameassets root. It is the single root GameTables reads and
         // the only place the byte-locked official loose tables are supplied from.
         mappedUiCandidateRoot = Path.GetFullPath(
-            Path.Combine(UnityEngine.Application.streamingAssetsPath, "gameassets"));
+            Path.Combine(ResourceFileRoot.Path, "gameassets"));
         mappedUiCandidatePrefix = mappedUiCandidateRoot.TrimEnd(
             Path.DirectorySeparatorChar,
             Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -129,7 +129,7 @@ public sealed class ReferenceResourceLoader : IDisposable
         {
             persistentStreamingOwner = new ReferenceResourceLoader(
                 Path.Combine(
-                    UnityEngine.Application.streamingAssetsPath,
+                    ResourceFileRoot.Path,
                     StreamingAssetsDirectory),
                 true);
         }

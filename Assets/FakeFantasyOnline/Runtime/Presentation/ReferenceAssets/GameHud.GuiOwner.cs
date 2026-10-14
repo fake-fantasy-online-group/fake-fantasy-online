@@ -106,6 +106,13 @@ public partial class GameHud
     {
         LastGuiDrawSucceededForIndependentRuntime = false;
         DrawResourcePrefixForIndependentRuntime(out int screenWidth, out int screenHeight);
+        if (MobileClientPresentation.Enabled)
+        {
+            bool enabled=GUI.enabled;
+            try { GUI.enabled=enabled && !MobileClientPresentation.ModalOpen; DrawMobileHud(); }
+            finally { GUI.enabled=enabled; }
+            return;
+        }
         float elapsedSeconds = Time.time;
         float hudScale = s;
         bool ready = guiPlayerStatus.DrawAvatarForIndependentRuntime(elapsedSeconds, screenHeight);

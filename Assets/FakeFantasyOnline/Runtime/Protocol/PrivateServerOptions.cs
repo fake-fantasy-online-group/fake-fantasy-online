@@ -87,6 +87,17 @@ public sealed class PrivateServerOptions
             versionManifestUriWin: ReadVersionManifestUri("FFO_VERSION_MANIFEST_URL_WIN"));
     }
 
+    public static PrivateServerOptions MobileConfigured(string dispatchUrl)
+    {
+        Uri uri;
+        if (!Uri.TryCreate(dispatchUrl, UriKind.Absolute, out uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.IsLoopback || uri.Host == "0.0.0.0" || uri.Host == "::" ||
+            !string.IsNullOrEmpty(uri.UserInfo))
+            throw new ArgumentException("Mobile dispatch requires an explicit reachable HTTP(S) server URL; loopback and embedded credentials are not allowed.", nameof(dispatchUrl));
+        return new PrivateServerOptions(uri, Guid.NewGuid().ToString("D").ToUpperInvariant());
+    }
+
     private static Uri ReadVersionManifestUri(string variable)
     {
         string value = Environment.GetEnvironmentVariable(variable);

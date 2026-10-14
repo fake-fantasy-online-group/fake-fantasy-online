@@ -19,7 +19,7 @@ public partial class RemotePlayer : ISelectable
     // Internal visibility lets the existing explicit diagnostic entry use this same body.
     internal void OnMouseDown()
     {
-        if (GameHud.OverUI) return;
+        if (MobileClientPresentation.Enabled || GameHud.OverUI) return;
         if (HostileToLocal)
         {
             CombatWorld.SetPvpTarget(this);

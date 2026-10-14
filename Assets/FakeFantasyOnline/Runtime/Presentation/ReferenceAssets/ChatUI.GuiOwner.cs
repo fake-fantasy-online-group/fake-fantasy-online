@@ -18,6 +18,8 @@ internal partial class ChatUI
             return;
         }
 
+        if (MobileClientPresentation.Enabled) { if (!MobileClientPresentation.DiagramOpen) DrawMobileChat(); return; }
+
         // Ordered >0 includes +Infinity and rejects NaN, exactly as the native comparison.
         float ownerScale = hud.uiScale;
         s = ownerScale > 0f ? ownerScale : UIScale.Factor;

@@ -1,0 +1,92 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace FakeFantasyOnline.Foundation
+{
+/// <summary>Versioned, local-package manifest. Not a remote updater or a trust/signature mechanism.</summary>
+public sealed class MobileResourceManifest
+{
+    public const string FileName = "mobile-resources.tsv";
+    public const int MaxManifestBytes = 8 * 1024 * 1024;
+    public sealed class Entry
+    {
+        public string Source { get; private set; }
+        public string Destination { get; private set; }
+        public long Length { get; private set; }
+        public string Sha256 { get; private set; }
+        internal Entry(string source, string destination, long length, string sha256)
+        { Source = source; Destination = destination; Length = length; Sha256 = sha256; }
+    }
+    public IReadOnlyList<Entry> Entries { get; private set; }
+    public string Version { get; private set; }
+
+    public static MobileResourceManifest Parse(string text)
+    {
+        if (text == null || Encoding.UTF8.GetByteCount(text) > MaxManifestBytes)
+            throw new InvalidDataException("Mobile resource manifest is missing or too large.");
+        var entries = new List<Entry>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var reader = new StringReader(text))
+        {
+            if (reader.ReadLine() != "FFO-MOBILE-1") throw new InvalidDataException("Unsupported mobile resource manifest.");
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                var fields = line.Split('\t');
+                long length;
+                if (fields.Length != 4 || !long.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out length) || length < 0)
+                    throw new InvalidDataException("Invalid mobile resource entry.");
+                ValidateRelativePath(fields[0]); ValidateRelativePath(fields[1]);
+                if (!names.Add(fields[1]) || entries.Count >= 100000)
+                    throw new InvalidDataException("Duplicate or excessive mobile resource entries.");
+                if (fields[3].Length != 64 || Array.Exists(fields[3].ToCharArray(), c => !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))))
+                    throw new InvalidDataException("Invalid SHA-256 digest.");
+                entries.Add(new Entry(fields[0], fields[1], length, fields[3]));
+            }
+        }
+        if (entries.Count == 0) throw new InvalidDataException("Empty mobile resource manifest.");
+        using (var sha = SHA256.Create())
+            return new MobileResourceManifest { Entries = entries.AsReadOnly(), Version = Hex(sha.ComputeHash(Encoding.UTF8.GetBytes(text))) };
+    }
+
+    public static void ValidateRelativePath(string path)
+    {
+        if (string.IsNullOrEmpty(path) || path.IndexOfAny(new[] { '\\', ':', '\t', '\r', '\n', '\0', '?', '#', '%' }) >= 0 || path.StartsWith("/"))
+            throw new InvalidDataException("Unsafe mobile resource path.");
+        foreach (string part in path.Split('/'))
+            if (part == "" || part == "." || part == ".." || part.EndsWith(".") || part.EndsWith(" ") || part.EndsWith(".part", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Unsafe mobile resource path segment.");
+    }
+
+    public static string FilePath(string root, string relative)
+    {
+        ValidateRelativePath(relative);
+        return Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    public static string HashFile(string path)
+    {
+        // SHA256 streams in bounded blocks; never allocates an entire package byte array.
+        using (var stream = File.OpenRead(path))
+        using (var sha = SHA256.Create()) return Hex(sha.ComputeHash(stream));
+    }
+
+    public static bool Verify(string path, Entry entry)
+    {
+        return File.Exists(path) && new FileInfo(path).Length == entry.Length && HashFile(path) == entry.Sha256;
+    }
+
+    public static void CommitFile(string temporary, string destination, Entry entry)
+    {
+        if (!Verify(temporary, entry)) throw new InvalidDataException("Mobile resource length/hash mismatch: " + entry.Destination);
+        if (File.Exists(destination)) File.Delete(destination);
+        File.Move(temporary, destination);
+    }
+
+    private static string Hex(byte[] bytes) { return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant(); }
+}
+}

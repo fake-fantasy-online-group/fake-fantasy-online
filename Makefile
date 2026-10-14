@@ -21,3 +21,13 @@ build-windows:
 		-projectPath "$(CURDIR)" \
 		-executeMethod FakeFantasyOnline.Editor.ClientBuild.BuildWindows64 \
 		-logFile -
+
+ANDROID_BUILD_PATH ?= $(CURDIR)/Build/Android/fake-fantasy-online.apk
+.PHONY: build-android
+build-android:
+	@command -v "$(UNITY_EDITOR_BIN)" >/dev/null 2>&1 || { echo "Unity 6000.4.9f1 editor not found: $(UNITY_EDITOR_BIN)"; exit 1; }
+	@FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH="$(ANDROID_BUILD_PATH)" "$(UNITY_EDITOR_BIN)" -batchmode -quit \
+		-buildTarget Android \
+		-projectPath "$(CURDIR)" \
+		-executeMethod FakeFantasyOnline.Editor.MobileClientBuild.BuildAndroid \
+		-logFile -

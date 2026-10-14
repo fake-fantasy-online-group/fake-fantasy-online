@@ -1,4 +1,7 @@
 using System;
+using System.Collections;
+using System.IO;
+using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Protocol;
 using FakeFantasyOnline.Presentation;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
@@ -31,7 +34,40 @@ public sealed class ClientBootstrap : MonoBehaviour
 
     private void Awake()
     {
-        PrivateServerOptions options = PrivateServerOptions.LocalDefault();
+        if (UnityEngine.Application.isMobilePlatform)
+        {
+            StartCoroutine(InitializeMobile());
+            return;
+        }
+        InitializeClient(PrivateServerOptions.LocalDefault());
+    }
+
+    private IEnumerator InitializeMobile()
+    {
+        var installer = gameObject.AddComponent<MobileResourceInstaller>();
+        IEnumerator installation = installer.Install();
+        while (true)
+        {
+            object next;
+            try
+            {
+                if (!installation.MoveNext()) break;
+                next = installation.Current;
+            }
+            catch (Exception exception) { installer.Fail(exception); yield break; }
+            yield return next;
+        }
+        try
+        {
+            string dispatch = File.ReadAllText(Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim();
+            InitializeClient(PrivateServerOptions.MobileConfigured(dispatch));
+            Destroy(installer);
+        }
+        catch (Exception exception) { installer.Fail(exception); }
+    }
+
+    private void InitializeClient(PrivateServerOptions options)
+    {
         NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri.AbsoluteUri);
         // Before title creation the native test-world path still has its original
         // unbound session. SetupNet transfers this graph to its first actual owner.

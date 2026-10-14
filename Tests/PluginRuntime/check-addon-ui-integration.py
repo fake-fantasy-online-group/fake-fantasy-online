@@ -25,7 +25,9 @@ for source, side_effect in [('MonsterEntity.Click.cs', 'CombatWorld.SetTarget'),
                             ('GroundItemEntity.Click.cs', 'WalkToPickup')]:
     text = (reference / source).read_text()
     check(text.index('GameHud.OverUI') < text.index(side_effect), source + ' gates before world action')
-check('bool overUi = OverAnyUI();' in (reference / 'PlayerController.PointerFrame.cs').read_text(), 'native pointer loop uses augmented gate')
+pointer = (reference / 'PlayerController.PointerFrame.cs').read_text()
+check(': OverAnyUI();' in pointer, 'desktop pointer loop retains augmented gate')
+check('MobileClientPresentation.IsPointerOverUi(pointer.Position)' in pointer, 'touch pointer loop uses owned screen position gate')
 check('owner.OverAnyUI()' in (reference / 'ReferenceFirstWorldWindowOwner.cs').read_text(), 'wrapper pointer loop uses augmented gate')
 bootstrap = (root / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/PluginBootstrap.cs').read_text()
 check('new PluginGameApi(() => view != null ? view.CurrentSessionForPlugins : null)' in bootstrap, 'session resolved at call time')

@@ -8,6 +8,7 @@ internal partial class ChatUI
     // any map view. Reuse the closed CHAT_HIT_BOTTOM_LAYOUT geometry/read order.
     public bool MouseOver()
     {
+        if (MobileClientPresentation.Enabled) return MobileClientPresentation.ChatRect.Contains(MobileClientPresentation.GuiPoint(Input.mousePosition));
         float scale = s > 0f ? s : UIScale.Factor;
         Vector2 point = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
         int viewportHeight = Screen.height;

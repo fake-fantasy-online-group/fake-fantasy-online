@@ -15,13 +15,18 @@ public partial class PlayerController
     private void UpdatePointerFrame()
     {
         if (Camera.main == null) return;
-        bool overUi = OverAnyUI();
-        Vector3 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        ClientPointerFrame pointer = ClientInput.Pointer;
+        bool mobile = MobileClientPresentation.Enabled;
+        if (mobile && pointer.Cancelled) { followMode = false; ResetMobilePlayerGesture(); return; }
+        if (mobile && !pointer.Available) return;
+        bool overUi = mobile ? MobileClientPresentation.IsPointerOverUi(pointer.Position) || SkillTargeting.Active : OverAnyUI();
+        Vector3 world = Camera.main.ScreenToWorldPoint(pointer.Position);
         Physics2D.SyncTransforms();
         float px = Mathf.Clamp(world.x * ppu + worldW * 0.5f, 0f, worldW);
         float py = Mathf.Clamp(worldH * 0.5f - world.y * ppu, 0f, worldH);
         Vector2 point = new Vector2(world.x, world.y);
-        if (Input.GetMouseButtonDown(0)) LatchPrimaryPressForIndependentRuntime(overUi);
+        if (mobile && HandleMobilePlayerPointer(pointer, overUi, point)) return;
+        if (pointer.Down) LatchPrimaryPressForIndependentRuntime(overUi);
         float elapsed = Time.time - mouseDownTime;
 
         if (overUi && CursorManager.I != null)
@@ -33,7 +38,7 @@ public partial class PlayerController
         NpcInteract npc = null;
         if (!overUi && StallConfigDlg.LocalStalling)
         {
-            if (Input.GetMouseButtonDown(0)) BrowseOwnStallAtForIndependentRuntime(point);
+            if (pointer.Down) BrowseOwnStallAtForIndependentRuntime(point);
         }
         else if (!overUi)
         {
@@ -44,10 +49,10 @@ public partial class PlayerController
             if (attackableMonster != null && attackableMonster.NoAttack) attackableMonster = null;
             RemotePlayer remote = selected as RemotePlayer;
             bool hostileRemote = remote != null && remote.HostileToLocal;
-            if (Input.GetMouseButtonDown(0))
+            if (pointer.Down)
                 mouseDownOverMob = attackableMonster != null || hostileRemote;
             StallSignClick sign = PickStallSignForIndependentRuntime(point, npc != null);
-            if (Input.GetMouseButtonDown(0) && sign != null) mouseDownOverSign = true;
+            if (pointer.Down && sign != null) mouseDownOverSign = true;
 
             if (CursorManager.I != null)
             {
@@ -61,25 +66,29 @@ public partial class PlayerController
             int gatherKind = GatherKindForIndependentRuntime(px, py, gatherAllowed);
             if (CursorManager.I != null) CursorManager.I.SetGatherHover(gatherKind);
 
-            bool openedWork = gatherKind != 0 && Input.GetMouseButtonDown(0) && !mouseDownOverUI;
-            if (openedWork)
+            bool pickedGround = mobile && pointer.Down && !mouseDownOverUI &&
+                (selected == null || selected is PlayerController) && TryMobileGroundPickup(point);
+            if (pickedGround) mouseDownOverSign = true; // consume release; retain pickup navigation
+            bool openedWork = gatherKind != 0 && pointer.Down && !mouseDownOverUI;
+            if (pickedGround) { }
+            else if (openedWork)
             {
                 OpenWorkTipForIndependentRuntime(gatherKind);
             }
-            else if (Input.GetMouseButtonDown(0) && sign != null && !mouseDownOverUI)
+            else if (pointer.Down && sign != null && !mouseDownOverUI)
             {
                 BrowseStallForIndependentRuntime(sign);
             }
-            else if (Input.GetMouseButtonDown(0) && npc != null && !mouseDownOverUI)
+            else if (pointer.Down && npc != null && !mouseDownOverUI)
             {
                 npc.Show();
                 StopForNpcPointerForIndependentRuntime();
             }
-            else if (Input.GetMouseButtonDown(0) && attackableMonster != null && !mouseDownOverUI)
+            else if (pointer.Down && attackableMonster != null && !mouseDownOverUI)
             {
                 ApproachMonsterPointerForIndependentRuntime(px, py);
             }
-            else if (followMode && Input.GetMouseButtonUp(0) && elapsed < holdThreshold && !mouseDownOverUI)
+            else if (followMode && pointer.Up && elapsed < holdThreshold && !mouseDownOverUI)
             {
                 followMode = false;
                 if (!mouseDownOverMob && !mouseDownOverSign)
@@ -88,14 +97,14 @@ public partial class PlayerController
                     SetPathTo(px, py);
                 }
             }
-            else if (!followMode && Input.GetMouseButton(0) && holdThreshold < elapsed &&
+            else if (!mobile && !followMode && pointer.Held && holdThreshold < elapsed &&
                 npc == null && attackableMonster == null && !mouseDownOverUI)
             {
                 followMode = true;
                 sitting = false;
                 CombatWorld.StopAttack();
             }
-            else if (!followMode && Input.GetMouseButtonUp(0) && elapsed < holdThreshold &&
+            else if (!followMode && pointer.Up && elapsed < holdThreshold &&
                 npc == null && attackableMonster == null && !mouseDownOverUI &&
                 !mouseDownOverMob && !mouseDownOverSign)
             {
@@ -104,17 +113,29 @@ public partial class PlayerController
                 sitting = false;
             }
 
-            // MonsterEntity and RemotePlayer receive their own Unity OnMouseDown messages.
-            // The local movement/pick branches do not forward or gate those callbacks.
+            // Mobile world ownership is explicit; Unity mouse callbacks remain desktop-only.
+            if (mobile && pointer.Down && !mouseDownOverUI)
+            {
+                if (selectedMonster != null)
+                {
+                    if (!selectedMonster.friendly && !selectedMonster.ally) CombatWorld.SetTarget(selectedMonster, true);
+                    else TargetSelect.Select(selectedMonster);
+                }
+                else if (remote != null)
+                {
+                    if (hostileRemote) CombatWorld.SetPvpTarget(remote);
+                    else TargetSelect.Select(remote);
+                }
+            }
 
-            if (Input.GetMouseButtonDown(1))
+            if (ClientInput.SecondaryDown)
             {
                 rightDownTime = Time.time;
-                rightDownScreen = Input.mousePosition;
+                rightDownScreen = pointer.Position;
             }
-            if (Input.GetMouseButtonUp(1) && rightDownTime > 0f &&
+            if (ClientInput.SecondaryUp && rightDownTime > 0f &&
                 Time.time - rightDownTime < holdThreshold &&
-                (Input.mousePosition - rightDownScreen).sqrMagnitude < 64f &&
+                ((Vector3)pointer.Position - rightDownScreen).sqrMagnitude < 64f &&
                 !PlayerActionMenu.Visible)
             {
                 if (CombatWorld.AwaitingTarget)

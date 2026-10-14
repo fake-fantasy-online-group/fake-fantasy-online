@@ -39,7 +39,8 @@ public sealed class PluginBootstrap : MonoBehaviour
         // The delegate follows the current native owner instead of retaining a title-era session.
         game = new PluginGameApi(() => view != null ? view.CurrentSessionForPlugins : null);
         dispatcher = new MainThreadGameDispatcher();
-        addonRoot = Path.Combine(UnityEngine.Application.streamingAssetsPath, "AddOns");
+        addonRoot = Path.Combine(FakeFantasyOnline.Foundation.ClientResourcePaths.Resolve(
+            UnityEngine.Application.streamingAssetsPath, UnityEngine.Application.isMobilePlatform), "AddOns");
         configRoot = Path.Combine(UnityEngine.Application.persistentDataPath, "AddOns");
         ui = gameObject.AddComponent<AddonUiHost>();
         ParseArguments(Environment.GetCommandLineArgs());

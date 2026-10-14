@@ -51,8 +51,8 @@ public partial class SoundManager : MonoBehaviour
 
     private static string ResolveDir(string leaf)
     {
-        string path = Path.Combine(UnityEngine.Application.streamingAssetsPath, leaf);
-        if (Directory.Exists(path)) return path;
+        string path = Path.Combine(ResourceFileRoot.Path, leaf);
+        if (Directory.Exists(path) || UnityEngine.Application.isMobilePlatform) return path;
         return Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "../../game_res/audio", leaf));
     }
 

@@ -10,6 +10,7 @@ public partial class PlayerController
     private void Awake()
     {
         I = this;
+        CancelMobileInput();
         sr = GetComponent<SpriteRenderer>();
         if (sr == null) sr = gameObject.AddComponent<SpriteRenderer>();
         sr.color = Color.white;

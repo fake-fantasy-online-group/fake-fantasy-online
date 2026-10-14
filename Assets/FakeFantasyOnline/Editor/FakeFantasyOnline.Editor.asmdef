@@ -1,7 +1,10 @@
 {
     "name": "FakeFantasyOnline.Editor",
     "rootNamespace": "FakeFantasyOnline.Editor",
-    "references": [],
+    "references": [
+        "FakeFantasyOnline.Foundation",
+        "FakeFantasyOnline.Protocol"
+    ],
     "includePlatforms": [
         "Editor"
     ],

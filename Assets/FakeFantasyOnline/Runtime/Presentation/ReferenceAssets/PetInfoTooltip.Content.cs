@@ -10,6 +10,11 @@ internal static partial class PetInfoTooltip
     private static void Draw(PetBrief b, Vector2 mouse, float s, string actionHint = null)
     {
         if (!BitmapFont.Ready) return;
+        DrawLines(BuildLines(b, actionHint), mouse, s);
+    }
+
+    internal static List<(string, Color)> BuildLines(PetBrief b, string actionHint = null)
+    {
         Color heading = new Color(1f, 0.85f, 0.3f, 1f);
         Color body = new Color32(225, 220, 195, 255);
         Color accent = new Color(1f, 0.9f, 0.35f, 1f);
@@ -26,8 +31,7 @@ internal static partial class PetInfoTooltip
             lines.Add(("这是你捕捉到的怪物的魂魄", body));
             lines.Add(("双击可孵化, 随机生成成长型与性别", accent));
             lines.Add(("(成长档由种类决定, 已经定死)", body));
-            DrawLines(lines, mouse, s);
-            return;
+            return lines;
         }
 
         lines.Add(("魂之精", heading));
@@ -74,7 +78,7 @@ internal static partial class PetInfoTooltip
         lines.Add((b.ppShCap > 0 ? "该宠物 已圣化" : "该宠物 未圣化", accent));
         if (!string.IsNullOrEmpty(actionHint))
             foreach (string line in actionHint.Split('\n')) lines.Add((line, accent));
-        DrawLines(lines, mouse, s);
+        return lines;
     }
 }
 }

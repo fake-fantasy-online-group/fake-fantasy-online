@@ -9,7 +9,7 @@ public partial class MonsterEntity
 {
     private void OnMouseDown()
     {
-        if (GameHud.OverUI)
+        if (MobileClientPresentation.Enabled || GameHud.OverUI)
         {
             return;
         }

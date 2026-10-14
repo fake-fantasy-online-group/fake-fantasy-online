@@ -20,7 +20,7 @@ public static class GameTables
 
         string[] roots =
         {
-            Path.Combine(UnityEngine.Application.streamingAssetsPath, "gameassets", "tables")
+            Path.Combine(ResourceFileRoot.Path, "gameassets", "tables")
         };
         _roots = roots;
         return _roots;

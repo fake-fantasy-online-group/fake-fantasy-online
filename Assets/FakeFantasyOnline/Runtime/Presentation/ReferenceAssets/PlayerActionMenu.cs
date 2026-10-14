@@ -54,6 +54,8 @@ internal sealed class PlayerActionMenu : MonoBehaviour
     // ---- instance fields (official layout) --------------------------------
 
     private bool visible;
+    private bool mobileEntry;
+    private int mobilePage;
     private byte tried;
     private int targetId;
     internal int TargetIdForIndependentRuntime => targetId;
@@ -103,6 +105,8 @@ internal sealed class PlayerActionMenu : MonoBehaviour
         // (arm64 0x291090 -> 0x177a74), not a skip. The writes remain on the actual component
         // returned by Ensure; no host-ready or world-entry flag substitutes for that owner.
         Ensure();
+        I.mobileEntry = false;
+        I.mobilePage = 0;
         I.targetId = playerId;
         I.targetName = name ?? string.Empty;
         I.copyLine = Plain(line);
@@ -110,6 +114,13 @@ internal sealed class PlayerActionMenu : MonoBehaviour
         I.anchor = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
         I.Build();
         I.visible = I.items.Count > 0;
+    }
+
+    internal static void OpenAtScreen(int playerId, string name, Vector2 screenPosition)
+    {
+        Open(playerId, name);
+        I.mobileEntry = MobileClientPresentation.Enabled;
+        I.anchor = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
     }
 
     /// <summary>Strips the \eNN rich-text escape used by the official chat feed.</summary>
@@ -282,6 +293,8 @@ internal sealed class PlayerActionMenu : MonoBehaviour
 
     private Rect Box()
     {
+        if (mobileEntry && MobileClientPresentation.Enabled)
+            return new MobilePlayerMenuLayout(MobileClientPresentation.SafeAreaGui, anchor, items.Count, MobileClientPresentation.Scale).Box;
         float scale = UIScale.Factor;
         int n = items.Count;
         float w = W * scale;
@@ -301,6 +314,7 @@ internal sealed class PlayerActionMenu : MonoBehaviour
     {
         if (!visible) return;
         if (tried == 0) Load();
+        if (mobileEntry && MobileClientPresentation.Enabled) { DrawMobileMenu(); return; }
         s = UIScale.Factor;
         // Official order (arm64 0x2930c8 / x86_64 0x2a1da6): the event is read before GUI.depth and
         // Box, and every one of the nine Event.current reads in the body is an injected guard that
@@ -375,6 +389,56 @@ internal sealed class PlayerActionMenu : MonoBehaviour
             PlayerController.SuppressWorldClick();
             visible = false;
         }
+    }
+
+    private void DrawMobileMenu()
+    {
+        s = MobileClientPresentation.Scale;
+        var layout = new MobilePlayerMenuLayout(MobileClientPresentation.SafeAreaGui, anchor, items.Count, s);
+        mobilePage = Mathf.Clamp(mobilePage, 0, layout.PageCount - 1);
+        Event e = Event.current;
+        GUI.depth = 1;
+        GUI.color = BK;
+        GUI.DrawTexture(layout.Box, Texture2D.whiteTexture);
+        GUI.color = Color.white;
+        Draw9(layout.Box);
+        if (MobileMenuButton(layout.Header, "关闭"))
+        {
+            PlayerController.SuppressWorldClick(); visible = false; return;
+        }
+        int start = mobilePage * layout.RowsPerPage;
+        int end = Mathf.Min(items.Count, start + layout.RowsPerPage);
+        for (int index = start; index < end; index++)
+        {
+            if (!MobileMenuButton(layout.Row(index - start), items[index].cap) || SysMsgBox.Visible) continue;
+            PlayerController.SuppressWorldClick();
+            visible = false;
+            Fire(items[index].act); // original permission/action owner
+            return;
+        }
+        bool enabled = GUI.enabled;
+        try
+        {
+            GUI.enabled = enabled && mobilePage > 0;
+            if (MobileMenuButton(layout.Previous, "上一页")) mobilePage--;
+            GUI.enabled = enabled && mobilePage + 1 < layout.PageCount;
+            if (MobileMenuButton(layout.Next, "下一页 " + (mobilePage + 1) + "/" + layout.PageCount)) mobilePage++;
+        }
+        finally { GUI.enabled = enabled; }
+        if (e.type == EventType.MouseDown && !layout.Box.Contains(e.mousePosition))
+        {
+            PlayerController.SuppressWorldClick(); visible = false; e.Use();
+        }
+    }
+
+    private bool MobileMenuButton(Rect rect, string caption)
+    {
+        if (rowBk != null) GUI.DrawTexture(rect, rowBk);
+        else GUI.Box(rect, GUIContent.none);
+        bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        if (BitmapFont.Ready)
+            BitmapFont.CenterOutline(new Rect(rect.x, rect.center.y - 9f * s, rect.width, 18f * s), caption, HOT, s * 1.25f);
+        return clicked;
     }
 
     // ---- Fire (0x06000977) ----------------------------------------------

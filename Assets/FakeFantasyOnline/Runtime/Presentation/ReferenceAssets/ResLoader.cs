@@ -99,9 +99,14 @@ public partial class ResLoader : MonoBehaviour
 
     private static IEnumerable<string> GameRoots()
     {
+        if (UnityEngine.Application.isMobilePlatform)
+        {
+            yield return ResourceFileRoot.Path;
+            yield break;
+        }
         yield return Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, ".."));
         yield return UnityEngine.Application.persistentDataPath;
-        yield return UnityEngine.Application.streamingAssetsPath;
+        yield return ResourceFileRoot.Path;
         yield return Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "../.."));
     }
 
@@ -143,6 +148,11 @@ public partial class ResLoader : MonoBehaviour
 
     private static string FindReleasePkgDir()
     {
+        if (UnityEngine.Application.isMobilePlatform)
+        {
+            string installed = Path.Combine(ResourceFileRoot.Path, "data");
+            return Directory.Exists(installed) ? installed : null;
+        }
         List<string> candidates = new List<string>();
         string dataPath = UnityEngine.Application.dataPath;
         string[] relatives = { "", "..", "../..", "../../.." };
@@ -160,8 +170,8 @@ public partial class ResLoader : MonoBehaviour
 
         candidates.Add(UnityEngine.Application.persistentDataPath);
         candidates.Add(Path.Combine(UnityEngine.Application.persistentDataPath, "data"));
-        candidates.Add(UnityEngine.Application.streamingAssetsPath);
-        candidates.Add(Path.Combine(UnityEngine.Application.streamingAssetsPath, "data"));
+        candidates.Add(ResourceFileRoot.Path);
+        candidates.Add(Path.Combine(ResourceFileRoot.Path, "data"));
 
         foreach (string candidate in candidates)
         {
@@ -782,7 +792,7 @@ public partial class ResLoader : MonoBehaviour
     private static IEnumerable<string> UiPackDirs()
     {
         yield return Path.Combine(
-            UnityEngine.Application.streamingAssetsPath,
+            ResourceFileRoot.Path,
             "gameassets");
     }
 

@@ -344,7 +344,11 @@ public sealed partial class AddonUiHost : MonoBehaviour, IPluginWidgetUi, IDispo
 
     public static bool MouseOver()
     {
-        Vector2 pointer = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+        return PointerOver(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y));
+    }
+
+    public static bool PointerOver(Vector2 pointer)
+    {
         foreach (AddonUiHost host in hosts)
         {
             if (host == null || host.disposed || !host.isActiveAndEnabled) continue;
