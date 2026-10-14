@@ -24,7 +24,7 @@ internal sealed partial class DealDlg
     }
     public static void Open()
     {
-        Ensure(); I.visible = true; I.myOffer.Clear(); I.gold = I.silver = I.copper = "0";
+        Ensure(); I.visible = true; I.offerSession++; I.myOffer.Clear(); I.gold = I.silver = I.copper = "0";
         I.selfHead = null; I.AttachMarks();
         // Original dependency: opening a trade opens the existing native inventory owner,
         // including a receipt before a world adapter exists. Its automatic OnGUI remains
@@ -172,7 +172,7 @@ internal sealed partial class DealDlg
             DrawItems(new Rect(itemX + 232 * itemScale, itemTop, itemWidth, itemHeight), SocialClient.OtherItems, false, mouse);
             if (SocialClient.MyLocked) Lbl(24, 70, "✔已锁定", new Color(.5f, 1, .5f, 1));
             if (SocialClient.OtherLocked) Lbl(235, 70, "✔已锁定", new Color(.5f, 1, .5f, 1));
-            if (!SocialClient.MyLocked) Lbl(21, 232, InventoryDlg.HasHeld ? "← 点左格放入交易" : "打开背包(I)拿物→点左格", InventoryDlg.HasHeld ? TradeUI.GOLD : TradeUI.GRAY);
+            if (!SocialClient.MyLocked) Lbl(21, 232, MobileClientPresentation.Enabled ? "背包选物 → 放入交易 / 撤回交易" : InventoryDlg.HasHeld ? "← 点左格放入交易" : "打开背包(I)拿物→点左格", InventoryDlg.HasHeld ? TradeUI.GOLD : TradeUI.GRAY);
             if (TradeUI.Btn(L(146, 246, 70, 22), icoAgree, SocialClient.MyLocked ? "已确认" : "确认", mouse, s) && !SocialClient.MyLocked)
             {
                 NetClient client = NetClient.I;

@@ -50,6 +50,7 @@ internal partial class RepairDlg
 
     private void OnGUI()
     {
+        DrawMobilePickCancel();
         if (Picking && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
         {
             CancelPick();

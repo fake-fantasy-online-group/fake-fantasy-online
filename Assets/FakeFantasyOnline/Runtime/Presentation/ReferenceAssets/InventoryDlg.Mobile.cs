@@ -195,11 +195,13 @@ internal partial class InventoryDlg
             }
         if (item.locked) text += "\n【已加锁】";
         bool offered = DealDlg.IsOffered((byte)tab, item.bagIdx);
-        if (offered) text += "\n【交易中】请先从交易窗撤回";
+        if (offered) text += "\n【交易中】可点击撤回交易";
+        if (DealDlg.Visible && !DealDlg.CanEditBagOffer) text += "\n【交易已锁定或已确认】";
+        else if (DealDlg.Visible && item.count > 1 && !offered) text += "\n放入整叠；部分交易请先拆分";
         UITip.DrawMobilePage(new Rect(rect.x, rect.y+h, rect.width, Mathf.Max(h, rect.height-4*h)), text, s, ref mobileDetailRow);
         bool available = !offered && !splitOpen && !HasHeldAny;
         float y = rect.yMax - 2*h;
-        if (MobileButton(new Rect(rect.x, y, rect.width/2, h), MobilePrimaryLabel(item), available)) ExecuteMobileAction(item, 0);
+        if (MobileButton(new Rect(rect.x, y, rect.width/2, h), MobilePrimaryLabel(item), DealDlg.Visible ? !splitOpen && !HasHeldAny && DealDlg.CanEditBagOffer : available)) ExecuteMobileAction(item, 0);
         if (MobileButton(new Rect(rect.x+rect.width/2, y, rect.width/2, h), item.locked ? "解锁" : "加锁", available)) ExecuteMobileAction(item, 1);
         if (MobileButton(new Rect(rect.x, y+h, rect.width/2, h), "拆分", available && !item.pet.HasValue && item.count > 1)) ExecuteMobileAction(item, 2);
         if (MobileButton(new Rect(rect.x+rect.width/2, y+h, rect.width/2, h), "分享", available)) ExecuteMobileAction(item, 3);
@@ -220,7 +222,9 @@ internal partial class InventoryDlg
     }
     private string MobilePrimaryLabel(Item item)
     {
+        if (DealDlg.Visible && DealDlg.IsOffered((byte)tab, item.bagIdx)) return "撤回交易";
         if (EquipFuseDlg.Picking || ToolTarget.Active || PetForgeDlg.Picking || AttrWashDlg.Picking || AvatarFuse.Active || RepairDlg.Picking) return "选择此物品";
+        if (DealDlg.Visible) return "放入交易";
         if (!item.pet.HasValue && EndgamePanel.CubeContainerOpen) return "放入周天鼎";
         if (!item.pet.HasValue && StoreDlg.Visible) return "存入仓库";
         if (!item.pet.HasValue && Win05.IsShowing("magicstoredlg")) return "放入衣橱";
@@ -231,10 +235,18 @@ internal partial class InventoryDlg
     {
         // Re-resolve admission at execution, never dispatch from a cached tooltip snapshot.
         Item live = ItemAt(tab, mobileSlot);
-        if (live.id != mobileId || live.id != item.id || HasHeldAny || splitOpen || DealDlg.IsOffered((byte)tab, live.bagIdx)) return;
+        if (live.id != mobileId || live.id != item.id || HasHeldAny || splitOpen) return;
+        bool offered = DealDlg.IsOffered((byte)tab, live.bagIdx);
+        if (offered)
+        {
+            if (action == 0) DealDlg.ChangeBagOffer((byte)tab, live.bagIdx);
+            ClearMobileSelection(); return;
+        }
         var command = new Event { type = EventType.MouseDown, button = 0, clickCount = 1, mousePosition = MobileClientPresentation.SafeAreaGui.center };
         // The original picker chain always gets first refusal, including split/lock/share.
         if (SlotPickers(command, live, live.pet.HasValue)) { ClearMobileSelection(); return; }
+        if (action == 0 && DealDlg.Visible)
+        { DealDlg.ChangeBagOffer((byte)tab, live.bagIdx); ClearMobileSelection(); return; }
         if (action == 0)
         {
             command.button = 1;

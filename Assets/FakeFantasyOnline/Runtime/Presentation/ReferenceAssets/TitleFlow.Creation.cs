@@ -38,7 +38,9 @@ internal sealed partial class TitleFlow
         DrawSprite(nudeAv[gender, Mathf.Clamp(CharData.head, 1, 8), CharData.hair >= 2 ? 2 : 1],
             new Rect(614f, 89f, 100f, 100f));
         if (namelbl) GUI.DrawTexture(new Rect(264f, 28f, 203f, 63f), namelbl);
-        charName = GUI.TextField(new Rect(306f, 68f, 135f, 22f), charName, 30, fieldStyle);
+        charName = MobileClientPresentation.Enabled
+            ? MobileField("character-name", new Rect(306f, 68f, 135f, 22f), charName, 30, false, fieldStyle)
+            : GUI.TextField(new Rect(306f, 68f, 135f, 22f), charName, 30, fieldStyle);
 
         if (RadioImg(new Rect(285f, 115f, 51f, 31f), male, maleSel, CharData.gender == 1))
             CharData.gender = 1;
@@ -88,6 +90,7 @@ internal sealed partial class TitleFlow
 
         if (ImgBtn(644f, 470f, btnComplete))
         {
+            mobileTitleInput.Close();
             CharData.name = charName.Trim().Length == 0 ? "无名侠客" : charName.Trim();
             CharData.race = race;
             setMessage("创建中...");

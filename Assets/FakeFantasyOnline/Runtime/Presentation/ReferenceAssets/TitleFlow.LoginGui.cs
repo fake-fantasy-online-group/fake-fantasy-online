@@ -313,7 +313,9 @@ internal sealed partial class TitleFlow
 
         Rect accountField = new Rect(327f, 392f, 134f, 22f);
         Rect passwordField = new Rect(327f, 429f, 134f, 22f);
-        string editedAccount = GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
+        string editedAccount = MobileClientPresentation.Enabled
+            ? MobileField("login-account", accountField, account, 20, false, _fieldStyle)
+            : GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
         if (!string.Equals(account, editedAccount, StringComparison.Ordinal)) pluginTitleRevision++;
         account = editedAccount;
         string editedPassword = DrawMaskedField(passwordField, password ?? string.Empty);
@@ -378,6 +380,7 @@ internal sealed partial class TitleFlow
             {
                 // The original call returns here, before GUI.enabled and the later controls.
                 // A synchronous connect callback/send exception stops this reached prefix.
+                mobileTitleInput.Close();
                 BeginLogin(submittedAccount);
             }
         }

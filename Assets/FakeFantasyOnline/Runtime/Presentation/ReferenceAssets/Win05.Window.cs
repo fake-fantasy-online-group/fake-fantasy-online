@@ -41,6 +41,7 @@ public partial class Win05
         if (loader == null) return;
         EnsureUiFrames(loader);
         s = UIScale.Factor;
+        PrepareMobileSkillWindow(def);
         if (!positioned)
         {
             winX = (Screen.width - def.w * s) * .5f;
@@ -66,7 +67,7 @@ public partial class Win05
             Rect help = hasHelp ? L(def.cx - 20f, def.cy, 20f, 19f) :
                 new Rect(-99f, -99f, 0f, 0f);
             Rect header = L(0f, 0f, def.w, 30f);
-            if (ev.type == EventType.MouseDown && header.Contains(ev.mousePosition) &&
+            if (!IsMobileSkillWindow && ev.type == EventType.MouseDown && header.Contains(ev.mousePosition) &&
                 !close.Contains(ev.mousePosition) && !help.Contains(ev.mousePosition))
             {
                 dragging = true;
@@ -103,6 +104,7 @@ public partial class Win05
             if (closed)
             {
                 cur = null;
+                mobileSkills.Reset();
                 return;
             }
 

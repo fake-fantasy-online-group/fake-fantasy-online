@@ -224,6 +224,7 @@ public sealed partial class DialogUI : MonoBehaviour
 
     private bool Open(WorldNpcState npc, NpcInteract originalReceiver)
     {
+        if (MobileClientPresentation.Enabled) ResetMobileDialog();
         LastOpenWasFurnace = false;
         if (!Ready || (npc == null && originalReceiver == null)) return false;
 
@@ -550,6 +551,7 @@ public sealed partial class DialogUI : MonoBehaviour
             return false;
         }
 
+        if (MobileClientPresentation.Enabled) return true;
         return ContainsInclusive(WindowRect(screenWidth, screenHeight, scale), topOriginPointer) ||
                optLabels.Count > 0 && ContainsInclusive(
                    OptionRect(screenWidth, screenHeight, scale),
@@ -577,6 +579,7 @@ public sealed partial class DialogUI : MonoBehaviour
             return false;
         }
 
+        if (MobileClientPresentation.Enabled) return HandleMobilePrimaryDown(topOriginPointer);
         Rect box = OptionRect(screenWidth, screenHeight, scale);
         for (int index = 0; index < optLabels.Count; index++)
         {
@@ -596,6 +599,7 @@ public sealed partial class DialogUI : MonoBehaviour
     {
         GUI.depth = 5;
         if (!Visible || win == null) return;
+        if (MobileClientPresentation.Enabled) { DrawMobileDialog(); return; }
         float scale = UIScale.Factor;
         int screenWidth = Screen.width;
         BuildStyles(scale);

@@ -188,6 +188,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static partial class TooltipContent { public static string QualityName(string name, int quality) => "\u0003" + quality + name; public static string Fmt(string name, string desc) => "\u0007" + name + "\n" + desc; }
     public partial class GameHud { public static GameHud I; public float uiScale; public bool showAvatar = true; public static string HotSlotTip(int index) => "hotbar:" + index; }
     internal static class PlayerController { public static void SuppressWorldClick() { } }
+    internal static class MobileClientPresentation { public static bool Enabled; }
     internal static class InventoryDlg
     {
         public struct Item { public int id, bagIdx, quality, count; public string name, desc; }
@@ -195,7 +196,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static Dictionary<int, Item> rows = new Dictionary<int, Item>();
         // Existing tooltip fixtures use tab-agnostic rows; entry fixtures opt into an exact native tab.
         public static Dictionary<int, int> rowTabs = new Dictionary<int, int>();
-        public static bool IsOpen, HasHeld; public static int HeldTab, HeldBagSlot;
+        public static bool IsOpen, HasHeld; public static bool HasHeldAny => HasHeld; public static int HeldTab, HeldBagSlot;
         public static bool IsLocked(byte tab, int slot) => locked.Contains(slot);
         public static HashSet<int> locked = new HashSet<int>();
         public static void Toggle() { IsOpen = !IsOpen; }

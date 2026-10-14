@@ -228,6 +228,8 @@ internal sealed partial class TitleFlow
 
     internal string DrawMaskedField(Rect rect, string value)
     {
+        if (MobileClientPresentation.Enabled)
+            return MobileField("password-" + rect.y, rect, value, 40, true, _fieldStyle);
         string mask = new string('\u25cf', value.Length);
         string edited = GUI.TextField(rect, mask, 40, _fieldStyle);
         if (string.Equals(edited, mask, StringComparison.Ordinal))
@@ -305,7 +307,9 @@ internal sealed partial class TitleFlow
 
         // GUI.TextField(rect, val, 24, style +0x290): 0x18 is the official maxLength of the
         // three plain rows - account, security code and invite code.
-        val = GUI.TextField(field, val, 24, _fieldStyle);
+        val = MobileClientPresentation.Enabled
+            ? MobileField("form-" + y, field, val, 24, false, _fieldStyle)
+            : GUI.TextField(field, val, 24, _fieldStyle);
     }
 
     /// <summary>

@@ -29,12 +29,14 @@ internal sealed partial class TitleFlow
     private void DrawTitleGui()
     {
         guiHost._projectNativeState?.Invoke();
-        if (guiHost._session == null) return;
+        if (guiHost._session == null) { mobileTitleInput.Close(); return; }
         TryLoad05Login();
         // Preserve the existing headless/diagnostic boundary without manually
         // invoking this callback or enabling a diagnostic copy of the component.
-        if (guiHost._backgroundSessionCheckRequested) return;
+        if (guiHost._backgroundSessionCheckRequested) { mobileTitleInput.Close(); return; }
 
+        mobileTitleInput.BeginPage((int)_page);
+        if (!MobileClientPresentation.Enabled || _noticeOpen) mobileTitleInput.Close();
         TitlePage page = _page;
         if (page == TitlePage.CharacterCreation)
         {

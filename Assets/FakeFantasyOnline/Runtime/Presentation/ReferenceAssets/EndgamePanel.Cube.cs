@@ -121,6 +121,13 @@ public sealed partial class EndgamePanel
             cubeInputs: CubeInputs());
         if (Send(request)) { quotedInputs = request; cubeAwaitingQuote = request.RequestID; }
     }
+    private void TakeBackCubeSelection()
+    {
+        if (!CubeEditable || SysMsgBox.Visible || InventoryDlg.HasHeldAny ||
+            cubeEditing < 0 || cubeEditing >= cubeSlots.Count) return;
+        cubeSlots.RemoveAt(cubeEditing); cubeEditing = -1; cubeQuantity = "1";
+        orderedRunes.Clear(); ChangedCubeInputs();
+    }
     private void DrawCube()
     {
         SyncCubeInputs();
@@ -142,10 +149,10 @@ public sealed partial class EndgamePanel
                 {
                     string tip = slot.Name + " ×" + slot.Count;
                     if (slot.UID.Length > 0) foreach (var item in State.Items) if (item.UID == slot.UID) { tip = OwnedItemTooltip(item); break; }
-                    ShowPanelTooltip(tip + "\n右键取回" + (slot.UID.Length == 0 ? "；左键调整数量" : "；左键取回"));
+                    ShowPanelTooltip(tip + (MobileClientPresentation.Enabled ? "\n点选后可取回或调整数量" : "\n右键取回" + (slot.UID.Length == 0 ? "；左键调整数量" : "；左键取回")));
                     if (editable && Event.current.type == EventType.MouseDown && !InventoryDlg.HasHeld)
                     {
-                        if (Event.current.button == 0 && slot.UID.Length == 0) { cubeEditing = index; cubeQuantity = slot.Count.ToString(); }
+                        if (Event.current.button == 0 && (MobileClientPresentation.Enabled || slot.UID.Length == 0)) { cubeEditing = index; cubeQuantity = slot.Count.ToString(); }
                         else if (Event.current.button == 1 || Event.current.button == 0)
                         { cubeSlots.RemoveAt(index); cubeEditing = -1; orderedRunes.Clear(); ChangedCubeInputs(); }
                         Event.current.Use();
@@ -154,7 +161,7 @@ public sealed partial class EndgamePanel
             }
             else if (cell.Contains(mouse))
             {
-                ShowPanelTooltip("从背包拖入物品；背包右键放入。\n确认合成前不会消耗物品。");
+                ShowPanelTooltip(MobileClientPresentation.Enabled ? "从背包选择物品，再点放入周天鼎。\n确认合成前不会消耗物品。" : "从背包拖入物品；背包右键放入。\n确认合成前不会消耗物品。");
                 if (editable && InventoryDlg.HasHeld && Event.current.type == EventType.MouseDown && Event.current.button == 0)
                 {
                     if (TryPutCubeBagItem(InventoryDlg.HeldTab, InventoryDlg.HeldBagSlot, cellIndex)) InventoryDlg.ClearHeld();
@@ -163,6 +170,9 @@ public sealed partial class EndgamePanel
             }
         }
         DrawCubeFooter(editable);
+        if (MobileClientPresentation.Enabled && cubeEditing >= 0 && cubeEditing < cubeSlots.Count &&
+            ArtworkSkin.Button(new Rect(353, 383, 88, 44), "取回选中", enabled: editable && !InventoryDlg.HasHeldAny))
+            TakeBackCubeSelection();
         if (CubeNativeButton(new Rect(110, 447, 90, 22), CubeMakePath, "确认合成", editable && CubeQuantitiesReady && cubeSlots.Count > 0)) SubmitCube();
         if (CubeNativeButton(new Rect(273, 447, 70, 22), CubeCancelPath, "取消", !SysMsgBox.Visible)) Close();
         if (CubeNativeButton(new Rect(340, 40, 20, 19), CubeClosePath, "×", !SysMsgBox.Visible)) Close();
@@ -184,12 +194,12 @@ public sealed partial class EndgamePanel
             if (editable && quantity != cubeQuantity) { cubeQuantity = quantity; ChangedCubeInputs(); }
             int owned = CubeOwnedMaterial(slot.ItemID);
             if (ArtworkSkin.Button(new Rect(247, 387, 94, 20), "确认数量", enabled: editable && int.TryParse(cubeQuantity, out int count) && count > 0 && count <= owned))
-            { slot.Count = int.Parse(cubeQuantity); cubeEditing = -1; ChangedCubeInputs(); }
+            { slot.Count = int.Parse(cubeQuantity); if (!MobileClientPresentation.Enabled) cubeEditing = -1; ChangedCubeInputs(); }
         }
         else DrawCubeSocketOrder(new Rect(105, 385, 239, 22), editable);
         string status = State.Pending ? "结果确认中，点击查询" : State.QuotePending ? "辨物中…" :
             State.Error.Length > 0 ? State.Message : State.Quote != null ? "铜币：" + State.Quote.Money :
-            State.SnapshotLoading ? "正在同步背包…" : !State.InventorySnapshotCurrent ? "背包未同步，点击重试" : "背包放入 · 右键取回";
+            State.SnapshotLoading ? "正在同步背包…" : !State.InventorySnapshotCurrent ? "背包未同步，点击重试" : MobileClientPresentation.Enabled ? "背包放入 · 点选后取回" : "背包放入 · 右键取回";
         Rect summary = new Rect(105, 417, 239, 18);
         CubeText(summary, status, State.Error.Length > 0 ? new Color(1f, .6f, .48f) : Gold);
         if (summary.Contains(Event.current.mousePosition))

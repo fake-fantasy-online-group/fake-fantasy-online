@@ -12,6 +12,16 @@ internal sealed partial class TitleFlow
         float scale = Mathf.Min(Screen.width / 800f, Screen.height / 600f);
         float offsetX = (Screen.width - scale * 800f) * 0.5f;
         float offsetY = (Screen.height - scale * 600f) * 0.5f;
+        if (MobileClientPresentation.Enabled)
+        {
+            Rect safe = MobileClientPresentation.SafeAreaGui;
+            scale = Mathf.Min(safe.width / 800f, safe.height / 600f);
+            offsetX = safe.x + (safe.width - scale * 800f) * .5f;
+            offsetY = safe.y + (safe.height - scale * 600f) * .5f;
+            if (mobileTitleInput.Editing)
+                offsetY = MobileTitleTextInput.PanY(offsetY, scale, mobileTitleInput.FocusRect,
+                    MobileTitleTextInput.VisibleArea(safe, TouchScreenKeyboard.area, true));
+        }
         Matrix4x4 previousMatrix = GUI.matrix;
         GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0f),
             Quaternion.identity, new Vector3(scale, scale, 1f));

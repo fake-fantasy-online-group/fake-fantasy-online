@@ -253,6 +253,7 @@ public partial class Win05
 
         I.cur = string.Equals(I.cur, name, StringComparison.Ordinal) ? null : name;
         I.positioned = false;
+        I.mobileSkills.Reset();
     }
 
     // Official 0x06001033, static System.Void Win05.Open(System.String).
@@ -279,6 +280,7 @@ public partial class Win05
         {
             I.cur = name;
             I.positioned = false;
+            I.mobileSkills.Reset();
             if (string.Equals(name, "historybar", StringComparison.Ordinal))
             {
                 _histSig = -1;
@@ -336,6 +338,7 @@ public partial class Win05
         if (I != null)
         {
             I.cur = null;
+            I.mobileSkills.Reset();
         }
     }
 
@@ -419,7 +422,7 @@ public partial class Win05
         AppendLevelBlock(rows, info, Mathf.Max(1, currentLevel),
             currentLevel > 0 ? string.Format("等级: {0}", currentLevel) : "等级: 未学习", info.name);
         AppendDmgBonusRow(rows, info);
-        if (SkillUsableForHotbar(info)) rows.Add(("双击或拖曳至快捷栏以使用这个技能", (char)6, false));
+        if (SkillUsableForHotbar(info)) rows.Add((MobileClientPresentation.Enabled ? "轻点查看；点放入快捷栏选择位置" : "双击或拖曳至快捷栏以使用这个技能", (char)6, false));
         return ComposeTip(rows);
     }
 
@@ -469,6 +472,7 @@ public partial class Win05
             {
                 skillTab = index;
                 skillScroll = 0f;
+                if (MobileClientPresentation.Enabled) mobileSkills.Reset();
                 current.Use();
             }
         }
@@ -564,6 +568,13 @@ public partial class Win05
         // viewport follows the live owner position after this pass's header drag.
         Rect viewport = new Rect(winX + 18f * s, winY + 65f * s,
             visibleWidth * s, visibleHeight * s);
+        bool mobile = MobileClientPresentation.Enabled;
+        if (mobile && mobileSkills.Skill > 0)
+        {
+            DrawMobileSkillActions(L, def);
+            return;
+        }
+        bool mobileTap = mobile && MobileSkillTreeInput(viewport, current, maximumScroll);
         if (viewport.Contains(current.mousePosition) && current.type == EventType.ScrollWheel)
         {
             // An oversized hovered growth card owns its wheel input. Short cards
@@ -666,7 +677,7 @@ public partial class Win05
                     GUI.DrawTexture(plusRect, Texture2D.whiteTexture);
                     GUI.color = Color.white;
                 }
-                if (current != null && current.type == EventType.MouseDown &&
+                if (!mobile && current != null && current.type == EventType.MouseDown &&
                     plusRect.Contains(localPointer))
                 {
                     requestedUpgrade = slot.id;
@@ -679,7 +690,8 @@ public partial class Win05
                 continue;
             }
 
-            if (current != null && current.type == EventType.MouseDown &&
+            if (mobile && mobileTap) { mobileSkills.Select(slot.id); mobileSkillFirstRow = 0; }
+            if (!mobile && current != null && current.type == EventType.MouseDown &&
                 current.button == 0 && canUse && SkillUsableForHotbar(info))
             {
                 GameHud.PickupSkill(slot.id, icon, false);
@@ -691,6 +703,11 @@ public partial class Win05
         }
         GUI.EndGroup();
 
+        if (mobile)
+        {
+            DrawMobileSkillActions(L, def);
+            return;
+        }
         if (requestedUpgrade != 0 && NetClient.I != null) NetClient.I.UpgradeSkillForIndependentRuntime(requestedUpgrade);
         if (hoveredInfo != null)
         {
@@ -903,7 +920,7 @@ public partial class Win05
             (currentLevel <= 0 && !prerequisite) ||
             (requirement != null && requirement.lreq > 0 && requirement.lreq != 999 && CharData.level < requirement.lreq))
             rows.Add(("您现在还无法升级这个技能", (char)6, false));
-        if (SkillUsableForHotbar(info)) rows.Add(("双击或拖曳至快捷栏以使用这个技能", (char)6, false));
+        if (SkillUsableForHotbar(info)) rows.Add((MobileClientPresentation.Enabled ? "轻点查看；点放入快捷栏选择位置" : "双击或拖曳至快捷栏以使用这个技能", (char)6, false));
         return ComposeTip(rows);
     }
 

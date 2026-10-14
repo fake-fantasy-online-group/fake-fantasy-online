@@ -11,6 +11,12 @@ This is an opt-in mobile presentation branch over the original IMGUI game. Deskt
 - Function buttons use the original control textures and activation functions. The expanded grid sits left of the map. Function expansion and expanded chat are mutually exclusive. Chat is compact at bottom center by default; expansion is centered. Chronological system and ordinary messages share the existing character-specific channel filter. This does not re-enable disabled message producers. Existing text/share guards and send rules are reused, and a reported keyboard occlusion area is respected.
 - Legacy visible dialogs block mobile world and skill input across the screen until migrated. Plugin hit testing takes the actual pointer position. Mobile inventory registers its own panel. A touch that began on UI is never reclassified as a world touch after dragging away.
 
+## Item workflows
+
+- While trading, the mobile inventory detail action explicitly adds the selected stack or withdraws an offered stack. Split a stack first to trade only part of it. The desktop held-item drop and mobile button share lock/binding/fused-item checks and the existing offer sender. Own locking or either final confirmation blocks changes; the other side locking alone keeps the original editable-side semantics. Delayed fused-item approval is invalidated by a bag receipt, a new trade, changed partner or changed item.
+- In the cube, mobile taps select a reserved cell. The explicit “取回选中” button releases that reservation and invalidates the quote without moving or spending inventory. Material quantity editing remains available; pending requests and confirmation dialogs block removal. Desktop left/right-click behavior stays available.
+- Repair selection has a mobile “取消修理选物” control above the bag. It calls the original cancellation action and clears its input region immediately.
+
 ## Tests
 
 From the repository with the managed toolchain activated:
@@ -21,6 +27,9 @@ bash Tests/Mobile/run-layout-contract.sh
 bash Tests/Mobile/run-chat-contract.sh
 bash Tests/Mobile/run-touch-pointer-contract.sh
 bash Tests/Mobile/run-item-gesture-contract.sh
+bash Tests/Mobile/run-bag-offer-contract.sh
+bash Tests/Mobile/run-repair-pick-contract.sh
+bash Tests/Endgame/run-ui-contract.sh
 bash Tests/Endgame/run-managed-compile.sh
 python Documentation/tools/compile-current-presentation.py
 ```

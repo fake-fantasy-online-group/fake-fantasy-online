@@ -56,33 +56,8 @@ internal sealed partial class DealDlg : MonoBehaviour
         if (!mine || SocialClient.MyLocked || !InventoryDlg.HasHeld || !area.Contains(mouse) ||
             Event.current.type != EventType.MouseDown || Event.current.button != 0) return;
         int tab = InventoryDlg.HeldTab, slot = InventoryDlg.HeldBagSlot;
-        int count = 1;
-        foreach (InventoryDlg.Item item in InventoryDlg.Items[tab])
-            if (item.bagIdx == slot) { count = item.count; break; }
-        if (!InventoryDlg.WarnIfLocked(tab, slot, "交易"))
-        {
-            bool bound = false;
-            foreach (InventoryDlg.Item item in InventoryDlg.Items[tab])
-                if (item.bagIdx == slot) { bound = item.bound; break; }
-            if (!bound)
-            {
-                InventoryDlg.Item item = InventoryDlg.ItemAt(tab, slot);
-                byte capturedTab = (byte)tab;
-                int capturedSlot = slot, capturedCount = count;
-                InventoryDlg.ClearHeld(); Event.current.Use();
-                FusedGuard.Confirm(item, "放到交易栏", () =>
-                {
-                    if (!myOffer.Exists(offer => offer.Item1 == capturedTab && offer.Item2 == capturedSlot) && myOffer.Count < 20)
-                        myOffer.Add((capturedTab, capturedSlot, capturedCount));
-                    SendOffer();
-                });
-                LastFusedMessageForIndependentRuntime = FusedGuard.Has(item) && SysMsgBox.I != null
-                    ? SysMsgBox.I.MessageForIndependentRuntime : string.Empty;
-                return;
-            }
-            ChatUI.Add("系统", "该物品已绑定, 不能交易(可用天工剪解绑)", new Color(1, 180f / 255, 120f / 255, 1));
-        }
         InventoryDlg.ClearHeld(); Event.current.Use();
+        OfferBagItem((byte)tab, slot);
     }
     // The real List type is part of the official call shape: NetClient.TradeOffer (0x06000751)
     // takes a List<(byte,int,int)> and its writer enumerates it with the List struct enumerator.
