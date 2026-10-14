@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace FakeFantasyOnline.Editor
 {
-/// <summary>Opt-in Android foundation build. Does not install SDKs, change signing or relax network policy.</summary>
+/// <summary>Opt-in Android foundation build. Does not install SDKs or change signing. Development HTTP requires explicit build opt-in.</summary>
 public static class MobileClientBuild
 {
     public static void BuildAndroid()
@@ -24,6 +24,8 @@ public static class MobileClientBuild
         string mode = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE") ?? "offline";
         if (mode != "offline" && mode != "bundled") throw new ArgumentException("Resource mode must be offline or bundled.");
         bool offline = mode == "offline";
+        bool developmentHttp = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP") == "1";
+        if (developmentHttp && !offline) throw new InvalidOperationException("HTTP opt-in is restricted to offline development builds.");
         string root = UnityEngine.Application.streamingAssetsPath;
         string backup = Path.GetFullPath("LocalMobileBuild/OriginalStreamingAssets");
         if (Directory.Exists(backup)) throw new IOException("Interrupted mobile staging: restore " + backup + " to StreamingAssets before retrying.");
@@ -33,8 +35,11 @@ public static class MobileClientBuild
         var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android);
         var architectures = PlayerSettings.Android.targetArchitectures;
         bool appBundle = EditorUserBuildSettings.buildAppBundle;
+        var previousHttpPolicy = PlayerSettings.insecureHttpOption;
         try
         {
+            // Explicit local-test opt-in only; production builds retain their existing policy.
+            if (developmentHttp) PlayerSettings.insecureHttpOption = InsecureHttpOption.DevelopmentOnly;
             GenerateManifest(root, offline);
             if (!offline && Directory.GetFiles(root, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) > 1024L * 1024 * 1024)
                 throw new InvalidDataException("Bundled resources exceed conservative 1 GiB limit; use offline development mode.");
@@ -63,6 +68,7 @@ public static class MobileClientBuild
         }
         finally
         {
+            PlayerSettings.insecureHttpOption = previousHttpPolicy;
             stage?.Dispose();
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, backend);
             PlayerSettings.Android.targetArchitectures = architectures;
