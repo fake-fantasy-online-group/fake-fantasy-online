@@ -1,0 +1,405 @@
+{
+  "clearance": 12,
+  "cases": [
+    {
+      "name": "parallel-outside",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 77,
+        "y": 0
+      },
+      "to": {
+        "x": 77,
+        "y": 200
+      },
+      "blocked": false
+    },
+    {
+      "name": "parallel-touching",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 78,
+        "y": 0
+      },
+      "to": {
+        "x": 78,
+        "y": 200
+      },
+      "blocked": true
+    },
+    {
+      "name": "fast-crossing",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": -10000,
+        "y": 100
+      },
+      "to": {
+        "x": 10000,
+        "y": 100
+      },
+      "blocked": true
+    },
+    {
+      "name": "flat-end-outside",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 50,
+        "y": 47
+      },
+      "to": {
+        "x": 150,
+        "y": 47
+      },
+      "blocked": false
+    },
+    {
+      "name": "flat-end-touching",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 50,
+        "y": 48
+      },
+      "to": {
+        "x": 150,
+        "y": 48
+      },
+      "blocked": true
+    },
+    {
+      "name": "zero-step-inside",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 100,
+        "y": 100
+      },
+      "to": {
+        "x": 100,
+        "y": 100
+      },
+      "blocked": true
+    },
+    {
+      "name": "zero-step-outside",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 50,
+        "y": 50
+      },
+      "to": {
+        "x": 50,
+        "y": 50
+      },
+      "blocked": false
+    },
+    {
+      "name": "end-at-boundary",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 0,
+        "y": 100
+      },
+      "to": {
+        "x": 78,
+        "y": 100
+      },
+      "blocked": true
+    },
+    {
+      "name": "start-at-boundary",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 78,
+        "y": 100
+      },
+      "to": {
+        "x": 0,
+        "y": 100
+      },
+      "blocked": true
+    },
+    {
+      "name": "diagonal-corner",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": 50,
+        "y": 20
+      },
+      "to": {
+        "x": 150,
+        "y": 120
+      },
+      "blocked": true
+    },
+    {
+      "name": "long-parallel",
+      "wall": {
+        "id": "axis",
+        "x": 100,
+        "y": 60,
+        "x2": 100,
+        "y2": 140,
+        "width": 20
+      },
+      "from": {
+        "x": -10000000,
+        "y": 47
+      },
+      "to": {
+        "x": 10000000,
+        "y": 47
+      },
+      "blocked": false
+    },
+    {
+      "name": "reverse-crossing",
+      "wall": {
+        "id": "reversed",
+        "x": 100,
+        "y": 140,
+        "x2": 100,
+        "y2": 60,
+        "width": 20
+      },
+      "from": {
+        "x": 0,
+        "y": 100
+      },
+      "to": {
+        "x": 200,
+        "y": 100
+      },
+      "blocked": true
+    },
+    {
+      "name": "reverse-boundary",
+      "wall": {
+        "id": "reversed",
+        "x": 100,
+        "y": 140,
+        "x2": 100,
+        "y2": 60,
+        "width": 20
+      },
+      "from": {
+        "x": 78,
+        "y": 0
+      },
+      "to": {
+        "x": 78,
+        "y": 200
+      },
+      "blocked": true
+    },
+    {
+      "name": "diagonal-crossing",
+      "wall": {
+        "id": "diagonal",
+        "x": 0,
+        "y": 0,
+        "x2": 80,
+        "y2": 80,
+        "width": 20
+      },
+      "from": {
+        "x": 0,
+        "y": 80
+      },
+      "to": {
+        "x": 80,
+        "y": 0
+      },
+      "blocked": true
+    },
+    {
+      "name": "diagonal-outside",
+      "wall": {
+        "id": "diagonal",
+        "x": 0,
+        "y": 0,
+        "x2": 80,
+        "y2": 80,
+        "width": 20
+      },
+      "from": {
+        "x": 0,
+        "y": 120
+      },
+      "to": {
+        "x": 40,
+        "y": 120
+      },
+      "blocked": false
+    },
+    {
+      "name": "diagonal-fast",
+      "wall": {
+        "id": "diagonal",
+        "x": 0,
+        "y": 0,
+        "x2": 80,
+        "y2": 80,
+        "width": 20
+      },
+      "from": {
+        "x": -10000,
+        "y": 40
+      },
+      "to": {
+        "x": 10000,
+        "y": 40
+      },
+      "blocked": true
+    },
+    {
+      "name": "fractional-crossing",
+      "wall": {
+        "id": "precise",
+        "x": 120.25,
+        "y": 97.5,
+        "x2": 184.375,
+        "y2": 122.625,
+        "width": 19.5
+      },
+      "from": {
+        "x": 0,
+        "y": 110
+      },
+      "to": {
+        "x": 300,
+        "y": 110
+      },
+      "blocked": true
+    },
+    {
+      "name": "fractional-clear",
+      "wall": {
+        "id": "precise",
+        "x": 120.25,
+        "y": 97.5,
+        "x2": 184.375,
+        "y2": 122.625,
+        "width": 19.5
+      },
+      "from": {
+        "x": 0,
+        "y": 160
+      },
+      "to": {
+        "x": 300,
+        "y": 160
+      },
+      "blocked": false
+    },
+    {
+      "name": "fractional-origin",
+      "wall": {
+        "id": "precise",
+        "x": 120.25,
+        "y": 97.5,
+        "x2": 184.375,
+        "y2": 122.625,
+        "width": 19.5
+      },
+      "from": {
+        "x": 120.25,
+        "y": 97.5
+      },
+      "to": {
+        "x": 120.25,
+        "y": 97.5
+      },
+      "blocked": true
+    },
+    {
+      "name": "fractional-end",
+      "wall": {
+        "id": "precise",
+        "x": 120.25,
+        "y": 97.5,
+        "x2": 184.375,
+        "y2": 122.625,
+        "width": 19.5
+      },
+      "from": {
+        "x": 184.375,
+        "y": 122.625
+      },
+      "to": {
+        "x": 184.375,
+        "y": 122.625
+      },
+      "blocked": true
+    }
+  ]
+}

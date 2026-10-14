@@ -25,12 +25,13 @@ public partial class PlayerController
     private bool CellWalkable(int cx, int cy)
     {
         if (cx < 0 || cy < 0 || cx >= maskW || cy >= maskH) return false;
-        return (maskBytes[unchecked(maskOff + cx + maskW * cy)] & 0x80) == 0;
+        return (maskBytes[unchecked(maskOff + cx + maskW * cy)] & 0x80) == 0 && RiftCellWalkable(cx, cy);
     }
 
     // 0x060009f0
     private bool LineWalkable(int x0, int y0, int x1, int y1)
     {
+        if (!RiftCellEdgeWalkable(x0, y0, x1, y1)) return false;
         int dx = unchecked(x1 - x0);
         int dy = unchecked(y1 - y0);
         if (dx < 0) dx = unchecked(-dx);
@@ -96,13 +97,15 @@ public partial class PlayerController
     // 0x060009f7
     private void SetPathTo(float tx, float ty, int hops)
     {
-        if (hops == 0) pluginNavigationRevision++;
+        RefreshRiftCollision();
+        if (hops == 0) { pluginNavigationRevision++; riftPathGoalX = tx; riftPathGoalY = ty; }
         path.Clear();
         pathIdx = 0;
         moveToTarget = false;
         pendHops = 0;
         if (maskBytes == null || maskW <= 0)
         {
+            if (!RiftPathWalkable(worldX, worldY, tx, ty)) return;
             tgtX = tx;
             tgtY = ty;
             moveToTarget = true;
@@ -120,7 +123,7 @@ public partial class PlayerController
         bool exactEnd = gx == requestedX && gy == requestedY;
         if (sx == gx && sy == gy)
         {
-            if (exactEnd)
+            if (exactEnd && RiftPathWalkable(worldX, worldY, tx, ty))
             {
                 tgtX = tx;
                 tgtY = ty;
@@ -214,7 +217,7 @@ public partial class PlayerController
             {
                 int nx = unchecked(x + DX8[direction]);
                 int ny = unchecked(y + DY8[direction]);
-                if (!CellWalkable(nx, ny)) continue;
+                if (!CellWalkable(nx, ny) || !RiftCellEdgeWalkable(x, y, nx, ny)) continue;
                 int nextCost;
                 if (direction < 4)
                 {
@@ -255,7 +258,11 @@ public partial class PlayerController
             current = selected;
             last = cells.Count - 1;
         }
-        if (exactEnd && path.Count > 0) path[path.Count - 1] = new Vector2(tx, ty);
+        if (exactEnd && path.Count > 0)
+        {
+            Vector2 from = path.Count > 1 ? path[path.Count - 2] : new Vector2(worldX, worldY);
+            if (RiftPathWalkable(from.x, from.y, tx, ty)) path[path.Count - 1] = new Vector2(tx, ty);
+        }
         moveToTarget = path.Count > 0;
     }
 

@@ -45,7 +45,7 @@ public partial class PlayerController
     internal DisplacementObservation AdvanceDisplacementForIndependentRuntime()
     {
         float dx = 0f, dy = 0f;
-        bool moving = false, cleared = false, blocked = false, replanned = false;
+        bool moving = false, cleared = false, blocked = false, replanned = ReplanRiftPathIfChanged();
         if (!sitting && moveToTarget)
         {
             if (path.Count > 0)
@@ -95,17 +95,17 @@ public partial class PlayerController
         }
         if (dx != 0f || dy != 0f)
         {
-            if (IsWalkable(worldX + dx, worldY + dy))
+            if (MovementSegmentWalkable(worldX + dx, worldY + dy))
             {
                 worldX += dx;
                 worldY += dy;
             }
-            else if (IsWalkable(worldX + dx, worldY))
+            else if (MovementSegmentWalkable(worldX + dx, worldY))
             {
                 worldX += dx;
                 dy = 0f;
             }
-            else if (IsWalkable(worldX, worldY + dy))
+            else if (MovementSegmentWalkable(worldX, worldY + dy))
             {
                 worldY += dy;
                 dx = 0f;

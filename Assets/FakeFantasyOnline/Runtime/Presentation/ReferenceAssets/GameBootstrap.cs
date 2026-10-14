@@ -470,6 +470,7 @@ public partial class GameBootstrap : MonoBehaviour
         }
 
         switching = true;
+        EndgamePanel.WorldState?.NoteRiftSceneChange();
         if (ResLoader.I != null)
             MapDef.EnsureLoaded(ResLoader.I.Pkg);
 
@@ -528,6 +529,7 @@ public partial class GameBootstrap : MonoBehaviour
             spawnX = backX;
             spawnY = backY;
             switching = false;
+            EndgamePanel.WorldState?.NoteRiftSceneChangeRejected(worldRoot, backCurMap);
             RearmRejectedPortalForIndependentRuntime(backPlayer);
             if (_queuedSwitch.HasValue)
             {

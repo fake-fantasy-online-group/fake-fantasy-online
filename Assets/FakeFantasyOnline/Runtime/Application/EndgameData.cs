@@ -17,6 +17,24 @@ internal static class EndgameData
         foreach (string key in value.Keys)
             if (Array.IndexOf(allowed, key) < 0) throw new FormatException("Unknown endgame field: " + key);
     }
+    public static void Required(IReadOnlyDictionary<string, object> value, params string[] keys)
+    {
+        foreach (string key in keys)
+            if (!value.TryGetValue(key, out object item) || item == null) throw new FormatException("Missing endgame field: " + key);
+    }
+    // JSON float64 geometry may decode as long, decimal or double. Never coerce strings/bools.
+    public static double Number(IReadOnlyDictionary<string, object> value, string key)
+    {
+        if (!value.TryGetValue(key, out object item)) return 0;
+        double n;
+        if (item is long signed) n = signed;
+        else if (item is ulong unsigned) n = unsigned;
+        else if (item is decimal exact) n = (double)exact;
+        else if (item is double approximate) n = approximate;
+        else throw new FormatException("Invalid number: " + key);
+        if (double.IsNaN(n) || double.IsInfinity(n)) throw new FormatException("Nonfinite number: " + key);
+        return n;
+    }
     public static string Text(object value, string key, int maximum = 8192)
     {
         if (!(value is string text) || text.Length > maximum) throw new FormatException("Invalid text: " + key);

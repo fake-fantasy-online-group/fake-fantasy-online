@@ -42,7 +42,7 @@ public sealed partial class EndgamePanel
         var liveAuras = new HashSet<int>();
         foreach (var aura in rift.Auras)
         {
-            if (aura.Class < 1 || aura.Class > 3) continue;
+            if (aura.Class < 0 || aura.Class > 3 || aura.Class == 0 && string.IsNullOrEmpty(aura.CloneOf)) continue;
             MonsterEntity monster = CombatWorld.EndgameMonster(aura.NativeEntityID);
             if (monster == null) continue; // Native spawn can arrive after the sidecar snapshot.
             liveAuras.Add(aura.NativeEntityID);
@@ -73,6 +73,7 @@ public sealed partial class EndgamePanel
         foreach (var pair in riftGlobeObjects)
             if (!liveGlobes.Contains(pair.Key)) { if (pair.Value != null) ReleaseRiftWorldObject(pair.Value); removedGlobes.Add(pair.Key); }
         foreach (string id in removedGlobes) riftGlobeObjects.Remove(id);
+        UpdateRiftEliteVisuals(rift);
         UpdateRiftArrival(rift);
         PruneRiftTelegraphArtwork(rift);
     }
@@ -172,6 +173,7 @@ public sealed partial class EndgamePanel
     }
     private void ClearRiftWorldVisuals()
     {
+        ClearRiftEliteVisuals();
         foreach (var pair in riftGlobeObjects) if (pair.Value != null) ReleaseRiftWorldObject(pair.Value);
         riftGlobeObjects.Clear();
         foreach (var pair in riftAuraObjects) if (pair.Value != null) pair.Value.ClearRiftIdentity();

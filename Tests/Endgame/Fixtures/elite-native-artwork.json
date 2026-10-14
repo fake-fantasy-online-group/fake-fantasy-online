@@ -1,0 +1,215 @@
+{
+  "kind": "Native source pixel measurements, independently decoded offline; not Unity output",
+  "resources": [
+    {
+      "resource": "magic/magic/magic0080.gso",
+      "sha256": "735a28b6dc177ecebd309a16d73d39668ad5d1c30109bd3cb3b0a3992cba446a",
+      "frames": 6,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 1,
+      "peak": {
+        "visibleWidth": 34.0,
+        "visibleHeight": 32.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 12.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic0201.gso",
+      "sha256": "5925710e0cce2551f8e8539d2b3bc2f219b141326661a3102c089d52d1e808f1",
+      "frames": 14,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 3,
+      "peak": {
+        "visibleWidth": 161.0,
+        "visibleHeight": 95.0,
+        "centerFromPivotX": 0.5,
+        "centerFromPivotY": 0.5
+      }
+    },
+    {
+      "resource": "magic/magic/magic4149.gso",
+      "sha256": "7222b5c70c7710409ad0cf228dbe0475c77c5986995b8d8490dd58a2f3d0c772",
+      "frames": 38,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 34,
+      "peak": {
+        "visibleWidth": 256.0,
+        "visibleHeight": 232.0,
+        "centerFromPivotX": 7.0,
+        "centerFromPivotY": 7.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic0420.gso",
+      "sha256": "f968d08d4ac6c999b3d491befb3b24fe0e0db8ad2cb2282c8dd1d9b5523dc25d",
+      "frames": 10,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 4,
+      "peak": {
+        "visibleWidth": 150.0,
+        "visibleHeight": 138.0,
+        "centerFromPivotX": -2.0,
+        "centerFromPivotY": -1.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic0216.gso",
+      "sha256": "7a6d7cf822a4a36e494ba4c93238072909c5f652dc7a6655278b0d08f3cb700f",
+      "frames": 6,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 64.0,
+        "visibleHeight": 64.0,
+        "centerFromPivotX": 1.0,
+        "centerFromPivotY": 2.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic4040.gso",
+      "sha256": "552a4f99a7887fc52b798b1cc12f160fe99cb54cd55ffe28c88459bcc524c610",
+      "frames": 21,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 19,
+      "peak": {
+        "visibleWidth": 342.0,
+        "visibleHeight": 174.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": -8.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic0147.gso",
+      "sha256": "ec2b0523f6ce2753ffc59c6014342be5abafa6589717015e2c51c074261c61d6",
+      "frames": 9,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 5,
+      "peak": {
+        "visibleWidth": 221.0,
+        "visibleHeight": 195.0,
+        "centerFromPivotX": 14.5,
+        "centerFromPivotY": 48.5
+      }
+    },
+    {
+      "resource": "magic/magic/magic0043.gso",
+      "sha256": "29f47a037196ecf444677ec55f10b54fbf8e6aeed07d90788690fa2e08ffe0ad",
+      "frames": 8,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 3,
+      "peak": {
+        "visibleWidth": 194.0,
+        "visibleHeight": 142.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 74.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic0230.gso",
+      "sha256": "fbf859a96b2ff3dac7c08fbad8bd42dac0f7bf6330d10fff885acfb8a2d43bc6",
+      "frames": 1,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 123.0,
+        "visibleHeight": 123.0,
+        "centerFromPivotX": 0.5,
+        "centerFromPivotY": 6.5
+      }
+    },
+    {
+      "resource": "magic/magic/magic0085.gso",
+      "sha256": "0aab7cf64eba093f9672ac0542e5510f33dda9a52d0acfcd63fd13c642de074f",
+      "frames": 5,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 96.0,
+        "visibleHeight": 62.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 23.0
+      }
+    },
+    {
+      "resource": "magic/magic/magic4145.gso",
+      "sha256": "0388736cdee18e9f816d5e3853ed08edbf87003b338f09a4fc1d01bdd78e4e9d",
+      "frames": 34,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 218.0,
+        "visibleHeight": 201.0,
+        "centerFromPivotX": -1.0,
+        "centerFromPivotY": 72.5
+      }
+    },
+    {
+      "resource": "magic/magic/magic4147.gso",
+      "sha256": "62312818c6986ce6e44b1b5517454d2e8c418bc25dd3dd2aa04092c56d1b5b6b",
+      "frames": 41,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 2,
+      "peak": {
+        "visibleWidth": 256.0,
+        "visibleHeight": 219.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 54.5
+      }
+    },
+    {
+      "resource": "object/SK/SK_CLY_0501.gso",
+      "sha256": "948ca08e7f73560a39b18769179b790f18da0ba40e2eef9f9c02da99daec3d47",
+      "frames": 1,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 310.0,
+        "visibleHeight": 240.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 90.0
+      }
+    },
+    {
+      "resource": "object/SK/SK_CLY_0502.gso",
+      "sha256": "c20d8290b3807e7d45fd114b633cc2e700698beccf234da46443305b41c604ff",
+      "frames": 1,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 328.0,
+        "visibleHeight": 252.0,
+        "centerFromPivotX": 0.0,
+        "centerFromPivotY": 95.0
+      }
+    },
+    {
+      "resource": "object/SK/SK_CLY_0503.gso",
+      "sha256": "f7c4181ce5a7a0118c39b585773da3e6f69cd16348d3a435db511346f8dfa4ce",
+      "frames": 1,
+      "directions": 1,
+      "scale": 1,
+      "peakFrame": 0,
+      "peak": {
+        "visibleWidth": 317.0,
+        "visibleHeight": 288.0,
+        "centerFromPivotX": 0.5,
+        "centerFromPivotY": 108.0
+      }
+    }
+  ]
+}

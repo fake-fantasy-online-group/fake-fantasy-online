@@ -26,6 +26,8 @@ public sealed partial class EndgameClientState
     public bool QuotePending { get; private set; }
     public string QuoteRequestID { get; private set; } = "";
     public EndgameRiftView Rift { get; private set; }
+    public EndgameRiftHazardState RiftHazards { get; } = new EndgameRiftHazardState();
+    public static double MonotonicMS => (double)System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency;
     public IReadOnlyList<EndgameRiftEntranceView> RiftEntrances { get; private set; } = Array.Empty<EndgameRiftEntranceView>();
     public bool CubeInputsV1 { get; private set; }
     public bool RiftPortalsV1 { get; private set; }
@@ -60,7 +62,7 @@ public sealed partial class EndgameClientState
     public void Reset()
     {
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
-        responses.Clear(); responseOrder.Clear();
+        responses.Clear(); responseOrder.Clear(); RiftHazards.Reset(); ResetRiftHazardContext();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
         RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
@@ -169,6 +171,7 @@ public sealed partial class EndgameClientState
             if (!response.OK || !response.Result.TryGetValue("inInstance", out string inside) ||
                 (inside != "true" && inside != "false"))
                 throw new FormatException("Invalid rift scene context.");
+            ApplyRiftHazardContext(response, inside == "true");
             RiftInInstance = inside == "true";
             RiftContextKnown = hasRiftSceneContext = true;
             Version++; return true;
@@ -232,7 +235,8 @@ public sealed partial class EndgameClientState
         if (response.RequestID == QuoteRequestID) QuotePending = false;
         bool receipt = PendingRequest != null && response.RequestID == PendingRequest.RequestID;
         // A rejected admission can still return the authoritative prior run to claim.
-        if (response.Rift != null && (Rift == null || Rift.RunID != response.Rift.RunID || CompareRevision(response.Rift.Revision, Rift.Revision) >= 0))
+        if (response.Rift != null && (Rift == null || Rift.RunID != response.Rift.RunID || CompareRevision(response.Rift.Revision, Rift.Revision) >= 0) &&
+            RiftHazards.Apply(response.Rift, MonotonicMS))
         {
             DateTime received = DateTime.UtcNow;
             var previousArrival = Rift?.GuardianArrival;

@@ -8,5 +8,6 @@ OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
+ "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/RiftElite*.cs \
  "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/RiftScenePortalContract.cs"
 "$FFO_MONO_ROOT/bin/mono" "$OUT/RiftScenePortalContract.exe"

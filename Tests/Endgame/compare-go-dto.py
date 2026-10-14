@@ -28,7 +28,7 @@ for name, body in re.findall(r'type (\w+) struct \{(.*?)\n\}', go, re.S):
     client = classes[name]
     for typ, key, options in re.findall(r'\w+\s+(\S+)\s+`json:"([^",]+)([^"]*)"`', body):
         if key == "-": continue  # Go explicitly excludes this internal field from the wire.
-        expected = {'int32': ('Int',), 'SkillID': ('Int',), 'EntityID': ('UInt',), 'int64': ('Long',), 'bool': ('Bool',), 'string': ('String','ID'), 'map[string]string': ('StringMap',)}.get(typ)
+        expected = {'int32': ('Int',), 'SkillID': ('Int',), 'EntityID': ('UInt',), 'int64': ('Long',), 'float64': ('Number',), 'bool': ('Bool',), 'string': ('String','ID'), 'map[string]string': ('StringMap',)}.get(typ)
         if ',string' in options: expected = ('String', 'ID')
         if typ.startswith('[]'):
             expected = ('List',)

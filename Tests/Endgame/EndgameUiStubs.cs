@@ -5,11 +5,32 @@ namespace UnityEngine
 {
     public class Object { public bool destroyed; public static void Destroy(Object value) { if (value != null) value.destroyed = true; } }
     public class MonoBehaviour : Object { public bool isActiveAndEnabled = true; public Transform transform = new Transform(); public GameObject gameObject; }
-    public class Transform { public Vector3 position, localPosition; public Transform parent; public Vector3 localScale; public void SetParent(Transform value, bool worldPositionStays) { parent = value; } }
-    public class GameObject : Object { public readonly string name; public Transform transform = new Transform(); public bool active = true; public readonly Dictionary<Type, object> components = new Dictionary<Type, object>(); public GameObject(string name) { this.name = name; } public void SetActive(bool value) { active = value; } public T AddComponent<T>() where T : new() { var result = new T(); components[typeof(T)] = result; return result; } }
-    public class Sprite : Object { public Texture2D texture = new Texture2D(); }
-    public class Material : Object { }
-    public class SpriteRenderer { public Sprite sprite; public Material sharedMaterial; public int sortingOrder; }
+    public class Transform { public Vector3 position, localPosition; public Transform parent; public Vector3 localScale = new Vector3(1,1,1); public Quaternion localRotation, rotation; public Vector3 right = new Vector3(1,0,0), up = new Vector3(0,1,0); public void SetParent(Transform value, bool worldPositionStays) { parent = value; } }
+    public class GameObject : Object { public readonly string name; public Transform transform = new Transform(); public bool active = true; public readonly Dictionary<Type, object> components = new Dictionary<Type, object>(); public GameObject(string name) { this.name = name; } public void SetActive(bool value) { active = value; } public T AddComponent<T>() where T : new() { var result = new T(); components[typeof(T)] = result;
+            if (result is MonoBehaviour mono) { mono.gameObject = this; mono.transform = transform; }
+            if (result is SpriteRenderer sprite) { sprite.gameObject = this; }
+            return result; } }
+    public class Sprite : Object
+    {
+        public Texture2D texture = new Texture2D(); public Vector2 pivot; public float pixelsPerUnit = 100;
+        public Bounds bounds => new Bounds { max = new Vector3((texture.width-pivot.x)/pixelsPerUnit,(texture.height-pivot.y)/pixelsPerUnit,0) };
+        public static Sprite Create(Texture2D t, Rect r, Vector2 p, float ppu) => new Sprite { texture=t, pivot=new Vector2(p.x*t.width,p.y*t.height), pixelsPerUnit=ppu };
+    }
+    public struct Bounds { public Vector3 max; }
+    public class Material : Object
+    {
+        public Texture2D mainTexture; public readonly Dictionary<string,float> floats = new Dictionary<string,float>(); public readonly Dictionary<string,Color> colors = new Dictionary<string,Color>();
+        public Material() { } public Material(Material source) { foreach(var pair in source.floats) floats[pair.Key]=pair.Value; foreach(var pair in source.colors) colors[pair.Key]=pair.Value; }
+        public void SetFloat(string key,float value) { floats[key]=value; } public void SetColor(string key,Color value) { colors[key]=value; }
+    }
+    public class SpriteRenderer : Object
+    {
+        public GameObject gameObject = new GameObject("sprite"); public Transform transform => gameObject.transform;
+        public Sprite sprite; public Material sharedMaterial; public int sortingOrder, sortingLayerID; public bool enabled = true, flipX, flipY; public Color color = new Color(1,1,1,1);
+    }
+    public class Mesh : Object { public Vector3[] vertices; public Vector2[] uv; public Color[] colors; public int[] triangles; public void Clear() { } public void RecalculateBounds() { } }
+    public class MeshFilter { public Mesh sharedMesh; }
+    public class MeshRenderer { public Material sharedMaterial; public int sortingOrder, sortingLayerID; }
     public struct Vector2
     {
         public float x, y;
@@ -38,7 +59,7 @@ namespace UnityEngine
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
     }
     public struct Matrix4x4 { public static Matrix4x4 TRS(Vector3 a, Quaternion b, Vector3 c) => new Matrix4x4(); }
-    public struct Quaternion { public static Quaternion identity => new Quaternion(); }
+    public struct Quaternion { public float z; public static Quaternion identity => new Quaternion(); public static Quaternion Euler(float x,float y,float z) => new Quaternion { z=z }; }
     public static class Mathf
     {
         public static float Min(float a, float b) => Math.Min(a, b);
@@ -56,7 +77,7 @@ namespace UnityEngine
         public Vector2 mousePosition = new Vector2(-9000, -9000);
         public void Use() { type = EventType.Used; }
     }
-    public class Camera { public static Camera main; public Vector3 WorldToScreenPoint(Vector3 p) => new Vector3(p.x * 100, p.y * 100, 1); }
+    public class Camera { public static Camera main; public Transform transform = new Transform(); public Vector3 WorldToScreenPoint(Vector3 p) => new Vector3(p.x * 100, p.y * 100, 1); }
     public class Font { }
     public enum FontStyle { Bold }
     public enum ScaleMode { ScaleToFit }
@@ -186,9 +207,18 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     internal static class NetClient { public static Texture2D LoadItemIcon(int id) => null; }
     public partial class GameBootstrap { public static GameBootstrap I; public static int CurMapId; public static float CurPpu = 100, CurWorldW = 2000, CurWorldH = 1000; public bool Switching; public Transform WorldRootForMapConstructionForIndependentRuntime; public static readonly Material PortalMaterial = new Material(); public static readonly Sprite PortalSprite = new Sprite(); public static Material IsoYObjMat() => PortalMaterial; public Sprite GetObjectSpriteForIndependentRuntime(int id, ResLoader.ObjSprite image, float ppu) => PortalSprite; }
-    public class ResLoader { public static ResLoader I; public int Loads, AnimLoads, LastID, LastWidth, LastHeight; public float LastPpu; public ObjSprite Image; public ObjAnim Animation; public struct ObjSprite { public Texture2D tex; public int nLeft, nTop, clipBy, frames; } public struct ObjAnim { public Sprite[] frames; public int[] nLeft, nTop; } public ObjSprite LoadObj(int id, int w, int h) { Loads++; LastID = id; LastWidth = w; LastHeight = h; return Image; } public ObjAnim LoadObjAnim(int id, float ppu) { AnimLoads++; LastID = id; LastPpu = ppu; return Animation; } }
+    public class ResLoader { public static ResLoader I; public byte[] ReadRes(string path) => DimgDecoder.Bytes; public int Loads, AnimLoads, LastID, LastWidth, LastHeight; public float LastPpu; public ObjSprite Image; public ObjAnim Animation; public struct ObjSprite { public Texture2D tex; public int nLeft, nTop, clipBy, frames; } public struct ObjAnim { public Sprite[] frames; public int[] nLeft, nTop; } public ObjSprite LoadObj(int id, int w, int h) { Loads++; LastID = id; LastWidth = w; LastHeight = h; return Image; } public ObjAnim LoadObjAnim(int id, float ppu) { AnimLoads++; LastID = id; LastPpu = ppu; return Animation; } }
+    public static class DimgDecoder
+    {
+        public static byte[] Bytes;
+        public struct FrameTex { public Texture2D tex; public int nLeft,nTop; }
+        public struct Anim { public bool ok; public FrameTex[] f; public int boundCx,boundCy,scale; }
+        public static Func<Anim> Factory;
+        public static Anim DecodeAnim(byte[] bytes) => Factory == null ? default(Anim) : Factory();
+    }
     public class FrameAnimator { public float frameMs; public bool loop; public Func<(Sprite[], Vector3[])> loader; }
     public partial class CombatWorld { private static CombatWorld I; private Dictionary<int, MonsterEntity> monsters = new Dictionary<int, MonsterEntity>(); }
-    public class MonsterEntity { public Transform transform = new Transform(); public int RiftKind, Clears; public string RiftName; public void UpdateRiftIdentity(int kind, string name) { RiftKind = kind; RiftName = name; } public void ClearRiftIdentity() { RiftKind = 0; Clears++; } }
+    public class MonsterEntity { public Transform transform = new Transform(); public int RiftKind, Clears; public string RiftName; public void UpdateRiftIdentity(int kind, string name) { RiftKind = kind; RiftName = name; } public void ClearRiftIdentity() { RiftKind = 0; Clears++; }
+        internal void UpdateRiftEliteState(RiftEliteVisualAssets assets, bool golden, bool agility, bool clone, double now) { } internal void ClearRiftEliteState() { } }
     public class EffectPlayer : MonoBehaviour { public static readonly List<EffectPlayer> Played = new List<EffectPlayer>(); public static readonly Material AlphaMaterial = new Material(), AdditiveMaterial = new Material(); public static Material BorrowAlphaMaterial() => AlphaMaterial; public static Material BorrowAdditiveMaterial() => AdditiveMaterial; public static float NextScale = 1f; public static Sprite[] MagicFrames; public static Sprite[] GetMagicFramesAll(int id) => MagicFrames; public static Sprite[] GetMagicFrames(int id) => MagicFrames; public static EffectPlayer PlayNamed(Vector3 position, string effect, float ppu) { var result = new EffectPlayer { gameObject = new GameObject(effect) }; result.transform.position = position; Played.Add(result); return result; } }
 }

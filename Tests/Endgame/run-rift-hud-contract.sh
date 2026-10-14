@@ -28,8 +28,9 @@ CS
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Application/Endgame*.cs \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
+ "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/RiftElite*.cs \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TooltipContent.Get.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/GameHud.BasicHit.cs" \
- "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$ROOT/Tests/Endgame/RiftQuietUiContract.cs" "$ROOT/Tests/Endgame/RiftWorldVisualContract.cs" "$OUT/Runner.cs"
+ "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$ROOT/Tests/Endgame/RiftQuietUiContract.cs" "$ROOT/Tests/Endgame/RiftWorldVisualContract.cs" "$ROOT/Tests/Endgame/RiftEliteVisualContract.cs" "$OUT/Runner.cs"
 FFO_RIFT_WIRE_FIXTURES="${FFO_RIFT_WIRE_FIXTURES:-$ROOT/Tests/Endgame/Fixtures/rift79-quiet-wire.json}" "$MONO/bin/mono" "$OUT/RiftHudContract.exe"
 python3 "$ROOT/Tests/Endgame/rift_hud_source_contract.py"

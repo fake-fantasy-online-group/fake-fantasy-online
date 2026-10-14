@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UnityEngine
 {
     public class Object { public bool destroyed; public static void Destroy(Object value) { value.destroyed = true; } }
-    public class MonoBehaviour : Object { public Transform transform = new Transform(); }
+    public class MonoBehaviour : Object { public GameObject gameObject; public Transform transform = new Transform(); }
     public class Transform { public Vector3 localScale; public Transform parent; public void SetParent(Transform value, bool worldPositionStays) { parent = value; } }
     public struct Vector3 { public float x,y,z; public Vector3(float x,float y,float z) { this.x=x;this.y=y;this.z=z; } }
     public struct Color { public float r,g,b,a; public Color(float r,float g,float b,float a) { this.r=r;this.g=g;this.b=b;this.a=a; } }
@@ -16,6 +16,13 @@ namespace UnityEngine
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
+    internal sealed class RiftEliteVisualAssets { }
+    internal sealed class RiftEliteActorVisual : MonoBehaviour
+    {
+        public void Bind(SpriteRenderer body,RiftEliteVisualAssets assets) { }
+        public void SetState(bool gold,bool agility,bool clone,double now) { }
+        public void Release() { }
+    }
     public partial class MonsterEntity : MonoBehaviour
     {
         public string mname = "寒林狼"; public SpriteRenderer body = new SpriteRenderer(); public bool dying; public EffectPlayer eliteRing = new EffectPlayer();

@@ -7,13 +7,37 @@ public partial class MonsterEntity
     private string riftOriginalName;
     private int riftClass;
     private SpriteRenderer riftBodyGlow;
+    private RiftEliteActorVisual riftEliteActor;
     internal int RiftClass => riftClass;
+    internal void UpdateRiftEliteState(RiftEliteVisualAssets assets, bool golden, bool agility, bool clone, double serverNow)
+    {
+        if (body == null || dying || !golden && !agility && !clone) { ClearRiftEliteState(); return; }
+        if (riftEliteActor == null)
+        {
+            var root = new GameObject("RiftEliteActor"); root.transform.SetParent(transform, false);
+            riftEliteActor = root.AddComponent<RiftEliteActorVisual>();
+            riftEliteActor.Bind(body, assets);
+        }
+        riftEliteActor.SetState(golden, agility, clone, serverNow);
+        if (riftBodyGlow != null && (golden || clone)) riftBodyGlow.enabled = false;
+    }
+    internal void ClearRiftEliteState()
+    {
+        if (riftEliteActor != null) { riftEliteActor.Release(); Destroy(riftEliteActor.gameObject); }
+        riftEliteActor = null;
+    }
     internal void UpdateRiftIdentity(int classification, string originalName)
     {
         if (riftOriginalName == null) riftOriginalName = mname;
         string name = string.IsNullOrEmpty(originalName) ? riftOriginalName : originalName;
         riftClass = classification;
-        mname = RiftMonsterName(name, classification);
+        mname = classification == 0 ? name : RiftMonsterName(name, classification);
+        if (classification == 0)
+        {
+            if (riftBodyGlow != null) { riftBodyGlow.enabled = false; Destroy(riftBodyGlow.gameObject); riftBodyGlow = null; }
+            if (eliteRing != null) eliteRing.ClearRiftGlow();
+            return;
+        }
         if (eliteRing != null) eliteRing.SetRiftGlow(classification == 1 ? 8 : 5);
         if (body == null) return;
         if (riftBodyGlow == null)
@@ -36,6 +60,7 @@ public partial class MonsterEntity
     }
     internal void ClearRiftIdentity()
     {
+        ClearRiftEliteState();
         if (riftOriginalName != null) mname = riftOriginalName;
         riftOriginalName = null; riftClass = 0;
         if (riftBodyGlow != null) { riftBodyGlow.enabled = false; riftBodyGlow.gameObject.SetActive(false); Destroy(riftBodyGlow.gameObject); }
