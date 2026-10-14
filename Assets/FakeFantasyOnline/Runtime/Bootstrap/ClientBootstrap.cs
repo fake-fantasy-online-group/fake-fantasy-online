@@ -36,6 +36,12 @@ public sealed class ClientBootstrap : MonoBehaviour
     {
         if (UnityEngine.Application.isMobilePlatform)
         {
+            // Apply before resource loading and title creation; only landscape is playable.
+            Screen.autorotateToPortrait = false;
+            Screen.autorotateToPortraitUpsideDown = false;
+            Screen.autorotateToLandscapeLeft = true;
+            Screen.autorotateToLandscapeRight = true;
+            Screen.orientation = ScreenOrientation.AutoRotation;
             StartCoroutine(InitializeMobile());
             return;
         }

@@ -51,38 +51,58 @@ public sealed partial class NetClient
         {
             attempt = unchecked(attempt + 1);
             AddressError = null;
-            using (IAddressRequest request = createAddressRequest())
+            IAddressRequest request = null;
+            object operation = null;
+            bool started = false;
+            try
             {
+                request = createAddressRequest();
                 request.Timeout = 10;
-                yield return request.Send();
-                if (request.Result == 1)
+                operation = request.Send();
+                started = true;
+            }
+            catch (Exception exception)
+            {
+                // Unity can reject SendWebRequest synchronously (for example when
+                // the player forbids HTTP). Publish that failure through the same
+                // visible error/retry path instead of abandoning the coroutine
+                // with AddressReady=false and AddressError=null forever.
+                AddressError = "获取服务器地址失败: " + exception.Message;
+            }
+            using (request)
+            {
+                if (started)
                 {
-                    // Only response text, parsing, validation and publication belong to this
-                    // catch. Request result/error access and disposal must escape unchanged.
-                    try
+                    yield return operation;
+                    if (request.Result == 1)
                     {
-                        ClientConfig.Dispatch dispatch = parseAddressDispatch(request.Text);
-                        if (dispatch != null && dispatch.servers != null &&
-                            dispatch.servers.Length > 0 &&
-                            !string.IsNullOrWhiteSpace(dispatch.servers[0].host) &&
-                            dispatch.servers[0].port > 0)
+                        // Only response text, parsing, validation and publication belong to this
+                        // catch. Request result/error access and disposal must escape unchanged.
+                        try
                         {
-                            publishServers(dispatch.servers);
-                            host = dispatch.servers[0].host;
-                            port = dispatch.servers[0].port;
-                            AddressReady = true;
-                            yield break;
+                            ClientConfig.Dispatch dispatch = parseAddressDispatch(request.Text);
+                            if (dispatch != null && dispatch.servers != null &&
+                                dispatch.servers.Length > 0 &&
+                                !string.IsNullOrWhiteSpace(dispatch.servers[0].host) &&
+                                dispatch.servers[0].port > 0)
+                            {
+                                publishServers(dispatch.servers);
+                                host = dispatch.servers[0].host;
+                                port = dispatch.servers[0].port;
+                                AddressReady = true;
+                                yield break;
+                            }
+                            AddressError = "服务器地址无效(dispatch.servers 为空)";
                         }
-                        AddressError = "服务器地址无效(dispatch.servers 为空)";
+                        catch (Exception exception)
+                        {
+                            AddressError = "解析服务器地址失败: " + exception.Message;
+                        }
                     }
-                    catch (Exception exception)
+                    else
                     {
-                        AddressError = "解析服务器地址失败: " + exception.Message;
+                        AddressError = "获取服务器地址失败: " + request.Error;
                     }
-                }
-                else
-                {
-                    AddressError = "获取服务器地址失败: " + request.Error;
                 }
             }
 
