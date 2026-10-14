@@ -49,3 +49,27 @@ python3 Tests/Mobile/compile-platform-boundaries.py
 The resource contract covers path traversal, duplicate destination/schema rejection, checksums, incomplete transfer preservation, corruption detection, root activation and desktop/default versus explicit mobile endpoint behavior. Boundary compilation includes all Bootstrap and Editor source using recovered Unity API references. These checks do not execute UnityWebRequest, a Unity Player or Android/IL2CPP.
 
 Required next acceptance: clean install and restart on a real Android ARM64 device; interrupted copy/disk-full recovery; real multi-GB resource timing and memory; encrypted-package and character encoding behavior under IL2CPP; dispatch/login/world entry; audio; optional plugin/AOT behavior; pause/resume and background termination. iOS packaging, signing and physical-device acceptance remain separate work.
+
+## Offline development APK (default Android mode)
+
+The existing six packages total 5,416,772,272 bytes. Local Build Tools 36.0.0 aapt2 rejected the 2,950,872,895-byte res_q21_000.pkg even without compression, while a same-name 17 MB control succeeded. This is not a Unity or IL2CPP pass. Splitting an individual asset would not establish that the complete APK is installable.
+
+Android builds now default to `FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE=offline`. The development APK embeds only the expected full manifest under StreamingAssets. It exports `<output.apk>.resources.tsv` for local transfer. The unchanged original resource files remain on the build machine, and never go to GitHub. This is a USB-based acceptance workflow, not a production download/update service or a Play delivery solution.
+
+The build moves the original StreamingAssets directory (including any resource links) to `LocalMobileBuild/OriginalStreamingAssets`, exposes a tiny manifest-only stage during BuildPlayer, then restores the original directory in `finally`. It does not rewrite resource files or follow links for deletion. An Editor crash leaves the original backup intact; the next build refuses to proceed until that original directory is restored. Generated tiny stages remain under LocalMobileBuild with a `.generated-<id>` suffix. Do not delete the original backup as a cleanup step. Desktop builds must not run concurrently with this Android staging operation.
+
+On first device launch, obtain the exact `FFO_MOBILE_RESOURCE_ROOT=` line from the game's log. Missing resources produce a visible startup error and never enter game loading. Stop the game before transfer. Then, with an explicitly connected and user-authorized device:
+
+```sh
+python3 Documentation/tools/push-mobile-offline-resources.py \
+  --adb /path/to/adb --device EXACT_SERIAL \
+  --manifest Build/Android/fake-fantasy-online.apk.resources.tsv \
+  --source Assets/StreamingAssets \
+  --remote-root EXACT_PATH_FROM_GAME_LOG
+```
+
+The helper checks every host file against the exported manifest before transfer. Each device file is pushed to `.part`, SHA-256 checked on-device, and then renamed. It does not install APKs, enable USB debugging, request broad storage permissions, or configure networking. Restart the game afterward: the APK's embedded manifest independently validates all installed files on a background thread before activating the version directory. Interruption or corrupt files remain inactive; rerun transfer and restart. Resources use application-specific storage; uninstall may remove them. First-boot hash timing, actual adb access to app-specific external storage, device free space and lifecycle behavior require real-device acceptance.
+
+For small fixtures only, `FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE=bundled` retains the existing streaming APK copy path; a conservative 1 GiB aggregate preflight prevents accidental giant bundled builds. Both modes still require an explicitly configured valid mobile-dispatch.txt. A syntactically valid address is not proof of phone reachability. No localhost substitution, firewall change or public endpoint is performed.
+
+Checks added: offline mode/version identity, incomplete/corrupt/repaired directory verification, source directory preservation and interrupted-staging rejection; transfer helper path/schema and streaming-hash checks. These are managed/host tests, not device verification.

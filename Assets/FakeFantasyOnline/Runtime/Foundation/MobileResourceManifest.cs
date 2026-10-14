@@ -23,16 +23,20 @@ public sealed class MobileResourceManifest
     }
     public IReadOnlyList<Entry> Entries { get; private set; }
     public string Version { get; private set; }
+    public bool Offline { get; private set; }
 
     public static MobileResourceManifest Parse(string text)
     {
         if (text == null || Encoding.UTF8.GetByteCount(text) > MaxManifestBytes)
             throw new InvalidDataException("Mobile resource manifest is missing or too large.");
+        bool offline;
         var entries = new List<Entry>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var reader = new StringReader(text))
         {
-            if (reader.ReadLine() != "FFO-MOBILE-1") throw new InvalidDataException("Unsupported mobile resource manifest.");
+            string header = reader.ReadLine();
+            offline = header == "FFO-MOBILE-OFFLINE-1";
+            if (header != "FFO-MOBILE-1" && !offline) throw new InvalidDataException("Unsupported mobile resource manifest.");
             string line;
             while ((line = reader.ReadLine()) != null)
             {
@@ -50,7 +54,14 @@ public sealed class MobileResourceManifest
         }
         if (entries.Count == 0) throw new InvalidDataException("Empty mobile resource manifest.");
         using (var sha = SHA256.Create())
-            return new MobileResourceManifest { Entries = entries.AsReadOnly(), Version = Hex(sha.ComputeHash(Encoding.UTF8.GetBytes(text))) };
+            return new MobileResourceManifest { Entries = entries.AsReadOnly(), Offline = offline, Version = Hex(sha.ComputeHash(Encoding.UTF8.GetBytes(text))) };
+    }
+
+    public void VerifyDirectory(string root)
+    {
+        foreach (var entry in Entries)
+            if (!Verify(FilePath(root, entry.Destination), entry))
+                throw new InvalidDataException("Missing or corrupt mobile resource: " + entry.Destination);
     }
 
     public static void ValidateRelativePath(string path)

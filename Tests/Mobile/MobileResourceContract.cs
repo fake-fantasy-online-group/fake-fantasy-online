@@ -20,6 +20,37 @@ internal static class MobileResourceContract
             string row = "ReferenceClient/packages/a.pkg\tdata/a.pkg\t" + new FileInfo(source).Length + "\t" + MobileResourceManifest.HashFile(source) + "\n";
             var manifest = MobileResourceManifest.Parse("FFO-MOBILE-1\n" + row);
             Assert(manifest.Entries.Count == 1, "one entry");
+            var offline = MobileResourceManifest.Parse("FFO-MOBILE-OFFLINE-1\n" + row);
+            Assert(offline.Offline && !manifest.Offline, "explicit transport modes");
+            Assert(offline.Version != manifest.Version, "transport mode belongs to version");
+            string offlineRoot = Path.Combine(root, "offline");
+            Reject(() => offline.VerifyDirectory(offlineRoot), "incomplete offline transfer blocked");
+            Directory.CreateDirectory(Path.Combine(offlineRoot, "data"));
+            File.Copy(source, Path.Combine(offlineRoot, "data/a.pkg"));
+            offline.VerifyDirectory(offlineRoot); checks++;
+            File.WriteAllText(Path.Combine(offlineRoot, "data/a.pkg"), "broken");
+            Reject(() => offline.VerifyDirectory(offlineRoot), "corrupt offline transfer blocked");
+            File.Copy(source, Path.Combine(offlineRoot, "data/a.pkg"), true);
+            offline.VerifyDirectory(offlineRoot); checks++;
+            string stagingRoot = Path.Combine(root, "StreamingAssets");
+            string backup = Path.Combine(root, "Temp/original");
+            Directory.CreateDirectory(stagingRoot);
+            File.WriteAllText(Path.Combine(stagingRoot, "original"), "preserve");
+            using (new MobileStreamingAssetsStage(stagingRoot, backup, "FFO-MOBILE-OFFLINE-1\n" + row))
+            {
+                Assert(!File.Exists(Path.Combine(stagingRoot, "original")), "giant source excluded from stage");
+                Assert(File.Exists(Path.Combine(backup, "original")), "original retained outside build assets");
+                Assert(Directory.GetFiles(stagingRoot).Length == 1, "only manifest bundled offline");
+            }
+            Assert(File.ReadAllText(Path.Combine(stagingRoot, "original")) == "preserve", "identical source restored");
+            Assert(!Directory.Exists(backup), "backup restored not deleted");
+            Directory.CreateDirectory(backup);
+            bool staleBlocked = false;
+            try { new MobileStreamingAssetsStage(stagingRoot, backup, "FFO-MOBILE-OFFLINE-1\n" + row); }
+            catch (IOException) { staleBlocked = true; }
+            Assert(staleBlocked && File.Exists(Path.Combine(stagingRoot, "original")), "interrupted stage refuses destructive retry");
+            Directory.Delete(backup);
+
             Assert(manifest.Version == MobileResourceManifest.Parse("FFO-MOBILE-1\n" + row).Version, "stable version");
             var entry = manifest.Entries[0];
             Assert(MobileResourceManifest.Verify(source, entry), "valid checksum");

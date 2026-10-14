@@ -95,3 +95,6 @@ SavedVariables/
 # Local application branding supplied separately from the source release
 /Assets/LocalBranding/
 /Assets/LocalBranding.meta
+
+# Durable source-resource backup for interrupted offline Android builds (never upload assets).
+/LocalMobileBuild/

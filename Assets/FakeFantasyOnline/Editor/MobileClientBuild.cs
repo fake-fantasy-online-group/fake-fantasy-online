@@ -21,7 +21,13 @@ public static class MobileClientBuild
         output = Path.GetFullPath(string.IsNullOrWhiteSpace(output) ? "Build/Android/fake-fantasy-online.apk" : output);
         if (!output.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Android build output must end in .apk.");
+        string mode = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE") ?? "offline";
+        if (mode != "offline" && mode != "bundled") throw new ArgumentException("Resource mode must be offline or bundled.");
+        bool offline = mode == "offline";
         string root = UnityEngine.Application.streamingAssetsPath;
+        string backup = Path.GetFullPath("LocalMobileBuild/OriginalStreamingAssets");
+        if (Directory.Exists(backup)) throw new IOException("Interrupted mobile staging: restore " + backup + " to StreamingAssets before retrying.");
+        MobileStreamingAssetsStage stage = null;
         string manifestPath = Path.Combine(root, MobileResourceManifest.FileName);
         byte[] previousManifest = File.Exists(manifestPath) ? File.ReadAllBytes(manifestPath) : null;
         var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android);
@@ -29,17 +35,27 @@ public static class MobileClientBuild
         bool appBundle = EditorUserBuildSettings.buildAppBundle;
         try
         {
-            GenerateManifest(root);
+            GenerateManifest(root, offline);
+            if (!offline && Directory.GetFiles(root, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) > 1024L * 1024 * 1024)
+                throw new InvalidDataException("Bundled resources exceed conservative 1 GiB limit; use offline development mode.");
             ClientBuild.PrepareClientScene();
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             EditorUserBuildSettings.buildAppBundle = false;
+            Directory.CreateDirectory(Path.GetDirectoryName(output));
+            if (offline)
+            {
+                string manifest = File.ReadAllText(manifestPath);
+                File.WriteAllText(output + ".resources.tsv", manifest, new UTF8Encoding(false));
+                stage = new MobileStreamingAssetsStage(root, backup, manifest);
+                AssetDatabase.Refresh();
+            }
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { "Assets/FakeFantasyOnline/Scenes/Client.unity" },
                 locationPathName = output,
                 target = BuildTarget.Android,
-                options = BuildOptions.None
+                options = offline ? BuildOptions.Development : BuildOptions.None
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Android build failed: " + report.summary.result);
@@ -47,6 +63,7 @@ public static class MobileClientBuild
         }
         finally
         {
+            stage?.Dispose();
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, backend);
             PlayerSettings.Android.targetArchitectures = architectures;
             EditorUserBuildSettings.buildAppBundle = appBundle;
@@ -56,7 +73,7 @@ public static class MobileClientBuild
         }
     }
 
-    public static void GenerateManifest(string root)
+    public static void GenerateManifest(string root, bool offline = false)
     {
         // Endpoint contains no credentials and is bundled in the app; never place secrets here.
         PrivateServerOptions.MobileConfigured(File.ReadAllText(Path.Combine(root, "mobile-dispatch.txt")).Trim());
@@ -73,7 +90,7 @@ public static class MobileClientBuild
         if (!Directory.Exists(Path.Combine(root, "ReferenceClient/music")) ||
             Directory.GetFiles(Path.Combine(root, "ReferenceClient/music"), "*.ogg").Length != 51)
             throw new InvalidDataException("The locally supplied 51-track music layout is required.");
-        var text = new StringBuilder("FFO-MOBILE-1\n");
+        var text = new StringBuilder(offline ? "FFO-MOBILE-OFFLINE-1\n" : "FFO-MOBILE-1\n");
         foreach (string file in Directory.GetFiles(root, "*", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
         {
             string relative = file.Substring(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length + 1).Replace('\\', '/');

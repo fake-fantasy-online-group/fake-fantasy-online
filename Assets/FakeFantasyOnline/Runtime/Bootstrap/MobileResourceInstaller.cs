@@ -26,6 +26,20 @@ public sealed class MobileResourceInstaller : MonoBehaviour
             throw new InvalidDataException("Mobile resource manifest exceeds size limit.");
         var manifest = MobileResourceManifest.Parse(File.ReadAllText(manifestPath));
         string root = Path.Combine(storage, manifest.Version);
+        if (manifest.Offline)
+        {
+            // The APK manifest is the authority. Local transfer metadata cannot change expected hashes.
+            // Keep this line machine-readable for the explicit-device deployment helper.
+            Debug.Log("FFO_MOBILE_RESOURCE_ROOT=" + root);
+            status = "离线测试资源待校验。请完成 USB 资源传输后重新启动游戏。\n" + root;
+            Task validation = Task.Run(() => manifest.VerifyDirectory(root));
+            while (!validation.IsCompleted) yield return null;
+            validation.GetAwaiter().GetResult();
+            ClientResourcePaths.Activate(root);
+            File.Delete(manifestPath);
+            status = null;
+            yield break;
+        }
         Directory.CreateDirectory(root);
         for (int i = 0; i < manifest.Entries.Count; i++)
         {
