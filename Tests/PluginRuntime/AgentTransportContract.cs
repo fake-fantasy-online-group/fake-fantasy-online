@@ -21,47 +21,104 @@ internal static class AgentTransportContract
     {
         try
         {
-            if (args.Length == 1 && args[0] == "--python-fixture") return RunPythonFixture();
-            SensitiveLoginIsEphemeral();
-            RoundTripsAndIndependentCursors();
-            MalformedFramesAndBounds();
-            TinyResponseBudget();
-            DisconnectAndStopCancelQueuedWork();
-            DispatchTimeoutAndOverload();
-            ClientAdmissionAndIdleTimeout();
-            Console.WriteLine("Agent transport contract passed: " + assertions + " assertions.");
-            return 0;
+            Source = args[0];
+            if (args.Length > 1 && args[1] == "--python-fixture") return RunPythonFixture();
+            SensitiveLoginIsEphemeral(); RoundTripsAndIndependentCursors(); LuaLifecycleAndExactNumbers();
+            MalformedFramesAndBounds(); TinyResponseBudget(); DispatchTimeoutAndOverload(); ClientAdmissionAndIdleTimeout();
+            CancelQueuedLuaCallbacks();
+            Console.WriteLine("Lua agent transport contract passed: " + assertions + " assertions."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
-
+    private static string Source;
     private static int RunPythonFixture()
     {
-        var api = new FakeGame();
-        for (var index = 0; index < 6; index++) api.Publish("fixture.event", Map("index", index));
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0))
-        {
-            server.Start();
-            Console.WriteLine(server.Port);
-            Console.Out.Flush();
+        var api = new FakeGame(); for (int i=0;i<6;i++) api.Publish("fixture.event",Map("index",i));
+        using (var fixture = new Fixture(api)) {
+            fixture.Start(); Console.WriteLine(fixture.Port); Console.Out.Flush();
             var stop = Task.Run(() => Console.ReadLine());
-            while (!stop.IsCompleted) { dispatcher.Pump(); Thread.Sleep(1); }
-            Check(!api.WrongThread, "Python fixture stayed on game thread");
+            while (!stop.IsCompleted) { fixture.Pump(); Thread.Sleep(1); }
+            Check(!api.WrongThread, "Python calls stay on owning thread");
         }
         return 0;
     }
+    private sealed class Ui : IPluginUi {
+        public IDisposable RegisterPanel(PanelDefinition panel) { throw new NotSupportedException(); }
+        public void SetPanelText(string id, string text) { throw new NotSupportedException(); }
+    }
+    private sealed class Fixture : IDisposable
+    {
+        private readonly string root = Path.Combine(Path.GetTempPath(), "ffo-lua-agent-" + Guid.NewGuid().ToString("N"));
+        internal readonly AddonHost Host;
+        internal readonly int Port;
+        internal bool IsRunning => Host.Statuses[0].State == AddonState.Enabled;
+        internal Fixture(FakeGame api, LoopbackJsonServerOptions options = null, string removeCapability = null)
+        {
+            var probe = new TcpListener(IPAddress.Loopback,0); probe.Start(); Port=((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+            var addon = Path.Combine(root,"addons","agent-bridge"); Directory.CreateDirectory(addon);
+            var manifest = Object(GameJson.Parse(File.ReadAllText(Path.Combine(Source,"addon.json"))));
+            if (removeCapability != null) ((List<object>)manifest["capabilities"]).Remove(removeCapability);
+            File.WriteAllText(Path.Combine(addon,"addon.json"),GameJson.Serialize(manifest));
+            File.WriteAllText(Path.Combine(addon,"main.lua"),File.ReadAllText(Path.Combine(Source,"main.lua")).Replace("loopback.listen(17845,", "loopback.listen("+Port+","));
+            Host = new AddonHost(Path.Combine(root,"addons"),Path.Combine(root,"config"),api,new Ui(),options); Host.Discover();
+        }
+        internal void Start() { Check(Host.Enable("agent-bridge"), "enable accepted"); for (int i=0;i<20 && !IsRunning;i++) Pump(); Check(IsRunning,"addon enabled: "+Host.Statuses[0].Error); }
+        internal void Pump() { Host.Tick(0.01f); }
+        internal void Stop() { Host.Disable("agent-bridge"); }
+        internal void CheckPortFree() { var probe=new TcpListener(IPAddress.Loopback,Port); probe.Start(); probe.Stop(); Check(true,"disabled port can be rebound"); }
+        public void Dispose() { Host.Dispose(); Directory.Delete(root,true); }
+    }
+    private static void CancelQueuedLuaCallbacks()
+    {
+        using(var fixture = new Fixture(new FakeGame())) {
+            fixture.Start();
+            var peers = new List<Peer>();
+            for(int i=0;i<5;i++) { var peer=new Peer(fixture.Port); peers.Add(peer); peer.Send("describe",Map()); }
+            Thread.Sleep(60); fixture.Pump();
+            foreach(var peer in peers) peer.Dispose();
+            Thread.Sleep(60);
+            for(int i=0;i<10;i++) fixture.Pump();
+            Check(fixture.IsRunning,"disconnected queued Lua callbacks must not fault addon: "+fixture.Host.Statuses[0].Error);
+            using(var live=new Peer(fixture.Port)) Check((bool)live.Call(fixture,"describe",Map())["ok"],"other clients work after disconnect cancellation");
+        }
+    }
 
+    private static void LuaLifecycleAndExactNumbers()
+    {
+        var api = new FakeGame();
+        using (var fixture = new Fixture(api)) {
+            fixture.Start();
+            using (var peer = new Peer(fixture.Port)) {
+                var large = 9007199254740993L;
+                var sent=Result(peer.Call(fixture,"act",Map("name","fake.step","requestId","exact","expectedSceneRevision",large,"arguments",Map("x",large))));
+                Check(api.LastRevision == large && api.LastX == large,"exact Int64 survives Lua opaque request routing");
+                Check((string)sent["requestId"]=="exact","external retry identity is not addon-prefixed");
+                Check(Error(peer.Call(fixture,"events",Map("afterSequence",0,"maxCount",513)))=="invalid_params","event cap retained");
+                Check(Error(peer.Raw(fixture,"{\"id\":\"bad\",\"method\":\"observe\",\"params\":{\"domain\":\"player\"},\"extra\":1}\n"))=="invalid_params","unknown envelope rejected");
+                Check(Error(peer.Raw(fixture,"{\"id\":\"bad\",\"id\":\"twice\"}\n"))=="invalid_json","duplicate JSON keys rejected");
+                int before=api.Executions; peer.Send("act",Map("name","fake.step","requestId","must-not-run")); Thread.Sleep(30);
+                fixture.Stop(); fixture.Pump(); Check(api.Executions==before,"disable cancels unpumped request");
+            }
+            fixture.CheckPortFree(); fixture.Start();
+            using(var peer=new Peer(fixture.Port)) Check((bool)peer.Call(fixture,"describe",Map())["ok"],"reenable opens fresh working listener");
+            fixture.Host.Reload("agent-bridge"); for(int i=0;i<20;i++) fixture.Pump();
+            using(var peer=new Peer(fixture.Port)) Check((bool)peer.Call(fixture,"describe",Map())["ok"],"reload closes and recreates listener");
+        }
+        using(var fixture=new Fixture(new FakeGame(),removeCapability:"game.sensitive-login")) {
+            fixture.Start(); using(var peer=new Peer(fixture.Port)) {
+                Check(!(bool)Result(peer.Call(fixture,"describe",Map()))["sensitiveLoginAvailable"],"login capability absent from discovery");
+                Check(!(bool)peer.Call(fixture,"sensitive-login",Map())["ok"],"login denied without permission");
+            }
+        }
+    }
     private static void SensitiveLoginIsEphemeral()
     {
         const string secret = "dummysecret";
         var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0,
-            new GameAgentServerOptions(dispatchTimeoutMilliseconds: 100)))
+        using (var dispatcher = new Fixture(api, new LoopbackJsonServerOptions(dispatchTimeoutMilliseconds: 100)))
         {
-            server.Start();
-            using (var peer = new Peer(server.Port))
+            dispatcher.Start();
+            using (var peer = new Peer(dispatcher.Port))
             {
                 var fields = Map("account", "dummyaccount", "password", secret,
                     "expectedTitleInstanceId", "title1", "expectedTitleRevision", "rev1");
@@ -85,7 +142,7 @@ internal static class AgentTransportContract
                 var expired = ReadResponse(peer.Read(), null);
                 Check(Error(expired) == "dispatch_timeout", "sensitive queued request times out");
                 dispatcher.Pump();
-                Check(api.LoginSubmissions == submitted && dispatcher.PendingCount == 0, "timed-out credential submission never runs later");
+                Check(api.LoginSubmissions == submitted, "timed-out credential submission never runs later");
                 Check(!GameJson.Serialize(peer.Call(dispatcher, "observe", Map("domain", "player"))).Contains(secret), "observations omit credentials");
                 Check(!GameJson.Serialize(peer.Call(dispatcher, "events", Map("afterSequence", 0))).Contains(secret), "events omit credentials");
             }
@@ -95,14 +152,14 @@ internal static class AgentTransportContract
     private static void RoundTripsAndIndependentCursors()
     {
         var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0))
+        using (var dispatcher = new Fixture(api))
         {
-            Check(!server.IsRunning && server.Port == 0, "construction does not listen");
-            server.Start();
-            var port = server.Port;
-            server.Start();
-            Check(port > 0 && server.Port == port, "Start is explicit and idempotent");
+            Check(!dispatcher.IsRunning, "construction does not listen");
+            dispatcher.CheckPortFree();
+            dispatcher.Start();
+            var port = dispatcher.Port;
+            dispatcher.Start();
+            Check(port > 0 && dispatcher.Port == port, "Start is explicit and idempotent");
             using (var first = new Peer(port))
             using (var second = new Peer(port))
             {
@@ -141,23 +198,20 @@ internal static class AgentTransportContract
                 Check(Error(first.Call(dispatcher, "invented", Map())) == "unknown_method", "unknown method rejected");
                 Check(!api.WrongThread, "every game API access ran on dispatcher owner thread");
             }
-            Eventually(() => server.ConnectedClients == 0, "connections release");
-            server.Stop();
-            Check(!server.IsRunning && server.ConnectedClients == 0, "Stop clears running state");
-            server.Start();
-            using (var peer = new Peer(server.Port)) Check((bool)peer.Call(dispatcher, "describe", Map())["ok"], "Stop then Start reconnects");
+            dispatcher.Stop();
+            Check(!dispatcher.IsRunning, "Stop clears running state");
+            dispatcher.Start();
+            using (var peer = new Peer(dispatcher.Port)) Check((bool)peer.Call(dispatcher, "describe", Map())["ok"], "Stop then Start reconnects");
         }
     }
 
     private static void MalformedFramesAndBounds()
     {
         var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0,
-            new GameAgentServerOptions(maxRequestBytes: 256, maxResponseBytes: 512)))
+        using (var dispatcher = new Fixture(api, new LoopbackJsonServerOptions(maxRequestBytes: 256, maxResponseBytes: 512)))
         {
-            server.Start();
-            using (var peer = new Peer(server.Port))
+            dispatcher.Start();
+            using (var peer = new Peer(dispatcher.Port))
             {
                 Check(Error(peer.Raw(dispatcher, "{\"id\":\"a\",\"id\":\"b\",\"method\":\"describe\"}\n")) == "invalid_json", "duplicate JSON keys rejected");
                 peer.Stream.Write(new byte[] { 0xff, 10 }, 0, 2);
@@ -170,7 +224,7 @@ internal static class AgentTransportContract
                 Check(Error(oversized) == "frame_too_large", "oversized frame rejected before parsing");
                 Check(peer.Reader.ReadLine() == null, "oversized frame disconnects");
             }
-            using (var peer = new Peer(server.Port))
+            using (var peer = new Peer(dispatcher.Port))
             {
                 var response = peer.Call(dispatcher, "observe", Map("domain", "large"));
                 Check(Error(response) == "response_too_large", "large response bounded rather than truncated");
@@ -184,12 +238,10 @@ internal static class AgentTransportContract
 
     private static void TinyResponseBudget()
     {
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(new FakeGame(), dispatcher, 0,
-            new GameAgentServerOptions(maxResponseBytes: 256)))
+        using (var dispatcher = new Fixture(new FakeGame(), new LoopbackJsonServerOptions(maxResponseBytes: 256)))
         {
-            server.Start();
-            using (var peer = new Peer(server.Port))
+            dispatcher.Start();
+            using (var peer = new Peer(dispatcher.Port))
             {
                 var request = Map("id", new string('片', 128), "method", "observe", "params", Map("domain", "large"));
                 var bytes = Utf8.GetBytes(GameJson.Serialize(request) + "\n");
@@ -203,103 +255,52 @@ internal static class AgentTransportContract
         }
     }
 
-    private static void DisconnectAndStopCancelQueuedWork()
-    {
-        var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0))
-        {
-            server.Start();
-            var peer = new Peer(server.Port);
-            peer.Send("act", Map("name", "fake.step", "requestId", "disconnected"));
-            Eventually(() => dispatcher.PendingCount == 1, "request reaches dispatcher");
-            peer.Dispose();
-            Eventually(() => server.ConnectedClients == 0 && dispatcher.PendingCount == 0, "disconnect cancels pending dispatch");
-            dispatcher.Pump();
-            Check(api.Executions == 0, "disconnected queued action never executes");
-            using (var next = new Peer(server.Port))
-            {
-                next.Send("act", Map("name", "fake.step", "requestId", "stopped"));
-                Eventually(() => dispatcher.PendingCount == 1, "second queued action");
-                var watch = Stopwatch.StartNew();
-                server.Stop();
-                Check(watch.ElapsedMilliseconds < 2000, "Stop releases workers promptly");
-                dispatcher.Pump();
-                Check(api.Executions == 0 && dispatcher.PendingCount == 0, "Stop removes queued game work");
-                Check(next.Reader.ReadLine() == null, "Stop closes client socket");
-            }
-            server.Dispose();
-            var rejected = false;
-            try { server.Start(); } catch (ObjectDisposedException) { rejected = true; }
-            Check(rejected, "disposed server cannot restart");
-        }
-    }
-
     private static void DispatchTimeoutAndOverload()
     {
         var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0,
-            new GameAgentServerOptions(dispatchTimeoutMilliseconds: 100, maxPendingRequestsPerClient: 1)))
+        using (var dispatcher = new Fixture(api, new LoopbackJsonServerOptions(dispatchTimeoutMilliseconds: 100, maxPendingRequestsPerClient: 1)))
         {
-            server.Start();
-            using (var peer = new Peer(server.Port))
+            dispatcher.Start();
+            using (var peer = new Peer(dispatcher.Port))
             {
                 peer.Send("act", Map("name", "fake.step", "requestId", "timeout"));
                 var pending = peer.Read();
                 Check(Error(ReadResponse(pending, null)) == "dispatch_timeout", "un-pumped request times out");
-                Check(dispatcher.PendingCount == 0, "timeout withdraws queued callback");
                 dispatcher.Pump();
                 Check(api.Executions == 0, "timed out action never executes later");
             }
-            using (var peer = new Peer(server.Port))
+            using (var peer = new Peer(dispatcher.Port))
             {
                 var text = string.Concat(Enumerable.Repeat(GameJson.Serialize(Map("id", "spam", "method", "act", "params", Map("name", "fake.step", "requestId", "overload"))) + "\n", 32));
                 var bytes = Utf8.GetBytes(text);
                 peer.Stream.Write(bytes, 0, bytes.Length);
                 var error = ReadResponse(peer.Read(), null);
                 Check(Error(error) == "queue_full", "per-client backlog is bounded");
-                Eventually(() => server.ConnectedClients == 0, "overloaded client closed");
+                Thread.Sleep(50);
                 dispatcher.Pump();
                 Check(api.Executions == 0, "overload cancels queued callbacks");
             }
         }
-        using (var dispatcher = new MainThreadGameDispatcher(1))
-        using (var server = new GameAgentServer(api, dispatcher, 0))
-        {
-            server.Start();
-            var held = dispatcher.InvokeAsync(() => 1);
-            using (var peer = new Peer(server.Port))
-            {
-                peer.Send("observe", Map("domain", "player"));
-                Check(Error(ReadResponse(peer.Read(), null)) == "queue_full", "global dispatcher backpressure propagated");
-            }
-            dispatcher.Pump();
-            Check(held.Result == 1, "backpressure preserves admitted work");
-        }
     }
-
     private static void ClientAdmissionAndIdleTimeout()
     {
         var api = new FakeGame();
-        using (var dispatcher = new MainThreadGameDispatcher())
-        using (var server = new GameAgentServer(api, dispatcher, 0,
-            new GameAgentServerOptions(maxClients: 1, idleTimeoutMilliseconds: 200)))
+        using (var dispatcher = new Fixture(api, new LoopbackJsonServerOptions(maxClients: 1, idleTimeoutMilliseconds: 200)))
         {
-            server.Start();
-            using (var first = new Peer(server.Port))
+            dispatcher.Start();
+            using (var first = new Peer(dispatcher.Port))
             {
-                Eventually(() => server.ConnectedClients == 1, "first client admitted");
-                using (var excess = new Peer(server.Port))
+                Thread.Sleep(30);
+                using (var excess = new Peer(dispatcher.Port))
                     Check(excess.Reader.ReadLine() == null, "excess client refused without new worker");
                 first.Stream.WriteByte((byte)'{');
                 Check(first.Reader.ReadLine() == null, "idle partial frame is disconnected");
-                Eventually(() => server.ConnectedClients == 0, "idle slot released");
+
             }
         }
     }
 
-    private static Dictionary<string, object> ReadResponse(Task<string> read, MainThreadGameDispatcher dispatcher)
+    private static Dictionary<string, object> ReadResponse(Task<string> read, Fixture dispatcher)
     {
         var watch = Stopwatch.StartNew();
         while (!read.IsCompleted)
@@ -367,12 +368,12 @@ internal static class AgentTransportContract
             Stream.Write(bytes, 0, bytes.Length);
         }
         internal Task<string> Read() { return Task.Run(() => Reader.ReadLine()); }
-        internal Dictionary<string, object> Call(MainThreadGameDispatcher dispatcher, string method, Dictionary<string, object> args)
+        internal Dictionary<string, object> Call(Fixture dispatcher, string method, Dictionary<string, object> args)
         {
             Send(method, args);
             return ReadResponse(Read(), dispatcher);
         }
-        internal Dictionary<string, object> Raw(MainThreadGameDispatcher dispatcher, string frame)
+        internal Dictionary<string, object> Raw(Fixture dispatcher, string frame)
         {
             var bytes = Utf8.GetBytes(frame);
             Stream.Write(bytes, 0, bytes.Length);
@@ -390,6 +391,7 @@ internal static class AgentTransportContract
         private readonly Queue<GameEvent> journal = new Queue<GameEvent>();
         private long sequence;
         internal int Executions;
+        internal long? LastRevision; internal long LastX;
         internal int LoginSubmissions;
         internal bool LoginThrows;
         public GameSensitiveLoginResult SubmitLogin(string account, string password, string expectedTitleInstanceId, string expectedTitleRevision)
@@ -424,6 +426,7 @@ internal static class AgentTransportContract
         public GameActionReceipt Execute(GameActionRequest request)
         {
             OnThread();
+            LastRevision = request.ExpectedSceneRevision; object x; if(request.Arguments.TryGetValue("x",out x)) LastX=Convert.ToInt64(x);
             var fingerprint = request.Name + ":" + GameJson.Serialize(request.Arguments) + ":" + request.ExpectedSceneRevision;
             string id;
             if (requests.TryGetValue(request.RequestId, out id))

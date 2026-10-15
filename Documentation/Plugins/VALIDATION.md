@@ -1,3 +1,5 @@
+> 历史验证记录：下文保留此前内置实现的测试背景；当前源码边界已经改为可选框架与独立 Lua 插件。最新入口见 [README.md](README.md) 和 `Tests/PluginRuntime/`，框架测试需 `FFO_PLUGIN_FRAMEWORK_PACKAGE`，智能体测试另需 `FFO_AGENT_ADDON`。旧 `PluginHost/GameAgent*` 路径和内置桥启动说明已不适用。独立源码/模拟测试不代表 Unity Player 或移动真机验收。
+
 # 验证记录（2026-10-10）
 
 本记录覆盖插件运行时分支的源码与独立测试，不代表 Unity 实机或真实服务器验收。

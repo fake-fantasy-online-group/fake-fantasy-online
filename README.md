@@ -6,7 +6,7 @@
 
 ## 源码结构
 
-- `Assets/FakeFantasyOnline/Runtime/`：Foundation、Domain、Application、Protocol、Presentation、Bootstrap、PluginApi 和 PluginHost 程序集。
+- `Assets/FakeFantasyOnline/Runtime/`：Foundation、Domain、Application、Protocol、Presentation、Bootstrap 和 PluginApi 程序集。插件加载器、MoonSharp 与智能体桥已独立为可选包，见 [插件说明](Documentation/Plugins/README.md)。
 - `Assets/FakeFantasyOnline/Editor/`：Unity 编辑器构建入口。
 - `Assets/FakeFantasyOnline/Scenes/Client.unity`：客户端场景。
 - `Assets/StreamingAssets/`：用户自行准备的运行资源目录。

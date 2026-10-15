@@ -10,13 +10,19 @@ This implementation is source-tested with fake gameplay. It has not been validat
 in a Unity runtime or against a live game server. External compatible game assets
 and a server are still required to play.
 
-## Explicit opt-in
+## Optional installation and explicit enablement
 
-The bridge is **disabled by default**. Enable it in the addon manager, or launch an
-already-built client with `--agent-bridge`. The default endpoint is
-`127.0.0.1:17845`; `--agent-port=17845` changes the configured port, but does not by
-itself enable the bridge. The manager can stop it again. Bootstrap accepts ports
-1024–65535. The C# constructor also permits port zero for ephemeral test listeners.
+Install the optional `com.fakefantasyonline.plugin-framework` Unity source package
+and rebuild the client once. Then install `addons/agent-bridge` as a Lua addon and
+explicitly enable it in the plugin manager. Future Lua updates do not require a
+client rebuild. Without the framework or enabled Lua addon there is no listener.
+Only Lua plugins are supported; no runtime C# or native library loading exists.
+
+The Lua addon selects `127.0.0.1:17845`. Its protocol method mapping is in
+`main.lua`; generic bounded loopback transport and capability-checked game
+operations are supplied by the framework. The old core `--agent-bridge` startup
+flag is no longer a client feature. Enable/disable/reload through the plugin
+manager. To change the port, update the Lua addon's listen configuration and reload.
 
 The listener always binds IPv4 loopback. There is no remote listener setting,
 authentication, TLS, credential storage or OS/network configuration change. Any
@@ -24,22 +30,13 @@ process running as a local user that can reach this port can issue gameplay
 commands. Enable it only on a trusted computer. Do not expose or forward it onto
 another network. Remote access requires a separate, deliberately reviewed design.
 
-The C# facade is:
-
-```csharp
-var dispatcher = new MainThreadGameDispatcher(); // Construct on the game thread.
-var bridge = new GameAgentServer(gameApi, dispatcher, 17845); // Does not listen.
-bridge.Start(); // Explicit opt-in.
-// Each game frame: gameApi.Tick(); dispatcher.Pump();
-// On stop/disposal: bridge.Dispose(); dispatcher.Dispose();
-```
-
-The API instance can simultaneously serve Lua and the external bridge. The
-bootstrap already owns this wiring. Do not create a second copy of the gameplay
-state. `IsRunning`, `Port`, `ConnectedClients` and `LastError` expose bridge state.
-`Stop` closes sockets and withdraws pending dispatches; `Start` may be used again.
-`Dispose` is final. A synchronous game API call that has already started cannot be
-preempted. Already submitted game-server actions are not undone by disconnecting.
+The Lua callback receives an ephemeral opaque request handle. Native game helpers
+validate its original JSON parameters, preserving exact signed-64-bit identities
+and keeping login credentials out of Lua tables, logging and storage. Results also
+use request-scoped handles; Lua selects the method and replies through the generic
+envelope API. Completion, timeout, disconnect, fault, disable and unload invalidate
+handles and cancel queued callbacks. Disabling closes all sockets before releasing
+Lua state. An action already sent to the game server cannot be undone.
 
 ## Wire protocol: ffo-agent/1
 

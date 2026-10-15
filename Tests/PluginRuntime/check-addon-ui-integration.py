@@ -2,6 +2,7 @@
 """Source-wiring regressions; complements actual UI state tests with Unity stubs."""
 from pathlib import Path
 import re
+import os
 root = Path(__file__).resolve().parents[2]
 reference = root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets'
 checks = 0
@@ -29,8 +30,14 @@ pointer = (reference / 'PlayerController.PointerFrame.cs').read_text()
 check(': OverAnyUI();' in pointer, 'desktop pointer loop retains augmented gate')
 check('MobileClientPresentation.IsPointerOverUi(pointer.Position)' in pointer, 'touch pointer loop uses owned screen position gate')
 check('owner.OverAnyUI()' in (reference / 'ReferenceFirstWorldWindowOwner.cs').read_text(), 'wrapper pointer loop uses augmented gate')
-bootstrap = (root / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/PluginBootstrap.cs').read_text()
+framework = Path(os.environ['FFO_PLUGIN_FRAMEWORK_PACKAGE'])
+bootstrap = (framework / 'Runtime/Bootstrap/PluginBootstrap.cs').read_text()
 check('new PluginGameApi(() => view != null ? view.CurrentSessionForPlugins : null)' in bootstrap, 'session resolved at call time')
-check(bootstrap.index('server?.Dispose()', bootstrap.index('public void Shutdown')) < bootstrap.index('game?.Dispose()') < bootstrap.index('ui?.Dispose()'), 'shutdown stops transport then game then UI')
-check('ParseArguments(Environment.GetCommandLineArgs());' in bootstrap and 'if (optIn && validPort) SetBridge(true, agentPort);' in bootstrap, 'CLI bridge needs explicit opt in')
+check(bootstrap.index('installedAddons?.Dispose()', bootstrap.index('public void Shutdown')) < bootstrap.index('game?.Dispose()') < bootstrap.index('ui?.Dispose()'), 'shutdown stops packages then game then UI')
+check('new AddonHost(' in bootstrap and 'ManagedPluginHost' not in bootstrap, 'framework loads Lua addons only')
+check('agent-port' not in bootstrap and '17845' not in bootstrap and 'GameAgentServer' not in bootstrap, 'framework has no AI-specific configuration')
+core = (root / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/ClientBootstrap.cs').read_text()
+check('OptionalPluginRuntime.Create(gameObject, _view)' in core and 'AddComponent<PluginBootstrap>' not in core, 'core uses optional generic entry only')
+for asm in (root / 'Assets/FakeFantasyOnline/Runtime').rglob('*.asmdef'):
+    check('FakeFantasyOnline.PluginHost' not in asm.read_text() and 'FakeFantasyOnline.AgentBridge' not in asm.read_text(), str(asm) + ' has no optional package reference')
 print(f'PASS {checks} addon/bootstrap source integration assertions (not runtime/PlayMode)')

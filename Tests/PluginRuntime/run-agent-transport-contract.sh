@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# Standalone C# compilation + ephemeral loopback tests against a fake IGameApi.
-# Uses managed compiler/runtime only; never launches Unity or builds a Player.
+# Actual Lua agent addon, real interpreter/loopback, fake game. No Unity or live server.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if [[ -n "${FFO_MONO_ROOT:-}" ]]; then MONO="$FFO_MONO_ROOT"; else : "${UNITY_EDITOR_DIR:?Set FFO_MONO_ROOT or UNITY_EDITOR_DIR}"; MONO="$UNITY_EDITOR_DIR/Data/MonoBleedingEdge"; fi
-OUT="$(mktemp -d)"
-trap 'rm -rf "$OUT"' EXIT
-"$MONO/bin/mono" "$MONO/lib/mono/4.5/mcs.exe" -langversion:latest \
-  -out:"$OUT/AgentTransportContract.exe" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginApi/GameApi.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginApi/GameApiData.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginApi/GameSensitiveLogin.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/GameJson.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/MainThreadGameDispatcher.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/GameAgentProtocol.cs" \
-  "$ROOT/Assets/FakeFantasyOnline/Runtime/PluginHost/GameAgentServer.cs" \
-  "$ROOT/Tests/PluginRuntime/AgentTransportContract.cs"
-"$MONO/bin/mono" "$OUT/AgentTransportContract.exe"
-python3 "$ROOT/Tests/PluginRuntime/test_agent_client.py" "$MONO/bin/mono" "$OUT/AgentTransportContract.exe"
+: "${FFO_MONO_ROOT:?Activate documented managed toolchain}"
+: "${FFO_PLUGIN_FRAMEWORK_PACKAGE:?Set framework package checkout}"
+: "${FFO_AGENT_ADDON:?Set path to Lua agent-bridge addon}"
+OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
+find "$FFO_PLUGIN_FRAMEWORK_PACKAGE/Runtime/ThirdParty/MoonSharp/Interpreter" -name '*.cs' > "$OUT/sources.rsp"
+printf '%s\n' "$ROOT"/Assets/FakeFantasyOnline/Runtime/PluginApi/*.cs \
+ "$ROOT"/Assets/FakeFantasyOnline/Runtime/Foundation/*.cs \
+ "$FFO_PLUGIN_FRAMEWORK_PACKAGE"/Runtime/Host/*.cs \
+ "$ROOT/Tests/PluginRuntime/AgentTransportContract.cs" >> "$OUT/sources.rsp"
+"$FFO_MONO_ROOT/bin/mono" "$FFO_MONO_ROOT/lib/mono/4.5/mcs.exe" -langversion:latest -out:"$OUT/AgentTransportContract.exe" @"$OUT/sources.rsp"
+"$FFO_MONO_ROOT/bin/mono" "$OUT/AgentTransportContract.exe" "$FFO_AGENT_ADDON"
+# Adapter preserves the Python fixture CLI while supplying the checked-out Lua addon.
+cat > "$OUT/host" <<'HOST'
+#!/usr/bin/env bash
+assembly="$1"; shift
+exec "$FFO_MONO_ROOT/bin/mono" "$assembly" "$FFO_AGENT_ADDON" "$@"
+HOST
+chmod +x "$OUT/host"
+python3 "$ROOT/Tests/PluginRuntime/test_agent_client.py" "$OUT/host" "$OUT/AgentTransportContract.exe"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile every source in the seven engine-free assemblies; no Unity/Player build.
+# Compile core engine-free assemblies; optional framework is compiled only when explicitly selected.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 : "${FFO_MONO_ROOT:?Set FFO_MONO_ROOT to MonoBleedingEdge-compatible runtime}"
@@ -11,7 +11,9 @@ export MONO_PATH="$FFO_FRAMEWORK_DIR/Facades${MONO_PATH:+:$MONO_PATH}"
 find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$OUT/framework.rsp"
 compile() {
  local name="$1"; shift
- find "$ROOT/Assets/FakeFantasyOnline/Runtime/$name" -name '*.cs' | sort > "$OUT/$name.sources"
+ local source="$ROOT/Assets/FakeFantasyOnline/Runtime/$name"
+ [[ "$name" != "PluginHost" ]] || source="$FFO_PLUGIN_FRAMEWORK_PACKAGE/Runtime/Host"
+ find "$source" -name '*.cs' | sort > "$OUT/$name.sources"
  "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -noconfig -nostdlib+ @"$OUT/framework.rsp" -nologo -langversion:9.0 -target:library -out:"$OUT/FakeFantasyOnline.$name.dll" "$@" @"$OUT/$name.sources" > "$OUT/$name.log" 2>&1 || { cat "$OUT/$name.log"; return 1; }
  echo "PASS $name ($(wc -l < "$OUT/$name.sources") actual source files)"
 }
@@ -20,7 +22,12 @@ compile Domain -r:"$OUT/FakeFantasyOnline.Foundation.dll"
 compile Application -r:"$OUT/FakeFantasyOnline.Foundation.dll" -r:"$OUT/FakeFantasyOnline.Domain.dll"
 compile Protocol -r:"$OUT/FakeFantasyOnline.Foundation.dll" -r:"$OUT/FakeFantasyOnline.Application.dll"
 compile PluginApi -r:"$OUT/FakeFantasyOnline.Foundation.dll"
-find "$ROOT/Assets/ThirdParty/MoonSharp" -name '*.cs' | sort > "$OUT/MoonSharp.sources"
+if [[ -n "${FFO_PLUGIN_FRAMEWORK_PACKAGE:-}" ]]; then
+find "$FFO_PLUGIN_FRAMEWORK_PACKAGE/Runtime/ThirdParty/MoonSharp" -name '*.cs' | sort > "$OUT/MoonSharp.sources"
 "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -noconfig -nostdlib+ @"$OUT/framework.rsp" -nologo -langversion:9.0 -define:MOONSHARP_NO_UNITY -target:library -out:"$OUT/MoonSharp.Interpreter.dll" @"$OUT/MoonSharp.sources" > "$OUT/MoonSharp.log" 2>&1 || { cat "$OUT/MoonSharp.log"; exit 1; }
 echo "PASS MoonSharp ($(wc -l < "$OUT/MoonSharp.sources") actual source files)"
 compile PluginHost -r:"$OUT/FakeFantasyOnline.Foundation.dll" -r:"$OUT/FakeFantasyOnline.Application.dll" -r:"$OUT/FakeFantasyOnline.PluginApi.dll" -r:"$OUT/MoonSharp.Interpreter.dll"
+
+else
+ echo "PASS core-only compile (framework and AI packages absent from compiler inputs)"
+fi

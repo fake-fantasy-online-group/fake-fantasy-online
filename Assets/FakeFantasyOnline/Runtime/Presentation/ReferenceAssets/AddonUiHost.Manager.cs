@@ -17,41 +17,35 @@ public sealed class AddonManagerEntry
     public bool Active { get; }
 }
 
-public sealed class AddonBridgeStatus
-{
-    public AddonBridgeStatus(bool enabled, int port, int clients, string status)
-    { Enabled = enabled; Port = port; Clients = clients; Status = status ?? string.Empty; }
-    public bool Enabled { get; }
-    public int Port { get; }
-    public int Clients { get; }
-    public string Status { get; }
-}
-
 public sealed partial class AddonUiHost
 {
     private readonly object launcherOwner = new object();
     private Func<IReadOnlyList<AddonManagerEntry>> readAddons;
     private Action<string, string> addonCommand;
     private Action discover;
-    private Func<AddonBridgeStatus> readBridge;
-    private Action<bool, int> setBridge;
+    private Action<string> installSource;
+    private Func<string> readInstallStatus;
+    private Func<string> readInstallAction;
     private bool managerVisible;
     private int managerPointer, managerKeyboard;
     private int managerPage;
-    private string portText = "17845";
+    private string sourceText = string.Empty;
     private string managerError = string.Empty;
+    private string displayedInstallStatus;
+    private Vector2 installStatusScroll;
+    private GUIStyle installStatusStyle;
 
     public void ConfigureManager(Func<IReadOnlyList<AddonManagerEntry>> addons,
         Action<string, string> command, Action rescan,
-        Func<AddonBridgeStatus> bridge, Action<bool, int> configureBridge)
+        Action<string> install = null, Func<string> installStatus = null, Func<string> installAction = null)
     {
         CheckThread();
         readAddons = addons ?? throw new ArgumentNullException(nameof(addons));
         addonCommand = command ?? throw new ArgumentNullException(nameof(command));
         discover = rescan ?? throw new ArgumentNullException(nameof(rescan));
-        readBridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
-        setBridge = configureBridge ?? throw new ArgumentNullException(nameof(configureBridge));
-        portText = readBridge().Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        installSource = install;
+        readInstallStatus = installStatus;
+        readInstallAction = installAction;
     }
 
     public void ToggleManager() { CheckThread(); managerVisible = !managerVisible; if (!managerVisible) { WinZ.Forget(this); ClearManagerControls(); } }
@@ -86,12 +80,12 @@ public sealed partial class AddonUiHost
         try
         {
             ArtworkSkin.Panel(rect, scale);
-            Label(new Rect(rect.x + 12f * scale, rect.y + 8f * scale, rect.width - 50f * scale, 22f * scale), "插件管理与本地 AI 接口", scale, false);
+            Label(new Rect(rect.x + 12f * scale, rect.y + 8f * scale, rect.width - 50f * scale, 22f * scale), "插件管理", scale, false);
             if (ArtworkSkin.Close(new Rect(rect.xMax - 29f * scale, rect.y + 7f * scale, 20f * scale, 20f * scale), scale))
             { managerVisible = false; WinZ.Forget(this); ClearManagerControls(); return; }
             float left = rect.x + 12f * scale, top = rect.y + 38f * scale;
             if (ArtworkSkin.Button(new Rect(left, top, 112f * scale, 25f * scale), "重新扫描", scale)) RunManager(discover);
-            Label(new Rect(left + 124f * scale, top, rect.width - 148f * scale, 25f * scale), "启用时加载 StreamingAssets/AddOns 中的代码", scale, false);
+            Label(new Rect(left + 124f * scale, top, rect.width - 148f * scale, 25f * scale), "安装后需手动启用；启用将运行插件代码", scale, false);
 
             IReadOnlyList<AddonManagerEntry> addons = readAddons() ?? Array.Empty<AddonManagerEntry>();
             float footer = 151f * scale;
@@ -99,7 +93,7 @@ public sealed partial class AddonUiHost
             int pages = Math.Max(1, (addons.Count + perPage - 1) / perPage);
             managerPage = Math.Max(0, Math.Min(pages - 1, managerPage));
             top += 35f * scale;
-            if (addons.Count == 0) Label(new Rect(left, top, rect.width - 24f * scale, 50f * scale), "未发现插件。请在 StreamingAssets/AddOns 的插件目录中放入 addon.json 与 Lua 入口文件，然后重新扫描。", scale, true);
+            if (addons.Count == 0) Label(new Rect(left, top, rect.width - 24f * scale, 50f * scale), "未发现插件。可从源地址安装，或将 Lua 插件放入 AddOns 目录后重新扫描。", scale, true);
             for (int i = managerPage * perPage; i < addons.Count && i < (managerPage + 1) * perPage; i++)
             {
                 AddonManagerEntry addon = addons[i];
@@ -123,31 +117,53 @@ public sealed partial class AddonUiHost
             if (ArtworkSkin.Button(new Rect(rect.xMax - 147f * scale, top, 135f * scale, 23f * scale), "显示插件面板", scale))
                 foreach (Panel panel in order) panel.Visible = true;
             top += 32f * scale;
-            AddonBridgeStatus bridge = readBridge();
-            Label(new Rect(left, top, rect.width - 24f * scale, 22f * scale), "本地 AI 接口：" + bridge.Status + (bridge.Enabled ? "  (" + bridge.Clients + " 个连接)" : string.Empty), scale, false);
-            top += 26f * scale;
-            Label(new Rect(left, top, 123f * scale, 25f * scale), "127.0.0.1 :", scale, false);
-            Rect port = new Rect(left + 99f * scale, top, 77f * scale, 25f * scale);
-            ArtworkSkin.Input(port, scale);
-            bool oldEnabled = GUI.enabled;
-            GUI.enabled = oldEnabled && !bridge.Enabled;
-            portText = GUI.TextField(port, portText, 5);
-            GUI.enabled = oldEnabled;
-            if (ArtworkSkin.Button(new Rect(left + 189f * scale, top, 123f * scale, 25f * scale), bridge.Enabled ? "停止接口" : "启动接口", scale))
+            if (installSource != null)
             {
-                if (!int.TryParse(portText, out int selectedPort) || selectedPort < 1024 || selectedPort > 65535)
-                    managerError = "请输入 1024 至 65535 之间的端口号。";
-                else RunManager(() => setBridge(!bridge.Enabled, selectedPort));
+                Rect source = new Rect(left, top, Mathf.Max(70f, rect.width - 185f * scale), 25f * scale);
+                ArtworkSkin.Input(source, scale);
+                sourceText = GUI.TextField(source, sourceText, 2048);
+                string action = readInstallAction?.Invoke() ?? "安装 / 更新";
+                if (ArtworkSkin.Button(new Rect(source.xMax + 6f * scale, top, 150f * scale, 25f * scale), action, scale))
+                    RunManager(() => installSource(sourceText));
+                top += 30f * scale;
+                string status = string.IsNullOrEmpty(managerError) ? readInstallStatus?.Invoke() : managerError;
+                DrawInstallStatus(new Rect(left, top, rect.width - 24f * scale, 68f * scale),
+                    status ?? "输入插件源地址。安装与更新不会自动启用插件。", scale);
             }
-            top += 30f * scale;
-            Label(new Rect(left, top, rect.width - 24f * scale, 36f * scale),
-                string.IsNullOrEmpty(managerError) ? "仅手动开启。开启期间，本机上的其他程序可以控制此客户端；使用完毕后请停止接口。" : managerError, scale, true);
+            else if (!string.IsNullOrEmpty(managerError))
+                Label(new Rect(left, top, rect.width - 24f * scale, 36f * scale), managerError, scale, true);
         }
         finally
         {
             current.mousePosition = previousMouse;
             RememberManagerControls(previousHot, previousKeyboard);
         }
+    }
+
+    private void DrawInstallStatus(Rect bounds, string status, float scale)
+    {
+        if (!string.Equals(displayedInstallStatus, status, StringComparison.Ordinal))
+        {
+            displayedInstallStatus = status;
+            installStatusScroll = new Vector2(0f, 0f);
+        }
+        if (installStatusStyle == null)
+            installStatusStyle = new GUIStyle(GUI.skin.textArea)
+            {
+                font = NpcChatter.CnFont(), richText = false, wordWrap = true,
+                alignment = TextAnchor.UpperLeft
+            };
+        installStatusStyle.fontSize = Mathf.RoundToInt(12f * scale);
+        float width = Mathf.Max(20f, bounds.width - 22f * scale);
+        float height = Mathf.Max(bounds.height, installStatusStyle.CalcHeight(new GUIContent(status), width));
+        installStatusScroll = GUI.BeginScrollView(bounds, installStatusScroll, new Rect(0f, 0f, width, height));
+        try
+        {
+            // Keep the complete text selectable/copyable, including long pinned source URLs.
+            // Discard edits: this field displays installer output, never user commands.
+            GUI.TextArea(new Rect(0f, 0f, width, height), status, installStatusStyle);
+        }
+        finally { GUI.EndScrollView(); }
     }
 
     private static string DisplayAddonState(string state)

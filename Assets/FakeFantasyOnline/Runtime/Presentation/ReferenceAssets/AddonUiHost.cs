@@ -364,14 +364,12 @@ public sealed partial class AddonUiHost : MonoBehaviour, IPluginWidgetUi, IDispo
         int maximum = Math.Max(0, Math.Min(MaxPanels, maxPanels));
         List<object> result = new List<object>();
         bool available = false, manager = false, truncated = false;
-        AddonBridgeStatus bridge = new AddonBridgeStatus(false, 0, 0, "Unavailable");
         foreach (AddonUiHost host in hosts)
         {
             if (host == null || host.disposed || !host.isActiveAndEnabled) continue;
             host.CheckThread();
             available = true;
             manager |= host.managerVisible;
-            bridge = host.readBridge?.Invoke() ?? bridge;
             foreach (Panel panel in host.order)
             {
                 if (result.Count >= maximum) { truncated = true; break; }
@@ -392,8 +390,7 @@ public sealed partial class AddonUiHost : MonoBehaviour, IPluginWidgetUi, IDispo
             }
         }
         return new Dictionary<string, object> {
-            { "available", available }, { "managerVisible", manager }, { "panels", result }, { "truncated", truncated },
-            { "bridge", new Dictionary<string, object> { { "enabled", bridge.Enabled }, { "port", bridge.Port }, { "clients", bridge.Clients }, { "status", bridge.Status } } } };
+            { "available", available }, { "managerVisible", manager }, { "panels", result }, { "truncated", truncated } };
     }
 
     public void Dispose()
@@ -409,8 +406,9 @@ public sealed partial class AddonUiHost : MonoBehaviour, IPluginWidgetUi, IDispo
         readAddons = null;
         addonCommand = null;
         discover = null;
-        readBridge = null;
-        setBridge = null;
+        installSource = null;
+        readInstallStatus = null;
+        readInstallAction = null;
     }
 }
 }

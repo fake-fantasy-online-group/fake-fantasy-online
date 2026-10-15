@@ -25,10 +25,16 @@ namespace UnityEngine
  public class Event { public static Event current=new Event(); public EventType type; public int button; public Vector2 mousePosition; public void Use(){type=EventType.Used;} }
  public class Font {}
  public class GUIStyleState { public Color textColor; }
- public class GUIStyle { public GUIStyle(){} public GUIStyle(GUIStyle style){} public Font font; public bool richText,wordWrap; public int fontSize; public TextClipping clipping; public TextAnchor alignment; public GUIStyleState normal=new GUIStyleState(); }
- public class GUISkin { public GUIStyle label=new GUIStyle(); }
+ public class GUIContent { public readonly string text; public GUIContent(string text){this.text=text;} }
+ public class GUIStyle { public GUIStyle(){} public GUIStyle(GUIStyle style){} public Font font; public bool richText,wordWrap; public int fontSize; public TextClipping clipping; public TextAnchor alignment; public GUIStyleState normal=new GUIStyleState(); public float CalcHeight(GUIContent content,float width)=>Math.Max(20f,(float)Math.Ceiling(content.text.Length/Math.Max(1f,width/8f))*20f); }
+ public class GUISkin { public GUIStyle label=new GUIStyle(); public GUIStyle textArea=new GUIStyle(); }
  public static class GUIUtility { public static int hotControl,keyboardControl; public static int GetControlID(int hint,FocusType focus,Rect rect)=>hint; }
- public static class GUI { public static int depth; public static bool enabled=true; public static Color color=Color.white; public static GUISkin skin=new GUISkin(); public static void Label(Rect r,string s,GUIStyle style){} public static void DrawTexture(Rect r,Texture2D texture){} public static void BeginGroup(Rect r){} public static void EndGroup(){} public static string TextField(Rect r,string value,int max)=>value; }
+ public static class GUI { public static int depth; public static bool enabled=true; public static Color color=Color.white; public static GUISkin skin=new GUISkin(); public static void Label(Rect r,string s,GUIStyle style){} public static void DrawTexture(Rect r,Texture2D texture){} public static void BeginGroup(Rect r){} public static void EndGroup(){} public static string TextField(Rect r,string value,int max)=>value;
+  public static string LastTextArea; public static Rect LastViewport,LastContent; public static Vector2 LastScrollInput; public static int ScrollEnds;
+  public static Vector2 BeginScrollView(Rect viewport,Vector2 scroll,Rect content){LastViewport=viewport;LastContent=content;LastScrollInput=scroll;return scroll;}
+  public static void EndScrollView(){ScrollEnds++;}
+  public static string TextArea(Rect bounds,string value,GUIStyle style){LastTextArea=value;return "ignored edit";}
+ }
  public static class Debug { public static void LogWarning(object text){} }
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
@@ -91,11 +97,22 @@ public static class AddonUiTests
   Check(Panels().Count==32&&(bool)State()["truncated"],"snapshot panel bound");
   Check((bool)Snapshot()["widgetsTruncated"],"snapshot widget bound");
   new GameSnapshot("ui",1,1,AddonUiHost.ObserveState(64));checks++;
-  int commands=0;host.ConfigureManager(()=>Array.Empty<AddonManagerEntry>(),(id,op)=>commands++,()=>commands++,()=>new AddonBridgeStatus(false,17845,0,"Stopped"),(enabled,port)=>commands++);
+  int commands=0;host.ConfigureManager(()=>Array.Empty<AddonManagerEntry>(),(id,op)=>commands++,()=>commands++,source=>commands++,()=>"Stopped",()=>"Install");
   host.ToggleManager();Check((bool)State()["managerVisible"],"manager toggles open");
   Event.current=new Event{type=EventType.Repaint};GUI.depth=731;GUI.color=new Color(.1f,.2f,.3f,.4f);Call(host,"OnGUI");Check(GUI.depth==731&&GUI.color.a==.4f,"GUI state restored");Check(commands==0,"render does not trigger commands");
   var style=(GUIStyle)typeof(AddonUiHost).GetField("labelStyle",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(host);Check(ReferenceEquals(style.font,NpcChatter.SharedFont),"Chinese UI uses client font");
   Check((string)typeof(AddonUiHost).GetMethod("DisplayAddonState",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{"Enabled"})=="已启用","manager state localized without changing enum");
+  string longStatus="Select an addon source:\n"+new string('x',1800)+"\nhttps://github.com/example/repository/blob/0123456789abcdef0123456789abcdef01234567/addons/agent-bridge/agent-bridge.toc";
+  int scrollEnds=GUI.ScrollEnds;Call(host,"DrawInstallStatus",new Rect(0,0,320,68),longStatus,1f);
+  Check(GUI.LastTextArea==longStatus,"complete long source URL is selectable without truncation");
+  Check(GUI.LastContent.height>GUI.LastViewport.height,"long installer output has scrollable content beyond viewport");
+  Check(GUI.ScrollEnds==scrollEnds+1,"installer scrollview is closed");
+  var scrollField=typeof(AddonUiHost).GetField("installStatusScroll",BindingFlags.Instance|BindingFlags.NonPublic);
+  scrollField.SetValue(host,new Vector2(0,120));Call(host,"DrawInstallStatus",new Rect(0,0,320,68),longStatus,1f);
+  Check(GUI.LastScrollInput.y==120,"unchanged output keeps scroll position");
+  Call(host,"DrawInstallStatus",new Rect(0,0,320,68),"New installation result",1f);
+  Check(GUI.LastScrollInput.y==0,"changed output resets scroll to top");
+  Check((string)typeof(AddonUiHost).GetField("displayedInstallStatus",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(host)=="New installation result","text area edits never change installer output");
   host.Dispose();host.Dispose();Check(!(bool)State()["available"]&&Panels().Count==0,"dispose releases all panels and host");Check(WinZ.Registered.Count==0,"dispose releases all hit zones");
   Throws<ObjectDisposedException>(()=>host.RegisterPanel(new PanelDefinition("late","x","x")),"disposed host rejects mutation");
   Console.WriteLine("PASS "+checks+" addon UI state/lifetime assertions (Unity/artwork stubs; not visual/PlayMode)");

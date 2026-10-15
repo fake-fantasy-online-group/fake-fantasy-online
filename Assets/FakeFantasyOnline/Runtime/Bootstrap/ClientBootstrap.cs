@@ -15,7 +15,7 @@ public sealed class ClientBootstrap : MonoBehaviour
     private NativeNetClientHost _unboundNetwork;
     private INetClientInstanceHost _networkHost;
     private ClientRootView _view;
-    private PluginBootstrap _plugins;
+    private IDisposable _plugins;
     private bool _terminalQuitRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -88,13 +88,13 @@ public sealed class ClientBootstrap : MonoBehaviour
         _view = gameObject.AddComponent<ClientRootView>();
         _view.Initialize(_unboundNetwork.Session, RequestTerminalQuit, options.NoticeUri);
         _unboundNetwork.ObserveUnboundView(_view);
-        _plugins = gameObject.AddComponent<PluginBootstrap>();
-        try { _plugins.Initialize(_view); }
+        try { _plugins = OptionalPluginRuntime.Create(gameObject, _view); }
         catch (Exception exception)
         {
             // An optional addon failure must not abort the native title/network composition.
             Debug.LogWarning("Plugin runtime initialization failed: " + exception.Message);
-            _plugins.Shutdown();
+            _plugins?.Dispose();
+            _plugins = null;
         }
         _view.BindTitleNetworkSetupForIndependentRuntime(() =>
         {
@@ -156,13 +156,13 @@ public sealed class ClientBootstrap : MonoBehaviour
     {
         if (_terminalQuitRequested) return;
         _terminalQuitRequested = true;
-        _plugins?.Shutdown();
+        _plugins?.Dispose();
         UnityEngine.Application.Quit(exitCode);
     }
 
     private void OnDestroy()
     {
-        _plugins?.Shutdown();
+        _plugins?.Dispose();
         _plugins = null;
         // Each NetClient owns its Close, coroutines, session and executor. Destroying
         // this view cannot release a persistent or foreign component's transport.

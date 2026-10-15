@@ -7,7 +7,6 @@
         "FakeFantasyOnline.Application",
         "FakeFantasyOnline.Protocol",
         "FakeFantasyOnline.PluginApi",
-        "FakeFantasyOnline.PluginHost",
         "FakeFantasyOnline.Presentation"
     ],
     "includePlatforms": [],

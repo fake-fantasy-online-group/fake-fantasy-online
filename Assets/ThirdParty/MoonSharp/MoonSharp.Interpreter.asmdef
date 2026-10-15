@@ -1,7 +1,0 @@
-{
-    "name": "MoonSharp.Interpreter",
-    "rootNamespace": "MoonSharp.Interpreter",
-    "references": [],
-    "autoReferenced": false,
-    "noEngineReferences": true
-}

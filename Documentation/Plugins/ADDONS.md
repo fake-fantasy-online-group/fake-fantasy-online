@@ -1,8 +1,8 @@
 # Lua 插件开发
 
-按 F10 打开插件管理，扫描、启用、停用或重载插件。插件默认不自动启用。
+安装可选插件框架后，按 F10 打开插件管理，扫描、启用、停用或重载插件。插件默认不自动启用。
 源码放在 `Assets/StreamingAssets/AddOns/<id>/`；Player 中使用对应的 StreamingAssets 目录。
-运行时只读取本地文件，不下载或安装插件。仅启用你信任的插件。
+仅安装和启用你信任的插件。安装路径与 Git 来源管理由可选框架负责，客户端核心不包含加载器。
 
 已提供三个真实 Lua 示例：
 - `hello-world`：游戏状态欢迎面板
@@ -133,3 +133,16 @@ UNITY_EDITOR_DIR=/path/to/Unity/Editor Tests/PluginRuntime/run-addon-runtime-tes
 ```
 
 该测试执行真实 Lua 解释器和 host，游戏/UI 为 fakes，覆盖生命周期、依赖、重载、指令预算、隔离、保存数据、API 桥接与示例脚本。它不代表 Unity 导入、真机画面或服务器游戏行为已经验收。
+
+
+## 可选框架与 WoW 风格子集
+
+框架只加载 Lua；不加载下载的 C#、DLL、XML 或可执行文件。规范目录清单为 `<id>/<id>.toc`，旧 `addon.json` 保持兼容。`.toc` 的 `## Interface: 1` 是本项目接口版本，非 WoW 客户端版本；Lua 文件按清单顺序执行，各文件拥有独立局部变量，`local addonName, namespace = ...` 共享插件命名空间。
+
+支持 `CreateFrame("Frame")` 的匿名、非视觉事件容器与 `RegisterEvent`、`UnregisterEvent`、`UnregisterAllEvents`、`SetScript("OnEvent", fn)`、`SetScript("OnUpdate", fn)`。处理函数按现有指令/队列预算调度。`ADDON_LOADED` 在源码执行、已保存变量恢复后触发，第三个实参为插件 ID；`PLAYER_LOGIN` 只在 `world.worldReady` 实际变为 true 时触发（需 `game.observe`）。原有游戏事件名原样提供，不模拟全部 WoW 事件、控件或函数。
+
+`SavedVariables` 仅持久化声明的全局 JSON 兼容值，需要 `storage.local` 权限；在停用、重载、退出时保存，与插件本地存储共用 64 KiB 配额。`SavedVariablesPerCharacter` 明确拒绝，直到宿主提供稳定的账户/服务器/角色身份。不要保存凭据。
+
+`net.loopback` 允许启用后监听本机；`game.remote` 允许通过临时请求句柄使用保留外部 requestId 的游戏操作；`game.sensitive-login` 另行允许不保留凭据的登录操作。这些权限需在安装/升级时明确审核。普通 `game.act` 的插件请求 ID 隔离不变。
+
+测试脚本通过 `FFO_PLUGIN_FRAMEWORK_PACKAGE` 指定框架目录，真实智能体 Lua 测试另设 `FFO_AGENT_ADDON` 指向其源码目录。源码/模拟运行测试不等同于 Unity Android/iOS 真机验证。
