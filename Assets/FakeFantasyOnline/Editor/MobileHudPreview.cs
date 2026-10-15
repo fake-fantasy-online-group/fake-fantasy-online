@@ -416,7 +416,11 @@ public static class MobileHudPreview
             !text.StartsWith("ArgumentOutOfRangeException:", StringComparison.Ordinal) ||
             trace.IndexOf("FakeFantasyOnline", StringComparison.Ordinal) >= 0) return false;
         int enumerate = trace.IndexOf("UnityEditor.Search.SearchDatabase.EnumerateAll", StringComparison.Ordinal);
-        int database = trace.IndexOf("GetDefaultSearchDatabase", StringComparison.Ordinal);
+        // Unity 6000.4.9f1 reports the iterator's generated MoveNext frame on macOS.
+        // Keep this as the observed exact signature, not an arbitrary Search exception.
+        if (enumerate < 0)
+            enumerate = trace.IndexOf("UnityEditor.Search.SearchDatabase+<EnumerateAll>d__80.MoveNext", StringComparison.Ordinal);
+        int database = trace.IndexOf("UnityEditor.Search.SearchDatabase.GetDefaultSearchDatabase", StringComparison.Ordinal);
         int startup = trace.IndexOf("UnityEditor.Search.SearchInit.IndexationOnStartup", StringComparison.Ordinal);
         return enumerate >= 0 && database > enumerate && startup > database;
     }
