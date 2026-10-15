@@ -6,7 +6,10 @@ namespace FakeFantasyOnline.Application
 public interface INetClientInstanceBinding : ITitleResultReceiptSource,
     ICharacterRosterReceiptSource, IWorldEntryPrefixReceiptSource, IWorldEntryAdmissionSource
 {
-    void BindNativeNetworkErrorForIndependentRuntime(Action<string> receive);
+    // Dismissal carries the exact locally owned retry string, never a blanket error reset.
+    // Replacing/clearing the error receiver also replaces/clears this optional callback.
+    void BindNativeNetworkErrorForIndependentRuntime(Action<string> receive,
+        Action<string> clearAddressRetryNotice = null);
     void BindNativeNetworkNoticeForIndependentRuntime(Action<string> receive);
     void BindRegisterResultReceipt(Action<int, string> receive);
     void BindResetResultReceipt(Action<int, string> receive);

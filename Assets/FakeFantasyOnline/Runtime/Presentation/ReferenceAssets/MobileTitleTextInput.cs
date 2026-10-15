@@ -90,17 +90,21 @@ internal sealed class MobileTitleTextInput
 
     internal static Rect VisibleArea(Rect safe, Rect keyboardArea, bool editing)
     {
-        if (!editing) return safe;
-        // Unity reports keyboard bounds from the screen bottom. Some Android keyboards
-        // report zero bounds; keep a conservative upper editing region in that case.
-        float top = keyboardArea.height > 0f ? Screen.height - keyboardArea.yMax
-            : safe.y + safe.height * .55f;
+        if (!editing || keyboardArea.height <= 0f) return safe;
+        // Unity 6000.4 reports nonzero keyboard bounds from the screen bottom.
+        float top = Screen.height - keyboardArea.yMax;
         safe.height = Mathf.Max(1f, Mathf.Min(safe.yMax, top) - safe.y);
         return safe;
     }
 
-    internal static float PanY(float offset, float scale, Rect focused, Rect visible)
+    internal static float PanY(float offset, float scale, Rect focused, Rect safe, Rect keyboardArea)
     {
+        // Unity 6000.4 documents a zero TouchScreenKeyboard.area on Android. A guessed
+        // percentage can still put the row underneath a tall landscape IME. Dock the
+        // focused row at the safe top instead, without resizing it or changing the IME.
+        // The ordinary centered layout returns as soon as editing ends.
+        if (keyboardArea.height <= 0f) return safe.y + 8f - focused.y * scale;
+        Rect visible = VisibleArea(safe, keyboardArea, true);
         float bottom = offset + focused.yMax * scale;
         if (bottom > visible.yMax - 12f) offset -= bottom - (visible.yMax - 12f);
         float top = offset + focused.y * scale;

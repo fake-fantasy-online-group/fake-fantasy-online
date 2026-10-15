@@ -1,10 +1,15 @@
-// Exercises the actual compiled Protocol resolver, login gate and error-queue drain.
-// Only request/parse/wait/trace capabilities are deterministic substitutes; no network or Unity.
+// Exercises the actual compiled Protocol resolver, login gate, error drain, gateway binding,
+// and production title dismissal with a field-only title shell. No network or Unity run.
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
 using FakeFantasyOnline.Application;
+using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Protocol;
+using FakeFantasyOnline.Presentation.ReferenceAssets;
+using NetClient = FakeFantasyOnline.Protocol.NetClient;
 
 internal static class AddressResolutionContract
 {
@@ -49,6 +54,8 @@ internal static class AddressResolutionContract
         internal readonly NetClient Client;
         internal readonly List<string> Warnings = new List<string>();
         internal readonly List<string> Errors = new List<string>();
+        internal readonly List<string> ClearedNotices = new List<string>();
+        internal readonly TitleFlow Title = new TitleFlow();
         internal readonly object Wait = new object();
         internal readonly ClientConfig.Srv[] Expected =
         {
@@ -62,7 +69,12 @@ internal static class AddressResolutionContract
         {
             Client = new NetClient(PrivateServerOptions.LocalDefault(), () => 0f,
                 Warnings.Add, new Trace(), () => 5f);
-            Client.OnError = Errors.Add;
+            Client.OnError = error => { Errors.Add(error); Title.netMsg = error; };
+            Client.BindAddressRetryNoticeClearForIndependentRuntime(notice =>
+            {
+                ClearedNotices.Add(notice);
+                Title.ClearResolvedAddressRetryNotice(notice);
+            });
             Client.BindAddressResolutionForIndependentRuntime(request,
                 parse ?? (_ => new ClientConfig.Dispatch { servers = Expected }),
                 seconds => { Check(seconds == 5f, "retry interval remains five scaled seconds"); Waits++; return Wait; },
@@ -100,6 +112,7 @@ internal static class AddressResolutionContract
             Check(Publications == 1 && ReferenceEquals(Published, Expected),
                 "success publishes the original server array once");
             Check(request.Disposals == 1, "completed request is disposed exactly once");
+            Check(Title.netMsg == string.Empty, "success dismisses the obsolete displayed address retry notice");
         }
 
         public void Dispose() { Client.Dispose(); }
@@ -199,6 +212,7 @@ internal static class AddressResolutionContract
             finally { ((IDisposable)resolve).Dispose(); }
             Check(fixture.Waits == 0 && fixture.Warnings.Count == 0 && fixture.Errors.Count == 0,
                 "desktop normal success introduces no error or retry");
+            Check(fixture.ClearedNotices.Count == 0, "first-attempt success does not issue an error dismissal");
         }
         var pending = new Request();
         using (var fixture = new Fixture(() => pending))
@@ -212,12 +226,186 @@ internal static class AddressResolutionContract
         }
     }
 
+    private static void QueueOrdinaryError(NetClient client, string message)
+    {
+        // Exercise the actual FIFO without starting a TCP worker just to fabricate its
+        // failure. The message is deliberately ordinary even when its text is identical.
+        object queue = typeof(NetClient).GetField("_errs", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(client);
+        Type entryType = queue.GetType().GetGenericArguments()[0];
+        object entry = Activator.CreateInstance(entryType,
+            BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { message, false }, null);
+        queue.GetType().GetMethod("Enqueue").Invoke(queue, new[] { entry });
+    }
+
+    private static void RecoveryPreservesNewerMessage(string kind, bool queuedRetry)
+    {
+        var failed = new Request { ThrowAt = "send" };
+        var good = new Request();
+        int attempts = 0;
+        using (var fixture = new Fixture(() => ++attempts == 1 ? failed : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext(), "failed send starts recovery fixture");
+                string retry = fixture.Client.AddressError + " (重试中…)";
+                if (!queuedRetry) fixture.Client.Update();
+                string newer = kind == "identical" ? new string(retry.ToCharArray()) : kind + " result";
+                if (queuedRetry) QueueOrdinaryError(fixture.Client, newer);
+                else fixture.Title.netMsg = newer;
+                Check(resolve.MoveNext() && !resolve.MoveNext(), "valid recovery finishes after a newer message");
+                fixture.Client.Update();
+                Check(ReferenceEquals(fixture.Title.netMsg, newer),
+                    "recovery preserves " + kind + " message after " + (queuedRetry ? "queued" : "displayed") + " retry");
+                Check(fixture.Errors.Count == 1, "only the expected displayed retry or ordinary queued error is delivered");
+                fixture.Client.Update();
+                Check(ReferenceEquals(fixture.Title.netMsg, newer), "next frame does not perform delayed unconditional clearing");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void MultipleQueuedRetries()
+    {
+        var good = new Request();
+        int attempts = 0;
+        using (var fixture = new Fixture(() => ++attempts <= 3 ? new Request { ThrowAt = "send" } : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext(), "first retry queued");
+                QueueOrdinaryError(fixture.Client, "first unrelated transport error");
+                Check(resolve.MoveNext(), "second retry queued");
+                QueueOrdinaryError(fixture.Client, "second unrelated transport error");
+                Check(resolve.MoveNext(), "third retry queued");
+                Check(resolve.MoveNext() && !resolve.MoveNext(), "recovery completes before any queue drain");
+                fixture.Client.Update();
+                Check(fixture.Errors.Count == 2 && fixture.Errors[0] == "first unrelated transport error" &&
+                    fixture.Errors[1] == "second unrelated transport error", "all stale retries are suppressed while unrelated FIFO ordering survives");
+                Check(fixture.ClearedNotices.Count == 0, "never-displayed retries do not issue a dismissal");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void LatestDisplayedRetryAndBoundedOwnership()
+    {
+        int attempts = 0;
+        var good = new Request();
+        using (var fixture = new Fixture(() => ++attempts <= 1000 ? new Request { ThrowAt = "send" } : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                for (int i = 0; i < 1000; i++)
+                {
+                    Check(resolve.MoveNext(), "long offline period retains scheduled retry behavior");
+                    fixture.Client.Update();
+                }
+                string latest = fixture.Title.netMsg;
+                Check(ReferenceEquals(typeof(NetClient).GetField("displayedAddressRetryNotice",
+                    BindingFlags.NonPublic | BindingFlags.Instance).GetValue(fixture.Client), latest),
+                    "ownership retains exactly the latest displayed retry");
+                object queue = typeof(NetClient).GetField("_errs", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(fixture.Client);
+                Check((int)queue.GetType().GetProperty("Count").GetValue(queue) == 0, "each frame releases processed queue entries during long offline periods");
+                Check(resolve.MoveNext() && !resolve.MoveNext(), "long offline period can recover");
+                Check(fixture.Title.netMsg == string.Empty && fixture.ClearedNotices.Count == 1 &&
+                    ReferenceEquals(fixture.ClearedNotices[0], latest), "only the latest displayed retry is dismissed once");
+                Check(typeof(NetClient).GetField("displayedAddressRetryNotice", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .GetValue(fixture.Client) == null, "successful resolution releases retained retry ownership");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void TitleBindingLifetime(bool rebind, bool drainSecondRetry = true)
+    {
+        using (var host = new SynchronizationContextHostExecutor(null, Thread.CurrentThread.ManagedThreadId))
+        using (var gateway = new PrivateServerGateway(PrivateServerOptions.LocalDefault(), _ => { }, host, () => 0f,
+            new Trace(), () => 5f))
+        {
+            var oldTitle = new TitleFlow();
+            var newTitle = new TitleFlow { netMsg = "new title login error" };
+            INetClientInstanceBinding binding = gateway;
+            binding.BindNativeNetworkErrorForIndependentRuntime(error => oldTitle.netMsg = error, oldTitle.ClearResolvedAddressRetryNotice);
+            var core = (NetClient)typeof(PrivateServerGateway).GetField("_netClient", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(gateway);
+            int attempts = 0;
+            gateway.BindAddressResolutionForIndependentRuntime(
+                () => ++attempts <= 2 ? new Request { ThrowAt = "send" } : new Request(),
+                _ => new ClientConfig.Dispatch { servers = new[] { new ClientConfig.Srv { host = "192.0.2.12", port = 4000 } } },
+                _ => new object(), () => new ClientConfig.Srv[0], _ => { });
+            IEnumerator resolve = gateway.ResolveServerAddressForIndependentRuntime();
+            try
+            {
+                Check(resolve.MoveNext(), "old title receives first retry");
+                core.Update();
+                string oldNotice = oldTitle.netMsg;
+                binding.BindNativeNetworkErrorForIndependentRuntime(null);
+                Check(core.OnError == null && typeof(NetClient).GetField("clearAddressRetryNotice",
+                    BindingFlags.NonPublic | BindingFlags.Instance).GetValue(core) == null,
+                    "existing title teardown clears both paired callbacks");
+                if (rebind) binding.BindNativeNetworkErrorForIndependentRuntime(error => newTitle.netMsg = error, newTitle.ClearResolvedAddressRetryNotice);
+                Check(resolve.MoveNext(), "retry can continue with destroyed or replaced title");
+                if (drainSecondRetry) core.Update();
+                Check(resolve.MoveNext() && !resolve.MoveNext(), "resolution completes after title teardown");
+                core.Update();
+                Check(ReferenceEquals(oldTitle.netMsg, oldNotice), "resolution never calls the destroyed title callback");
+                Check(newTitle.netMsg == (rebind && drainSecondRetry ? string.Empty : "new title login error"),
+                    "only the currently bound title's retry can be dismissed");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void DismissalExceptionsAreNotDispatchFailures()
+    {
+        int attempts = 0;
+        var good = new Request();
+        using (var fixture = new Fixture(() => ++attempts == 1 ? new Request { ThrowAt = "send" } : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext(), "dismissal-exception fixture starts with retry");
+                fixture.Client.Update();
+                fixture.Client.BindAddressRetryNoticeClearForIndependentRuntime(_ => { throw new InvalidOperationException("UI dismissal failure"); });
+                Check(resolve.MoveNext(), "dismissal-exception recovery request starts");
+                bool threw = false;
+                try { resolve.MoveNext(); }
+                catch (InvalidOperationException error) { threw = error.Message == "UI dismissal failure"; }
+                Check(threw && fixture.Client.AddressReady && fixture.Client.AddressError == null,
+                    "UI dismissal exceptions escape without corrupting successful dispatch state");
+                Check(good.Disposals == 1 && fixture.Waits == 1 && fixture.Warnings.Count == 1,
+                    "UI exception neither leaks the request nor restarts discovery");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
     public static void Main()
     {
         foreach (string phase in new[] { "factory", "timeout", "send" }) StartupFailure(phase);
         RepeatedStartupFailure();
         foreach (string failure in new[] { "network", "parse", "invalid" }) CompletedFailure(failure);
         NormalSuccessAndCancellation();
-        Console.WriteLine("PASS address resolution: " + checks + " assertions against actual Protocol; deterministic request capabilities, no Unity/device run.");
+        foreach (string kind in new[] { "login", "server notice", "validation", "identical" })
+            foreach (bool queued in new[] { false, true }) RecoveryPreservesNewerMessage(kind, queued);
+        MultipleQueuedRetries();
+        LatestDisplayedRetryAndBoundedOwnership();
+        TitleBindingLifetime(false);
+        TitleBindingLifetime(true);
+        TitleBindingLifetime(true, false);
+        DismissalExceptionsAreNotDispatchFailures();
+        Console.WriteLine("PASS address resolution: " + checks + " assertions against actual Protocol, gateway binding and title dismissal; deterministic request capabilities and a title field shell, no Unity/device run.");
     }
+}
+
+namespace FakeFantasyOnline.Presentation.ReferenceAssets
+{
+// Compile the production dismissal partial against only its field dependency.
+internal sealed partial class TitleFlow
+{
+    internal string netMsg = string.Empty;
+}
 }

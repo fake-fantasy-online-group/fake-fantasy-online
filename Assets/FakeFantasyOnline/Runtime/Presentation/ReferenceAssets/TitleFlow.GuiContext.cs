@@ -20,7 +20,7 @@ internal sealed partial class TitleFlow
             offsetY = safe.y + (safe.height - scale * 600f) * .5f;
             if (mobileTitleInput.Editing)
                 offsetY = MobileTitleTextInput.PanY(offsetY, scale, mobileTitleInput.FocusRect,
-                    MobileTitleTextInput.VisibleArea(safe, TouchScreenKeyboard.area, true));
+                    safe, TouchScreenKeyboard.area);
         }
         Matrix4x4 previousMatrix = GUI.matrix;
         GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0f),

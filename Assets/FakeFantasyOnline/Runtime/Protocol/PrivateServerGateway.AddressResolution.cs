@@ -28,8 +28,13 @@ public sealed partial class PrivateServerGateway
     public bool HasStartupAddressResultForIndependentRuntime =>
         _netClient.AddressReady || _netClient.AddressError != null;
 
-    public void BindNativeNetworkErrorForIndependentRuntime(Action<string> error) =>
+    public void BindNativeNetworkErrorForIndependentRuntime(Action<string> error,
+        Action<string> clearAddressRetryNotice = null)
+    {
         _netClient.OnError = error;
+        // One title owns both callbacks; its existing null error binding releases both.
+        _netClient.BindAddressRetryNoticeClearForIndependentRuntime(error == null ? null : clearAddressRetryNotice);
+    }
 
     public void BindNativeNetworkNoticeForIndependentRuntime(Action<string> notice) =>
         _netClient.OnNotice = notice;

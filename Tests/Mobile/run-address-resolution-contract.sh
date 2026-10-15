@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Actual complete Protocol assembly; only request, parse, wait and trace capabilities are substituted.
+# Actual Protocol/gateway plus title dismissal; deterministic requests and a title field shell.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 : "${FFO_MONO_ROOT:?Source Documentation/tools/activate-dotnet-test-toolchain.sh}"
@@ -10,5 +10,6 @@ trap 'rm -rf "$OUT"' EXIT
   -r:"$FFO_COMPILE_DIR/FakeFantasyOnline.Foundation.dll" \
   -r:"$FFO_COMPILE_DIR/FakeFantasyOnline.Application.dll" \
   -r:"$FFO_COMPILE_DIR/FakeFantasyOnline.Protocol.dll" \
-  -out:"$OUT/AddressResolutionContract.exe" "$ROOT/Tests/Mobile/AddressResolutionContract.cs"
+  -out:"$OUT/AddressResolutionContract.exe" "$ROOT/Tests/Mobile/AddressResolutionContract.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TitleFlow.AddressRetryNotice.cs"
 MONO_PATH="$FFO_COMPILE_DIR${MONO_PATH:+:$MONO_PATH}" "$FFO_MONO_ROOT/bin/mono" "$OUT/AddressResolutionContract.exe"

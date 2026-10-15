@@ -93,7 +93,7 @@ public sealed partial class NetClient : IDisposable
     // architecture, and every real caller runs on one host executor (see
     // netclient-host-execution-boundary-1-5-8, WB-010).
     private readonly ConcurrentQueue<ProtocolPacket> _inbox;
-    private readonly ConcurrentQueue<string> _errs;
+    private readonly ConcurrentQueue<QueuedNetworkError> _errs;
     private readonly Queue<byte[]> _txPending;
     private readonly Stopwatch _dispatchSw;
     private TcpClient _tcp;
@@ -158,7 +158,7 @@ public sealed partial class NetClient : IDisposable
         host = string.Empty;
         _lastDropReason = string.Empty;
         _inbox = new ConcurrentQueue<ProtocolPacket>();
-        _errs = new ConcurrentQueue<string>();
+        _errs = new ConcurrentQueue<QueuedNetworkError>();
         _connectDone = new ConcurrentQueue<bool>();
         _txPending = new Queue<byte[]>();
         _dispatchSw = new Stopwatch();
@@ -763,7 +763,7 @@ public sealed partial class NetClient : IDisposable
                 return;
             }
 
-            _errs.Enqueue(BackpressureDropReason);
+            _errs.Enqueue(new QueuedNetworkError(BackpressureDropReason));
             LastDropReason = BackpressureDropReason;
             _run = false;
             _dropped = true;
@@ -775,7 +775,7 @@ public sealed partial class NetClient : IDisposable
                 return;
             }
 
-            _errs.Enqueue(ClosedDropReason);
+            _errs.Enqueue(new QueuedNetworkError(ClosedDropReason));
             LastDropReason = ClosedDropReason;
             _run = false;
             _dropped = true;
@@ -842,7 +842,7 @@ public sealed partial class NetClient : IDisposable
             }
 
             string reason = TransmitInterruptedPrefix + ex.Message;
-            _errs.Enqueue(reason);
+            _errs.Enqueue(new QueuedNetworkError(reason));
             LastDropReason = reason;
             _run = false;
             _dropped = true;
@@ -1021,7 +1021,7 @@ public sealed partial class NetClient : IDisposable
         {
             if (failure != null)
             {
-                _errs.Enqueue(failure);
+                _errs.Enqueue(new QueuedNetworkError(failure));
                 LastDropReason = failure;
             }
 
@@ -1148,8 +1148,13 @@ public sealed partial class NetClient : IDisposable
     public void Update()
     {
         DrainTx();
-        while (_errs.TryDequeue(out string error))
+        while (_errs.TryDequeue(out QueuedNetworkError queuedError))
         {
+            // Discovery can recover before a pending frame drains its retry notices.
+            // Suppress only those locally owned notices; all other errors retain order.
+            if (queuedError.IsAddressRetry && AddressReady) continue;
+            string error = queuedError.Message;
+            if (queuedError.IsAddressRetry) displayedAddressRetryNotice = error;
             // Official field read, unchanged: a real caller-assigned subscriber still fires.
             OnError?.Invoke(error);
             // Product-only per-call consumer; see _hostErrorSink. Not the official OnError.

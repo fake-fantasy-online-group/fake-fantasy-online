@@ -28,6 +28,21 @@ public sealed partial class NetClient
     private Func<string, ClientConfig.Dispatch> parseAddressDispatch;
     private Func<float, object> addressRetryWait;
 
+    // Resolver and Update both run on the host thread. Only the latest displayed retry
+    // is retained; queued entries carry their own local kind, without a growing history.
+    private string displayedAddressRetryNotice;
+    private Action<string> clearAddressRetryNotice;
+
+    public void BindAddressRetryNoticeClearForIndependentRuntime(Action<string> clearNotice) =>
+        clearAddressRetryNotice = clearNotice;
+
+    private void ClearResolvedAddressRetryNotice()
+    {
+        string obsolete = displayedAddressRetryNotice;
+        displayedAddressRetryNotice = null;
+        if (obsolete != null) clearAddressRetryNotice?.Invoke(obsolete);
+    }
+
     public void BindAddressResolutionForIndependentRuntime(
         Func<IAddressRequest> requestFactory,
         Func<string, ClientConfig.Dispatch> parseDispatch,
@@ -90,9 +105,8 @@ public sealed partial class NetClient
                                 host = dispatch.servers[0].host;
                                 port = dispatch.servers[0].port;
                                 AddressReady = true;
-                                yield break;
                             }
-                            AddressError = "服务器地址无效(dispatch.servers 为空)";
+                            else AddressError = "服务器地址无效(dispatch.servers 为空)";
                         }
                         catch (Exception exception)
                         {
@@ -106,8 +120,17 @@ public sealed partial class NetClient
                 }
             }
 
+            if (AddressReady)
+            {
+                // UI callbacks are outside the parse/publication catch and run only after
+                // disposing the request. A UI exception must not become a dispatch failure.
+                ClearResolvedAddressRetryNotice();
+                yield break;
+            }
+
             _warningSink(string.Format("[Net] {0} (第{1}次, 5s后重试)", AddressError, attempt));
-            _errs.Enqueue(AddressError + " (重试中…)");
+            string retryNotice = AddressError + " (重试中…)";
+            _errs.Enqueue(new QueuedNetworkError(retryNotice, isAddressRetry: true));
             yield return addressRetryWait(5f);
         }
     }

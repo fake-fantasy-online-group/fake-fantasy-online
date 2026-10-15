@@ -325,7 +325,7 @@ public sealed partial class NetClient
         }
         catch (Exception ex)
         {
-            _errs.Enqueue("连接失败: " + ex.Message);
+            _errs.Enqueue(new QueuedNetworkError("连接失败: " + ex.Message));
             return false;
         }
         finally

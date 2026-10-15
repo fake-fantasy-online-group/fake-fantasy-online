@@ -20,7 +20,8 @@ public sealed partial class ClientRootView
         TitleFlow title = source.NativeOwnerForIndependentRuntime;
         ClientSessionCoordinator session = _session;
 
-        binding.BindNativeNetworkErrorForIndependentRuntime(title.ReceiveNativeNetworkError);
+        binding.BindNativeNetworkErrorForIndependentRuntime(title.ReceiveNativeNetworkError,
+            title.ClearResolvedAddressRetryNotice);
         binding.BindNativeNetworkNoticeForIndependentRuntime(title.ReceiveNativeNetworkNotice);
 
         session.BindTitleLoginResultForIndependentRuntime(title.ReceiveNativeTitleLoginResult, binding);
