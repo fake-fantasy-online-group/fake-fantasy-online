@@ -32,7 +32,16 @@ assert "DrawTextureWithTexCoords" not in art, "Top mobile menu renders complete 
 assert "MobileClientPresentation.AvatarRect" in hud, "Avatar rendering uses the same safe-area anchor as pointer exclusion"
 assert "touchControls:true" in hud and "GUI.enabled=false" not in hud, "Mobile map is not greyed out to disable old inputs"
 assert "ctrlTex[index]" not in hud, "Function icons cannot index the three-frame array as one frame per entry"
-assert "GUI.Box(" not in hud and "GUI.Label(" not in hud, "Mobile HUD must not use default boxes or unscaled system text"
+assert "GUI.Box(" not in hud, "Mobile HUD must not use default boxes"
+wheel_text = hud.split("private void DrawMobileGroupText", 1)[1].split("private void DrawMobileRoundCooldown", 1)[0]
+assert hud.count("GUI.Label(") == wheel_text.count("GUI.Label(") == 2, "Only scaled wheel text may use explicit GUI.Label"
+assert "Mathf.RoundToInt(size*scale)" in wheel_text and "mobileGroupWheelStyle" in wheel_text, "Wheel uses scaled explicit text style"
+wheel_draw = hud.split("private void DrawMobileGroupWheel", 1)[1].split("private void DrawMobileRoundCooldown", 1)[0]
+for forbidden in ("DrawMobileRoundFace", "GUI.Box(", "GUI.DrawTexture", "MobileHudArtwork.Image", "Handles.", "DrawLine"):
+    assert forbidden not in wheel_draw, "Wheel has no number frames, outer ring or sector borders: " + forbidden
+mobile_input = (source / "GameHud.MobileInput.cs").read_text()
+assert "MobilePageSwipe" not in mobile_input and "PageAfter" not in mobile_input, "Group selector never cycles pages with swipes"
+assert "mobilePage=selected" in mobile_input, "Release commits the directly selected group"
 assert "ActivateControlButtonForIndependentRuntime(index)" in hud, "Menu still routes to original native windows"
 assert "DrawMobileRoundCooldown(iconRect,hotSkill[slot])" in hud, "Mobile cooldown is clipped to the icon circle"
 assert "CooldownFrameIndexForIndependentRuntime(fraction)" in hud, "Native cooldown timing/frame selection remains"

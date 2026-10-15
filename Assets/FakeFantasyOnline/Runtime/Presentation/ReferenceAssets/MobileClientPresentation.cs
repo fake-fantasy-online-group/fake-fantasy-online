@@ -77,6 +77,22 @@ public static class MobileClientPresentation
             48f*Scale,48f*Scale);
     }
     public static Rect PageRect => new Rect(SafeAreaGui.xMax-200f*Scale,SafeAreaGui.yMax-254f*Scale,48f*Scale,48f*Scale);
+    internal static bool GroupWheelOpen;
+    internal static float GroupWheelRadius => 72f*Scale;
+    internal static float GroupWheelDeadZone => 24f*Scale;
+    internal static Vector2 GroupWheelCenter
+    {
+        get
+        {
+            Rect safe=SafeAreaGui;
+            float padding=GroupWheelRadius+24f*Scale;
+            return new Vector2(
+                MobileGroupWheel.ClampCenter(PageRect.center.x,safe.x,safe.width,padding),
+                MobileGroupWheel.ClampCenter(PageRect.center.y,safe.y,safe.height,padding));
+        }
+    }
+    internal static bool GroupWheelContains(Vector2 point) => (GroupWheelOpen || GameHud.MobileGroupWheelOpening || GameHud.MobileGroupWheelClosing) &&
+        (point-GroupWheelCenter).sqrMagnitude <= (GroupWheelRadius+24f*Scale)*(GroupWheelRadius+24f*Scale);
     internal static int ActiveSkillButton = -1;
     public static Rect CancelRect
     {
@@ -221,7 +237,7 @@ public static class MobileClientPresentation
         if (GameHud.I!=null && GameHud.I.showAvatar && AvatarRect.Contains(point)) return true;
         if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return true;
         // Includes reserved thumb areas even before the first OnGUI event.
-        if (JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
+        if (GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
         if (GameHud.I != null && GameHud.I.showChat && ChatRect.Contains(point)) return true;
         if (MenuExpanded && MenuRect.Contains(point)) return true;
         for (int i=0;i<4;i++) if (SkillRect(i).Contains(point)) return true;

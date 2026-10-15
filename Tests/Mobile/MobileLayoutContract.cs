@@ -47,6 +47,23 @@ MobileClientPresentation.ActiveSkillButton=-1;Check(!MobileClientPresentation.Ca
 Vector2 joy=MobileClientPresentation.JoystickRect.center;joy.y=Screen.height-joy.y;Check(MobileClientPresentation.IsJoystickRegion(joy),"Joystick region");SysMsgBox.Visible=true;Check(!MobileClientPresentation.IsJoystickRegion(joy),"Modal blocks joystick");Check(MobileClientPresentation.IsPointerOverUi(new Vector2(400,250)),"Modal blocks world");SysMsgBox.Visible=false;
 object owner=new object();MobileClientPresentation.RegisterPanel(owner,safe);Check(MobileClientPresentation.IsPanelPointer(joy),"Panel registers");Check(!MobileClientPresentation.IsJoystickRegion(joy),"Panel owns pointer");MobileClientPresentation.RemovePanel(owner);Check(!MobileClientPresentation.IsPanelPointer(joy),"Panel removed");
 }
+// Actual production wheel layout across landscape, portrait, and compact safe areas.
+foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{375,812},new[]{320,240},new[]{240,320}}){
+ Screen.width=size[0];Screen.height=size[1];Screen.safeArea=new Rect(12,12,size[0]-24,size[1]-24);
+ Rect safe=MobileClientPresentation.SafeAreaGui;float scale=MobileClientPresentation.Scale;
+ Vector2 center=MobileClientPresentation.GroupWheelCenter;
+ for(int group=0;group<8;group++){
+  MobileGroupWheel.Direction(group,out float dx,out float dy);
+  Vector2 position=center+new Vector2(dx,dy)*MobileClientPresentation.GroupWheelRadius;
+  Check(Within(new Rect(position.x-24*scale,position.y-24*scale,48*scale,48*scale),safe),"all wheel labels inside safe area");
+  Check(MobileGroupWheel.Hit(position.x-center.x,position.y-center.y,MobileClientPresentation.GroupWheelDeadZone)==group,"drawn label equals production hit direction");
+ }
+ MobileClientPresentation.GroupWheelOpen=true;
+ Check(MobileClientPresentation.GroupWheelContains(center),"open center captured");
+ Check(MobileClientPresentation.IsPointerOverUi(new Vector2(center.x,Screen.height-center.y)),"open wheel excludes world");
+ MobileClientPresentation.GroupWheelOpen=false;GameHud.MobileGroupWheelOpening=true;
+ Check(MobileClientPresentation.GroupWheelContains(center),"opening frame also captured");GameHud.MobileGroupWheelOpening=false;
+}
 Check(MobileClientPresentation.MenuColumnsForWidth(496f,1f,9)==9,"Full-width row has all nine entries");
 Check(MobileClientPresentation.MenuColumnsForWidth(272f,1f,9)==5,"Narrow menu wraps after fifth entry");
 Check(MobileClientPresentation.MenuColumnsForWidth(48f,1f,9)==1,"Small menu retains one full touch column");

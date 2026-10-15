@@ -224,7 +224,6 @@ public sealed partial class DialogUI : MonoBehaviour
 
     private bool Open(WorldNpcState npc, NpcInteract originalReceiver)
     {
-        if (MobileClientPresentation.Enabled) ResetMobileDialog();
         LastOpenWasFurnace = false;
         if (!Ready || (npc == null && originalReceiver == null)) return false;
 
@@ -518,6 +517,7 @@ public sealed partial class DialogUI : MonoBehaviour
 
     public Rect WindowRect(int screenWidth, int screenHeight, float scale)
     {
+        if (MobileClientPresentation.Enabled) return MobileLayout().Panel;
         float optionHeight = OptionHeight(scale);
         float width = WindowWidth * scale;
         float height = WindowHeight * scale;
@@ -532,6 +532,7 @@ public sealed partial class DialogUI : MonoBehaviour
 
     public Rect OptionRect(int screenWidth, int screenHeight, float scale)
     {
+        if (MobileClientPresentation.Enabled) scale = MobileLayout().Scale;
         Rect win = WindowRect(screenWidth, screenHeight, scale);
         return new Rect(
             win.x,
@@ -579,7 +580,7 @@ public sealed partial class DialogUI : MonoBehaviour
             return false;
         }
 
-        if (MobileClientPresentation.Enabled) return HandleMobilePrimaryDown(topOriginPointer);
+        if (MobileClientPresentation.Enabled) scale = MobileLayout().Scale;
         Rect box = OptionRect(screenWidth, screenHeight, scale);
         for (int index = 0; index < optLabels.Count; index++)
         {
@@ -599,8 +600,7 @@ public sealed partial class DialogUI : MonoBehaviour
     {
         GUI.depth = 5;
         if (!Visible || win == null) return;
-        if (MobileClientPresentation.Enabled) { DrawMobileDialog(); return; }
-        float scale = UIScale.Factor;
+        float scale = MobileClientPresentation.Enabled ? MobileLayout().Scale : UIScale.Factor;
         int screenWidth = Screen.width;
         BuildStyles(scale);
         bfs = scale;
@@ -614,6 +614,12 @@ public sealed partial class DialogUI : MonoBehaviour
         float x = (screenWidth - width) * 0.5f;
         float y = Mathf.Max(6f, Mathf.Min(190f * scale,
             Screen.height - height - optionHeight - 6f));
+        if (MobileClientPresentation.Enabled)
+        {
+            Rect fitted = MobileLayout().Panel;
+            x = fitted.x;
+            y = fitted.y;
+        }
         Rect panel = new Rect(x, y, width, height);
         GUI.DrawTexture(panel, win);
         if (pic != null)
