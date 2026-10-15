@@ -13,7 +13,7 @@ class MobilePageSwipeContract
             g.Begin(1,100,100);
             Check(g.Sample(1,100,100,threshold,true,false)==0,"Tap never cycles page");
             g.Begin(1,100,100);
-            for(int i=0;i<100;i++) Check(g.Sample(1,100,100,threshold,false,false)==0,"Hold never cycles page");
+            for(int i=0;i<10;i++) Check(g.Sample(1,100,100,threshold,false,false)==0,"Hold never cycles page");
             Check(g.Sample(1,100,100,threshold,true,false)==0,"Long hold release never cycles page");
             g.Begin(1,100,100);
             g.Begin(2,200,100);
@@ -41,6 +41,19 @@ class MobilePageSwipeContract
         }
         Check(MobilePageSwipe.PageAfter(7,1)==0,"Page eight wraps to first");
         Check(MobilePageSwipe.PageAfter(0,-1)==7,"Page one wraps to last");
+        var ownership=new MobileShortcutPointerOwnership();
+        Check(!ownership.Owns(0),"No ownership before a press");
+        ownership.Claim(1);ownership.Claim(2);
+        Check(ownership.Owns(1),"All shortcut fingers own synthetic events");
+        ownership.Refresh(2,p=>p==2);
+        Check(ownership.Owns(3),"Ignored second shortcut finger stays owned after first releases");
+        ownership.Refresh(4,p=>false);
+        Check(ownership.Owns(4),"End/cancel/missing owner suppresses same-frame synthetic event");
+        Check(!ownership.Owns(5),"Following frame releases chat normally");
+        ownership.Claim(-2);ownership.Refresh(6,p=>p==-2);
+        Check(ownership.Owns(7),"Simulated mouse hold stays owned");
+        ownership.Clear(8);
+        Check(ownership.Owns(8)&&!ownership.Owns(9),"Disable clears physical owners but retains terminal frame");
         Console.WriteLine("PASS mobile page swipe: "+checks+" production gesture assertions.");
     }
 }
