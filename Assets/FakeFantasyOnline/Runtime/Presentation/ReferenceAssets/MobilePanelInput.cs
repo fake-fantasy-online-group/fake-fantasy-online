@@ -27,14 +27,14 @@ internal static class MobilePanelLayout
     internal static int HotbarSlot(Rect box, float scale, ref int page, out bool cancel)
     {
         int selected = -1;
-        for (int button = 0; button < 4; button++)
+        for (int button = 0; button < 6; button++)
         {
-            int slot = page * 4 + button;
-            if (slot < 30 && Action(box, button, (page + 1) + "页" + (button + 1), scale)) selected = slot;
+            int slot = page * 6 + button;
+            if (slot >= 0 && slot < 24 && Action(box, button, (page + 1) + "页" + (button + 1), scale)) selected = slot;
         }
-        if (Action(box, 4, "上一页", scale)) page = (page + 7) % 8;
-        if (Action(box, 5, "下一页", scale)) page = (page + 1) % 8;
-        cancel = Action(box, 6, "取消", scale);
+        if (Action(box, 6, "上一页", scale)) page = (page + 3) % 4;
+        if (Action(box, 7, "下一页", scale)) page = (page + 1) % 4;
+        cancel = Action(box, 8, "取消", scale);
         return selected;
     }
 

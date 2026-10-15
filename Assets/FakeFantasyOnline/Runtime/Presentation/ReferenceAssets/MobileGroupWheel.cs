@@ -2,10 +2,15 @@ using System;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
-    /// <summary>Eight fixed directions in GUI coordinates; no swipe/page cycling.</summary>
+    /// <summary>Four cardinal directions in GUI coordinates; no swipe/page cycling.</summary>
     internal sealed class MobileGroupWheel
     {
-        private static readonly int[] ClockwiseGroups = { 0, 4, 1, 5, 2, 6, 3, 7 };
+        internal const int GroupCount = 4;
+        internal const int SlotsPerGroup = 6;
+        internal const int SlotCount = GroupCount * SlotsPerGroup;
+        // Desktop owns 30 persisted bindings. Mobile exposes only the first 24.
+        internal static int HotbarSlot(int group, int button) =>
+            (uint)group < GroupCount && (uint)button < SlotsPerGroup ? group * SlotsPerGroup + button : -1;
         internal int Pointer { get; private set; } = -1;
         internal int Hovered { get; private set; } = -1;
         private float centerX, centerY, deadZone;
@@ -27,13 +32,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         {
             if (dx * dx + dy * dy <= deadZoneRadius * deadZoneRadius) return -1;
             double angle = Math.Atan2(dx, -dy);
-            int sector = (int)Math.Floor(angle / (Math.PI / 4) + .5);
-            return ClockwiseGroups[(sector + 8) % 8];
+            int sector = (int)Math.Floor(angle / (Math.PI / 2) + .5);
+            return (sector + GroupCount) % GroupCount;
         }
         internal static void Direction(int group, out float x, out float y)
         {
-            int sector = Array.IndexOf(ClockwiseGroups, group);
-            double angle = sector * Math.PI / 4;
+            if ((uint)group >= GroupCount) { x = y = 0f; return; }
+            double angle = group * Math.PI / 2;
             x = (float)Math.Sin(angle); y = -(float)Math.Cos(angle);
         }
         internal static float ClampCenter(float desired, float min, float extent, float padding)

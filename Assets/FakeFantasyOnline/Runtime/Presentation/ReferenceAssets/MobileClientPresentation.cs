@@ -24,8 +24,8 @@ public static class MobileClientPresentation
     public static float Scale => Mathf.Max(.1f, Mathf.Min(SafeAreaGui.height / 540f, SafeAreaGui.width / 960f));
     private static Rect Centered(Vector2 c, float size) => new Rect(c.x-size*.5f,c.y-size*.5f,size,size);
     public static Rect JoystickRect => Centered(new Vector2(SafeAreaGui.x+100f*Scale,SafeAreaGui.yMax-110f*Scale),160f*Scale);
-    public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-68f*Scale,SafeAreaGui.yMax-68f*Scale),96f*Scale);
-    private static readonly Vector2[] SkillOffsets = { new Vector2(-110,0), new Vector2(-104,-82), new Vector2(-36,-142), new Vector2(32,-102) };
+    public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-100f*Scale,SafeAreaGui.yMax-110f*Scale),96f*Scale);
+    private static readonly Vector2[] SkillOffsets = { new Vector2(-108,32), new Vector2(-116,-40), new Vector2(-116,-116), new Vector2(-40,-156), new Vector2(36,-156), new Vector2(64,-80) };
     public static Rect SkillRect(int index) => Centered(AttackRect.center+SkillOffsets[index]*Scale,64f*Scale);
     // The avatar has no extra horizontal gutter beyond the device's real safe area.
     public static Rect AvatarRect => new Rect(SafeAreaGui.x,SafeAreaGui.y,171f*Scale,155f*Scale);
@@ -76,7 +76,7 @@ public static class MobileClientPresentation
         return new Rect(menu.x+(index%columns)*56f*Scale,menu.y+(index/columns)*56f*Scale,
             48f*Scale,48f*Scale);
     }
-    public static Rect PageRect => new Rect(SafeAreaGui.xMax-200f*Scale,SafeAreaGui.yMax-254f*Scale,48f*Scale,48f*Scale);
+    public static Rect PageRect => new Rect(SafeAreaGui.xMax-308f*Scale,SafeAreaGui.yMax-280f*Scale,48f*Scale,48f*Scale);
     internal static bool GroupWheelOpen;
     internal static float GroupWheelRadius => 72f*Scale;
     internal static float GroupWheelDeadZone => 24f*Scale;
@@ -98,15 +98,15 @@ public static class MobileClientPresentation
     {
         get
         {
-            Vector2 origin=SkillRect(ActiveSkillButton>=0 && ActiveSkillButton<4 ? ActiveSkillButton : 0).center;
+            Vector2 origin=SkillRect(ActiveSkillButton>=0 && ActiveSkillButton<6 ? ActiveSkillButton : 0).center;
             float size=52f*Scale;
             Rect safe=SafeAreaGui;
-            // Search nearby free space, nearest ring first; never obscure another control.
+            // Search nearby free space, at least 128 logical pixels away; never obscure another control.
             for (int ring=1;ring<=8;ring++)
                 for (int index=0;index<16;index++)
                 {
                     float angle=(index*22.5f+180f)*Mathf.Deg2Rad;
-                    Vector2 center=origin+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*(76f*ring*Scale);
+                    Vector2 center=origin+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*((128f+24f*(ring-1))*Scale);
                     Rect candidate=Centered(center,size);
                     if (candidate.x<safe.x || candidate.y<safe.y || candidate.xMax>safe.xMax || candidate.yMax>safe.yMax) continue;
                     if (CancelOverlapsControl(candidate)) continue;
@@ -122,7 +122,7 @@ public static class MobileClientPresentation
         if (padded.Overlaps(AttackRect) || padded.Overlaps(PageRect) || padded.Overlaps(JoystickRect) ||
             padded.Overlaps(ChatRect) || padded.Overlaps(MinimapRect) || padded.Overlaps(AvatarRect) ||
             padded.Overlaps(MenuToggleRect) || (MenuExpanded && padded.Overlaps(MenuRect))) return true;
-        for (int k=0;k<4;k++) if (padded.Overlaps(SkillRect(k))) return true;
+        for (int k=0;k<6;k++) if (padded.Overlaps(SkillRect(k))) return true;
         return false;
     }
     public static bool CancelContains(Vector2 point)
@@ -240,7 +240,7 @@ public static class MobileClientPresentation
         if (GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
         if (GameHud.I != null && GameHud.I.showChat && ChatRect.Contains(point)) return true;
         if (MenuExpanded && MenuRect.Contains(point)) return true;
-        for (int i=0;i<4;i++) if (SkillRect(i).Contains(point)) return true;
+        for (int i=0;i<6;i++) if (SkillRect(i).Contains(point)) return true;
         return IsPanelPointer(screenPoint);
     }
 }

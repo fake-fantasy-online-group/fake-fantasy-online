@@ -36,14 +36,14 @@ public partial class GameHud
         // Reuse original resources, icons, cooldown masks and dispatch; no replacement artwork.
         if (showHotbar && !diagramOpen)
         {
-            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==4);
-            for (int k=0;k<4;k++)
+            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==6);
+            for (int k=0;k<6;k++)
             {
-                int slot=mobilePage*4+k;
+                int slot=MobileGroupWheel.HotbarSlot(mobilePage,k);
                 Rect rect=MobileClientPresentation.SkillRect(k);
-                DrawMobileRoundFace(rect,scale,slot<30 && hotSkill[slot]!=0,
+                DrawMobileRoundFace(rect,scale,(uint)slot<24 && hotSkill[slot]!=0,
                     mobileFinger!=-1 && mobilePressed==k);
-                if (slot<30)
+                if ((uint)slot<24)
                 {
                     Texture2D icon=HotIconForIndependentRuntime(slot);
                     // Both artwork and cooldown are alpha-masked circles, not squares inside a rim.
@@ -55,8 +55,8 @@ public partial class GameHud
             }
             if (!MobileClientPresentation.GroupWheelOpen)
             {
-                DrawMobileRoundFace(MobileClientPresentation.PageRect,scale,true,mobilePressed==5);
-                MobileHudArtwork.Label(MobileClientPresentation.PageRect,(mobilePage+1)+"/8",scale);
+                DrawMobileRoundFace(MobileClientPresentation.PageRect,scale,true,mobilePressed==7);
+                MobileHudArtwork.Label(MobileClientPresentation.PageRect,(mobilePage+1)+"/4",scale);
             }
             MobileHudArtwork.Joystick(MobileClientPresentation.JoystickRect,ClientInput.MovementAxis,scale);
         }
@@ -80,7 +80,7 @@ public partial class GameHud
                 }
             }
         }
-        if (mobileFinger!=-1 && mobilePressed<4)
+        if (mobileFinger!=-1 && mobilePressed<6)
             {
             Rect cancelRect=MobileClientPresentation.CancelRect;
             Color old=GUI.color;
@@ -105,8 +105,10 @@ public partial class GameHud
                 clipping=TextClipping.Overflow, richText=false, wordWrap=false
             };
         Vector2 center=MobileClientPresentation.GroupWheelCenter;
-        // Only text: no number frames, ring, sector edges, or spokes.
-        for (int group=0;group<8;group++)
+        // One shared background and outer circle; numbers stay unboxed.
+        float diameter=(MobileClientPresentation.GroupWheelRadius+24f*scale)*2f;
+        DrawMobileRoundFace(new Rect(center.x-diameter*.5f,center.y-diameter*.5f,diameter,diameter),scale,true,false);
+        for (int group=0;group<4;group++)
         {
             MobileGroupWheel.Direction(group,out float x,out float y);
             Vector2 position=center+new Vector2(x,y)*MobileClientPresentation.GroupWheelRadius;

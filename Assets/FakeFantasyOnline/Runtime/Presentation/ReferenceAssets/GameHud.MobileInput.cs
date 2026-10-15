@@ -11,7 +11,7 @@ public partial class GameHud
     internal static bool MobileGroupWheelClosing => I!=null && I.mobileWheelClosedFrame==Time.frameCount;
     private readonly MobileSkillGesture mobileSkillGesture = new MobileSkillGesture();
     private bool mobileCancelHighlighted;
-    internal static bool MobileHotSlotUsable(int slot) => (uint)slot <= 29 && hotSkill[slot] != 0 &&
+    internal static bool MobileHotSlotUsable(int slot) => (uint)slot < 24 && hotSkill[slot] != 0 &&
         NetClient.I != null && HotSlotUsable(slot) && SkillCdFrac(hotSkill[slot]) <= 0f;
     private readonly MobileGroupWheel mobileGroupWheel = new MobileGroupWheel();
     private readonly MobileShortcutPointerOwnership mobileShortcutPointers = new MobileShortcutPointerOwnership();
@@ -100,15 +100,15 @@ public partial class GameHud
         {
             // Even an ignored second shortcut finger owns its synthesized events.
             bool shortcut=MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point) || MobileClientPresentation.GroupWheelContains(point);
-            for (int k=0;k<4;k++) shortcut |= MobileClientPresentation.SkillRect(k).Contains(point);
+            for (int k=0;k<6;k++) shortcut |= MobileClientPresentation.SkillRect(k).Contains(point);
             if (shortcut) mobileShortcutPointers.Claim(finger);
         }
         if (phase==TouchPhase.Began && mobileFinger==-1 && !panelPointer &&
             !(MobileGroupWheelClosing && MobileClientPresentation.GroupWheelContains(point)))
         {
-            int button=showHotbar && !diagramOpen && MobileClientPresentation.AttackRect.Contains(point) ? 4 : -1;
-            if (showHotbar && !diagramOpen) for (int k=0;k<4;k++) if (MobileClientPresentation.SkillRect(k).Contains(point)) button=k;
-            if (showHotbar && !diagramOpen && MobileClientPresentation.PageRect.Contains(point)) button=5;
+            int button=showHotbar && !diagramOpen && MobileClientPresentation.AttackRect.Contains(point) ? 6 : -1;
+            if (showHotbar && !diagramOpen) for (int k=0;k<6;k++) if (MobileClientPresentation.SkillRect(k).Contains(point)) button=k;
+            if (showHotbar && !diagramOpen && MobileClientPresentation.PageRect.Contains(point)) button=7;
             if (showMinimap && MobileClientPresentation.MinimapRect.Contains(point))
             {
                 button=10;
@@ -117,13 +117,13 @@ public partial class GameHud
             if (button>=0)
             {
                 mobileFinger=finger; mobilePressed=button; mobilePressPosition=position;
-                if (button<4)
+                if (button<6)
                 {
                     mobileSkillGesture.Begin(position.x,position.y,MobileClientPresentation.Scale);
                     MobileClientPresentation.ActiveSkillButton=button;
-                    SkillTargeting.BeginMobileHotSlot(mobilePage*4+button);
+                    SkillTargeting.BeginMobileHotSlot(MobileGroupWheel.HotbarSlot(mobilePage,button));
                 }
-                if (button==5)
+                if (button==7)
                 {
                     Vector2 center=MobileClientPresentation.GroupWheelCenter;
                     mobileGroupWheel.Begin(finger,center.x,center.y,MobileClientPresentation.GroupWheelDeadZone);
@@ -133,20 +133,20 @@ public partial class GameHud
         }
         if (finger!=mobileFinger) return;
         mobileSkillGesture.Sample(position.x,position.y);
-        mobileCancelHighlighted=mobilePressed>=0 && mobilePressed<4 && MobileClientPresentation.CancelContains(point);
+        mobileCancelHighlighted=mobilePressed>=0 && mobilePressed<6 && MobileClientPresentation.CancelContains(point);
         bool cancel=phase==TouchPhase.Canceled || mobileCancelHighlighted;
-        if (mobilePressed==5)
+        if (mobilePressed==7)
         {
             int selected=phase==TouchPhase.Began ? -1 : mobileGroupWheel.Sample(finger,point.x,point.y,
                 phase==TouchPhase.Ended,cancel);
             if (selected>=0) mobilePage=selected;
         }
-        if (mobilePressed<4 && SkillTargeting.Active) ClientInput.SetSkillAim(MobileAimPosition(position),false,false);
+        if (mobilePressed<6 && SkillTargeting.Active) ClientInput.SetSkillAim(MobileAimPosition(position),false,false);
         if (phase==TouchPhase.Ended || phase==TouchPhase.Canceled)
         {
             if (cancel) SkillTargeting.CancelMobileHotSlot();
-            else if (mobilePressed<4) SkillTargeting.ReleaseMobileHotSlot(MobileAimPosition(position),mobileSkillGesture.Dragged);
-            else if (mobilePressed==4 && MobileClientPresentation.AttackRect.Contains(point)) MobileAttack();
+            else if (mobilePressed<6) SkillTargeting.ReleaseMobileHotSlot(MobileAimPosition(position),mobileSkillGesture.Dragged);
+            else if (mobilePressed==6 && MobileClientPresentation.AttackRect.Contains(point)) MobileAttack();
             else if (mobilePressed>=10 && MobileClientPresentation.MinimapRect.Contains(point))
             {
                 if (mobilePressed==10 || mobilePressed==14) guiMinimap?.ToggleDiagram();
@@ -157,7 +157,7 @@ public partial class GameHud
                     if (mobilePressed==13) { guiMinimap?.CloseDiagram(); WorldMapDlg.Toggle(); guiHost?.ObserveNativeWorldMapRequestForIndependentRuntime(); }
                 }
             }
-            if (mobilePressed==5) mobileWheelClosedFrame=Time.frameCount;
+            if (mobilePressed==7) mobileWheelClosedFrame=Time.frameCount;
             mobileFinger=-1; mobilePressed=-1;
             MobileClientPresentation.GroupWheelOpen=false;
             mobileSkillGesture.Reset(); mobileCancelHighlighted=false;
@@ -172,7 +172,7 @@ public partial class GameHud
     private void CancelMobileGesture()
     {
         if (mobileFinger!=-1) SkillTargeting.CancelMobileHotSlot();
-        if (mobilePressed==5) mobileWheelClosedFrame=Time.frameCount;
+        if (mobilePressed==7) mobileWheelClosedFrame=Time.frameCount;
         mobileGroupWheel.Reset();
         mobileFinger=-1; mobilePressed=-1;
         MobileClientPresentation.GroupWheelOpen=false;

@@ -8,6 +8,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private static int mobileSkill;
         private static int mobileKind;
         private static Aim mobileMode;
+        private static Vector2 mobileAimDelta;
         internal static bool MobileHotSlotActive => mobileSlot >= 0;
 
         public static void BeginMobileHotSlot(int slot)
@@ -24,12 +25,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (mobileMode == Aim.Unavailable) { CancelMobileHotSlot(); return; }
             if (mobileMode == Aim.Instant) return;
             // Prepare a preview only. No target choice or cast occurs on pointer down.
-            ClientInput.SetSkillAim(ClientInput.AimPosition, false, false);
+            ClientInput.SetSkillAim(MobileAimPosition(Vector2.zero), false, false);
             Begin(mobileSkill, mobileMode, range, mobileMode == Aim.Single || mobileMode == Aim.Trap ? 24f : radius, angle, length, width, trap);
         }
 
         internal static Vector2 MobileAimPosition(Vector2 delta)
         {
+            mobileAimDelta = delta;
             PlayerController pc = PlayerController.I;
             if (pc == null || Camera.main == null) return new Vector2(Screen.width * .5f, Screen.height * .5f);
             Vector3 feet = new Vector3((pc.worldX - pc.worldW * .5f) / pc.ppu,
@@ -39,6 +41,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (float.IsInfinity(range) || range <= 0f) range = DefaultRange;
             Vector2 edge = Camera.main.WorldToScreenPoint(feet + new Vector3(range / pc.ppu, 0f, 0f));
             float screenRange = (edge - origin).magnitude;
+            // A neutral directional press still needs a fresh, nondegenerate footprint.
+            // FaceOct uses map Y-down; screen Y points up.
+            if (delta.sqrMagnitude < .000001f && mobileMode == Aim.Direction)
+            {
+                float facing = pc.FaceOct * 45f * Mathf.Deg2Rad;
+                return origin + new Vector2(Mathf.Cos(facing), -Mathf.Sin(facing)) * screenRange;
+            }
             return origin + Vector2.ClampMagnitude(delta / (120f * MobileClientPresentation.Scale), 1f) * screenRange;
         }
 
@@ -105,6 +114,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         {
             mobileSlot = -1;
             mobileSkill = 0;
+            mobileAimDelta = Vector2.zero;
             if (I != null && Active) I.End();
             ClientInput.ClearSkillAim();
         }

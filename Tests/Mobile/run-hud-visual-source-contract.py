@@ -28,7 +28,7 @@ check_digest((source / "GameHud.Resources.cs").read_text(),
 hud = (source / "GameHud.Mobile.cs").read_text()
 assert "DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect" not in hud, "No second row of mobile map faces"
 art = (source / "MobileHudArtwork.cs").read_text()
-assert "DrawTextureWithTexCoords" not in art, "Top mobile menu renders complete artwork without bottom-hotbar UV crop"
+assert "MenuIconTexture(texture)" in art and "MenuToggleTexture(source, frame)" in art, "Mobile menu removes baked labels and centers native glyphs in owned copies"
 assert "MobileClientPresentation.AvatarRect" in hud, "Avatar rendering uses the same safe-area anchor as pointer exclusion"
 assert "touchControls:true" in hud and "GUI.enabled=false" not in hud, "Mobile map is not greyed out to disable old inputs"
 assert "ctrlTex[index]" not in hud, "Function icons cannot index the three-frame array as one frame per entry"
@@ -37,8 +37,9 @@ wheel_text = hud.split("private void DrawMobileGroupText", 1)[1].split("private 
 assert hud.count("GUI.Label(") == wheel_text.count("GUI.Label(") == 2, "Only scaled wheel text may use explicit GUI.Label"
 assert "Mathf.RoundToInt(size*scale)" in wheel_text and "mobileGroupWheelStyle" in wheel_text, "Wheel uses scaled explicit text style"
 wheel_draw = hud.split("private void DrawMobileGroupWheel", 1)[1].split("private void DrawMobileRoundCooldown", 1)[0]
-for forbidden in ("DrawMobileRoundFace", "GUI.Box(", "GUI.DrawTexture", "MobileHudArtwork.Image", "Handles.", "DrawLine"):
-    assert forbidden not in wheel_draw, "Wheel has no number frames, outer ring or sector borders: " + forbidden
+assert wheel_draw.count("DrawMobileRoundFace(") == 1, "One shared wheel background/outer circle is restored"
+for forbidden in ("GUI.Box(", "GUI.DrawTexture", "MobileHudArtwork.Image", "Handles.", "DrawLine"):
+    assert forbidden not in wheel_draw, "Wheel has no per-number frames or sector borders: " + forbidden
 mobile_input = (source / "GameHud.MobileInput.cs").read_text()
 assert "MobilePageSwipe" not in mobile_input and "PageAfter" not in mobile_input, "Group selector never cycles pages with swipes"
 assert "mobilePage=selected" in mobile_input, "Release commits the directly selected group"
@@ -48,4 +49,4 @@ assert "CooldownFrameIndexForIndependentRuntime(fraction)" in hud, "Native coold
 assert "MenuItemRect(index)" in hud, "Drawing and touch exclusion use the same top menu layout"
 assert "lianliRing" not in hud and "socketFill" not in hud, "Mobile joystick cannot reuse a partial progress arc or generated black disc"
 assert "hb24Block" not in hud, "Combat faces use complete original mobile-appropriate artwork instead of enlarged empty hotbar squares"
-print("PASS mobile HUD source contracts: desktop bodies unchanged; native map faces and full top-menu art retained. Not Unity rendering.")
+print("PASS mobile HUD source contracts: desktop bodies unchanged; native map faces retained; mobile menu uses icon-only copies. Not Unity rendering.")

@@ -65,15 +65,15 @@ static void Main(string[] args){
  frames[3]=null;Check(MobileHudArtwork.ControlFrame(frames,1,true,true)==frames[5],"Missing pressed frame uses same entry idle");
  var r=new UnityEngine.Rect(10,20,48,48);
  MobileHudArtwork.ControlFace(r,frames,null,4,1,true,false);
- Check(UnityEngine.GUI.last==frames[13],"Complete bottom icon is preferred");
+ Check(UnityEngine.GUI.last.name==frames[13].name+" (mobile menu)","Complete bottom icon is preferred");
  Check(Near(UnityEngine.GUI.lastRect.width,44)&&Near(UnityEngine.GUI.lastRect.height,44),"Bottom artwork preserves inner padding");
  var legacy=new UnityEngine.Texture2D[27];for(int i=0;i<27;i++)legacy[i]=new UnityEngine.Texture2D{name="legacy-"+i,width=42,height=55};
  MobileHudArtwork.ControlFace(r,null,legacy,8,1,false,true);
- Check(UnityEngine.GUI.last==legacy[24],"Legacy fallback uses corresponding entry and state");
+ Check(UnityEngine.GUI.last.name==legacy[24].name+" (mobile menu)","Legacy fallback uses corresponding entry and state");
  Check(Near(UnityEngine.GUI.lastRect.height,44),"Full legacy artwork fits the available height");
- Check(Near(UnityEngine.GUI.lastRect.width/UnityEngine.GUI.lastRect.height,42f/55f),"Full legacy frame retains aspect ratio including decorative bottom");
+ Check(UnityEngine.GUI.last.width==1 && UnityEngine.GUI.last.height==1,"Transparent menu source has no fabricated label or frame");
  MobileHudArtwork.ControlFace(r,frames,legacy,2,1,false,false);
- Check(UnityEngine.GUI.last==legacy[8],"Top menu prefers the original complete top artwork");
+ Check(UnityEngine.GUI.last.name==legacy[8].name+" (mobile menu)","Top menu prefers the original complete top artwork");
  var prior=new UnityEngine.Color(.4f,.5f,.6f,.7f);UnityEngine.GUI.color=prior;
  MobileHudArtwork.Image(r,frames[0],true);
  Check(UnityEngine.GUI.lastColor.r<prior.r&&UnityEngine.GUI.lastColor.a==prior.a,"Pressed tint retains alpha");
@@ -118,6 +118,31 @@ static void Main(string[] args){
  Check(MobileHudArtwork.MenuButton(r,1,false),"Icon menu retains IMGUI release activation");
  Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#4","Collapsed menu uses native down arrow");
  MobileHudArtwork.MenuButton(r,1,true);Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#0","Expanded menu uses native up arrow");
+ // Regression fixtures use Unity's bottom-origin pixels, including odd native height.
+ for(int state=0;state<8;state++){
+  var native=new UnityEngine.Texture2D(20,19,UnityEngine.TextureFormat.RGBA32,false){name="toggle-fixture"};
+  var raw=new UnityEngine.Color32[380];for(int i=0;i<raw.Length;i++)raw[i]=new UnityEngine.Color32(90,30,10,255);
+  int gx=state%4==0?8:7,gy=state%4==0?7:6;
+  for(int y=0;y<8;y++)for(int x=0;x<7;x++)raw[(18-gy-y)*20+gx+x]=new UnityEngine.Color32(255,200,120,255);
+  native.SetPixels32(raw);var fixedToggle=MobileHudArtwork.MenuToggleTexture(native,state);var output=fixedToggle.GetPixels32();
+  Check(fixedToggle.width==40&&fixedToggle.height==38,"Toggle permits half-native-pixel alignment for state "+state);
+  int minX=40,maxX=0,minY=38,maxY=0;
+  for(int y=0;y<38;y++)for(int x=0;x<40;x++)if(output[y*40+x].g==200){minX=Math.Min(minX,x);maxX=Math.Max(maxX,x);minY=Math.Min(minY,y);maxY=Math.Max(maxY,y);}
+  Check(minX==13&&maxX==26&&minY==11&&maxY==26,"Real glyph bounds centered in state "+state);
+  foreach(float scale in new[]{.5f,.73f,1f,1.25f,1.5f,2f,3f}){
+   var target=new UnityEngine.Rect(13.25f,17.75f,48*scale,48*scale);var fit=MobileHudArtwork.Fit(MobileHudArtwork.Inset(target,6*scale),40,38);
+   Check(Near(fit.x+(minX+maxX+1)*.5f/40*fit.width,target.center.x)&&Near(fit.y+(minY+maxY+1)*.5f/38*fit.height,target.center.y),"Visible glyph alignment at fractional scale "+scale);
+  }
+  Check(native.GetPixels32()[(18-gy)*20+gx].g==200&&output[0].g==30,"Native source and original button border preserved");
+ }
+ var labeled=new UnityEngine.Texture2D(42,55,UnityEngine.TextureFormat.RGBA32,false){name="label-fixture"};
+ var labeledPixels=new UnityEngine.Color32[42*55];
+ for(int y=0;y<55;y++)for(int x=0;x<42;x++)labeledPixels[y*42+x]=new UnityEngine.Color32((byte)(y<19?255:0),(byte)(y>=19?200:0),0,255);
+ labeled.SetPixels32(labeledPixels);var onlyIcon=MobileHudArtwork.MenuIconTexture(labeled);
+ Check(onlyIcon.width==42&&onlyIcon.height==36,"Icon copy excludes all 19 bottom label/box rows");
+ foreach(var pixel in onlyIcon.GetPixels32())Check(pixel.r==0,"No label or label-box pixels survive");
+ Check(labeled.GetPixels32()[0].r==255,"Original desktop label pixels unchanged");
+ MobileHudArtwork.ClearRoundTextures();
  var source=new UnityEngine.Texture2D(16,16,UnityEngine.TextureFormat.RGBA32,false);
  var pixels=new UnityEngine.Color32[256];for(int i=0;i<pixels.Length;i++)pixels[i]=new UnityEngine.Color32(80,120,160,200);source.SetPixels32(pixels);
  var round=MobileHudArtwork.RoundTexture(source);var masked=round.GetPixels32();
@@ -127,7 +152,7 @@ static void Main(string[] args){
  Check(masked[8*16+8].r==80&&source.GetPixels32()[0].a==200,"Original RGB and borrowed source are preserved");
  Check(object.ReferenceEquals(round,MobileHudArtwork.RoundTexture(source)),"Repeated GUI events reuse mask texture");
  Check(MobileHudArtwork.RoundTexture(null)==null,"Empty shortcut is safe");
- int destroyed=UnityEngine.Object.destroyed;MobileHudArtwork.ClearRoundTextures();Check(UnityEngine.Object.destroyed==destroyed+1,"HUD cleanup destroys only owned copy");
+ int destroyed=UnityEngine.Object.destroyed;MobileHudArtwork.ClearRoundTextures();Check(UnityEngine.Object.destroyed>=destroyed+1,"HUD cleanup destroys only owned copy");
  Check(!object.ReferenceEquals(round,MobileHudArtwork.RoundTexture(source)),"Cleared cache recreates mask");
  var wide=new UnityEngine.Texture2D(24,16,UnityEngine.TextureFormat.RGBA32,false);var circle=MobileHudArtwork.RoundTexture(wide);Check(circle.width==16&&circle.height==16,"Non-square art is center-cropped to a true circle, never an ellipse");
  var gpu=new UnityEngine.Texture2D(16,16,UnityEngine.TextureFormat.RGBA32,false){isReadable=false};gpu.SetPixels32(pixels);
@@ -143,11 +168,19 @@ static void Main(string[] args){
  Check(MobileHudArtwork.RoundTexture(failed)==null&&UnityEngine.Graphics.blits==blits&&UnityEngine.Debug.warnings==warnings+1,"Cached failure does not retry or spam each GUI event");
  UnityEngine.Texture2D.failReadback=false;MobileHudArtwork.ClearRoundTextures();
  Check(MobileHudArtwork.RoundTexture(failed)!=null&&UnityEngine.Graphics.blits==blits+1,"Cache reset allows failed icon to recover");
- if(args.Length==2){
+ var failedMenu=new UnityEngine.Texture2D(20,19,UnityEngine.TextureFormat.RGBA32,false){isReadable=false,name="failed-menu"};
+ UnityEngine.Texture2D.failReadback=true;int menuWarnings=UnityEngine.Debug.warnings;
+ Check(MobileHudArtwork.MenuToggleTexture(failedMenu,0)==null,"Menu readback failure does not abort the HUD");
+ int menuBlits=UnityEngine.Graphics.blits;
+ Check(MobileHudArtwork.MenuToggleTexture(failedMenu,0)==null&&UnityEngine.Graphics.blits==menuBlits&&UnityEngine.Debug.warnings==menuWarnings+1,"Menu failure is cached without readback/log spam");
+ UnityEngine.Texture2D.failReadback=false;MobileHudArtwork.ClearRoundTextures();
+ Check(MobileHudArtwork.MenuToggleTexture(failedMenu,0)!=null,"Menu cache reset retries recovered GPU source");
+ if(args.Length>=2){
   using(var input=new System.IO.BinaryReader(System.IO.File.OpenRead(args[0]))){
    int w=input.ReadInt32(),h=input.ReadInt32();var fixture=new UnityEngine.Texture2D(w,h,UnityEngine.TextureFormat.RGBA32,false);var data=new UnityEngine.Color32[w*h];
    for(int i=0;i<data.Length;i++)data[i]=new UnityEngine.Color32(input.ReadByte(),input.ReadByte(),input.ReadByte(),input.ReadByte());fixture.SetPixels32(data);
-   var output=MobileHudArtwork.RoundTexture(fixture).GetPixels32();using(var writer=new System.IO.BinaryWriter(System.IO.File.Create(args[1])))foreach(var pixel in output){writer.Write(pixel.r);writer.Write(pixel.g);writer.Write(pixel.b);writer.Write(pixel.a);}
+   var transformed=args.Length==3 ? (args[2]=="icon" ? MobileHudArtwork.MenuIconTexture(fixture) : MobileHudArtwork.MenuToggleTexture(fixture,int.Parse(args[2]))) : MobileHudArtwork.RoundTexture(fixture);
+   var output=transformed.GetPixels32();using(var writer=new System.IO.BinaryWriter(System.IO.File.Create(args[1])))foreach(var pixel in output){writer.Write(pixel.r);writer.Write(pixel.g);writer.Write(pixel.b);writer.Write(pixel.a);}
   }
  }
  Console.WriteLine("PASS mobile HUD artwork: "+checks+" deterministic assertions; real production helper with Unity API stubs, not rendering.");

@@ -11,6 +11,7 @@ Check(!MobileClientPresentation.Enabled,"Desktop default unchanged");MobileClien
 foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{2340,1080},new[]{1920,1200}}){
 Screen.width=size[0];Screen.height=size[1];Screen.safeArea=new Rect(24,16,size[0]-48,size[1]-32);
 Rect safe=MobileClientPresentation.SafeAreaGui;
+Check(Math.Abs(MobileClientPresentation.AttackRect.center.x+MobileClientPresentation.JoystickRect.center.x-2*safe.center.x)<.01f && Math.Abs(MobileClientPresentation.AttackRect.center.y-MobileClientPresentation.JoystickRect.center.y)<.01f,"Thumb centers mirror exactly in safe area");
 Check(MobileClientPresentation.AvatarRect.x==safe.x && MobileClientPresentation.AvatarRect.y==safe.y,"Avatar starts at actual safe area without added gutter");
 Check(MobileClientPresentation.PageRect.width==MobileClientPresentation.PageRect.height,"Page control is square");
 float ms=MobileClientPresentation.Scale, right=safe.x+MobileClientPresentation.MinimapViewportWidth;
@@ -22,7 +23,7 @@ for(int i=0;i<4;i++){
  Check(Within(hit,MobileClientPresentation.MinimapRect),"Map hit inside exclusion "+i);
  for(int j=0;j<i;j++)Check(!Overlap(hit,MobileClientPresentation.MapActionRect(j)),"Disjoint native map actions "+i+","+j);
 }
-var controls=new[]{MobileClientPresentation.JoystickRect,MobileClientPresentation.AttackRect,MobileClientPresentation.SkillRect(0),MobileClientPresentation.SkillRect(1),MobileClientPresentation.SkillRect(2),MobileClientPresentation.SkillRect(3),MobileClientPresentation.PageRect,MobileClientPresentation.MenuToggleRect,MobileClientPresentation.MenuRect,MobileClientPresentation.MinimapRect};
+var controls=new[]{MobileClientPresentation.JoystickRect,MobileClientPresentation.AttackRect,MobileClientPresentation.SkillRect(0),MobileClientPresentation.SkillRect(1),MobileClientPresentation.SkillRect(2),MobileClientPresentation.SkillRect(3),MobileClientPresentation.SkillRect(4),MobileClientPresentation.SkillRect(5),MobileClientPresentation.PageRect,MobileClientPresentation.MenuToggleRect,MobileClientPresentation.MenuRect,MobileClientPresentation.MinimapRect};
 for(int i=0;i<controls.Length;i++){Check(Within(controls[i],safe),"Safe bounds "+i);for(int j=i+1;j<controls.Length;j++)Check(!Overlap(controls[i],controls[j]),"Control overlap "+i+","+j);}
 Check(MobileClientPresentation.MenuToggleRect.yMax<safe.y+100f*MobileClientPresentation.Scale,"Menu switch stays in top band");
 Check(MobileClientPresentation.MenuToggleRect.x>=safe.x+171f*MobileClientPresentation.Scale,"Menu avoids avatar");
@@ -32,16 +33,17 @@ MobileClientPresentation.ChatExpanded=false;Check(Within(MobileClientPresentatio
 Check(Math.Abs(MobileClientPresentation.ChatRect.height-112f*MobileClientPresentation.Scale)<.01f,"Compact chat height");
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.JoystickRect),"Chat avoids joystick");
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.AttackRect),"Chat avoids attack");
-for(int i=0;i<4;i++)Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.SkillRect(i)),"Chat avoids skill "+i);
+for(int i=0;i<6;i++)Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.SkillRect(i)),"Chat avoids skill "+i);
 MobileClientPresentation.ChatExpanded=true;Rect chat=MobileClientPresentation.ChatRect;Check(Math.Abs(chat.center.x-safe.center.x)<.01&&Math.Abs(chat.yMax-(safe.yMax-12f*MobileClientPresentation.Scale))<.01,"Expanded chat bottom anchored");Check(Math.Abs(chat.height-196f*MobileClientPresentation.Scale)<.01,"Expanded chat compact height");Check(Within(chat,safe),"Expanded chat safe");
-for(int button=0;button<4;button++){
+for(int button=0;button<6;button++){
 MobileClientPresentation.ActiveSkillButton=button;Rect cancel=MobileClientPresentation.CancelRect;
+Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude >= (127.9f*ms)*(127.9f*ms),"Cancel has deliberate minimum travel");
 Check(Within(cancel,safe),"Cancel safe area "+button);
 foreach(Rect control in controls)Check(!Overlap(cancel,control),"Cancel avoids controls "+button);
 Check(!Overlap(cancel,MobileClientPresentation.ChatRect),"Cancel avoids expanded chat "+button);
 Check(MobileClientPresentation.CancelContains(cancel.center),"Cancel center accepted "+button);
 Check(!MobileClientPresentation.CancelContains(new Vector2(cancel.x,cancel.y)),"Cancel bounding corner rejected "+button);
-Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(152f*ms)*(152f*ms),"Cancel within two nearby rings "+button);
+Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(200f*ms)*(200f*ms),"Cancel remains within thumb reach "+button);
 }
 MobileClientPresentation.ActiveSkillButton=-1;Check(!MobileClientPresentation.CancelContains(MobileClientPresentation.CancelRect.center),"Inactive cancel has no hit area");
 Vector2 joy=MobileClientPresentation.JoystickRect.center;joy.y=Screen.height-joy.y;Check(MobileClientPresentation.IsJoystickRegion(joy),"Joystick region");SysMsgBox.Visible=true;Check(!MobileClientPresentation.IsJoystickRegion(joy),"Modal blocks joystick");Check(MobileClientPresentation.IsPointerOverUi(new Vector2(400,250)),"Modal blocks world");SysMsgBox.Visible=false;
@@ -52,7 +54,7 @@ foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{375,812},new[]{32
  Screen.width=size[0];Screen.height=size[1];Screen.safeArea=new Rect(12,12,size[0]-24,size[1]-24);
  Rect safe=MobileClientPresentation.SafeAreaGui;float scale=MobileClientPresentation.Scale;
  Vector2 center=MobileClientPresentation.GroupWheelCenter;
- for(int group=0;group<8;group++){
+ for(int group=0;group<4;group++){
   MobileGroupWheel.Direction(group,out float dx,out float dy);
   Vector2 position=center+new Vector2(dx,dy)*MobileClientPresentation.GroupWheelRadius;
   Check(Within(new Rect(position.x-24*scale,position.y-24*scale,48*scale,48*scale),safe),"all wheel labels inside safe area");

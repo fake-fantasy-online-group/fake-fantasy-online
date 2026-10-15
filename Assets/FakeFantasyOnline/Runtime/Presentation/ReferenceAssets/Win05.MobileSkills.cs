@@ -88,7 +88,7 @@ public partial class Win05
         SkInfo info = SkillInfo(mobileSkills.Skill);
         if (info == null) { ResetMobileSkills(); return; }
         bool usable = MobileBookSkillUsable(info);
-        Rect box = MobilePanelLayout.Actions(mobileSkillAnchor, mobileSkills.ChoosingSlot ? 7 : 3, out float scale);
+        Rect box = MobilePanelLayout.Actions(mobileSkillAnchor, mobileSkills.ChoosingSlot ? 9 : 3, out float scale);
         mobileSkillActionsRect = box;
         int depth = GUI.depth; GUI.depth = 0;
         if (mobileSkills.ChoosingSlot)

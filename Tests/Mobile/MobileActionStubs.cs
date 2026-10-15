@@ -9,7 +9,7 @@ namespace UnityEngine
     public static class Time { public static float unscaledTime; }
     public static class Mathf
     {
-        public static int RoundToInt(float f)=>(int)Math.Round(f);
+        public const float Deg2Rad=(float)(Math.PI/180); public static float Cos(float v)=>(float)Math.Cos(v); public static float Sin(float v)=>(float)Math.Sin(v); public static int RoundToInt(float f)=>(int)Math.Round(f);
         public static float Max(float a,float b)=>Math.Max(a,b);
         public static float Clamp(float x,float min,float max)=>Math.Max(min,Math.Min(max,x));
     }
@@ -47,7 +47,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         bool followMode,sitting,moveToTarget;
         int followId,pathIdx,pendHops;
         List<Vector2> path=new List<Vector2>();
-        public float worldX=500,worldY=500,worldW=1000,worldH=1000;
+        public int FaceOct=2;public float worldX=500,worldY=500,worldW=1000,worldH=1000;
         public Vector2 Requested; public int Requests;
         float MoveStepPx()=>400;
         void SetPathTo(float x,float y) { Requested=new Vector2(x,y);Requests++;moveToTarget=true; }

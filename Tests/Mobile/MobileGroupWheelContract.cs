@@ -10,6 +10,21 @@ public static class MobileGroupWheelContract {
  static void Frame(params Touch[] touches){Time.frameCount++;Input.touches=touches;if(sampleBeforeHud)ClientInput.Refresh();GameHud.I.Tick();ClientInput.Refresh();}
  static void Reset(){ClientInput.CancelAll();GameHud.I=new GameHud();MobileClientPresentation.ModalOpen=MobileClientPresentation.DiagramOpen=MobileClientPresentation.GroupWheelOpen=false;MobileClientPresentation.SafeAreaGui=new Rect(0,0,1000,1000);Frame();}
  public static void Main(){
+  for(int group=0;group<4;group++)for(int button=0;button<6;button++)
+   Check(MobileGroupWheel.HotbarSlot(group,button)==group*6+button,"24 exact mobile mappings");
+  foreach(int invalid in new[]{-1,4,8,int.MaxValue})Check(MobileGroupWheel.HotbarSlot(invalid,0)==-1,"invalid group rejected");
+  foreach(int invalid in new[]{-1,6,30,int.MaxValue})Check(MobileGroupWheel.HotbarSlot(0,invalid)==-1,"invalid button rejected");
+  for(int group=0;group<4;group++)for(int button=0;button<6;button++){
+   Reset();MobileGroupWheel.Direction(group,out float dx,out float dy);
+   Frame(Stick(TouchPhase.Began),Wheel(TouchPhase.Began));Frame(Stick(TouchPhase.Stationary),Wheel(TouchPhase.Ended,dx*72,dy*72));Frame(Stick(TouchPhase.Stationary));
+   int slot=group*6+button;GameHud.hotSkill[slot]=100+slot;GameHud.hotKind[slot]=0;SkillTargeting.Mode=SkillTargeting.Aim.Instant;NetClient.I=new NetClient();
+   Vector2 center=MobileClientPresentation.SkillRect(button).center;
+   Frame(Stick(TouchPhase.Stationary),T(21,TouchPhase.Began,center.x,1000-center.y));
+   Check(GameHud.I.Owner==21&&GameHud.MobileShortcutPointerOwned,"each of six buttons owns touch");
+   Frame(Stick(TouchPhase.Stationary),T(21,TouchPhase.Ended,center.x,1000-center.y));
+   Check(NetClient.I.LastSkill==100+slot&&NetClient.I.Uses==1&&ClientInput.JoystickHeld,"all 24 buttons release exact binding while moving");
+  }
+  foreach(int slot in new[]{-1,24,29,30,int.MaxValue})Check(!GameHud.MobileHotSlotUsable(slot),"mobile rejects non-mobile slots without changing desktop data");
   // Same frame opening plus a third touch in otherwise-world space or an
   // underlying skill must not depend on HUD update or touch-array ordering.
   foreach(bool inputFirst in new[]{true,false})foreach(bool thirdFirst in new[]{true,false})foreach(float thirdY in new[]{175f,70f}){
@@ -31,9 +46,9 @@ public static class MobileGroupWheelContract {
    Frame(T(30,TouchPhase.Ended,650,70),Stick(TouchPhase.Stationary));Check(!ClientInput.Pointer.Up&&GameHud.I.Page==1,"closing frame third finger never leaks later release");
   }
   sampleBeforeHud=false;
-  int[] order={0,4,1,5,2,6,3,7};
-  for(int sector=0;sector<8;sector++){
-   double angle=sector*Math.PI/4;float dx=(float)Math.Sin(angle)*72,dy=-(float)Math.Cos(angle)*72;
+  int[] order={0,1,2,3};
+  for(int sector=0;sector<4;sector++){
+   double angle=sector*Math.PI/2;float dx=(float)Math.Sin(angle)*72,dy=-(float)Math.Cos(angle)*72;
    Check(MobileGroupWheel.Hit(dx,dy,24)==order[sector],"clockwise mapping "+sector);
    MobileGroupWheel.Direction(order[sector],out float x,out float y);Check(Math.Abs(x*72-dx)<.01&&Math.Abs(y*72-dy)<.01,"render direction matches hit");
    foreach(bool wheelFirst in new[]{false,true}){

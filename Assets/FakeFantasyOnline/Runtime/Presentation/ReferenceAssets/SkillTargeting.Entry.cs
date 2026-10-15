@@ -36,6 +36,14 @@ public sealed partial class SkillTargeting
             I.selLine.startColor = I.selLine.endColor = color;
         }
 
+        // Do not expose the previous gesture's world-space geometry for one frame.
+        // Mobile preview is safe to refresh synchronously: its release owns casting.
+        if (MobileClientPresentation.Enabled && MobileHotSlotActive)
+        {
+            Active = true;
+            I.Update();
+            if (!Active) return;
+        }
         I.Show(true);
         if (CursorManager.I != null) CursorManager.I.SetCastMode(true);
         Active = true;
@@ -132,6 +140,12 @@ public sealed partial class SkillTargeting
             End();
             return;
         }
+
+        // HUD Update and player movement have no guaranteed component order.
+        // Re-project the held thumb displacement against the live player/camera here,
+        // rather than reusing a screen coordinate sampled before movement.
+        if (MobileClientPresentation.Enabled && MobileHotSlotActive)
+            ClientInput.SetSkillAim(MobileAimPosition(mobileAimDelta), false, false);
 
         Vector3 pointerWorld = Camera.main.ScreenToWorldPoint(ClientInput.AimPosition);
         float gx = Mathf.Clamp(pointerWorld.x * ppu + worldW * 0.5f, 0f, worldW);

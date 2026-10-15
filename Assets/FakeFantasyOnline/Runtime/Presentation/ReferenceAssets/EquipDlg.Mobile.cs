@@ -86,7 +86,7 @@ internal partial class EquipDlg
         }
         bool picking = AvatarFuse.Active || ToolTarget.Active || AttrWashDlg.Picking || RepairDlg.Picking;
         int skill = MobileEquipmentSkill(item);
-        Rect box = MobilePanelLayout.Actions(mobileEquipmentTouch.Anchor, mobileEquipmentBinding ? 7 : 4, out float scale);
+        Rect box = MobilePanelLayout.Actions(mobileEquipmentTouch.Anchor, mobileEquipmentBinding ? 9 : 4, out float scale);
         mobileEquipmentActionsRect = box;
         int depth = GUI.depth; GUI.depth = 0;
         if (mobileEquipmentBinding)

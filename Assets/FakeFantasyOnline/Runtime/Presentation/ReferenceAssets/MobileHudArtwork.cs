@@ -11,6 +11,7 @@ internal static class MobileHudArtwork
     internal const string SkillWellPath = "res/uires/composedlg/sculphole.gsa";
     internal const string MenuTogglePath = "res/uires/sketchmap/togglebtn.gsa";
     private static readonly Dictionary<Texture2D, Texture2D> roundTextures = new Dictionary<Texture2D, Texture2D>();
+    private static readonly Dictionary<Texture2D, Texture2D> menuTextures = new Dictionary<Texture2D, Texture2D>();
     private static GUIStyle labelStyle;
     private static readonly GUIContent labelContent = new GUIContent();
 
@@ -130,6 +131,8 @@ internal static class MobileHudArtwork
     {
         foreach (Texture2D texture in roundTextures.Values) Object.Destroy(texture);
         roundTextures.Clear();
+        foreach (Texture2D texture in menuTextures.Values) Object.Destroy(texture);
+        menuTextures.Clear();
     }
 
     internal static bool MenuButton(Rect rect, float scale, bool expanded)
@@ -140,7 +143,8 @@ internal static class MobileHudArtwork
         // 4..7 down, each normal/hover/pressed/disabled. Use no text or default skin.
         Texture2D[] frames = ArtworkSkin.Frames(MenuTogglePath, 8);
         int frame = (expanded ? 0 : 4) + (!GUI.enabled ? 3 : pressed ? 2 : hovered ? 1 : 0);
-        Image(Inset(rect, 6f * scale), frames != null && frame < frames.Length ? frames[frame] : null);
+        Texture2D source = frames != null && frame < frames.Length ? frames[frame] : null;
+        Image(Inset(rect, 6f * scale), MenuToggleTexture(source, frame));
         return GUI.Button(rect, GUIContent.none, GUIStyle.none);
     }
 
@@ -179,13 +183,93 @@ internal static class MobileHudArtwork
     internal static void ControlFace(Rect rect, Texture2D[] bottomFrames, Texture2D[] legacyFrames,
         int index, float scale, bool hovered, bool pressed)
     {
-        // This is a top menu: the desktop top branch draws the entire ctrlbar frame.
-        // The bottom-hotbar UV crop removes the decorative foot and must not be reused here.
         Texture2D texture = ControlFrame(legacyFrames, index, hovered, pressed)
             ?? ControlFrame(bottomFrames, index, hovered, pressed);
-        if (texture == null) return;
-        Rect well = Inset(rect, 2f * scale);
-        Image(Fit(well, texture.width, texture.height), texture);
+        Image(Inset(rect, 2f * scale), MenuIconTexture(texture));
+    }
+
+    // The label and its outline are baked into ctrlbar pixels. Mobile gets an
+    // owned icon-only copy; no text, replacement box, or desktop asset mutation.
+    internal static Texture2D MenuIconTexture(Texture2D source)
+    {
+        if (source == null) return null;
+        if (menuTextures.TryGetValue(source, out Texture2D cached)) return cached;
+        Color32[] pixels = ReadMenuPixels(source);
+        if (pixels == null) return null;
+        int topHeight = Mathf.Max(1, Mathf.RoundToInt(source.height * (36f / 55f)));
+        int bottom = source.height - topHeight;
+        int left = source.width, right = -1, low = source.height, high = -1;
+        for (int y = bottom; y < source.height; y++)
+        for (int x = 0; x < source.width; x++)
+            if (pixels[y * source.width + x].a != 0)
+            { left = Mathf.Min(left, x); right = Mathf.Max(right, x); low = Mathf.Min(low, y); high = Mathf.Max(high, y); }
+        if (right < left) return CacheMenuTexture(source, 1, 1, new Color32[1]);
+        int width = right - left + 1, height = high - low + 1;
+        Color32[] cropped = new Color32[width * height];
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++) cropped[y * width + x] = pixels[(low + y) * source.width + left + x];
+        return CacheMenuTexture(source, width, height, cropped);
+    }
+
+    internal static Texture2D MenuToggleTexture(Texture2D source, int frame)
+    {
+        if (source == null || source.width != 20 || source.height != 19) return source;
+        if (menuTextures.TryGetValue(source, out Texture2D cached)) return cached;
+        Color32[] original = ReadMenuPixels(source);
+        if (original == null) return null;
+        // Actual package glyph bounds (top-origin): idle x8/y7, other states
+        // x7/y6, all 7x8. The normal artwork is baked one pixel down/right.
+        // A 2x copy permits exact half-source-pixel centering without rounding
+        // the frame or changing the native hit rect at fractional HUD scales.
+        int gx = frame % 4 == 0 ? 8 : 7, gy = frame % 4 == 0 ? 7 : 6;
+        Color32[] result = new Color32[40 * 38];
+        for (int y = 0; y < 38; y++)
+        for (int x = 0; x < 40; x++)
+        {
+            int sx = x / 2, sy = y / 2, top = 18 - sy;
+            Color32 pixel = original[sy * 20 + sx];
+            if (sx >= gx && sx < gx + 7 && top >= gy && top < gy + 8 && IsToggleGlyph(pixel))
+                pixel = original[sy * 20 + 5]; // Native clean background on this row.
+            result[y * 40 + x] = pixel;
+        }
+        for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 7; x++)
+        {
+            Color32 pixel = original[(18 - gy - y) * 20 + gx + x];
+            if (!IsToggleGlyph(pixel)) continue;
+            for (int dy = 0; dy < 2; dy++)
+            for (int dx = 0; dx < 2; dx++) result[(37 - (11 + y * 2 + dy)) * 40 + 13 + x * 2 + dx] = pixel;
+        }
+        return CacheMenuTexture(source, 40, 38, result);
+    }
+
+    private static Color32[] ReadMenuPixels(Texture2D source)
+    {
+        if (menuTextures.Count >= 64)
+        {
+            foreach (Texture2D texture in menuTextures.Values) Object.Destroy(texture);
+            menuTextures.Clear();
+        }
+        try { return ReadPixels(source); }
+        catch (System.Exception error)
+        {
+            menuTextures.Add(source, null);
+            Debug.LogWarning("Mobile HUD could not prepare menu artwork '" + source.name + "'. " + error.Message);
+            return null;
+        }
+    }
+
+    private static bool IsToggleGlyph(Color32 pixel) => pixel.g >= 100 && pixel.r >= pixel.g && pixel.r > pixel.b * 1.2f;
+
+    private static Texture2D CacheMenuTexture(Texture2D source, int width, int height, Color32[] pixels)
+    {
+        Texture2D result = new Texture2D(width, height, TextureFormat.RGBA32, false) {
+            name = source.name + " (mobile menu)", filterMode = source.filterMode,
+            wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+        };
+        result.SetPixels32(pixels); result.Apply(false, false);
+        menuTextures.Add(source, result);
+        return result;
     }
 
     internal static void Label(Rect rect, string text, float scale)

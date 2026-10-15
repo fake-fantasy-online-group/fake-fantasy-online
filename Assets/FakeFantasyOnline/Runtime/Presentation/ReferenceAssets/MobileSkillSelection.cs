@@ -31,7 +31,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal bool Choose(bool usable) { ChoosingSlot=Skill>0 && usable; return ChoosingSlot; }
         internal bool Commit(int slot, bool usable, System.Action<int,int> bind)
         {
-            if (!ChoosingSlot || !usable || slot<0 || slot>=30 || bind==null) return false;
+            if (!ChoosingSlot || !usable || slot<0 || slot>=24 || bind==null) return false;
             ChoosingSlot=false;
             bind(slot,Skill);
             return true;

@@ -5,13 +5,13 @@ namespace UnityEngine {
  public struct Vector3 { public static Vector3 operator +(Vector3 a,Vector3 b)=>new Vector3(a.x+b.x,a.y+b.y,a.z+b.z);public float x,y,z; public Vector3(float x,float y,float z=0){this.x=x;this.y=y;this.z=z;} }
  public class GameObject {public bool activeInHierarchy=true;}
  public class Collider2D {public bool enabled=true;}
- public static class Mathf {public static int RoundToInt(float v)=>(int)Math.Round(v); public static float Abs(float v)=>Math.Abs(v); public static float Sqrt(float v)=>(float)Math.Sqrt(v); public static float Max(float a,float b)=>Math.Max(a,b);}
+ public static class Mathf {public static int Clamp(int v,int min,int max)=>Math.Max(min,Math.Min(max,v));public static float Atan2(float y,float x)=>(float)Math.Atan2(y,x);public const float Deg2Rad=(float)(Math.PI/180); public static float Cos(float v)=>(float)Math.Cos(v); public static float Sin(float v)=>(float)Math.Sin(v); public static int RoundToInt(float v)=>(int)Math.Round(v); public static float Abs(float v)=>Math.Abs(v); public static float Sqrt(float v)=>(float)Math.Sqrt(v); public static float Max(float a,float b)=>Math.Max(a,b);}
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  using UnityEngine;
  public class MonsterEntity { public GameObject gameObject=new GameObject(); public int id,hp=100; public bool NoAttack; public float worldX,worldY; }
  public class RemotePlayer {public GameObject gameObject=new GameObject();public Collider2D PickBoxForIndependentRuntime=new Collider2D();public int id;public bool IsDead,HostileToLocal,SupportHostileToLocal; public float worldX,worldY;}
- public class PlayerController {public static PlayerController I=new PlayerController();public float worldX,worldY,worldW=1000,worldH=1000,ppu=100;public int Stops,MoveRequests;public bool ManualMoving=true;public void StopMove(){Stops++;ManualMoving=false;} }
+ public class PlayerController {public int FaceOct=2;public int CurDir;public bool Flip;public static PlayerController I=new PlayerController();public float worldX,worldY,worldW=1000,worldH=1000,ppu=100;public int Stops,MoveRequests;public bool ManualMoving=true;public void StopMove(){Stops++;ManualMoving=false;} }
  public static class TargetSelect { public static object CurrentSourceForIndependentRuntime; }
  public static class SocialClient {public static int SelectedMemberId;public static HashSet<int> Party=new HashSet<int>(); public static bool InParty(int id)=>Party.Contains(id);}
  public static class CharData {public static int hp=100;}
@@ -28,7 +28,7 @@ namespace UnityEngine {
  public enum TouchPhase {Began,Moved,Stationary,Ended,Canceled}
  public enum KeyCode {Escape}
  public struct Touch {public int fingerId;public Vector2 position;public TouchPhase phase;}
- public static class Time {public static int frameCount;}
+ public static class Time {public static int frameCount;public static float deltaTime;}
  public static class Screen {public static int width=1000,height=1000;}
  public static class Application {public static bool isMobilePlatform=true;}
  public static class Input {public static Touch[] touches=new Touch[0];public static int touchCount=>touches.Length;public static Touch GetTouch(int i)=>touches[i];public static Vector2 mousePosition;public static bool GetMouseButton(int n)=>false;public static bool GetMouseButtonDown(int n)=>false;public static bool GetMouseButtonUp(int n)=>false;public static bool GetKeyDown(KeyCode c)=>false;}
@@ -44,7 +44,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
   public static bool GroupWheelContains(Vector2 p)=>(GroupWheelOpen||GameHud.MobileGroupWheelOpening||GameHud.MobileGroupWheelClosing)&&(p-GroupWheelCenter).sqrMagnitude<=96*96;public static int ActiveSkillButton=-1;public static float Scale=1;public static Rect SafeAreaGui=new Rect(0,0,1000,1000);
   public static Rect JoystickRect=>new Rect(0,800,200,200);public static Rect SkillRect(int k)=>new Rect(700+k*60,800,50,50);public static Rect AttackRect=>new Rect(900,900,60,60);public static Rect PageRect=>new Rect(700,900,60,60);public static Rect MinimapRect=>new Rect(800,0,200,200);public static Rect MapActionRect(int k)=>new Rect(800+k*40,0,40,40);
   public static Vector2 GuiPoint(Vector2 p)=>new Vector2(p.x,Screen.height-p.y);public static bool IsPanelPointer(Vector2 p)=>false;public static bool CancelContains(Vector2 p)=>new Rect(400,400,100,100).Contains(p);
-  public static bool IsJoystickRegion(Vector2 p)=>JoystickRect.Contains(GuiPoint(p));public static bool IsPointerOverUi(Vector2 p){p=GuiPoint(p);if(GroupWheelContains(p)||JoystickRect.Contains(p)||AttackRect.Contains(p)||PageRect.Contains(p)||MinimapRect.Contains(p))return true;for(int k=0;k<4;k++)if(SkillRect(k).Contains(p))return true;return false;}
+  public static bool IsJoystickRegion(Vector2 p)=>JoystickRect.Contains(GuiPoint(p));public static bool IsPointerOverUi(Vector2 p){p=GuiPoint(p);if(GroupWheelContains(p)||JoystickRect.Contains(p)||AttackRect.Contains(p)||PageRect.Contains(p)||MinimapRect.Contains(p))return true;for(int k=0;k<6;k++)if(SkillRect(k).Contains(p))return true;return false;}
  }
  public partial class GameHud {
   public static GameHud I;public static int[] hotSkill=new int[30],hotKind=new int[30];public bool showHotbar=true,showMinimap=true,diagramOpen;public static bool HotSlotUsable(int s)=>true;public static float SkillCdFrac(int s)=>0;public static void UseHotSlot(int s){}

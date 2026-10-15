@@ -50,6 +50,18 @@ public static class MobileMoveCastContract {
   Reset();SkillTargeting.Mode=SkillTargeting.Aim.Circle;Frame(Stick(TouchPhase.Began),Skill(TouchPhase.Began));Frame(Stick(TouchPhase.Stationary),Skill(TouchPhase.Ended,990));Check(NetClient.I.GroundUses==1&&NetClient.I.X<=600,"drag ground clamp while moving");Moving("ground cast preserves stick");
   Reset();SkillTargeting.Mode=SkillTargeting.Aim.Instant;GameSettings.SmartCast=false;Frame(Stick(TouchPhase.Began),Skill(TouchPhase.Began));Frame(Stick(TouchPhase.Stationary),Skill(TouchPhase.Ended));Check(NetClient.I.Uses==1&&NetClient.I.LastId==0,"self tap while moving in manual mode");Moving("self cast preserves stick");
   Reset();CombatWorld.I.monsters[1].worldX=900;Frame(Stick(TouchPhase.Began),Skill(TouchPhase.Began));Frame(Stick(TouchPhase.Stationary),Skill(TouchPhase.Ended));Check(NetClient.I.Uses==0&&CombatWorld.I.Approaches==0,"out of range never chases");Moving("failed cast preserves stick");
+  // Exercise immediate down/up with no intermediate move frame for both wire modes.
+  foreach(bool authoritative in new[]{false,true})foreach(var aim in new[]{SkillTargeting.Aim.Circle,SkillTargeting.Aim.Direction}){
+   Reset();AuthoritativeProfessionSkill.Enabled=authoritative;AuthoritativeProfessionSkill.Value.InputMode=aim==SkillTargeting.Aim.Circle?"point":"direction";SkillTargeting.Mode=aim;
+   Frame(Skill(TouchPhase.Began));Frame(Skill(TouchPhase.Ended));
+   Check(NetClient.I.GroundUses==1&&NetClient.I.X==550&&NetClient.I.Y==500,"quick tap sends legal selected target for "+aim+" authority="+authoritative);
+   Frame(Skill(TouchPhase.Began));CombatWorld.I.monsters[1].hp=0;Frame(Skill(TouchPhase.Ended));
+   Check(NetClient.I.GroundUses==1,"target death before quick release cannot cast");
+   CombatWorld.I.monsters[1].hp=100;PlayerController.I.worldX=800;
+   Frame(Skill(TouchPhase.Began));Frame(Skill(TouchPhase.Ended));
+   Check(NetClient.I.GroundUses==1&&CombatWorld.I.Approaches==0,"quick release uses current moved origin and never chases");
+   AuthoritativeProfessionSkill.Enabled=false;
+  }
   Console.WriteLine("PASS production mobile HUD/input/cast integration: "+checks+" checks");
  }
 }

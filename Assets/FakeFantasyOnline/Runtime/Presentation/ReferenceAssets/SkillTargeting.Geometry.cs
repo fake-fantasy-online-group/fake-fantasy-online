@@ -45,7 +45,12 @@ public sealed partial class SkillTargeting
             (wh * 0.5f - pc.worldY) / ppu, 0f);
         Vector2 delta = new Vector2((gx - ww * 0.5f) / ppu - feet.x,
             (wh * 0.5f - gy) / ppu - feet.y);
-        if (delta.sqrMagnitude < 0.000001f) return;
+        if (delta.sqrMagnitude < 0.000001f)
+        {
+            if (!MobileClientPresentation.Enabled || !MobileHotSlotActive) return;
+            float facing = pc.FaceOct * 45f * Mathf.Deg2Rad;
+            delta = new Vector2(Mathf.Cos(facing), -Mathf.Sin(facing));
+        }
         float angle = Mathf.Atan2(delta.y, delta.x);
         float c = Mathf.Cos(angle);
         float s = Mathf.Sin(angle);
