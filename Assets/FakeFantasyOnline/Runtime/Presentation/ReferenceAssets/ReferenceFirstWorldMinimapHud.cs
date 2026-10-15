@@ -921,7 +921,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         {
             LastToggleRect = new Rect(barX + 131f * scale, 0f, 20f * scale, 19f * scale);
         }
-        if (!touchControls && resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
+        if (resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
         if (!touchControls && GUI.Button(LastToggleRect, GUIContent.none, TransparentButton))
         {
             MiniOpen = !MiniOpen;
@@ -1017,7 +1017,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float worldButtonScale = hudOwner.s;
         LastWorldButtonRect = new Rect(baseX + 140f * worldButtonScale, baseY + 10f * worldButtonScale,
             26f * worldButtonScale, 26f * worldButtonScale);
-        if (!touchControls && resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
+        if (resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
         if (!touchControls && GUI.Button(LastWorldButtonRect, GUIContent.none, TransparentButton))
         {
             DiagramOpen = false;
@@ -1028,7 +1028,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float plusButtonScale = hudOwner.s;
         LastPlusButtonRect = new Rect(baseX + 150f * plusButtonScale, baseY + 37f * plusButtonScale,
             26f * plusButtonScale, 26f * plusButtonScale);
-        if (!touchControls && resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
+        if (resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
         if (!touchControls && GUI.Button(LastPlusButtonRect, GUIContent.none, TransparentButton))
         {
             StepZoom(true);
@@ -1037,7 +1037,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float minusButtonScale = hudOwner.s;
         LastMinusButtonRect = new Rect(baseX + 155f * minusButtonScale, baseY + 63f * minusButtonScale,
             26f * minusButtonScale, 26f * minusButtonScale);
-        if (!touchControls && resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
+        if (resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
         if (!touchControls && GUI.Button(LastMinusButtonRect, GUIContent.none, TransparentButton))
         {
             StepZoom(false);

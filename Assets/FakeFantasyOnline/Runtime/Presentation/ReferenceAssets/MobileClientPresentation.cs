@@ -27,8 +27,22 @@ public static class MobileClientPresentation
     public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-68f*Scale,SafeAreaGui.yMax-68f*Scale),96f*Scale);
     private static readonly Vector2[] SkillOffsets = { new Vector2(-110,0), new Vector2(-104,-82), new Vector2(-36,-142), new Vector2(32,-102) };
     public static Rect SkillRect(int index) => Centered(AttackRect.center+SkillOffsets[index]*Scale,64f*Scale);
-    public static Rect MinimapRect => new Rect(SafeAreaGui.xMax-184f*Scale,SafeAreaGui.y,184f*Scale,221f*Scale);
-    public static Rect MapActionRect(int index) => new Rect(MinimapRect.x+index*46f*Scale,MinimapRect.y+177f*Scale,44f*Scale,44f*Scale);
+    // The avatar has no extra horizontal gutter beyond the device's real safe area.
+    public static Rect AvatarRect => new Rect(SafeAreaGui.x,SafeAreaGui.y,171f*Scale,155f*Scale);
+    public static int MinimapViewportWidth => (int)(SafeAreaGui.width-5f*Scale);
+    public static Rect MinimapRect => new Rect(SafeAreaGui.x+MinimapViewportWidth-179f*Scale,
+        SafeAreaGui.y,184f*Scale,173f*Scale);
+    public static Rect MapActionRect(int index)
+    {
+        // Native artwork positions: plus (w-29,57), minus (w-24,83),
+        // world (w-39,30), toggle (w-20,0). Widen inward for thumbs,
+        // keeping vertical lanes disjoint and every face inside its own hit region.
+        float right=SafeAreaGui.x+MinimapViewportWidth;
+        if(index==0) return new Rect(right-42f*Scale,SafeAreaGui.y+57f*Scale,44f*Scale,26f*Scale);
+        if(index==1) return new Rect(right-42f*Scale,SafeAreaGui.y+83f*Scale,44f*Scale,26f*Scale);
+        if(index==2) return new Rect(right-44f*Scale,SafeAreaGui.y+30f*Scale,44f*Scale,26f*Scale);
+        return new Rect(right-40f*Scale,SafeAreaGui.y,40f*Scale,26f*Scale);
+    }
     public static bool DiagramOpen => GameHud.I!=null && GameHud.I.diagramOpen;
     // One compact switch and the original nine entries share the top safe-area band.
     // Neither the avatar's 171px band nor the compact map is covered by an entry.
@@ -62,7 +76,7 @@ public static class MobileClientPresentation
         return new Rect(menu.x+(index%columns)*56f*Scale,menu.y+(index/columns)*56f*Scale,
             48f*Scale,48f*Scale);
     }
-    public static Rect PageRect => new Rect(SafeAreaGui.xMax-208f*Scale,SafeAreaGui.yMax-250f*Scale,64f*Scale,40f*Scale);
+    public static Rect PageRect => new Rect(SafeAreaGui.xMax-200f*Scale,SafeAreaGui.yMax-254f*Scale,48f*Scale,48f*Scale);
     public static Rect CancelRect => new Rect(SafeAreaGui.center.x-60f*Scale,SafeAreaGui.y+100f*Scale,120f*Scale,48f*Scale);
     public static Rect ChatRect
     {
@@ -72,9 +86,9 @@ public static class MobileClientPresentation
             if (TouchScreenKeyboard.visible && TouchScreenKeyboard.area.height>0f)
                 safe.height=Mathf.Max(1f,safe.height-TouchScreenKeyboard.area.height);
             float width = Mathf.Min(360f*Scale,safe.width*.38f);
-            float height = (ChatExpanded ? 264f : 112f)*Scale;
+            float height = (ChatExpanded ? 196f : 112f)*Scale;
             height=Mathf.Min(height,safe.height);
-            float top=ChatExpanded ? safe.center.y-height*.5f : safe.yMax-height-12f*Scale;
+            float top=safe.yMax-height-12f*Scale;
             return new Rect(safe.center.x-width*.5f,Mathf.Max(safe.y,top),width,height);
         }
     }
@@ -167,8 +181,7 @@ public static class MobileClientPresentation
         if (!Enabled) return false;
         if (ModalOpen || DiagramOpen) return true;
         Vector2 point = GuiPoint(screenPoint);
-        Rect safe=SafeAreaGui;
-        if (GameHud.I!=null && GameHud.I.showAvatar && new Rect(safe.x,safe.y,171f*Scale,155f*Scale).Contains(point)) return true;
+        if (GameHud.I!=null && GameHud.I.showAvatar && AvatarRect.Contains(point)) return true;
         if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return true;
         // Includes reserved thumb areas even before the first OnGUI event.
         if (JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || CancelRect.Contains(point)) return true;

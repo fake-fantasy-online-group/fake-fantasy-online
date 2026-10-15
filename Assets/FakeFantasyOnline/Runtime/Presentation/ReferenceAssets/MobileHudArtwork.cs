@@ -85,21 +85,13 @@ internal static class MobileHudArtwork
     internal static void ControlFace(Rect rect, Texture2D[] bottomFrames, Texture2D[] legacyFrames,
         int index, float scale, bool hovered, bool pressed)
     {
-        // The complete 50x50 bottom-art frames are already transparent icon faces.
-        // Legacy ctrlbar frames have a different shape and alone need the original UV crop.
-        Texture2D texture = ControlFrame(bottomFrames, index, hovered, pressed);
-        Rect well = Inset(rect, 2f * scale);
-        if (texture != null) { Image(well, texture); return; }
-        texture = ControlFrame(legacyFrames, index, hovered, pressed);
+        // This is a top menu: the desktop top branch draws the entire ctrlbar frame.
+        // The bottom-hotbar UV crop removes the decorative foot and must not be reused here.
+        Texture2D texture = ControlFrame(legacyFrames, index, hovered, pressed)
+            ?? ControlFrame(bottomFrames, index, hovered, pressed);
         if (texture == null) return;
-        Color previous = GUI.color;
-        try
-        {
-            if (!GUI.enabled) GUI.color = previous * new Color(.55f, .55f, .55f, 1f);
-            Rect art = Fit(well, texture.width, texture.height * .61818182f);
-            GUI.DrawTextureWithTexCoords(art, texture, new Rect(0f, .27272728f, 1f, .61818182f));
-        }
-        finally { GUI.color = previous; }
+        Rect well = Inset(rect, 2f * scale);
+        Image(Fit(well, texture.width, texture.height), texture);
     }
 
     internal static void Label(Rect rect, string text, float scale)

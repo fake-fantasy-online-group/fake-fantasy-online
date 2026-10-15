@@ -15,10 +15,22 @@ internal partial class ChatUI
         GameHud hud = GameHud.I;
         if (hud == null || !hud.ShowChatForIndependentRuntime)
         {
+            MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
+            mobileExpandPressed = false;
             return;
         }
 
-        if (MobileClientPresentation.Enabled) { if (!MobileClientPresentation.DiagramOpen) DrawMobileChat(); return; }
+        if (MobileClientPresentation.Enabled)
+        {
+            if (!MobileClientPresentation.DiagramOpen) DrawMobileChat();
+            else
+            {
+                MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
+                mobileExpandPressed = false;
+            }
+            return;
+        }
+        MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
 
         // Ordered >0 includes +Infinity and rejects NaN, exactly as the native comparison.
         float ownerScale = hud.uiScale;
@@ -249,7 +261,7 @@ internal partial class ChatUI
             winDown);
     }
 
-    private void DrawLines(List<ChatUI.Line> lines, Rect panel, bool withChannel)
+    private void DrawLines(List<ChatUI.Line> lines, Rect panel, bool withChannel, bool interactive = true)
     {
         if (!BitmapFont.Ready) return;
         // Height/width locals persist; each wrap, draw, hover and menu reads the live scale.
@@ -275,6 +287,7 @@ internal partial class ChatUI
                 BitmapFont.DrawOutline(panel.x + 4f * s, y, "[" + row.Line.ch + "]",
                     new Color32(255, 220, 120, 255), s);
             ChatUI.DrawShareRow(panel.x + padding, y, row.Text, row.Line.col, row.Line.shares, s, true);
+            if (!interactive) continue;
             ChatUI.ShareHover(panel.x + padding, y, row.Text, row.Line.shares, s);
             ChatUI.LineMenuForIndependentRuntime(new Rect(panel.x, y + s * -3f, panel.width, lineHeight),
                 row.Line.who, row.Line.text);

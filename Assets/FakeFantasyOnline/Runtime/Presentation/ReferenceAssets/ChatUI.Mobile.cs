@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,6 +7,39 @@ internal partial class ChatUI
 {
     private List<Line> mobileLines;
     private GUIStyle mobileChatLabelStyle;
+    private bool mobileExpandPressed;
+    private readonly object mobileChannelPanelOwner = new object();
+
+    private Rect MobileChannelPanelRect()
+    {
+        Rect chat = MobileClientPresentation.ChatRect;
+        float scale = MobileClientPresentation.Scale;
+        float height = (Channels.Length * 44f + 8f) * scale;
+        return new Rect(chat.x, chat.yMax - 44f * scale - height,
+            104f * scale, height);
+    }
+
+    private void DrawMobileChannelPanel()
+    {
+        Rect panel = MobileChannelPanelRect();
+        MobileClientPresentation.RegisterPanel(mobileChannelPanelOwner, panel);
+        ArtworkSkin.Panel(panel, s);
+        for (int index = 0; index < Channels.Length; index++)
+        {
+            Rect row = new Rect(panel.x + 4f * s, panel.y + (4f + index * 44f) * s,
+                panel.width - 8f * s, 44f * s);
+            ArtworkSkin.Row(row, s, channel == Channels[index]);
+            DrawMobileChatLabel(row, Channels[index]);
+            if (GUI.Button(row, GUIContent.none, GUIStyle.none))
+            {
+                chIdx = index;
+                channel = Channels[index];
+                whisperTarget = string.Empty;
+                chanOpen = false;
+                MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
+            }
+        }
+    }
 
     private void DrawMobileChat()
     {
@@ -15,35 +47,59 @@ internal partial class ChatUI
         Rect panel = MobileClientPresentation.ChatRect;
         float control = 44f * s;
         // The collapsed 112-unit footprint reserves 68 units for three existing
-        // 18-unit message rows. Channel/send/expand share one touch band below it.
+        // 18-unit message rows. Channel/send share one touch band below it.
         // Only explicit expansion draws the original message-window frame.
         Rect messages = new Rect(panel.x, panel.y, panel.width, Mathf.Max(0f, panel.height - control));
-        if (MobileClientPresentation.ChatExpanded) DrawPanel(messages);
+        Event current = Event.current;
+        bool expanded = MobileClientPresentation.ChatExpanded;
+        if (expanded) DrawPanel(messages);
         if (mobileLines == null) mobileLines = new List<Line>();
         CollectMobileLines(mobileLines);
-        DrawLines(mobileLines, messages, true);
+        DrawLines(mobileLines, messages, true, expanded && !chanOpen && !GameHud.MobileShortcutPointerOwned);
+        // Compact rows are display-only. A complete primary tap opens the existing
+        // panel; right clicks / synthesized long presses cannot open message menus.
+        if (GameHud.MobileShortcutPointerOwned) mobileExpandPressed = false;
+        if (current != null && current.button == 0 && !GameHud.MobileShortcutPointerOwned)
+        {
+            if (current.type == EventType.MouseDown)
+            {
+                mobileExpandPressed = !expanded && !chanOpen && messages.Contains(current.mousePosition);
+                if (expanded && !panel.Contains(current.mousePosition) && !chanOpen)
+                    MobileClientPresentation.ChatExpanded = false;
+            }
+            if (current.type == EventType.MouseUp)
+            {
+                if (mobileExpandPressed && messages.Contains(current.mousePosition))
+                {
+                    MobileClientPresentation.ChatExpanded = true;
+                    MobileClientPresentation.MenuExpanded = false;
+                    current.Use();
+                }
+                mobileExpandPressed = false;
+            }
+        }
 
-        Rect bar = new Rect(panel.x, panel.yMax - control, panel.width - control, control);
+        Rect bar = new Rect(panel.x, panel.yMax - control, panel.width, control);
         Rect channelRect = new Rect(bar.x, bar.y, 56f * s, control);
         Rect sendRect = new Rect(bar.xMax - control, bar.y, control, control);
         Rect inputRect = new Rect(channelRect.xMax + 4f * s, bar.y,
             Mathf.Max(0f, sendRect.x - channelRect.xMax - 8f * s), control);
-        Rect toggle = new Rect(bar.xMax, bar.y, control, control);
         Rect barArtwork = new Rect(bar.x, bar.y + 6f * s, bar.width, 32f * s);
         if (inputBar != null) GUI.DrawTexture(barArtwork, inputBar);
         else ArtworkSkin.Input(barArtwork, s);
 
-        Event current = Event.current;
+        if (chanOpen && current != null && current.type == EventType.MouseDown &&
+            !MobileChannelPanelRect().Contains(current.mousePosition) && !channelRect.Contains(current.mousePosition))
+            chanOpen = false;
+        if (!chanOpen) MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
         DrawMobileChatLabel(new Rect(channelRect.x + 2f * s, channelRect.y,
             36f * s, control), channel);
         DrawMobileChatIcon(new Rect(channelRect.xMax - 18f * s, bar.y + 14f * s,
             16f * s, 16f * s), channelRect, dropBtn);
         if (GUI.Button(channelRect, GUIContent.none, GUIStyle.none))
         {
-            chIdx = (Array.IndexOf(Channels, channel) + 1) % Channels.Length;
-            channel = Channels[chIdx];
-            // Match selecting a normal channel in the original channel picker.
-            whisperTarget = string.Empty;
+            chanOpen = !chanOpen;
+            mobileExpandPressed = false;
         }
 
         EnsureEditStyle();
@@ -80,15 +136,8 @@ internal partial class ChatUI
             current.Use();
         }
 
-        DrawMobileChatIcon(new Rect(toggle.x + 10f * s, toggle.y + 1f * s,
-            24f * s, 24f * s), toggle, sizeBtn);
-        DrawMobileChatLabel(new Rect(toggle.x, toggle.y + 26f * s, toggle.width, 18f * s),
-            MobileClientPresentation.ChatExpanded ? "收起" : "展开");
-        if (GUI.Button(toggle, GUIContent.none, GUIStyle.none))
-        {
-            MobileClientPresentation.ChatExpanded = !MobileClientPresentation.ChatExpanded;
-            if (MobileClientPresentation.ChatExpanded) MobileClientPresentation.MenuExpanded = false;
-        }
+        if (chanOpen) DrawMobileChannelPanel();
+        else MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
     }
 
     private static bool HasMobileChatIcon(Texture2D[] frames)

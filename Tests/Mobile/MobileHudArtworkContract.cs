@@ -59,8 +59,10 @@ static void Main(){
  var legacy=new UnityEngine.Texture2D[27];for(int i=0;i<27;i++)legacy[i]=new UnityEngine.Texture2D{name="legacy-"+i,width=42,height=55};
  MobileHudArtwork.ControlFace(r,null,legacy,8,1,false,true);
  Check(UnityEngine.GUI.last==legacy[26],"Legacy fallback uses corresponding entry and state");
- Check(Near(UnityEngine.GUI.lastUv.y,.27272728f)&&Near(UnityEngine.GUI.lastUv.height,.61818182f),"Only legacy artwork uses the original crop");
- Check(Near(UnityEngine.GUI.lastRect.width/UnityEngine.GUI.lastRect.height,42f/34f),"Legacy crop retains aspect ratio");
+ Check(Near(UnityEngine.GUI.lastRect.height,44),"Full legacy artwork fits the available height");
+ Check(Near(UnityEngine.GUI.lastRect.width/UnityEngine.GUI.lastRect.height,42f/55f),"Full legacy frame retains aspect ratio including decorative bottom");
+ MobileHudArtwork.ControlFace(r,frames,legacy,2,1,false,false);
+ Check(UnityEngine.GUI.last==legacy[6],"Top menu prefers the original complete top artwork");
  var prior=new UnityEngine.Color(.4f,.5f,.6f,.7f);UnityEngine.GUI.color=prior;
  MobileHudArtwork.Image(r,frames[0],true);
  Check(UnityEngine.GUI.lastColor.r<prior.r&&UnityEngine.GUI.lastColor.a==prior.a,"Pressed tint retains alpha");
