@@ -44,7 +44,10 @@ public static class MobileHudPreview
     {
         EditorApplication.playModeStateChanged += OnPlayMode;
         if (SessionState.GetBool(Key + "Active", false))
-            EditorApplication.update += Tick;
+        {
+            if (SessionState.GetBool(Key + "Stopping", false)) EditorApplication.update += CompleteExit;
+            else EditorApplication.update += Tick;
+        }
     }
 
     [MenuItem("Tools/Fake Fantasy Online/Capture Offline Mobile HUD")]
@@ -76,6 +79,7 @@ public static class MobileHudPreview
         EditorSettings.enterPlayModeOptionsEnabled = false;
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         SessionState.SetBool(Key + "Active", true);
+        SessionState.SetBool(Key + "Stopping", false);
         SessionState.SetInt(Key + "ExitCode", 1);
         try
         {
@@ -94,22 +98,37 @@ public static class MobileHudPreview
         if (!SessionState.GetBool(Key + "Active", false)) return;
         if (state == PlayModeStateChange.EnteredPlayMode)
         {
-            stageStarted = EditorApplication.timeSinceStartup;
-            EditorApplication.update -= Tick;
-            EditorApplication.update += Tick;
-            UnityEngine.Application.logMessageReceived += OnLog;
-            SetGameViewSize(Sizes[0], saveOriginal: false);
+            try
+            {
+                stageStarted = EditorApplication.timeSinceStartup;
+                EditorApplication.update -= Tick;
+                EditorApplication.update += Tick;
+                UnityEngine.Application.logMessageReceived += OnLog;
+                SetGameViewSize(Sizes[0], saveOriginal: false);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("FFO_MOBILE_PREVIEW_FAILED: " + exception);
+                Finish(1);
+            }
         }
         if (state == PlayModeStateChange.ExitingPlayMode)
         {
             EditorApplication.update -= Tick;
             UnityEngine.Application.logMessageReceived -= OnLog;
-            host?.AllowDisposal();
-            session?.Dispose();
-            session = null;
-            MobileClientPresentation.Simulate = false;
-            MobileClientPresentation.MenuExpanded = false;
-            MobileClientPresentation.ChatExpanded = false;
+            try
+            {
+                host?.AllowDisposal();
+                session?.Dispose();
+            }
+            catch (Exception exception) { NoteCleanupFailure(exception); }
+            finally
+            {
+                session = null;
+                MobileClientPresentation.Simulate = false;
+                MobileClientPresentation.MenuExpanded = false;
+                MobileClientPresentation.ChatExpanded = false;
+            }
         }
         if (state == PlayModeStateChange.EnteredEditMode) RestoreEditor();
     }
@@ -285,31 +304,122 @@ public static class MobileHudPreview
         if (finishing) return;
         finishing = true;
         SessionState.SetInt(Key + "ExitCode", exitCode);
+        SessionState.SetBool(Key + "Stopping", true);
+        SessionState.SetFloat(Key + "ExitDeadline", (float)EditorApplication.timeSinceStartup + 30f);
+        EditorApplication.update -= Tick;
+        EditorApplication.update -= CompleteExit;
+        EditorApplication.update += CompleteExit;
+        // Console Error Pause must not leave an automated failed capture suspended.
+        EditorApplication.isPaused = false;
         EditorApplication.ExitPlaymode();
+    }
+
+    // Reinstalled after domain reload by the static constructor. Restoration must not
+    // depend solely on receiving EnteredEditMode in the same managed domain as Finish.
+    private static void CompleteExit()
+    {
+        if (!SessionState.GetBool(Key + "Active", false))
+        { EditorApplication.update -= CompleteExit; return; }
+        if (!EditorApplication.isPlayingOrWillChangePlaymode)
+        { RestoreEditor(); return; }
+        if (EditorApplication.timeSinceStartup <= SessionState.GetFloat(Key + "ExitDeadline", float.MaxValue)) return;
+        EditorApplication.update -= CompleteExit;
+        NoteCleanupFailure(new TimeoutException("Unity did not leave Play Mode within 30 seconds of preview completion."));
+        // Only the explicit CLI exit option authorizes closing this Editor. No saved
+        // scene was modified; a normal menu invocation stays open for inspection.
+        if (SessionState.GetBool(Key + "Exit", false))
+        {
+            EditorSettings.enterPlayModeOptions = (EnterPlayModeOptions)SessionState.GetInt(Key + "OldOptions", 0);
+            EditorSettings.enterPlayModeOptionsEnabled = SessionState.GetBool(Key + "OldOptionsEnabled", false);
+            SessionState.SetBool(Key + "Active", false);
+            SessionState.SetBool(Key + "Stopping", false);
+            Debug.Log("FFO_MOBILE_PREVIEW_EXIT=1 (Play Mode exit timeout)");
+            EditorApplication.Exit(1);
+        }
     }
 
     private static void RestoreEditor()
     {
+        if (!SessionState.GetBool(Key + "Active", false)) return;
         bool exit = SessionState.GetBool(Key + "Exit", false);
-        int code = SessionState.GetInt(Key + "ExitCode", 1);
         SessionState.SetBool(Key + "Active", false);
+        SessionState.SetBool(Key + "Stopping", false);
         EditorApplication.update -= Tick;
-        EditorSettings.enterPlayModeOptions = (EnterPlayModeOptions)SessionState.GetInt(Key + "OldOptions", 0);
-        EditorSettings.enterPlayModeOptionsEnabled = SessionState.GetBool(Key + "OldOptionsEnabled", false);
-        var saved = JsonUtility.FromJson<SavedScenes>(SessionState.GetString(Key + "Scenes", "{}"));
-        if (saved?.scenes != null && saved.scenes.Length > 0 && !string.IsNullOrEmpty(saved.scenes[0].path))
-            EditorSceneManager.RestoreSceneManagerSetup(saved.scenes);
-        else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        Type viewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
-        EditorWindow view = EditorWindow.GetWindow(viewType);
-        viewType.GetProperty("selectedSizeIndex", Members).SetValue(view, SessionState.GetInt(Key + "OldSize", 0));
-        if (exit) EditorApplication.delayCall += () => EditorApplication.Exit(code);
+        EditorApplication.update -= CompleteExit;
+        UnityEngine.Application.logMessageReceived -= OnLog;
+        try
+        {
+            EditorSettings.enterPlayModeOptions = (EnterPlayModeOptions)SessionState.GetInt(Key + "OldOptions", 0);
+            EditorSettings.enterPlayModeOptionsEnabled = SessionState.GetBool(Key + "OldOptionsEnabled", false);
+            var saved = JsonUtility.FromJson<SavedScenes>(SessionState.GetString(Key + "Scenes", "{}"));
+            if (saved?.scenes != null && saved.scenes.Length > 0 && !string.IsNullOrEmpty(saved.scenes[0].path))
+                EditorSceneManager.RestoreSceneManagerSetup(saved.scenes);
+            else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        }
+        catch (Exception exception) { NoteCleanupFailure(exception); }
+        try
+        {
+            Type viewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            EditorWindow view = EditorWindow.GetWindow(viewType);
+            viewType.GetProperty("selectedSizeIndex", Members).SetValue(view, SessionState.GetInt(Key + "OldSize", 0));
+        }
+        catch (Exception exception) { NoteCleanupFailure(exception); }
+        finally
+        {
+            int code = SessionState.GetInt(Key + "ExitCode", 1);
+            Debug.Log("FFO_MOBILE_PREVIEW_EXIT=" + code);
+            if (exit) EditorApplication.Exit(code);
+        }
+    }
+
+    private static void NoteCleanupFailure(Exception exception)
+    {
+        SessionState.SetInt(Key + "ExitCode", 1);
+        Debug.LogError("FFO_MOBILE_PREVIEW_CLEANUP_FAILED: " + exception);
     }
 
     private static int PngInt(byte[] png, int offset) =>
         (png[offset] << 24) | (png[offset + 1] << 16) | (png[offset + 2] << 8) | png[offset + 3];
     private static void OnLog(string text, string trace, LogType type)
-    { if (type == LogType.Exception || type == LogType.Error) failure = text; }
+    {
+        if (type != LogType.Exception && type != LogType.Error) return;
+        if (IsUnrelatedEditorSearchFailure(text, trace, type))
+        {
+            // Preserve the original exception and stack, both in Unity's existing log
+            // and beside the captures. Do not broaden this to arbitrary Editor errors.
+            try
+            {
+                File.AppendAllText(Path.Combine(SessionState.GetString(Key + "Output", ""),
+                    "preview-editor-diagnostics.log"), text + "\n" + trace + "\n");
+                Debug.LogWarning("FFO_MOBILE_PREVIEW_EDITOR_DIAGNOSTIC: retained unrelated Search database startup exception; continuing offline preview.");
+                // Unity's Console may apply Error Pause after this callback returns.
+                EditorApplication.delayCall += () =>
+                {
+                    if (SessionState.GetBool(Key + "Active", false) &&
+                        !SessionState.GetBool(Key + "Stopping", false)) EditorApplication.isPaused = false;
+                };
+            }
+            catch (Exception exception)
+            {
+                failure = "Cannot retain Editor diagnostic: " + exception;
+                SessionState.SetInt(Key + "ExitCode", 1);
+            }
+            return;
+        }
+        if (string.IsNullOrEmpty(failure)) failure = text + "\n" + trace;
+        if (SessionState.GetBool(Key + "Stopping", false)) SessionState.SetInt(Key + "ExitCode", 1);
+    }
+
+    private static bool IsUnrelatedEditorSearchFailure(string text, string trace, LogType type)
+    {
+        if (type != LogType.Exception || string.IsNullOrEmpty(text) || string.IsNullOrEmpty(trace) ||
+            !text.StartsWith("ArgumentOutOfRangeException:", StringComparison.Ordinal) ||
+            trace.IndexOf("FakeFantasyOnline", StringComparison.Ordinal) >= 0) return false;
+        int enumerate = trace.IndexOf("UnityEditor.Search.SearchDatabase.EnumerateAll", StringComparison.Ordinal);
+        int database = trace.IndexOf("GetDefaultSearchDatabase", StringComparison.Ordinal);
+        int startup = trace.IndexOf("UnityEditor.Search.SearchInit.IndexationOnStartup", StringComparison.Ordinal);
+        return enumerate >= 0 && database > enumerate && startup > database;
+    }
     private static bool HasArgument(string name) => Array.IndexOf(Environment.GetCommandLineArgs(), name) >= 0;
     private static string Argument(string name)
     {
