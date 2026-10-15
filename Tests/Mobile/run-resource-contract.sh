@@ -7,6 +7,7 @@ trap 'rm -rf "$OUT"' EXIT
 "$FFO_MONO_ROOT/bin/mono" "$FFO_MONO_ROOT/lib/mono/4.5/mcs.exe" -langversion:latest -out:"$OUT/MobileResourceContract.exe" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/ClientResourcePaths.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceManifest.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceVerification.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileStreamingAssetsStage.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Protocol/PrivateServerOptions.cs" \
   "$ROOT/Tests/Mobile/MobileResourceContract.cs"

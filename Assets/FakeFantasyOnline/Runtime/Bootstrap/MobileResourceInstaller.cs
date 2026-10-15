@@ -62,17 +62,23 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         string root = Path.Combine(storage, manifest.Version);
         if (manifest.Offline) Debug.Log("FFO_MOBILE_RESOURCE_ROOT=" + root);
         else Directory.CreateDirectory(root);
-        long allBytes = 0, verifiedBytes = 0;
-        foreach (var entry in manifest.Entries) allBytes = checked(allBytes + entry.Length);
+        Phase("Checking resource metadata", "Checking installed files...", 0);
+        Task<MobileResourceVerification> preparation = Task.Run(() =>
+            new MobileResourceVerification(manifest, root, root + ".verified"));
+        while (!preparation.IsCompleted) yield return null;
+        var validation = preparation.GetAwaiter().GetResult();
+        long allBytes = validation.BytesToHash, verifiedBytes = 0;
         for (int i = 0; i < manifest.Entries.Count; i++)
         {
             var entry = manifest.Entries[i];
+            if (!validation.NeedsHash(i)) continue;
+            int index = i;
             string fileLabel = (i + 1) + "/" + manifest.Entries.Count + "  " + Path.GetFileName(entry.Destination);
             Phase("Checking resources", fileLabel, allBytes);
             long preceding = verifiedBytes;
             Interlocked.Exchange(ref completedBytes, preceding);
             string destination = MobileResourceManifest.FilePath(root, entry.Destination);
-            Task<bool> verification = Task.Run(() => MobileResourceManifest.Verify(destination, entry,
+            Task<bool> verification = Task.Run(() => validation.Verify(index,
                 bytes => Interlocked.Exchange(ref completedBytes, preceding + bytes)));
             while (!verification.IsCompleted) yield return null;
             bool valid = verification.GetAwaiter().GetResult();
@@ -98,13 +104,17 @@ public sealed class MobileResourceInstaller : MonoBehaviour
                     Interlocked.Exchange(ref completedBytes, (long)request.downloadedBytes);
                 }
                 Phase("Verifying copied resource", fileLabel, entry.Length);
-                Task commit = Task.Run(() => MobileResourceManifest.CommitFile(temporary, destination, entry,
+                Task commit = Task.Run(() => validation.CommitFile(index, temporary,
                     bytes => Interlocked.Exchange(ref completedBytes, bytes)));
                 while (!commit.IsCompleted) yield return null;
                 commit.GetAwaiter().GetResult();
             }
             verifiedBytes += entry.Length;
         }
+        Phase("Finishing resource check", "Saving verified resource state...", 0);
+        Task receipt = Task.Run(() => validation.CommitReceipt());
+        while (!receipt.IsCompleted) yield return null;
+        receipt.GetAwaiter().GetResult();
         // Activation is the commit boundary. Interrupted versions are never visible to loaders.
         ClientResourcePaths.Activate(root);
         File.Delete(manifestPath);

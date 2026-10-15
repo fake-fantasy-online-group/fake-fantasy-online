@@ -33,6 +33,7 @@ internal static class MobileResourceContract
             Reject(() => offline.VerifyDirectory(offlineRoot), "corrupt offline transfer blocked");
             File.Copy(source, Path.Combine(offlineRoot, "data/a.pkg"), true);
             offline.VerifyDirectory(offlineRoot); checks++;
+            TestReceipts(root);
             string stagingRoot = Path.Combine(root, "StreamingAssets");
             string backup = Path.Combine(root, "Temp/original");
             Directory.CreateDirectory(stagingRoot);
@@ -107,4 +108,76 @@ internal static class MobileResourceContract
         }
         finally { Directory.Delete(root, true); }
     }
+    private static void TestReceipts(string root)
+    {
+        string installed = Path.Combine(root, "receipt-files");
+        Directory.CreateDirectory(installed);
+        string a = Path.Combine(installed, "a.pkg"), b = Path.Combine(installed, "table.json");
+        File.WriteAllText(a, "package bytes"); File.WriteAllText(b, "table bytes");
+        Func<string> manifestText = () => "FFO-MOBILE-OFFLINE-1\n" +
+            "a.pkg\ta.pkg\t" + new FileInfo(a).Length + "\t" + MobileResourceManifest.HashFile(a) + "\n" +
+            "table.json\ttable.json\t" + new FileInfo(b).Length + "\t" + MobileResourceManifest.HashFile(b) + "\n";
+        var manifest = MobileResourceManifest.Parse(manifestText());
+        string receipt = Path.Combine(root, "receipt");
+        var first = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(first.CachedFiles == 0 && first.NeedsHash(0) && first.NeedsHash(1), "first install hashes packages AND nonpackages");
+        Reject(() => first.CommitReceipt(), "cannot write receipt before verification");
+        long actual = 0;
+        Assert(first.Verify(0, bytes => actual = bytes) && actual == new FileInfo(a).Length, "cold hash byte progress");
+        Assert(first.Verify(1), "cold nonpackage verification");
+        first.CommitReceipt();
+        string goodReceipt = File.ReadAllText(receipt);
+        var warm = new MobileResourceVerification(manifest, installed, receipt);
+        actual = -1;
+        Assert(warm.CachedFiles == 2 && warm.BytesToHash == 0 && !warm.NeedsHash(0), "warm startup has zero hash bytes");
+        Assert(warm.Verify(0, bytes => actual = bytes) && actual == -1, "warm verification never reads payload");
+        warm.CommitReceipt();
+        Assert(File.ReadAllText(receipt) == goodReceipt, "atomic replacement preserves complete receipt");
+        File.WriteAllText(receipt + ".part", "interrupted");
+        Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 2, "partial receipt never overrides previous valid receipt");
+        File.Delete(receipt);
+        Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "partial first receipt is not success");
+        File.WriteAllText(receipt, goodReceipt);
+        foreach (string broken in new[] { "", "junk", goodReceipt.Substring(0, goodReceipt.Length / 2), goodReceipt.Replace("FFO-VERIFIED-1", "FFO-VERIFIED-9"), goodReceipt.Replace("a", "b") })
+        {
+            File.WriteAllText(receipt, broken);
+            Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "malformed receipt requires full verification");
+        }
+        File.WriteAllText(receipt, goodReceipt);
+        File.SetLastWriteTimeUtc(a, File.GetLastWriteTimeUtc(a).AddSeconds(5));
+        var changed = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(changed.NeedsHash(0) && !changed.NeedsHash(1) && changed.CachedFiles == 1, "mtime change only rehashes changed file");
+        Assert(changed.Verify(0), "same content changed timestamp passes hash");
+        changed.CommitReceipt();
+        goodReceipt = File.ReadAllText(receipt);
+        File.WriteAllText(a, "Package bytes"); // Same length; different content and mtime.
+        File.SetLastWriteTimeUtc(a, File.GetLastWriteTimeUtc(a).AddSeconds(5));
+        var corrupt = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(!corrupt.Verify(0), "same length changed timestamp corruption rejected");
+        Reject(() => corrupt.CommitReceipt(), "failed verification never saves success");
+        Assert(File.ReadAllText(receipt) == goodReceipt, "failed check preserves old receipt only");
+        var updatedManifest = MobileResourceManifest.Parse(manifestText());
+        Assert(new MobileResourceVerification(updatedManifest, installed, receipt).CachedFiles == 0, "changed embedded manifest invalidates whole receipt");
+        File.WriteAllText(a, "short");
+        var truncated = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(truncated.NeedsHash(0) && !truncated.Verify(0), "length changes reject cached file");
+        File.Delete(a);
+        var missing = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(missing.NeedsHash(0) && !missing.Verify(0), "missing file rejected despite cache");
+        string temporary = a + ".part";
+        File.WriteAllText(temporary, "package bytes");
+        actual = -1;
+        missing.CommitFile(0, temporary, bytes => actual = bytes);
+        Assert(actual == manifest.Entries[0].Length && !File.Exists(temporary), "installed file verified once with byte progress");
+        missing.CommitReceipt();
+        var raced = new MobileResourceVerification(manifest, installed, receipt);
+        File.SetLastWriteTimeUtc(b, File.GetLastWriteTimeUtc(b).AddSeconds(5));
+        Reject(() => raced.CommitReceipt(), "metadata changed after scan blocks activation");
+        var duringHash = new MobileResourceVerification(manifest, installed, receipt);
+        Assert(!duringHash.Verify(1, bytes => { if (bytes > 0) File.SetLastWriteTimeUtc(b, File.GetLastWriteTimeUtc(b).AddSeconds(5)); }),
+            "change while hashing cannot be cached");
+        File.WriteAllText(receipt, goodReceipt.Replace(manifest.Version, new string('0', 64)));
+        Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "stale fingerprint rejected");
+    }
+
 }
