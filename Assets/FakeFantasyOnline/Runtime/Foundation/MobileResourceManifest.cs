@@ -79,21 +79,36 @@ public sealed class MobileResourceManifest
         return Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
     }
 
-    public static string HashFile(string path)
+    public static string HashFile(string path, Action<long> progress = null)
     {
-        // SHA256 streams in bounded blocks; never allocates an entire package byte array.
+        // Report bytes actually hashed, including within large packages. Callbacks run on
+        // the caller's thread; UI callers must marshal or use atomic counters.
         using (var stream = File.OpenRead(path))
-        using (var sha = SHA256.Create()) return Hex(sha.ComputeHash(stream));
+        using (var sha = SHA256.Create())
+        {
+            var buffer = new byte[256 * 1024];
+            long completed = 0;
+            progress?.Invoke(0);
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                sha.TransformBlock(buffer, 0, read, buffer, 0);
+                completed += read;
+                progress?.Invoke(completed);
+            }
+            sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return Hex(sha.Hash);
+        }
     }
 
-    public static bool Verify(string path, Entry entry)
+    public static bool Verify(string path, Entry entry, Action<long> progress = null)
     {
-        return File.Exists(path) && new FileInfo(path).Length == entry.Length && HashFile(path) == entry.Sha256;
+        return File.Exists(path) && new FileInfo(path).Length == entry.Length && HashFile(path, progress) == entry.Sha256;
     }
 
-    public static void CommitFile(string temporary, string destination, Entry entry)
+    public static void CommitFile(string temporary, string destination, Entry entry, Action<long> progress = null)
     {
-        if (!Verify(temporary, entry)) throw new InvalidDataException("Mobile resource length/hash mismatch: " + entry.Destination);
+        if (!Verify(temporary, entry, progress)) throw new InvalidDataException("Mobile resource length/hash mismatch: " + entry.Destination);
         if (File.Exists(destination)) File.Delete(destination);
         File.Move(temporary, destination);
     }

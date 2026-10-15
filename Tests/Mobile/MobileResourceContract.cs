@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using FakeFantasyOnline.Foundation;
 using FakeFantasyOnline.Protocol;
 
@@ -53,6 +54,31 @@ internal static class MobileResourceContract
 
             Assert(manifest.Version == MobileResourceManifest.Parse("FFO-MOBILE-1\n" + row).Version, "stable version");
             var entry = manifest.Entries[0];
+            string large = Path.Combine(root, "large");
+            var payload = new byte[700000];
+            for (int i = 0; i < payload.Length; i++) payload[i] = (byte)(i % 251);
+            File.WriteAllBytes(large, payload);
+            long previous = -1;
+            int callbacks = 0;
+            string streamed = MobileResourceManifest.HashFile(large, bytes =>
+            {
+                Assert(bytes >= previous && bytes <= payload.Length, "monotonic actual hashed bytes");
+                previous = bytes; callbacks++;
+            });
+            using (var sha = SHA256.Create())
+                Assert(streamed == BitConverter.ToString(sha.ComputeHash(payload)).Replace("-", "").ToLowerInvariant(), "streaming hash matches SHA256");
+            Assert(previous == payload.Length && callbacks >= 4, "progress within large files and exact completion");
+            long reported = -1;
+            Assert(MobileResourceManifest.Verify(source, entry, bytes => reported = bytes) && reported == entry.Length,
+                "verification reports actual bytes");
+            reported = -1;
+            Assert(!MobileResourceManifest.Verify(Path.Combine(root, "absent"), entry, bytes => reported = bytes) && reported == -1,
+                "missing file never invents progress");
+            File.WriteAllBytes(large, new byte[0]);
+            reported = -1;
+            Assert(MobileResourceManifest.HashFile(large, bytes => reported = bytes) ==
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" && reported == 0,
+                "empty resource has correct hash and zero progress");
             Assert(MobileResourceManifest.Verify(source, entry), "valid checksum");
             string target = Path.Combine(root, "installed");
             File.Copy(source, target + ".part");

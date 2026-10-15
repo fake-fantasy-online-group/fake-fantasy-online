@@ -69,16 +69,17 @@ public sealed class ClientBootstrap : MonoBehaviour
             catch (Exception exception) { installer.Fail(exception); yield break; }
             yield return next;
         }
+        // Show the loading phase before synchronous client/title initialization.
+        yield return null;
         try
         {
             string dispatch = File.ReadAllText(Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim();
-            InitializeClient(PrivateServerOptions.MobileConfigured(dispatch));
-            Destroy(installer);
+            InitializeClient(PrivateServerOptions.MobileConfigured(dispatch), installer);
         }
         catch (Exception exception) { installer.Fail(exception); }
     }
 
-    private void InitializeClient(PrivateServerOptions options)
+    private void InitializeClient(PrivateServerOptions options, MobileResourceInstaller startup = null)
     {
         NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri.AbsoluteUri);
         // Before title creation the native test-world path still has its original
@@ -104,9 +105,18 @@ public sealed class ClientBootstrap : MonoBehaviour
         _view.WorldBootstrapForIndependentRuntime.BindTitleStartupForIndependentRuntime(() =>
         {
             if (_terminalQuitRequested || this == null) return;
-            var title = _view.InitializeTitleForIndependentRuntime();
-            if (_terminalQuitRequested || this == null) return;
-            _view.BindTitleBootstrapForIndependentRuntime(title);
+            try
+            {
+                var title = _view.InitializeTitleForIndependentRuntime();
+                if (_terminalQuitRequested || this == null) return;
+                _view.BindTitleBootstrapForIndependentRuntime(title);
+                if (startup != null) startup.Complete();
+            }
+            catch (Exception exception)
+            {
+                if (startup == null) throw;
+                startup.Fail(exception);
+            }
         });
     }
 
