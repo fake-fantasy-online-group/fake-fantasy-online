@@ -113,7 +113,7 @@ public sealed partial class SkillTargeting
         {
             if (refreshedMode != mode) { End(); return; }
             rangePx = refreshedRange > 0f ? refreshedRange : float.PositiveInfinity;
-            radiusPx = refreshedRadius; fanDeg = refreshedAngle; rectLen = refreshedLength; rectWid = refreshedWidth;
+            radiusPx = MobileClientPresentation.Enabled && MobileHotSlotActive && (mode == Aim.Single || mode == Aim.Trap) ? 24f : refreshedRadius; fanDeg = refreshedAngle; rectLen = refreshedLength; rectWid = refreshedWidth;
             noCircle = refreshedTrap;
         }
 
@@ -138,6 +138,11 @@ public sealed partial class SkillTargeting
         float gy = Mathf.Clamp(worldH * 0.5f - pointerWorld.y * ppu, 0f, worldH);
         float playerX = pc.worldX;
         float playerY = pc.worldY;
+        if (MobileClientPresentation.Enabled && MobileHotSlotActive && mode == Aim.Circle)
+        {
+            Vector2 center = CombatWorld.ClampMobileGround(skillId,new Vector2(gx,gy),rangePx);
+            gx=center.x; gy=center.y;
+        }
         if (mode == Aim.Direction)
         {
             pc.AimFace(new Vector3((gx - 0.5f * worldW) / ppu,
@@ -145,7 +150,7 @@ public sealed partial class SkillTargeting
             UpdateSelector(pc, ppu, worldW, worldH);
             UpdateOutline(pc, gx, gy, ppu, worldW, worldH);
         }
-        else if (!noCircle)
+        else if (!noCircle || (MobileClientPresentation.Enabled && MobileHotSlotActive))
         {
             UpdateCircle(gx, gy, ppu, worldW, worldH);
         }
@@ -153,6 +158,9 @@ public sealed partial class SkillTargeting
         bool overHud = MobileClientPresentation.Enabled
             ? !ClientInput.MobileSkillGestureActive && MobileClientPresentation.IsPointerOverUi(ClientInput.AimPosition)
             : GameHud.I != null && GameHud.I.MouseOverHud();
+        // Mobile release is synchronous in ReleaseMobileHotSlot, with fresh validation
+        // and a non-chasing combat entry. Never fall through the desktop confirmation.
+        if (MobileClientPresentation.Enabled && MobileHotSlotActive) return;
         if (!ClientInput.AimConfirm || overHud) return;
 
         bool mobileConfirmation = MobileClientPresentation.Enabled && ClientInput.MobileSkillGestureActive;

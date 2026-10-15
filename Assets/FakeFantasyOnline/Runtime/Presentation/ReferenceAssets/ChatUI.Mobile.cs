@@ -44,34 +44,34 @@ internal partial class ChatUI
     private void DrawMobileChat()
     {
         s = MobileClientPresentation.Scale;
+        // Details belong to the original tabbed history window, never a taller HUD.
+        MobileClientPresentation.ChatExpanded = false;
         Rect panel = MobileClientPresentation.ChatRect;
         float control = 44f * s;
         // The collapsed 112-unit footprint reserves 68 units for three existing
         // 18-unit message rows. Channel/send share one touch band below it.
-        // Only explicit expansion draws the original message-window frame.
+        // Opening details keeps this three-line preview and composer compact.
         Rect messages = new Rect(panel.x, panel.y, panel.width, Mathf.Max(0f, panel.height - control));
         Event current = Event.current;
-        bool expanded = MobileClientPresentation.ChatExpanded;
-        if (expanded) DrawPanel(messages);
         if (mobileLines == null) mobileLines = new List<Line>();
         CollectMobileLines(mobileLines);
-        DrawLines(mobileLines, messages, true, expanded && !chanOpen && !GameHud.MobileShortcutPointerOwned);
+        DrawLines(mobileLines, messages, true, false);
         // Compact rows are display-only. A complete primary tap opens the existing
-        // panel; right clicks / synthesized long presses cannot open message menus.
-        if (GameHud.MobileShortcutPointerOwned) mobileExpandPressed = false;
-        if (current != null && current.button == 0 && !GameHud.MobileShortcutPointerOwned)
+        // viewbtn -> Win05 historybar, including its original channel tabs.
+        // Right clicks / synthesized long presses cannot open message menus.
+        bool blocked = GameHud.MobileShortcutPointerOwned || MobileClientPresentation.ModalOpen;
+        if (blocked) mobileExpandPressed = false;
+        if (current != null && current.button == 0 && !blocked)
         {
             if (current.type == EventType.MouseDown)
             {
-                mobileExpandPressed = !expanded && !chanOpen && messages.Contains(current.mousePosition);
-                if (expanded && !panel.Contains(current.mousePosition) && !chanOpen)
-                    MobileClientPresentation.ChatExpanded = false;
+                mobileExpandPressed = !chanOpen && messages.Contains(current.mousePosition);
             }
             if (current.type == EventType.MouseUp)
             {
                 if (mobileExpandPressed && messages.Contains(current.mousePosition))
                 {
-                    MobileClientPresentation.ChatExpanded = true;
+                    Win05.Open("historybar");
                     MobileClientPresentation.MenuExpanded = false;
                     current.Use();
                 }

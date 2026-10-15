@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
@@ -8,6 +9,8 @@ internal static class MobileHudArtwork
     internal const string RoundControlPath = "res/uires/petCircle/choosepetbtn.gsa";
     internal const string AttackIconPath = "res/uires/badgen/hurttype0.gsa";
     internal const string SkillWellPath = "res/uires/composedlg/sculphole.gsa";
+    internal const string MenuTogglePath = "res/uires/sketchmap/togglebtn.gsa";
+    private static readonly Dictionary<Texture2D, Texture2D> roundTextures = new Dictionary<Texture2D, Texture2D>();
     private static GUIStyle labelStyle;
     private static readonly GUIContent labelContent = new GUIContent();
 
@@ -15,9 +18,10 @@ internal static class MobileHudArtwork
     {
         int first = index * 3;
         if (index < 0 || frames == null || first >= frames.Length) return null;
-        int state = pressed ? 2 : hovered ? 1 : 0;
+        // Original ctrlbar GSA/PNG frames: 0 pressed, 1 gold hover, 2 unlit idle.
+        int state = pressed ? 0 : hovered ? 1 : 2;
         return first + state < frames.Length && frames[first + state] != null
-            ? frames[first + state] : frames[first];
+            ? frames[first + state] : first + 2 < frames.Length ? frames[first + 2] : null;
     }
 
     internal static Rect Inset(Rect rect, float padding)
@@ -48,6 +52,96 @@ internal static class MobileHudArtwork
             GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit);
         }
         finally { GUI.color = previous; }
+    }
+
+    // Mask only mobile copies. Borrowed package pixels and desktop textures are never changed.
+    internal static Texture2D RoundTexture(Texture2D source)
+    {
+        if (source == null) return null;
+        if (roundTextures.TryGetValue(source, out Texture2D cached)) return cached;
+        // At most 30 slot icons + 37 cooldown frames are needed concurrently. Bound the
+        // cache across page/rebinding changes and release owned copies on HUD disable.
+        if (roundTextures.Count >= 128) ClearRoundTextures();
+        Color32[] original;
+        try { original = ReadPixels(source); }
+        catch (System.Exception error)
+        {
+            // Isolate a failed icon from the rest of OnGUI. A cached null keeps the
+            // existing round well and input alive without retrying/logging each frame.
+            roundTextures.Add(source, null);
+            Debug.LogWarning("Mobile HUD could not read icon '" + source.name +
+                "' for its circular mask; showing the empty round well until cache reset. " + error.Message);
+            return null;
+        }
+        int size = Mathf.Min(source.width, source.height);
+        int left = (source.width - size) / 2, bottom = (source.height - size) / 2;
+        Color32[] pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = (x + .5f - size * .5f) * 2f / size;
+            float dy = (y + .5f - size * .5f) * 2f / size;
+            // One source-pixel feather avoids jagged corners when the HUD is scaled.
+            float coverage = Mathf.Clamp01((1f - Mathf.Sqrt(dx * dx + dy * dy)) *
+                size * .5f);
+            int i = y * size + x;
+            pixels[i] = original[(y + bottom) * source.width + x + left];
+            pixels[i].a = (byte)Mathf.RoundToInt(pixels[i].a * coverage);
+        }
+        Texture2D result = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = source.name + " (mobile round)", filterMode = source.filterMode,
+            wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
+        };
+        result.SetPixels32(pixels);
+        result.Apply(false, false);
+        roundTextures.Add(source, result);
+        return result;
+    }
+
+    private static Color32[] ReadPixels(Texture2D source)
+    {
+        if (source.isReadable) return source.GetPixels32();
+        // Imported/GPU-only icons need an explicit readback. Never fall back to the
+        // unmasked square, and always restore the caller's active render target.
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture target = null;
+        Texture2D readable = null;
+        try
+        {
+            target = RenderTexture.GetTemporary(source.width, source.height, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(source, target);
+            RenderTexture.active = target;
+            readable = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
+            readable.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0, false);
+            readable.Apply(false, false);
+            return readable.GetPixels32();
+        }
+        finally
+        {
+            RenderTexture.active = previous;
+            if (target != null) RenderTexture.ReleaseTemporary(target);
+            if (readable != null) Object.Destroy(readable);
+        }
+    }
+
+    internal static void ClearRoundTextures()
+    {
+        foreach (Texture2D texture in roundTextures.Values) Object.Destroy(texture);
+        roundTextures.Clear();
+    }
+
+    internal static bool MenuButton(Rect rect, float scale, bool expanded)
+    {
+        bool hovered = GUI.enabled && Event.current != null && rect.Contains(Event.current.mousePosition);
+        bool pressed = hovered && Input.GetMouseButton(0);
+        // The native map toggle supplies both arrow directions: frames 0..3 up,
+        // 4..7 down, each normal/hover/pressed/disabled. Use no text or default skin.
+        Texture2D[] frames = ArtworkSkin.Frames(MenuTogglePath, 8);
+        int frame = (expanded ? 0 : 4) + (!GUI.enabled ? 3 : pressed ? 2 : hovered ? 1 : 0);
+        Image(Inset(rect, 6f * scale), frames != null && frame < frames.Length ? frames[frame] : null);
+        return GUI.Button(rect, GUIContent.none, GUIStyle.none);
     }
 
     private static Texture2D ResourceFrame(string path)

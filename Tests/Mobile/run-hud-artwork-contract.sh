@@ -7,5 +7,5 @@ find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$
 "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -noconfig -nostdlib+ @"$OUT/framework.rsp" -nologo -langversion:9.0 -out:"$OUT/Contract.exe" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/MobileHudArtwork.cs" \
  "$ROOT/Tests/Mobile/MobileHudArtworkContract.cs"
-"$FFO_MONO_ROOT/bin/mono" "$OUT/Contract.exe"
+"$FFO_MONO_ROOT/bin/mono" "$OUT/Contract.exe" "$@"
 python3 "$ROOT/Tests/Mobile/run-hud-visual-source-contract.py"

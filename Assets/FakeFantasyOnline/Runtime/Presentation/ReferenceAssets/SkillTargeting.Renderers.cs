@@ -84,7 +84,9 @@ public sealed partial class SkillTargeting
     // Official 06000d1c: the outline's visibility does not depend on arrow-frame availability.
     private void Show(bool on)
     {
-        bool circle = on && mode == Aim.Circle && !noCircle &&
+        bool mobilePoint = MobileClientPresentation.Enabled && MobileHotSlotActive &&
+            (mode == Aim.Circle || mode == Aim.Single || mode == Aim.Trap);
+        bool circle = on && (mobilePoint || (mode == Aim.Circle && !noCircle)) &&
             aimerFrames != null && aimerFrames.Length > 0;
         if (aimerSR != null) aimerSR.enabled = circle;
         bool direction = on && mode == Aim.Direction;

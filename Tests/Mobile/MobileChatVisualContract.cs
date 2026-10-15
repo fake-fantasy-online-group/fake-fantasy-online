@@ -66,8 +66,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     internal static class MobileClientPresentation
     {
-        public static float Scale=1; public static Rect ChatRect; public static bool ChatExpanded, MenuExpanded;
+        public static float Scale=1; public static Rect ChatRect; public static bool ChatExpanded, MenuExpanded, ModalOpen;
         public static void RegisterPanel(object owner,Rect panel) {} public static void RemovePanel(object owner) {}
+    }
+    internal static class Win05
+    {
+        public static string LastOpened; public static int Opens;
+        public static void Open(string name) { LastOpened=name; Opens++; MobileClientPresentation.ModalOpen=true; }
     }
     internal static class GameHud { public static bool MobileShortcutPointerOwned; }
     internal static class ArtworkSkin
@@ -132,7 +137,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             HornDialog.Typing=DuelDlg.Typing=false; _pendingFocus=TypingNow=false;
             Event.current=new Event { type=EventType.Repaint };
             MobileClientPresentation.Scale=scale; MobileClientPresentation.ChatExpanded=false;
-            MobileClientPresentation.MenuExpanded=false;
+            MobileClientPresentation.MenuExpanded=false; MobileClientPresentation.ModalOpen=false;
+            Win05.LastOpened=null; Win05.Opens=0;
             MobileClientPresentation.ChatRect=new Rect(300*scale,400*scale,360*scale,112*scale);
             chatLines.Clear(); filters=0;
             return new ChatUI();
@@ -192,23 +198,28 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
             Check(!c.interactive&&!MobileClientPresentation.ChatExpanded,"Collapsed rows cannot expose actions on press");
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
-            Check(MobileClientPresentation.ChatExpanded&&!MobileClientPresentation.MenuExpanded,"Message tap expands existing chat and closes function grid");
-            GUI.Reset(); Event.current.type=EventType.Repaint; MobileClientPresentation.ChatRect=new Rect(300,320,360,192); c.DrawMobileChat();
-            Check(c.panels==1&&Near(c.messageRect.height,148)&&c.interactive,"Expanded original frame enables message actions");
-            GUI.Reset(); GameHud.MobileShortcutPointerOwned=true; c.DrawMobileChat();
-            Check(!c.interactive,"Shortcut-owned long press cannot invoke chat copy or share actions");
-            GameHud.MobileShortcutPointerOwned=false;
-            GUI.Reset(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(100,100); c.DrawMobileChat();
-            Check(!MobileClientPresentation.ChatExpanded,"Outside tap dismisses expanded chat without a separate expand button");
-            GUI.Reset(); MobileClientPresentation.ChatRect=new Rect(300,400,360,112); int previous=c.panels; c.DrawMobileChat();
-            Check(c.panels==previous&&Near(c.messageRect.height,68)&&!c.interactive,"Collapse restores display-only compact rows");
+            Check(Win05.LastOpened=="historybar"&&Win05.Opens==1&&!MobileClientPresentation.MenuExpanded,"Message tap uses original viewbtn historybar entry and closes function grid");
+            Check(!MobileClientPresentation.ChatExpanded&&Event.current.type==EventType.Used,"Opening original details consumes release without enlarging HUD");
+            GUI.Reset(); Event.current.type=EventType.Repaint; c.DrawMobileChat();
+            Check(c.panels==0&&Near(c.messageRect.height,68)&&!c.interactive,"Details leave preview compact and display-only");
+            GUI.Reset(); Event.current.type=EventType.MouseDown; c.DrawMobileChat();
+            GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+            Check(Win05.Opens==1,"Modal details block preview taps from reopening or stealing navigation");
+            MobileClientPresentation.ModalOpen=false;
+            GUI.Reset(); Event.current.type=EventType.MouseDown; c.DrawMobileChat();
+            GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+            Check(Win05.Opens==2&&Win05.LastOpened=="historybar","After closing details a new tap reopens the same original history window");
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            MobileClientPresentation.ModalOpen=true;
+            GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+            Check(Win05.Opens==0,"A modal opening during a press cancels the pending preview tap");
             c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.button=1; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
-            Check(!c.interactive&&!MobileClientPresentation.ChatExpanded,"Collapsed right-click / long press cannot expose copy menu");
+            Check(!c.interactive&&Win05.Opens==0,"Collapsed right-click / long press cannot expose copy menu");
 
             c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
             GameHud.MobileShortcutPointerOwned=true; GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
             GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); c.DrawMobileChat();
-            Check(!MobileClientPresentation.ChatExpanded,"Shortcut ownership cancels any pending chat tap, including its release frame");
+            Check(Win05.Opens==0,"Shortcut ownership cancels any pending chat tap, including its release frame");
             c=Fresh(); c.chanOpen=true; Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(50,50); c.DrawMobileChat();
             Check(!c.chanOpen&&c.channel=="附近","Outside tap closes picker without changing channel");
 

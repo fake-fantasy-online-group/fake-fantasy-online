@@ -7,6 +7,10 @@ public partial class GameHud
     private int mobileFinger = -1;
     private int mobilePressed = -1;
     private int mobilePage;
+    private readonly MobileSkillGesture mobileSkillGesture = new MobileSkillGesture();
+    private bool mobileCancelHighlighted;
+    internal static bool MobileHotSlotUsable(int slot) => (uint)slot <= 29 && hotSkill[slot] != 0 &&
+        NetClient.I != null && HotSlotUsable(slot) && SkillCdFrac(hotSkill[slot]) <= 0f;
     private readonly MobilePageSwipe mobilePageSwipe = new MobilePageSwipe();
     private readonly MobileShortcutPointerOwnership mobileShortcutPointers = new MobileShortcutPointerOwnership();
     // Chat must not interpret synthetic mouse/right-click events from skill holds.
@@ -33,7 +37,21 @@ public partial class GameHud
         if (!MobileClientPresentation.Enabled) { CancelMobileGesture(); return; }
         Rect viewport = MobileClientPresentation.SafeAreaGui;
         if (mobileViewport != viewport) { CancelMobileGesture(); mobileViewport = viewport; }
-        if (MobileClientPresentation.ModalOpen) { CancelMobileGesture(); return; }
+        if (MobileClientPresentation.ModalOpen || MobileClientPresentation.DiagramOpen || !showHotbar)
+        { CancelMobileGesture(); return; }
+        if (Input.touchCount > 1)
+        {
+            // Keep ownership of every shortcut finger even when the gesture is rejected.
+            for (int i = 0; i < Input.touchCount; i++)
+            {
+                Touch touch = Input.GetTouch(i);
+                Vector2 point = MobileClientPresentation.GuiPoint(touch.position);
+                bool shortcut = MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point);
+                for (int k = 0; k < 4; k++) shortcut |= MobileClientPresentation.SkillRect(k).Contains(point);
+                if (shortcut) mobileShortcutPointers.Claim(touch.fingerId);
+            }
+            CancelMobileGesture(); return;
+        }
         bool found = false;
         for (int i=0;i<Input.touchCount;i++)
         {
@@ -75,12 +93,19 @@ public partial class GameHud
             if (button>=0)
             {
                 mobileFinger=finger; mobilePressed=button; mobilePressPosition=position;
-                if (button<4) SkillTargeting.BeginMobileHotSlot(mobilePage*4+button);
+                if (button<4)
+                {
+                    mobileSkillGesture.Begin(position.x,position.y,MobileClientPresentation.Scale);
+                    MobileClientPresentation.ActiveSkillButton=button;
+                    SkillTargeting.BeginMobileHotSlot(mobilePage*4+button);
+                }
                 if (button==5) mobilePageSwipe.Begin(finger,position.x,position.y);
             }
         }
         if (finger!=mobileFinger) return;
-        bool cancel=phase==TouchPhase.Canceled || MobileClientPresentation.CancelRect.Contains(point);
+        mobileSkillGesture.Sample(position.x,position.y);
+        mobileCancelHighlighted=mobilePressed>=0 && mobilePressed<4 && MobileClientPresentation.CancelContains(point);
+        bool cancel=phase==TouchPhase.Canceled || mobileCancelHighlighted;
         if (mobilePressed==5)
         {
             int change=mobilePageSwipe.Sample(finger,position.x,position.y,24f*MobileClientPresentation.Scale,
@@ -91,7 +116,7 @@ public partial class GameHud
         if (phase==TouchPhase.Ended || phase==TouchPhase.Canceled)
         {
             if (cancel) SkillTargeting.CancelMobileHotSlot();
-            else if (mobilePressed<4) SkillTargeting.ReleaseMobileHotSlot(MobileAimPosition(position));
+            else if (mobilePressed<4) SkillTargeting.ReleaseMobileHotSlot(MobileAimPosition(position),mobileSkillGesture.Dragged);
             else if (mobilePressed==4 && MobileClientPresentation.AttackRect.Contains(point)) MobileAttack();
             else if (mobilePressed>=10 && MobileClientPresentation.MinimapRect.Contains(point))
             {
@@ -104,23 +129,22 @@ public partial class GameHud
                 }
             }
             mobileFinger=-1; mobilePressed=-1;
+            mobileSkillGesture.Reset(); mobileCancelHighlighted=false;
+            MobileClientPresentation.ActiveSkillButton=-1;
         }
     }
 
     private Vector2 MobileAimPosition(Vector2 pointer)
     {
-        // Skill-thumb displacement aims from the player, not at the button under the thumb.
-        Vector2 origin = new Vector2(Screen.width*.5f,Screen.height*.5f);
-        if (Camera.main != null && PlayerController.I != null)
-            origin = Camera.main.WorldToScreenPoint(PlayerController.I.transform.position);
-        Vector2 delta = pointer-mobilePressPosition;
-        return origin+Vector2.ClampMagnitude(delta,120f*MobileClientPresentation.Scale)*3f;
+        return SkillTargeting.MobileAimPosition(pointer-mobilePressPosition);
     }
     private void CancelMobileGesture()
     {
         if (mobileFinger!=-1) SkillTargeting.CancelMobileHotSlot();
         mobilePageSwipe.Reset();
         mobileFinger=-1; mobilePressed=-1;
+        mobileSkillGesture.Reset(); mobileCancelHighlighted=false;
+        MobileClientPresentation.ActiveSkillButton=-1;
     }
     private void OnApplicationFocus(bool focused) { if (!focused) CancelMobileGesture(); }
     private void OnApplicationPause(bool paused) { if (paused) CancelMobileGesture(); }
@@ -128,6 +152,7 @@ public partial class GameHud
     {
         CancelMobileGesture();
         mobileShortcutPointers.Clear(Time.frameCount);
+        MobileHudArtwork.ClearRoundTextures();
     }
     private static void MobileAttack()
     {
@@ -179,11 +204,11 @@ public partial class GameHud
                 if (slot<30)
                 {
                     Texture2D icon=HotIconForIndependentRuntime(slot);
-                    // Inscribe the icon and cooldown square inside the round frame.
+                    // Both artwork and cooldown are alpha-masked circles, not squares inside a rim.
                     Rect iconRect=MobileHudArtwork.Inset(rect,13f*scale);
-                    MobileHudArtwork.Image(iconRect,icon,
+                    MobileHudArtwork.Image(iconRect,MobileHudArtwork.RoundTexture(icon),
                         mobileFinger!=-1 && mobilePressed==k);
-                    DrawCdOverlay(iconRect,hotSkill[slot]);
+                    DrawMobileRoundCooldown(iconRect,hotSkill[slot]);
                 }
             }
             DrawMobileRoundFace(MobileClientPresentation.PageRect,scale,true,mobilePressed==5);
@@ -192,8 +217,8 @@ public partial class GameHud
         }
         if (showMenu && !diagramOpen)
         {
-            if (MobileHudArtwork.TextButton(MobileClientPresentation.MenuToggleRect,
-                MobileClientPresentation.MenuExpanded ? "收起" : "功能",scale,MobileClientPresentation.MenuExpanded))
+            if (MobileHudArtwork.MenuButton(MobileClientPresentation.MenuToggleRect,
+                scale,MobileClientPresentation.MenuExpanded))
             {
                 MobileClientPresentation.MenuExpanded=!MobileClientPresentation.MenuExpanded;
                 if (MobileClientPresentation.MenuExpanded) MobileClientPresentation.ChatExpanded=false;
@@ -211,10 +236,36 @@ public partial class GameHud
             }
         }
         if (mobileFinger!=-1 && mobilePressed<4)
-            ArtworkSkin.ButtonFace(MobileClientPresentation.CancelRect,"移到这里取消",scale,
-                selected:MobileClientPresentation.CancelRect.Contains(MobileClientPresentation.GuiPoint(Input.mousePosition)));
+            {
+            Rect cancelRect=MobileClientPresentation.CancelRect;
+            Color old=GUI.color;
+            try
+            {
+                GUI.color=mobileCancelHighlighted ? new Color(1f,.3f,.25f,1f) : Color.white;
+                DrawMobileRoundFace(cancelRect,scale,true,mobileCancelHighlighted);
+                MobileHudArtwork.Label(cancelRect,mobileCancelHighlighted ? "松开取消" : "取消",scale);
+            }
+            finally { GUI.color=old; }
+        }
         LastGuiDrawSucceededForIndependentRuntime=ready;
     }
+    private void DrawMobileRoundCooldown(Rect rect, int skill)
+    {
+        if (cooldownFrames == null) return;
+        float fraction = SkillCooldownFractionForIndependentRuntime(skill);
+        if (fraction <= 0f) return;
+        int index = CooldownFrameIndexForIndependentRuntime(fraction);
+        Texture2D frame = MobileHudArtwork.RoundTexture(cooldownFrames[index]);
+        if (frame == null) return;
+        Color previous = GUI.color;
+        try
+        {
+            GUI.color = new Color(1f, 1f, 1f, 180f / 255f);
+            GUI.DrawTexture(rect, frame);
+        }
+        finally { GUI.color = previous; }
+    }
+
     private static void DrawMobileRoundFace(Rect rect,float scale,bool occupied,bool pressed)
     {
         Texture2D[] frames=ArtworkSkin.Frames(MobileHudArtwork.RoundControlPath,1);

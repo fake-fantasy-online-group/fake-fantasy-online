@@ -77,7 +77,44 @@ public static class MobileClientPresentation
             48f*Scale,48f*Scale);
     }
     public static Rect PageRect => new Rect(SafeAreaGui.xMax-200f*Scale,SafeAreaGui.yMax-254f*Scale,48f*Scale,48f*Scale);
-    public static Rect CancelRect => new Rect(SafeAreaGui.center.x-60f*Scale,SafeAreaGui.y+100f*Scale,120f*Scale,48f*Scale);
+    internal static int ActiveSkillButton = -1;
+    public static Rect CancelRect
+    {
+        get
+        {
+            Vector2 origin=SkillRect(ActiveSkillButton>=0 && ActiveSkillButton<4 ? ActiveSkillButton : 0).center;
+            float size=52f*Scale;
+            Rect safe=SafeAreaGui;
+            // Search nearby free space, nearest ring first; never obscure another control.
+            for (int ring=1;ring<=8;ring++)
+                for (int index=0;index<16;index++)
+                {
+                    float angle=(index*22.5f+180f)*Mathf.Deg2Rad;
+                    Vector2 center=origin+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*(76f*ring*Scale);
+                    Rect candidate=Centered(center,size);
+                    if (candidate.x<safe.x || candidate.y<safe.y || candidate.xMax>safe.xMax || candidate.yMax>safe.yMax) continue;
+                    if (CancelOverlapsControl(candidate)) continue;
+                    return candidate;
+                }
+            return Centered(safe.center,size);
+        }
+    }
+    private static bool CancelOverlapsControl(Rect rect)
+    {
+        // Include a small gap, so a cancel release cannot also hit an adjacent button.
+        Rect padded=new Rect(rect.x-6f*Scale,rect.y-6f*Scale,rect.width+12f*Scale,rect.height+12f*Scale);
+        if (padded.Overlaps(AttackRect) || padded.Overlaps(PageRect) || padded.Overlaps(JoystickRect) ||
+            padded.Overlaps(ChatRect) || padded.Overlaps(MinimapRect) || padded.Overlaps(AvatarRect) ||
+            padded.Overlaps(MenuToggleRect) || (MenuExpanded && padded.Overlaps(MenuRect))) return true;
+        for (int k=0;k<4;k++) if (padded.Overlaps(SkillRect(k))) return true;
+        return false;
+    }
+    public static bool CancelContains(Vector2 point)
+    {
+        if (ActiveSkillButton<0) return false;
+        Rect rect=CancelRect;
+        return (point-rect.center).sqrMagnitude<=rect.width*rect.width*.25f;
+    }
     public static Rect ChatRect
     {
         get
@@ -184,7 +221,7 @@ public static class MobileClientPresentation
         if (GameHud.I!=null && GameHud.I.showAvatar && AvatarRect.Contains(point)) return true;
         if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return true;
         // Includes reserved thumb areas even before the first OnGUI event.
-        if (JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || CancelRect.Contains(point)) return true;
+        if (JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
         if (GameHud.I != null && GameHud.I.showChat && ChatRect.Contains(point)) return true;
         if (MenuExpanded && MenuRect.Contains(point)) return true;
         for (int i=0;i<4;i++) if (SkillRect(i).Contains(point)) return true;

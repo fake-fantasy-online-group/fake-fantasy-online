@@ -34,6 +34,16 @@ Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.Joysti
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.AttackRect),"Chat avoids attack");
 for(int i=0;i<4;i++)Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.SkillRect(i)),"Chat avoids skill "+i);
 MobileClientPresentation.ChatExpanded=true;Rect chat=MobileClientPresentation.ChatRect;Check(Math.Abs(chat.center.x-safe.center.x)<.01&&Math.Abs(chat.yMax-(safe.yMax-12f*MobileClientPresentation.Scale))<.01,"Expanded chat bottom anchored");Check(Math.Abs(chat.height-196f*MobileClientPresentation.Scale)<.01,"Expanded chat compact height");Check(Within(chat,safe),"Expanded chat safe");
+for(int button=0;button<4;button++){
+MobileClientPresentation.ActiveSkillButton=button;Rect cancel=MobileClientPresentation.CancelRect;
+Check(Within(cancel,safe),"Cancel safe area "+button);
+foreach(Rect control in controls)Check(!Overlap(cancel,control),"Cancel avoids controls "+button);
+Check(!Overlap(cancel,MobileClientPresentation.ChatRect),"Cancel avoids expanded chat "+button);
+Check(MobileClientPresentation.CancelContains(cancel.center),"Cancel center accepted "+button);
+Check(!MobileClientPresentation.CancelContains(new Vector2(cancel.x,cancel.y)),"Cancel bounding corner rejected "+button);
+Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(152f*ms)*(152f*ms),"Cancel within two nearby rings "+button);
+}
+MobileClientPresentation.ActiveSkillButton=-1;Check(!MobileClientPresentation.CancelContains(MobileClientPresentation.CancelRect.center),"Inactive cancel has no hit area");
 Vector2 joy=MobileClientPresentation.JoystickRect.center;joy.y=Screen.height-joy.y;Check(MobileClientPresentation.IsJoystickRegion(joy),"Joystick region");SysMsgBox.Visible=true;Check(!MobileClientPresentation.IsJoystickRegion(joy),"Modal blocks joystick");Check(MobileClientPresentation.IsPointerOverUi(new Vector2(400,250)),"Modal blocks world");SysMsgBox.Visible=false;
 object owner=new object();MobileClientPresentation.RegisterPanel(owner,safe);Check(MobileClientPresentation.IsPanelPointer(joy),"Panel registers");Check(!MobileClientPresentation.IsJoystickRegion(joy),"Panel owns pointer");MobileClientPresentation.RemovePanel(owner);Check(!MobileClientPresentation.IsPanelPointer(joy),"Panel removed");
 }
