@@ -859,7 +859,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         return DrawForNativeOwner(scale, viewportWidth, viewportHeight);
     }
 
-    internal bool DrawForNativeOwner(float scale, int? viewportWidth = null, int? viewportHeight = null)
+    internal bool DrawForNativeOwner(float scale, int? viewportWidth = null, int? viewportHeight = null,
+        bool touchControls = false)
     {
         if (!Ready || !IsPositiveFinite(scale)) return false;
 
@@ -920,8 +921,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         {
             LastToggleRect = new Rect(barX + 131f * scale, 0f, 20f * scale, 19f * scale);
         }
-        if (resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
-        if (GUI.Button(LastToggleRect, GUIContent.none, TransparentButton))
+        if (!touchControls && resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
+        if (!touchControls && GUI.Button(LastToggleRect, GUIContent.none, TransparentButton))
         {
             MiniOpen = !MiniOpen;
         }
@@ -964,7 +965,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
             // the same List reference, so this stays at the official point in the frame without
             // re-walking the polygons each time; the hover that follows consumes what it built.
             hudOwner.BuildGateMarksForIndependentRuntime();
-            ShowNearestGateTip(LastMapRect, mapScale);
+            if (!touchControls) ShowNearestGateTip(LastMapRect, mapScale);
         }
 
         if (minimapOpen)
@@ -1008,7 +1009,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         // aligned from the map corner; see DrawCoordinateText.
         DrawCoordinateText(scale);
 
-        if (GUI.Button(LastMapRect, GUIContent.none, TransparentButton))
+        if (!touchControls && GUI.Button(LastMapRect, GUIContent.none, TransparentButton))
         {
             DiagramOpen = !DiagramOpen;
         }
@@ -1016,8 +1017,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float worldButtonScale = hudOwner.s;
         LastWorldButtonRect = new Rect(baseX + 140f * worldButtonScale, baseY + 10f * worldButtonScale,
             26f * worldButtonScale, 26f * worldButtonScale);
-        if (resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
-        if (GUI.Button(LastWorldButtonRect, GUIContent.none, TransparentButton))
+        if (!touchControls && resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
+        if (!touchControls && GUI.Button(LastWorldButtonRect, GUIContent.none, TransparentButton))
         {
             DiagramOpen = false;
             WorldMapRequested = true;
@@ -1027,8 +1028,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float plusButtonScale = hudOwner.s;
         LastPlusButtonRect = new Rect(baseX + 150f * plusButtonScale, baseY + 37f * plusButtonScale,
             26f * plusButtonScale, 26f * plusButtonScale);
-        if (resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
-        if (GUI.Button(LastPlusButtonRect, GUIContent.none, TransparentButton))
+        if (!touchControls && resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
+        if (!touchControls && GUI.Button(LastPlusButtonRect, GUIContent.none, TransparentButton))
         {
             StepZoom(true);
         }
@@ -1036,8 +1037,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         float minusButtonScale = hudOwner.s;
         LastMinusButtonRect = new Rect(baseX + 155f * minusButtonScale, baseY + 63f * minusButtonScale,
             26f * minusButtonScale, 26f * minusButtonScale);
-        if (resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
-        if (GUI.Button(LastMinusButtonRect, GUIContent.none, TransparentButton))
+        if (!touchControls && resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
+        if (!touchControls && GUI.Button(LastMinusButtonRect, GUIContent.none, TransparentButton))
         {
             StepZoom(false);
         }

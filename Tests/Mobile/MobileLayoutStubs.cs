@@ -9,7 +9,7 @@ public static class TouchScreenKeyboard {public static bool visible;public stati
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
 public static class AddonUiHost {public static bool PointerOver(UnityEngine.Vector2 point)=>false;}
-public class GameHud {public static GameHud I;public bool showChat=true,showAvatar=true,showMinimap=true,diagramOpen;}
+public class GameHud {public static GameHud I;public bool showChat=true,showAvatar=true,showMinimap=true,diagramOpen;internal static int ControlButtonCountForIndependentRuntime=>9;}
 public class EquipDlg {public static EquipDlg I;public bool IsOpen;}
 public class Win05 {public static Win05 I;public bool IsOpen;}
 public class UIManager {public static UIManager I;public bool MobileWindowOpen;}

@@ -119,9 +119,8 @@ public partial class GameHud
             if (guiPlayerStatus!=null) ready &= guiPlayerStatus.DrawExperienceForIndependentRuntime(Time.time,(int)safe.width,(int)safe.height);
             // The retained map renderer receives the full safe viewport, never a minimap-sized viewport.
             if (showMinimap) miniOpen=true; // Mobile keeps the compact map visible; its separate touch buttons own expansion.
-            bool enabled=GUI.enabled;
-            try { GUI.enabled=false; if (guiMinimap!=null) ready &= guiMinimap.DrawForNativeOwner(scale,(int)safe.width-5,(int)safe.height); }
-            finally { GUI.enabled=enabled; }
+            if (guiMinimap!=null) ready &= guiMinimap.DrawForNativeOwner(scale,(int)safe.width-5,
+                (int)safe.height,touchControls:true);
             if (guiMinimap!=null && guiMinimap.ConsumeWorldMapRequest()) guiHost?.ObserveNativeWorldMapRequestForIndependentRuntime();
             Rect band=MarqueeBand();
             GUI.matrix=Matrix4x4.Translate(new Vector3(safe.center.x-band.width*.5f-band.x,safe.y+4*scale-band.y,0))*previous;
@@ -131,60 +130,60 @@ public partial class GameHud
         // Reuse original resources, icons, cooldown masks and dispatch; no replacement artwork.
         if (showMinimap)
         {
-            DrawMobileButton(MobileClientPresentation.MapActionRect(0),skPlus,"+");
-            DrawMobileButton(MobileClientPresentation.MapActionRect(1),skMinus,"−");
-            DrawMobileButton(MobileClientPresentation.MapActionRect(2),skWorldBtn,"地图");
-            DrawMobileButton(MobileClientPresentation.MapActionRect(3),skToggle,diagramOpen ? "收图" : "展开");
+            DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect(0),6f*scale),skPlus,"",mobilePressed==11);
+            DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect(1),6f*scale),skMinus,"",mobilePressed==12);
+            DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect(2),6f*scale),skWorldBtn,"",mobilePressed==13);
+            DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect(3),6f*scale),skToggle,"",mobilePressed==14);
         }
         if (showHotbar && !diagramOpen)
         {
-            DrawMobileButton(MobileClientPresentation.AttackRect,hb24Block,"普攻");
+            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==4);
             for (int k=0;k<4;k++)
             {
                 int slot=mobilePage*4+k;
                 Rect rect=MobileClientPresentation.SkillRect(k);
-                DrawMobileButton(rect,hb24Block,"");
+                MobileHudArtwork.SkillFace(rect,scale,slot<30 && hotSkill[slot]!=0,
+                    mobileFinger!=-1 && mobilePressed==k);
                 if (slot<30)
                 {
                     Texture2D icon=HotIconForIndependentRuntime(slot);
-                    if (icon!=null) GUI.DrawTexture(new Rect(rect.x+6*scale,rect.y+6*scale,rect.width-12*scale,rect.height-12*scale),icon,ScaleMode.ScaleToFit);
+                    MobileHudArtwork.Image(MobileHudArtwork.Inset(rect,9f*scale),icon,
+                        mobileFinger!=-1 && mobilePressed==k);
                     DrawCdOverlay(rect,hotSkill[slot]);
                 }
             }
-            if (GUI.Button(MobileClientPresentation.PageRect,(mobilePage+1)+"/8")) { CancelMobileGesture(); mobilePage=(mobilePage+1)%8; }
-            Rect joy=MobileClientPresentation.JoystickRect;
-            DrawMobileButton(joy,lianliRing,"");
-            Vector2 axis=ClientInput.MovementAxis;
-            Rect knob=new Rect(joy.center.x-22*scale+axis.x*48*scale,joy.center.y-22*scale-axis.y*48*scale,44*scale,44*scale);
-            DrawMobileButton(knob,socketFill,"");
+            if (MobileHudArtwork.TextButton(MobileClientPresentation.PageRect,(mobilePage+1)+"/8",scale)) { CancelMobileGesture(); mobilePage=(mobilePage+1)%8; }
+            MobileHudArtwork.Joystick(MobileClientPresentation.JoystickRect,ClientInput.MovementAxis,scale);
         }
         if (showMenu && !diagramOpen)
         {
-            if (GUI.Button(MobileClientPresentation.MenuToggleRect,MobileClientPresentation.MenuExpanded ? "收起" : "功能"))
+            if (MobileHudArtwork.TextButton(MobileClientPresentation.MenuToggleRect,
+                MobileClientPresentation.MenuExpanded ? "收起" : "功能",scale,MobileClientPresentation.MenuExpanded))
             {
                 MobileClientPresentation.MenuExpanded=!MobileClientPresentation.MenuExpanded;
                 if (MobileClientPresentation.MenuExpanded) MobileClientPresentation.ChatExpanded=false;
             }
             if (MobileClientPresentation.MenuExpanded)
             {
-                Rect menu=MobileClientPresentation.MenuRect;
                 for (int index=0;index<CtrlBtns.Length;index++)
                 {
-                    Rect rect=new Rect(menu.x+(index%3)*52*scale,menu.y+(index/3)*52*scale,48*scale,48*scale);
-                    Texture2D tex=ctrlTex!=null && index<ctrlTex.Length ? ctrlTex[index] : null;
-                    if (GUI.Button(rect,GUIContent.none)) ActivateControlButtonForIndependentRuntime(index);
-                    DrawControlIconForIndependentRuntime(rect,tex,true);
+                    Rect rect=MobileClientPresentation.MenuItemRect(index);
+                    bool hovered=GUI.enabled && rect.Contains(Event.current.mousePosition);
+                    MobileHudArtwork.ControlFace(rect,hb24Ctrl,ctrlTex,index,scale,hovered,
+                        hovered && Input.GetMouseButton(0));
+                    if (GUI.Button(rect,GUIContent.none,GUIStyle.none)) ActivateControlButtonForIndependentRuntime(index);
                 }
             }
         }
-        if (mobileFinger!=-1 && mobilePressed<4) DrawMobileButton(MobileClientPresentation.CancelRect,togglebtn,"移到这里取消");
+        if (mobileFinger!=-1 && mobilePressed<4)
+            ArtworkSkin.ButtonFace(MobileClientPresentation.CancelRect,"移到这里取消",scale,
+                selected:MobileClientPresentation.CancelRect.Contains(MobileClientPresentation.GuiPoint(Input.mousePosition)));
         LastGuiDrawSucceededForIndependentRuntime=ready;
     }
-    private static void DrawMobileButton(Rect rect,Texture2D art,string text)
+    private static void DrawMobileButton(Rect rect,Texture2D art,string text,bool pressed=false)
     {
-        if (art!=null) GUI.DrawTexture(rect,art,ScaleMode.ScaleToFit);
-        else GUI.Box(rect,GUIContent.none);
-        if (!string.IsNullOrEmpty(text)) GUI.Label(rect,text);
+        MobileHudArtwork.Image(rect,art,pressed);
+        MobileHudArtwork.Label(rect,text,MobileClientPresentation.Scale);
     }
 }
 }

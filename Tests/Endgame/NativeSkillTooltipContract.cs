@@ -194,6 +194,139 @@ internal static class NativeSkillTooltipContract
         CheckRender(equipment, 2f, new Vector2(15f, 15f));
         Event.current = null; Screen.width = 1280; Screen.height = 900;
     }
+    private static int MobileRow(bool comparison = false) => (int)typeof(UITip)
+        .GetField(comparison ? "mobileCompareRow" : "mobileMainRow", HiddenStatic).GetValue(null);
+    private static void RenderMobile(string text, Vector2 anchor, EventType type = EventType.Repaint,
+        Vector2? point = null, string comparison = null, float scale = 1f)
+    {
+        Time.frameCount++;
+        Event.current = new Event { type = type, mousePosition = point ?? anchor };
+        if (comparison == null) UITip.ShowAtForIndependentRuntime(text, scale, anchor);
+        else UITip.ShowCompareAtForIndependentRuntime(text, comparison, scale, anchor);
+        BitmapFont.Draws.Clear(); GUI.Draws.Clear();
+        object renderer = typeof(UITip).GetField("renderer", HiddenStatic).GetValue(null);
+        renderer.GetType().GetMethod("OnGUI", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(renderer, null);
+    }
+    private static void CheckInside(Rect box, Rect safe, string message) => Check(
+        box.x >= safe.x - .0001f && box.y >= safe.y - .0001f &&
+        box.xMax <= safe.xMax + .0001f && box.yMax <= safe.yMax + .0001f, message);
+    private static void MobileNativeRendering()
+    {
+        MobileClientPresentation.Enabled = true;
+        try
+        {
+            const string text = "\u0007\u0005原始装备\n\u0001绿色属性 +1\n\u0002原始要求\n\u0006完整原说明";
+            var layout = Layout(text);
+            var anchor = new Vector2(720f, 390f);
+            var safe = new Rect(48f, 32f, 680f, 360f);
+            MobileClientPresentation.SafeAreaGui = safe;
+            var tint = new Color(.2f, .3f, .4f, .5f); GUI.color = tint;
+            RenderMobile(text, anchor);
+            Rect box = GUI.Draws[0].Area;
+            CheckInside(box, safe, "Mobile native tooltip respects nonzero safe-area insets");
+            Check(GUI.Draws.Count == 9 && GUI.Draws.Count(draw => draw.HasCoordinates) == 8,
+                "Mobile tooltip uses original background and all eight native frame pieces");
+            Check(GUI.Draws.Skip(1).All(draw => draw.Texture.Name.StartsWith("ui/equipdlg05/", StringComparison.Ordinal)),
+                "Mobile frame retains native equipment tooltip artwork");
+            Check(Same(GUI.Draws[0].Color, new Color32(16,16,16,196)) && Same(GUI.color,tint),
+                "Mobile frame retains native background palette and restores GUI tint");
+            Check(Near(box.width, layout.Item2) && Near(box.height, layout.Item3) && BitmapFont.Draws.Count == layout.Item1.Count,
+                "Fitting mobile card retains original box dimensions and complete row count");
+            for (int index = 0; index < layout.Item1.Count; index++)
+            {
+                var expected = layout.Item1[index]; var draw = BitmapFont.Draws[index];
+                float x = expected.Item3 ? box.x + (box.width - BitmapFont.Measure(expected.Item1,1f)) / 2f : box.x + 6f;
+                Check(draw.Text == expected.Item1 && Same(draw.Color,expected.Item2) && Near(draw.X,x) &&
+                    Near(draw.Y,box.y+6f+16f*index) && Near(draw.Scale,1f),
+                    "Mobile card retains exact native row text, color, alignment and pitch " + index);
+            }
+            var inside = new Vector2(box.x + 1,box.y + 1);
+            Check(UITip.MobileContainsPointer(inside) && !UITip.MobileContainsPointer(new Vector2(safe.x-1,safe.y-1)),
+                "Only the actual mobile tooltip rectangle owns its pointer");
+            Time.frameCount += 2;
+            Check(!UITip.MobileContainsPointer(inside), "Expired tooltip geometry no longer blocks panel input");
+
+            string longText = string.Join("\n", Enumerable.Range(0,24).Select(index =>
+                (index % 2 == 0 ? "\u0007\u0001" : "\u0002") + "完整原始行" + index));
+            MobileClientPresentation.SafeAreaGui = safe = new Rect(34,26,480,88);
+            anchor = new Vector2(60,35);
+            var full = Layout(longText);
+            var reached = new HashSet<int>();
+            RenderMobile(longText,anchor);
+            Check(BitmapFont.Draws.Count < full.Item1.Count, "Mobile overflow clips rows without changing original layout");
+            for (int step = 0; step <= full.Item1.Count; step++)
+            {
+                box=GUI.Draws[0].Area;
+                CheckInside(box,safe,"Scrollable mobile card remains inside safe area");
+                int first=MobileRow();
+                for(int index=0;index<BitmapFont.Draws.Count;index++)
+                {
+                    var expected=full.Item1[first+index];var draw=BitmapFont.Draws[index];
+                    Check(draw.Text==expected.Item1 && Same(draw.Color,expected.Item2) && Near(draw.Scale,1f) &&
+                        draw.Y>=box.y && draw.Y+12f<=box.yMax,
+                        "Every visible mobile overflow row is an unchanged fully visible native row");
+                    reached.Add(first+index);
+                }
+                if(reached.Count==full.Item1.Count)break;
+                var start=new Vector2(box.x+box.width/2,box.yMax-8);
+                var end=new Vector2(start.x,start.y-16);
+                RenderMobile(longText,anchor,EventType.MouseDown,start);
+                Check(Event.current.type==EventType.Used,"Tooltip drag start owns the event");
+                RenderMobile(longText,anchor,EventType.MouseDrag,end);
+                Check(Event.current.type==EventType.Used,"Tooltip scrolling consumes the drag event");
+                RenderMobile(longText,anchor,EventType.MouseUp,end);
+                Check(Event.current.type==EventType.Used,"Tooltip release cannot activate underlying UI");
+            }
+            Check(reached.Count==full.Item1.Count && MobileRow()>0,"Dragging reaches every original overflow row, including final footer");
+            RenderMobile(text,anchor);
+            Check(MobileRow()==0,"Changing tooltip content resets mobile scroll");
+
+            // Long comparison rows retain their own independent native frame and scroll.
+            string comparison=longText.Replace("完整原始行","对比原始行");
+            MobileClientPresentation.SafeAreaGui=safe=new Rect(40,30,500,104);
+            anchor=new Vector2(50,40);
+            RenderMobile(longText,anchor,comparison:comparison);
+            Check(GUI.Draws.Count==18,"Comparison remains two separate original framed cards");
+            Rect main=GUI.Draws[0].Area,other=GUI.Draws[9].Area;
+            CheckInside(main,safe,"Comparison main fits safe inset");CheckInside(other,safe,"Comparison secondary fits safe inset");
+            var otherStart=new Vector2(other.x+other.width/2,other.yMax-8);
+            RenderMobile(longText,anchor,EventType.MouseDown,otherStart,comparison);
+            RenderMobile(longText,anchor,EventType.MouseDrag,new Vector2(otherStart.x,otherStart.y-16),comparison);
+            Check(MobileRow()==0 && MobileRow(true)==1,"Comparison drag scrolls only its own original rows");
+            RenderMobile(longText,anchor,EventType.MouseUp,new Vector2(otherStart.x,otherStart.y-16),comparison);
+
+            // Neither comparison card may cover the other, even near the safe-area middle
+            // or when a narrow display scales the original pair down together.
+            foreach(float width in new[]{340f,200f})
+            {
+                MobileClientPresentation.SafeAreaGui=safe=new Rect(40,30,width,180);
+                string wide="\u0007\u0005"+new string('W',24)+"\n原物品";
+                string compare="\u0007\u0001"+new string('M',24)+"\n已装备";
+                RenderMobile(wide,new Vector2(140,50),comparison:compare);
+                Check(GUI.Draws.Count==18,"Width-limited comparison keeps two native frames");
+                main=GUI.Draws[0].Area;other=GUI.Draws[9].Area;
+                CheckInside(main,safe,"Width-limited main stays inside safe area");
+                CheckInside(other,safe,"Width-limited comparison stays inside safe area");
+                Check(main.xMax<=other.x+.0001f || other.xMax<=main.x+.0001f,
+                    "Mobile comparison cards cannot overlap at safe width "+width);
+                Check(BitmapFont.Draws.Select(row=>row.Text).SequenceEqual(Layout(wide).Item1.Concat(Layout(compare).Item1).Select(row=>row.Item1)),
+                    "Width adaptation retains both separate native card contents");
+            }
+        }
+        finally
+        {
+            MobileClientPresentation.Enabled=false;MobileClientPresentation.SafeAreaGui=new Rect(0,0,1280,900);
+            Input.touches=new Touch[0];Event.current=null;
+        }
+        // Verify the real request renderer returns to the unchanged desktop route.
+        Event.current=new Event {type=EventType.Repaint,mousePosition=new Vector2(25,35)};
+        UITip.Show("桌面原提示",1f);
+        object desktop=typeof(UITip).GetField("renderer",HiddenStatic).GetValue(null);
+        BitmapFont.Draws.Clear();GUI.Draws.Clear();
+        desktop.GetType().GetMethod("OnGUI",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(desktop,null);
+        Check(Near(GUI.Draws[0].Area.x,41f)&&Near(GUI.Draws[0].Area.y,51f),"Desktop request restores original pointer placement after mobile mode");
+        Event.current=null;
+    }
     private static void CenteringAfterWrapping()
     {
         // Exercise the actual composition with a mixed-width title, a source that
@@ -738,7 +871,7 @@ internal static class NativeSkillTooltipContract
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
         CenteringAfterWrapping(); HierarchyAndDrawing(); EquipmentTrainingDrawing(); CapUnlearnedAndHotbar(); FullNextPreview(); ExactRanksAndCompatibility();
-        PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation(); ReducedManaCostPreservesOriginalBlock();
+        PendingStaleAndRouting(); RequestAndComparisonRendering(); SkillScrollingAndIsolation(); ReducedManaCostPreservesOriginalBlock(); MobileNativeRendering();
         foreach (string fixture in args) CheckServerFixture(fixture);
         ServerActualManaCostTips(Environment.GetEnvironmentVariable("FFO_SKILL_MANA_FIXTURE"));
         ServerActualGrowthTips(Environment.GetEnvironmentVariable("FFO_SKILL_GROWTH_FIXTURE"));

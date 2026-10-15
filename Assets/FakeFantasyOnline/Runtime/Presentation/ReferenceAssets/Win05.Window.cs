@@ -36,7 +36,7 @@ public partial class Win05
         Rect L(float x, float y, float width, float height) =>
             new Rect(originX + x * s, originY + y * s, width * s, height * s);
 
-        if (!TryGetCurrentDefinition(out Def def)) return;
+        if (!TryGetCurrentDefinition(out Def def)) { MobileClientPresentation.RemovePanel(this); return; }
         ResLoader loader = ResLoader.I;
         if (loader == null) return;
         EnsureUiFrames(loader);
@@ -59,6 +59,13 @@ public partial class Win05
         if (stacking.Item2) ev.mousePosition = new Vector2(-9999f, -9999f);
         try
         {
+            if (IsMobileSkillWindow && stacking.Item2) ResetMobileSkills();
+            if (IsMobileSkillWindow && ev.type == EventType.MouseDown && !UITip.MobileContainsPointer(ev.mousePosition) &&
+                (!mobileSkillActions || !mobileSkillActionsRect.Contains(ev.mousePosition))) ResetMobileSkills();
+            bool actionsCover = IsMobileSkillWindow && ((mobileSkillActions && mobileSkillActionsRect.Contains(ev.mousePosition)) ||
+                UITip.MobileContainsPointer(ev.mousePosition));
+            Vector2 pointer = ev.mousePosition;
+            if (actionsCover) ev.mousePosition = new Vector2(-9999f, -9999f);
             originX = winX;
             originY = winY;
             Rect close = def.cx >= 0f ? L(def.cx, def.cy, 20f, 19f) :
@@ -67,7 +74,7 @@ public partial class Win05
             Rect help = hasHelp ? L(def.cx - 20f, def.cy, 20f, 19f) :
                 new Rect(-99f, -99f, 0f, 0f);
             Rect header = L(0f, 0f, def.w, 30f);
-            if (!IsMobileSkillWindow && ev.type == EventType.MouseDown && header.Contains(ev.mousePosition) &&
+            if (ev.type == EventType.MouseDown && header.Contains(ev.mousePosition) &&
                 !close.Contains(ev.mousePosition) && !help.Contains(ev.mousePosition))
             {
                 dragging = true;
@@ -104,7 +111,7 @@ public partial class Win05
             if (closed)
             {
                 cur = null;
-                mobileSkills.Reset();
+                ResetMobileSkills();
                 return;
             }
 
@@ -123,6 +130,8 @@ public partial class Win05
                 BitmapFont.CenterOutline(L(0f, def.h - 42f, def.w, 12f), "(功能待接入)",
                     new Color(150f / 255f, 150f / 255f, 150f / 255f, 1f), s);
             GameHud.DrawDragIcon(s);
+            if (actionsCover) ev.mousePosition = pointer;
+            if (IsMobileSkillWindow && !stacking.Item2) DrawMobileSkillActions(L, def);
         }
         finally
         {

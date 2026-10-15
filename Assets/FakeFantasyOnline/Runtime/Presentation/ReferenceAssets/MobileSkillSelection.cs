@@ -6,6 +6,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal int Skill { get; private set; }
         internal bool ChoosingSlot { get; private set; }
         private bool pressed, moved;
+        internal bool Pressed => pressed;
+        internal bool Moved => moved;
+        internal void ConsumeHold() { pressed = false; }
         private float startX, startY, lastY;
         internal void Begin(float x, float y) { pressed = true; moved = false; startX = x; startY = lastY = y; }
         internal float Move(float x, float y, float threshold)

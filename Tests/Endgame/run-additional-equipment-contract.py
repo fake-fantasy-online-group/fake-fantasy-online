@@ -26,5 +26,8 @@ with tempfile.TemporaryDirectory(prefix="additional-equipment-contract-") as fol
     exe = Path(folder) / "EquipmentAdditionalSlotsContract.exe"
     subprocess.run(compiler + references + ["-nologo", "-langversion:9.0", "-target:exe", "-out:" + str(exe),
         str(root / "Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EquipDlg.OnGUI.cs"),
+        str(root / "Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EquipDlg.Mobile.cs"),
+        str(root / "Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/MobilePanelInput.cs"),
+        str(root / "Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/MobileItemGesture.cs"),
         str(tests / "EquipmentAdditionalSlotsStubs.cs"), str(tests / "EquipmentAdditionalSlotsContract.cs")], check=True)
     subprocess.run([mono, str(exe)], check=True)

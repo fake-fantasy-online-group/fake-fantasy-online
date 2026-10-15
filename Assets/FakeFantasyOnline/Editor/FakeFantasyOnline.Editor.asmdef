@@ -3,7 +3,9 @@
     "rootNamespace": "FakeFantasyOnline.Editor",
     "references": [
         "FakeFantasyOnline.Foundation",
-        "FakeFantasyOnline.Protocol"
+        "FakeFantasyOnline.Protocol",
+        "FakeFantasyOnline.Application",
+        "FakeFantasyOnline.Presentation"
     ],
     "includePlatforms": [
         "Editor"

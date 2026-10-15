@@ -30,10 +30,40 @@ public static class MobileClientPresentation
     public static Rect MinimapRect => new Rect(SafeAreaGui.xMax-184f*Scale,SafeAreaGui.y,184f*Scale,221f*Scale);
     public static Rect MapActionRect(int index) => new Rect(MinimapRect.x+index*46f*Scale,MinimapRect.y+177f*Scale,44f*Scale,44f*Scale);
     public static bool DiagramOpen => GameHud.I!=null && GameHud.I.diagramOpen;
-    public static Rect MenuToggleRect => new Rect(SafeAreaGui.xMax-56f*Scale,SafeAreaGui.yMax-302f*Scale,48f*Scale,48f*Scale);
-    public static Rect MenuRect => new Rect(SafeAreaGui.xMax-352f*Scale,MenuToggleRect.y-160f*Scale,156f*Scale,156f*Scale);
+    // One compact switch and the original nine entries share the top safe-area band.
+    // Neither the avatar's 171px band nor the compact map is covered by an entry.
+    public static Rect MenuToggleRect => new Rect(MinimapRect.x-60f*Scale,SafeAreaGui.y+36f*Scale,48f*Scale,48f*Scale);
+    internal static int MenuColumnsForWidth(float width, float scale, int count)
+    {
+        int columns=(int)((width+8f*scale)/(56f*scale));
+        if (columns<1) columns=1;
+        return columns<count ? columns : count;
+    }
+    private static float MenuAvailableWidth => Mathf.Max(48f*Scale,
+        MenuToggleRect.x-8f*Scale-(SafeAreaGui.x+183f*Scale));
+    public static int MenuColumns => MenuColumnsForWidth(MenuAvailableWidth,Scale,
+        GameHud.ControlButtonCountForIndependentRuntime);
+    public static Rect MenuRect
+    {
+        get
+        {
+            int count=GameHud.ControlButtonCountForIndependentRuntime;
+            int columns=MenuColumns;
+            int rows=(count+columns-1)/columns;
+            float width=(columns*56f-8f)*Scale;
+            return new Rect(MenuToggleRect.x-8f*Scale-width,MenuToggleRect.y,
+                width,(rows*56f-8f)*Scale);
+        }
+    }
+    public static Rect MenuItemRect(int index)
+    {
+        Rect menu=MenuRect;
+        int columns=MenuColumns;
+        return new Rect(menu.x+(index%columns)*56f*Scale,menu.y+(index/columns)*56f*Scale,
+            48f*Scale,48f*Scale);
+    }
     public static Rect PageRect => new Rect(SafeAreaGui.xMax-208f*Scale,SafeAreaGui.yMax-250f*Scale,64f*Scale,40f*Scale);
-    public static Rect CancelRect => new Rect(SafeAreaGui.center.x-60f*Scale,SafeAreaGui.y+24f*Scale,120f*Scale,48f*Scale);
+    public static Rect CancelRect => new Rect(SafeAreaGui.center.x-60f*Scale,SafeAreaGui.y+100f*Scale,120f*Scale,48f*Scale);
     public static Rect ChatRect
     {
         get
@@ -42,7 +72,7 @@ public static class MobileClientPresentation
             if (TouchScreenKeyboard.visible && TouchScreenKeyboard.area.height>0f)
                 safe.height=Mathf.Max(1f,safe.height-TouchScreenKeyboard.area.height);
             float width = Mathf.Min(360f*Scale,safe.width*.38f);
-            float height = (ChatExpanded ? 264f : 128f)*Scale;
+            float height = (ChatExpanded ? 264f : 112f)*Scale;
             height=Mathf.Min(height,safe.height);
             float top=ChatExpanded ? safe.center.y-height*.5f : safe.yMax-height-12f*Scale;
             return new Rect(safe.center.x-width*.5f,Mathf.Max(safe.y,top),width,height);

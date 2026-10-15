@@ -26,7 +26,7 @@ internal partial class EquipDlg
     // 1.6.0 06000314: Unity is the only driver. No world-host, readiness, finite-scale or session gate.
     private void OnGUI()
     {
-        if (!open) return;
+        if (!open) { ClearMobileEquipmentSelection(); MobileClientPresentation.RemovePanel(this); return; }
         if (!loaded) Load();
         if (bk == null) return;
         s = UIScale.Factor;
@@ -36,6 +36,9 @@ internal partial class EquipDlg
             winY = (Screen.height - 506f * s) * 0.5f;
             placed = true;
         }
+        bool mobile = MobileClientPresentation.Enabled;
+        if (mobile) PrepareMobileEquipment();
+        else MobileClientPresentation.RemovePanel(this);
         Event ev = Event.current;
         var z = WinZ.Frame(this, new Rect(winX - 26f * s, winY, 313f * s, 506f * s), 10);
         GUI.depth = z.Item1;
@@ -43,6 +46,14 @@ internal partial class EquipDlg
         if (z.Item2) ev.mousePosition = new Vector2(-9999f, -9999f);
         try
         {
+            if (mobile)
+            {
+                if (z.Item2) ClearMobileEquipmentSelection();
+                else ReadMobileEquipment(ev);
+            }
+            bool actionsCover = mobile && ((mobileEquipmentActions && mobileEquipmentActionsRect.Contains(ev.mousePosition)) || UITip.MobileContainsPointer(ev.mousePosition));
+            Vector2 pointer = ev.mousePosition;
+            if (actionsCover) ev.mousePosition = new Vector2(-9999f, -9999f);
             // Native display-class90_0 captures X/Y before drag stores. The current pass
             // retains these coordinates; the next callback observes the new winX/winY.
             var f = new GuiFrame(this, winX, winY);
@@ -114,6 +125,8 @@ internal partial class EquipDlg
                     if (titleOpen) DrawTitles(f, ev);
                 }
             }
+            if (actionsCover) ev.mousePosition = pointer;
+            if (mobile && !z.Item2) DrawMobileEquipmentSelection(ev);
         }
         finally
         {
@@ -245,7 +258,7 @@ internal partial class EquipDlg
                     BitmapFont.Draw(rect.x + 3f * s, rect.y + 10f * s,
                         item.name.Substring(0, Math.Min(2, item.name.Length)),
                         item.quality > 0 ? (Color)UITip.QualityColor(item.quality) : Color.white, s);
-                if (hover) DrawSlotAction(item, ev);
+                if (hover && !MobileClientPresentation.Enabled) DrawSlotAction(item, ev);
             }
             if (!sharedSlot && checkbox != null && checkbox.Length != 0)
             {
@@ -342,7 +355,7 @@ internal partial class EquipDlg
                 BitmapFont.Draw(rect.x + 3f * s, rect.y + 10f * s,
                     item.name.Substring(0, Math.Min(2, item.name.Length)),
                     item.quality > 0 ? (Color)UITip.QualityColor(item.quality) : Color.white, s);
-            if (rect.Contains(ev.mousePosition) && !AttrWashDlg.MouseOver()) DrawSlotAction(item, ev);
+            if (!MobileClientPresentation.Enabled && rect.Contains(ev.mousePosition) && !AttrWashDlg.MouseOver()) DrawSlotAction(item, ev);
         }
     }
 

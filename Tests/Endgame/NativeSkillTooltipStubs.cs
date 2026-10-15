@@ -19,6 +19,7 @@ namespace UnityEngine
         { this.x = x; this.y = y; this.width = width; this.height = height; }
         public float xMax => x + width;
         public float yMax => y + height;
+        public bool Contains(Vector2 point) => point.x >= x && point.x < xMax && point.y >= y && point.y < yMax;
     }
     public struct Color
     {
@@ -44,7 +45,16 @@ namespace UnityEngine
         public static float Clamp(float value, float minimum, float maximum) => Math.Min(maximum, Math.Max(minimum, value));
         public static float Round(float value) => (float)Math.Round(value);
     }
-    public static class Input { public static Vector3 mousePosition; }
+    public enum TouchPhase { Began, Moved, Stationary, Ended, Canceled }
+    public struct Touch { public TouchPhase phase; }
+    public static class Input
+    {
+        public static Vector3 mousePosition;
+        public static Touch[] touches = new Touch[0];
+        public static int touchCount => touches.Length;
+        public static Touch GetTouch(int index) => touches[index];
+    }
+    public static class Time { public static int frameCount; }
     public static class Screen { public static int width = 1280, height = 900; public static float dpi = 96f; }
     public static class PlayerPrefs
     {
@@ -52,7 +62,7 @@ namespace UnityEngine
         public static void SetFloat(string key, float value) { }
         public static void Save() { }
     }
-    public enum EventType { Layout, Repaint, ScrollWheel, Used }
+    public enum EventType { Layout, Repaint, ScrollWheel, MouseDown, MouseDrag, MouseUp, Used }
     public class Event { public static Event current; public Vector2 mousePosition, delta; public EventType type; public void Use() { type = EventType.Used; } }
     public class MonoBehaviour { }
     public class GameObject
@@ -88,6 +98,11 @@ namespace UnityEngine
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     using UnityEngine;
+    public static class MobileClientPresentation
+    {
+        public static bool Enabled;
+        public static Rect SafeAreaGui = new Rect(0, 0, 1280, 900);
+    }
     public static class EndgamePanel { public static EndgameClientState GrowthState; }
     public static class CharData { public static int skillPoints; }
     public static class GameSettings { public static bool ColorWeak; }

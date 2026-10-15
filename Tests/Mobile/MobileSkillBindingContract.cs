@@ -26,9 +26,9 @@ static class Contract
   view.Pointer(EventType.MouseDown,10,10);Input.touchCount=2;
   Check(!view.Pointer(EventType.MouseUp,10,10),"second touch cancels tree tap");Input.touchCount=0;
   view.Pointer(EventType.MouseDown,10,10);Check(!view.Pointer(EventType.MouseUp,400,400),"outside release cancels");
-  view.Selection.Select(10);GUI.click="放入快捷栏";view.DrawActions();
+  view.SelectForActions(10);GUI.click="放入快捷栏";view.DrawActions();
   Check(!view.Selection.ChoosingSlot&&NetClient.I.writes==0&&NetClient.I.upgrades==0,"unlearned cannot bind or implicitly learn");
-  CharData.skills[10]=1;GUI.click="放入快捷栏";view.DrawActions();
+  CharData.skills[10]=1;view.SelectForActions(10);GUI.click="放入快捷栏";view.DrawActions();
   Check(view.Selection.ChoosingSlot&&NetClient.I.writes==0,"explicit bind enters chooser only");
   GameHud.hotSkill[29]=888;GameHud.hotKind[29]=2;GameHud.hotSkill[0]=999;GameHud.hotKind[0]=1;
   for(int page=0;page<7;page++){GUI.click="下一页";view.DrawActions();}
@@ -36,14 +36,23 @@ static class Contract
   Check(GameHud.hotSkill[29]==10&&GameHud.hotKind[29]==0&&GameHud.hotSkill[0]==999&&GameHud.hotKind[0]==1,"last partial page maps to slot29; replaces item without touching pet slot");
   Check(NetClient.I.writes==1&&NetClient.I.upgrades==0,"real drop sync once, no upgrade");
   GUI.click="8页2";view.DrawActions();Check(NetClient.I.writes==1,"repeated slot release does not resend");
-  GUI.click="放入快捷栏";view.DrawActions();GUI.click="取消选槽";view.DrawActions();Check(!view.Selection.ChoosingSlot&&NetClient.I.writes==1,"cancel leaves bindings");
-  GUI.click="返回技能树";view.DrawActions();Check(view.Selection.Skill==0,"back clears selection");view.Selection.Select(10);
+  view.SelectForActions(10);GUI.click="放入快捷栏";view.DrawActions();GUI.click="取消";view.DrawActions();Check(!view.Selection.ChoosingSlot&&NetClient.I.writes==1,"cancel leaves bindings");
+  GUI.click="取消";view.DrawActions();Check(view.Selection.Skill==0,"back clears selection");view.SelectForActions(10);
   Win05.info.type=19;GUI.click="放入快捷栏";view.DrawActions();Check(!view.Selection.ChoosingSlot,"passive cannot bind");Win05.info.type=0;
   Win05.info.tgt=18;GUI.click="放入快捷栏";view.DrawActions();Check(!view.Selection.ChoosingSlot,"non-hotbar target cannot bind");Win05.info.tgt=0;
   GUI.click="放入快捷栏";view.DrawActions();CharData.skills.Clear();GUI.click="1页1";view.DrawActions();Check(NetClient.I.writes==1,"revalidate learned state at commit");
   view.LoseFocus();Check(view.Selection.Skill==0&&!view.Selection.ChoosingSlot,"focus loss clears pending selection");
-  view.Selection.Select(10);GUI.click="学习 / 升级";view.DrawActions();Check(NetClient.I.upgrades==1&&NetClient.I.writes==1,"only explicit upgrade sends upgrade");
+  view.SelectForActions(10);GUI.click="学习 / 升级";view.DrawActions();Check(NetClient.I.upgrades==1&&NetClient.I.writes==1,"only explicit upgrade sends upgrade");
   var state=new MobileSkillSelection();state.Select(10);state.Choose(true);Check(!state.Commit(30,true,(a,b)=>{throw new Exception();}),"invalid slot rejected");
+  Time.unscaledTime=0;view.Pointer(EventType.MouseDown,10,10);Time.unscaledTime=.5f;
+  Check(view.Pointer(EventType.Repaint,10,10)&&view.Holding,"hold selects actions only after threshold");
+  Check(!view.Pointer(EventType.MouseUp,10,10),"hold release cannot tap or duplicate actions");
+  Time.unscaledTime=1;Input.touchCount=1;Input.touch=new Touch{fingerId=22,phase=TouchPhase.Began};
+  view.Pointer(EventType.MouseDown,10,10);Input.touchCount=0;Time.unscaledTime=2;
+  Check(!view.Pointer(EventType.Repaint,10,10)&&view.Selection.Skill==0,"lost skill finger cancels rather than becoming a late hold");
+  Input.touchCount=1;Input.touch=new Touch{fingerId=23,phase=TouchPhase.Began};view.Pointer(EventType.MouseDown,10,10);
+  Input.touch.fingerId=24;Check(!view.Pointer(EventType.Repaint,10,10),"replacement finger cannot inherit pending skill hold");Input.touchCount=0;
+  OriginalPanelContract.Run();
   Console.WriteLine("PASS mobile skill selection and real binding call paths: "+checks+" checks");
  }
 }

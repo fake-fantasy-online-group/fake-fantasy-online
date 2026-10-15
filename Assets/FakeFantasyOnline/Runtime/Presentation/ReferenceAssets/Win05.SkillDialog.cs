@@ -253,7 +253,7 @@ public partial class Win05
 
         I.cur = string.Equals(I.cur, name, StringComparison.Ordinal) ? null : name;
         I.positioned = false;
-        I.mobileSkills.Reset();
+        I.ResetMobileSkills();
     }
 
     // Official 0x06001033, static System.Void Win05.Open(System.String).
@@ -280,7 +280,7 @@ public partial class Win05
         {
             I.cur = name;
             I.positioned = false;
-            I.mobileSkills.Reset();
+            I.ResetMobileSkills();
             if (string.Equals(name, "historybar", StringComparison.Ordinal))
             {
                 _histSig = -1;
@@ -338,7 +338,7 @@ public partial class Win05
         if (I != null)
         {
             I.cur = null;
-            I.mobileSkills.Reset();
+            I.ResetMobileSkills();
         }
     }
 
@@ -422,7 +422,7 @@ public partial class Win05
         AppendLevelBlock(rows, info, Mathf.Max(1, currentLevel),
             currentLevel > 0 ? string.Format("等级: {0}", currentLevel) : "等级: 未学习", info.name);
         AppendDmgBonusRow(rows, info);
-        if (SkillUsableForHotbar(info)) rows.Add((MobileClientPresentation.Enabled ? "轻点查看；点放入快捷栏选择位置" : "双击或拖曳至快捷栏以使用这个技能", (char)6, false));
+        if (SkillUsableForHotbar(info)) rows.Add(("双击或拖曳至快捷栏以使用这个技能", (char)6, false));
         return ComposeTip(rows);
     }
 
@@ -472,7 +472,7 @@ public partial class Win05
             {
                 skillTab = index;
                 skillScroll = 0f;
-                if (MobileClientPresentation.Enabled) mobileSkills.Reset();
+                if (MobileClientPresentation.Enabled) ResetMobileSkills();
                 current.Use();
             }
         }
@@ -569,11 +569,6 @@ public partial class Win05
         Rect viewport = new Rect(winX + 18f * s, winY + 65f * s,
             visibleWidth * s, visibleHeight * s);
         bool mobile = MobileClientPresentation.Enabled;
-        if (mobile && mobileSkills.Skill > 0)
-        {
-            DrawMobileSkillActions(L, def);
-            return;
-        }
         bool mobileTap = mobile && MobileSkillTreeInput(viewport, current, maximumScroll);
         if (viewport.Contains(current.mousePosition) && current.type == EventType.ScrollWheel)
         {
@@ -677,8 +672,8 @@ public partial class Win05
                     GUI.DrawTexture(plusRect, Texture2D.whiteTexture);
                     GUI.color = Color.white;
                 }
-                if (!mobile && current != null && current.type == EventType.MouseDown &&
-                    plusRect.Contains(localPointer))
+                if (current != null && ((!mobile && current.type == EventType.MouseDown) ||
+                    (mobile && mobileTap && !mobileSkillHeld)) && plusRect.Contains(localPointer))
                 {
                     requestedUpgrade = slot.id;
                     current.Use();
@@ -690,7 +685,11 @@ public partial class Win05
                 continue;
             }
 
-            if (mobile && mobileTap) { mobileSkills.Select(slot.id); mobileSkillFirstRow = 0; }
+            if (mobile && mobileTap && requestedUpgrade == 0)
+            {
+                mobileSkills.Select(slot.id); mobileSkillActions = mobileSkillHeld;
+                mobileSkillActionsRect = MobilePanelLayout.Actions(mobileSkillAnchor, 3, out _);
+            }
             if (!mobile && current != null && current.type == EventType.MouseDown &&
                 current.button == 0 && canUse && SkillUsableForHotbar(info))
             {
@@ -703,12 +702,12 @@ public partial class Win05
         }
         GUI.EndGroup();
 
+        if (requestedUpgrade != 0 && NetClient.I != null) NetClient.I.UpgradeSkillForIndependentRuntime(requestedUpgrade);
         if (mobile)
         {
-            DrawMobileSkillActions(L, def);
+            ShowMobileSkillTooltip();
             return;
         }
-        if (requestedUpgrade != 0 && NetClient.I != null) NetClient.I.UpgradeSkillForIndependentRuntime(requestedUpgrade);
         if (hoveredInfo != null)
         {
             string text = BuildSkillTip(hoveredInfo, hoveredLevel);
@@ -829,6 +828,8 @@ public partial class Win05
     private void DrawLifeSkills(Func<float, float, float, float, Rect> L, Def d)
     {
         Event current = Event.current;
+        bool mobile = MobileClientPresentation.Enabled;
+        bool mobileTap = mobile && MobileSkillTreeInput(L(18f,65f,230f,299f), current, 0f);
         Texture2D button = UiFrame(SkillButtonPath, 0);
         Texture2D plus = UiFrame(PlusButtonPath, 0);
         int requested = 0;
@@ -857,13 +858,15 @@ public partial class Win05
                 Rect plusRect = new Rect(iconRect.xMax - 12f * s, iconRect.yMax - 12f * s,
                     GsaTextureScale.Width(plus) * s, GsaTextureScale.Height(plus) * s);
                 GUI.DrawTexture(plusRect, plus);
-                if (current.type == EventType.MouseDown && current.button == 0 && plusRect.Contains(current.mousePosition))
+                if (((!mobile && current.type == EventType.MouseDown && current.button == 0) ||
+                    (mobile && mobileTap && !mobileSkillHeld)) && plusRect.Contains(current.mousePosition))
                 {
                     current.Use();
                     requested = definition.Id;
                 }
             }
-            if (iconRect.Contains(current.mousePosition))
+            if (mobile && mobileTap && iconRect.Contains(current.mousePosition)) mobileLifeSkill = definition.Id;
+            if ((!mobile && iconRect.Contains(current.mousePosition)) || (mobile && mobileLifeSkill == definition.Id))
             {
                 hovered = (definition.Id, definition.Name);
                 hoveredLearned = learned;
@@ -876,7 +879,10 @@ public partial class Win05
             ? string.Format("{0}\n{1}  熟练度 {2}", hovered.Name, hoveredState.Item2, hoveredState.Item1)
             : hovered.Name + (lifeCanLearn.Contains(hovered.Id)
                 ? "\n可学习 (点右下角 + 学习)" : "\n未学习 (需先到鬼谷购买对应技能书)");
+        Vector2 pointer = current.mousePosition;
+        if (mobile) current.mousePosition = mobileSkillAnchor;
         UITip.Show(tip, s);
+        if (mobile) current.mousePosition = pointer;
     }
 
     // Original Fit 06001052, used by the native life-skill icon path.
@@ -920,7 +926,7 @@ public partial class Win05
             (currentLevel <= 0 && !prerequisite) ||
             (requirement != null && requirement.lreq > 0 && requirement.lreq != 999 && CharData.level < requirement.lreq))
             rows.Add(("您现在还无法升级这个技能", (char)6, false));
-        if (SkillUsableForHotbar(info)) rows.Add((MobileClientPresentation.Enabled ? "轻点查看；点放入快捷栏选择位置" : "双击或拖曳至快捷栏以使用这个技能", (char)6, false));
+        if (SkillUsableForHotbar(info)) rows.Add(("双击或拖曳至快捷栏以使用这个技能", (char)6, false));
         return ComposeTip(rows);
     }
 

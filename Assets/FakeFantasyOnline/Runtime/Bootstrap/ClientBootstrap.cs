@@ -21,6 +21,12 @@ public sealed class ClientBootstrap : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void CreateCompositionRoot()
     {
+#if UNITY_EDITOR
+        // Only the explicit Editor preview runner sets this session-scoped flag.
+        // The isolated scene must never create networking or addon listeners.
+        if (UnityEditor.SessionState.GetBool("FakeFantasyOnline.MobileHudPreview.Active", false))
+            return;
+#endif
         if (UnityEngine.Object.FindAnyObjectByType<ClientBootstrap>() != null)
         {
             return;

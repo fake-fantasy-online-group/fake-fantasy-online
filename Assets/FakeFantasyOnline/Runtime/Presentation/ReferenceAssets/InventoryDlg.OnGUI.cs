@@ -35,8 +35,8 @@ internal partial class InventoryDlg
         if (!open) { ClearMobileSelection(); MobileClientPresentation.RemovePanel(this); return; }
         if (!loaded) Load();
         if (bk == null) return;
-        if (MobileClientPresentation.Enabled) { DrawMobileInventory(Event.current); return; }
-        MobileClientPresentation.RemovePanel(this);
+        bool mobile = MobileClientPresentation.Enabled;
+        if (!mobile) MobileClientPresentation.RemovePanel(this);
         s = UIScale.Factor;
         if (!placed)
         {
@@ -44,6 +44,8 @@ internal partial class InventoryDlg
             winY = (Screen.height + s * -501f) * 0.5f;
             placed = true;
         }
+
+        if (mobile) PrepareMobileInventory();
 
         // A window covered by a higher one still draws, but it must not answer the mouse: the official
         // body parks the mouse at (-9999, -9999) instead of skipping the event.
@@ -57,7 +59,17 @@ internal partial class InventoryDlg
         if (covered) ev.mousePosition = new Vector2(-9999f, -9999f);
         try
         {
+            if (mobile)
+            {
+                if (covered) ClearMobileSelection();
+                else ReadMobileInventory(ev);
+            }
+            bool actionsCover = mobile && ((mobileActions && mobileActionsRect.Contains(ev.mousePosition)) || UITip.MobileContainsPointer(ev.mousePosition));
+            Vector2 pointer = ev.mousePosition;
+            if (actionsCover) ev.mousePosition = new Vector2(-9999f, -9999f);
             DrawOpenWindow(ev);
+            if (actionsCover) ev.mousePosition = pointer;
+            if (mobile && !covered) DrawMobileInventorySelection(ev);
         }
         finally
         {
@@ -161,7 +173,7 @@ internal partial class InventoryDlg
             Rect cell = new Rect(x, y, size, size);
             if (slotTex != null) GUI.DrawTexture(cell, slotTex);
 
-            bool over = SlotHit(cell, ev.mousePosition);
+            bool over = !MobileClientPresentation.Enabled && SlotHit(cell, ev.mousePosition);
             if (over)
             {
                 previous = GUI.color;
@@ -301,7 +313,7 @@ internal partial class InventoryDlg
         }
 
         // The full native held/drop and split tail is connected after the bottom row.
-        HeldClickForIndependentRuntime(new Rect(X, Y, s * 423f, s * 501f), ev);
+        if (!MobileClientPresentation.Enabled) HeldClickForIndependentRuntime(new Rect(X, Y, s * 423f, s * 501f), ev);
         if (splitOpen) SplitDraw();
     }
 

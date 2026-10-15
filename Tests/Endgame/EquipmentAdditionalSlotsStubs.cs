@@ -15,6 +15,12 @@ namespace UnityEngine
         public float x, y, width, height;
         public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
         public bool Contains(Vector2 p) => p.x >= x && p.x < x + width && p.y >= y && p.y < y + height;
+        public float xMax => x + width; public float yMax => y + height;
+        public Vector2 center => new Vector2(x+width/2,y+height/2);
+        public static bool operator ==(Rect a,Rect b)=>a.x==b.x&&a.y==b.y&&a.width==b.width&&a.height==b.height;
+        public static bool operator !=(Rect a,Rect b)=>!(a==b);
+        public override bool Equals(object other)=>other is Rect r&&this==r;
+        public override int GetHashCode()=>x.GetHashCode()^y.GetHashCode()^width.GetHashCode()^height.GetHashCode();
     }
     public struct Color
     {
@@ -25,10 +31,16 @@ namespace UnityEngine
     public class Sprite { public Texture2D texture; public Rect textureRect; }
     public enum EventType { MouseDown, MouseDrag, MouseUp, KeyDown, Repaint, Used }
     public enum KeyCode { Escape }
+    [Flags] public enum EventModifiers { None=0,Control=1,Command=2,Shift=4 }
+    public enum TouchPhase { Began,Moved,Stationary,Ended,Canceled }
+    public struct Touch { public int fingerId;public Vector2 position;public TouchPhase phase; }
+    public static class Input { public static Touch[] touches=new Touch[0];public static int touchCount=>touches.Length;public static Touch GetTouch(int i)=>touches[i]; }
+    public static class Time { public static int frameCount;public static float unscaledTime; }
+    public static class Application { public static bool isMobilePlatform; }
     public class Event
     {
         public static Event current;
-        public EventType type; public int button; public KeyCode keyCode; public Vector2 mousePosition;
+        public EventType type; public int button; public KeyCode keyCode; public Vector2 mousePosition;public EventModifiers modifiers;
         public void Use() { type = EventType.Used; }
     }
     public static class Screen { public static int width = 1024, height = 768; }
@@ -37,15 +49,27 @@ namespace UnityEngine
         public static int Clamp(int n, int min, int max) => Math.Min(Math.Max(n, min), max);
         public static int Max(int a, int b) => Math.Max(a, b);
         public static float Min(float a, float b) => Math.Min(a, b);
+        public static float Max(float a,float b)=>Math.Max(a,b);
+        public static float Clamp(float n,float min,float max)=>Math.Min(Math.Max(n,min),max);
     }
     public class GUIContent { public static GUIContent none = new GUIContent(); }
     public class GUIStyle { public static GUIStyle none = new GUIStyle(); }
     public static class GUI
     {
-        public static int depth; public static Color color;
+        public static int depth; public static Color color;public static bool enabled=true;
+        private static Rect pressed;private static bool pressing;
+        public static void ResetButton(){pressing=false;}
         public static void DrawTexture(Rect r, Texture2D t) { }
         public static void DrawTextureWithTexCoords(Rect r, Texture2D t, Rect uv) { }
-        public static bool Button(Rect r, GUIContent c, GUIStyle s) => false;
+        public static bool Button(Rect r, GUIContent c, GUIStyle s)
+        {
+            Event ev=Event.current;
+            if(!enabled||ev.button!=0)return false;
+            if(ev.type==EventType.MouseDown&&r.Contains(ev.mousePosition)){pressed=r;pressing=true;ev.Use();return false;}
+            if(ev.type==EventType.MouseUp&&pressing&&r==pressed)
+            {pressing=false;bool hit=r.Contains(ev.mousePosition);if(hit)ev.Use();return hit;}
+            return false;
+        }
         public static void Label(Rect r, string text) { }
     }
 }
@@ -67,13 +91,18 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public bool AdditionalOpen => additionalEquipmentOpen;
         public bool Open { get => open; set => open = value; }
         public int Tab { get => tab; set => tab = value; }
-        public float X { set => winX = value; }
-        public float Y { set => winY = value; }
+        public float X { get=>winX;set => winX = value; }
+        public float Y { get=>winY;set => winY = value; }
+        public float Scale=>s;public int MobileSlot=>mobileEquipmentSlot;public bool MobileActions=>mobileEquipmentActions;public bool MobileBinding=>mobileEquipmentBinding;
+        public Rect ActionRect=>mobileEquipmentActionsRect;
         public void Frame(float x, float y, int button)
         {
-            ItemIconUI.Drawn.Clear();
-            Event.current = new Event { type = button < 0 ? EventType.Repaint : EventType.MouseDown, button = button, mousePosition = new Vector2(x, y) };
-            OnGUI();
+            Frame(new Vector2(x,y),button<0?EventType.Repaint:EventType.MouseDown,0.02f,button<0?0:button);
+        }
+        public void Frame(Vector2 point,EventType type,float elapsed=.02f,int button=0)
+        {
+            Time.frameCount++;Time.unscaledTime+=elapsed;ItemIconUI.Drawn.Clear();ArtworkSkin.Buttons.Clear();
+            Event.current=new Event {type=type,button=button,mousePosition=point};OnGUI();
         }
         private void Load() { }
         private bool Btn(Rect r, Texture2D[] frames, Event ev)
@@ -122,10 +151,23 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public Sprite Still(int f) => null;
         public static PlayerAvatar Build(int g, int h, int hair, Appear a, float scale) => null;
     }
-    internal class PlayerController { public static PlayerController I; public PlayerAvatar Doll; public void RefreshSoulFx() { } }
+    internal class PlayerController { public static PlayerController I; public PlayerAvatar Doll;public static int Suppressions; public static void SuppressWorldClick(){Suppressions++;} public void RefreshSoulFx() { } }
     internal static class ItemIconUI { public static List<int> Drawn = new List<int>(); public static void Draw(Rect r, Texture2D t, float s) { Drawn.Add(t.ID); } }
+    internal static class MobileClientPresentation
+    {
+        public static bool Enabled;public static float Scale=1;public static Rect SafeAreaGui=new Rect(0,0,1024,768);
+        public static object Owner;public static Rect Registered;
+        public static void RegisterPanel(object owner,Rect r){Owner=owner;Registered=r;}
+        public static void RemovePanel(object o){if(Owner==o)Owner=null;}
+    }
+    internal static class ArtworkSkin
+    {
+        public static List<(Rect,string,bool)> Buttons=new List<(Rect,string,bool)>();
+        public static void ButtonFace(Rect r,string label,float scale,bool enabled,bool hovered,bool pressed){Buttons.Add((r,label,enabled));}
+    }
     internal static class UITip
     {
+        public static bool MobileContainsPointer(Vector2 p) => false;
         public static string Last;
         public static Color QualityColor(int q) => Color.white;
         public static void Show(string text, float s) { Last = text; }
@@ -156,14 +198,19 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     {
         public static bool Sharing, IsOpen; public static int SharedSlot;
         public static void Toggle() { }
-        public static bool ShareModHeld(Event e) => Sharing;
+        public static bool ShareModHeld(Event e) => Sharing||(e.modifiers&(EventModifiers.Control|EventModifiers.Command))!=0;
         public static void ShareToChat(int kind, int tab, int slot, string name) { SharedSlot = slot; }
     }
-    internal static class GameHud { public static void PickupSkill(int skill, Texture2D icon, bool b) { } }
+    internal static class GameHud
+    {
+        public static int Pickups,Bindings,BoundSlot=-1,BoundSkill;
+        public static void PickupSkill(int skill,Texture2D icon,bool b){Pickups++;}
+        public static bool BindMobileBookSkill(int slot,int skill,Texture2D icon){Bindings++;BoundSlot=slot;BoundSkill=skill;return true;}
+    }
     internal class NetClient
     {
-        public static NetClient I; public int LastUnequipped;
-        public void UnequipItemForIndependentRuntime(int slot) { LastUnequipped = slot; }
+        public static NetClient I; public int LastUnequipped,UnequipCount;
+        public void UnequipItemForIndependentRuntime(int slot) { LastUnequipped = slot;UnequipCount++; }
         public void SendEquipFx() { }
         public static void RefreshTransmogFx() { }
     }

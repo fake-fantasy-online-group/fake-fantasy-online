@@ -57,7 +57,8 @@ internal static partial class UITip
             GUI.depth = 1;
             if (reqText != null)
             {
-                if (reqIsSkill) RenderSkill(reqText, reqS, reqMouse);
+                if (MobileClientPresentation.Enabled) RenderMobileOriginal(reqText, reqCmp, reqS, reqMouse);
+                else if (reqIsSkill) RenderSkill(reqText, reqS, reqMouse);
                 else
                 {
                     ResetSkillScroll();
