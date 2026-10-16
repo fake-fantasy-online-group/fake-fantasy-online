@@ -142,6 +142,8 @@ internal static class MobileHudArtwork
         // The native map toggle supplies both arrow directions: frames 0..3 up,
         // 4..7 down, each normal/hover/pressed/disabled. Use no text or default skin.
         Texture2D[] frames = ArtworkSkin.Frames(MenuTogglePath, 8);
+        // The menu extends left of its toggle: expand left, collapse right.
+        // Rotate only the native up/down glyph clockwise, keeping its frame upright.
         int frame = (expanded ? 0 : 4) + (!GUI.enabled ? 3 : pressed ? 2 : hovered ? 1 : 0);
         Texture2D source = frames != null && frame < frames.Length ? frames[frame] : null;
         Image(Inset(rect, 6f * scale), MenuToggleTexture(source, frame));
@@ -185,7 +187,16 @@ internal static class MobileHudArtwork
     {
         Texture2D texture = ControlFrame(legacyFrames, index, hovered, pressed)
             ?? ControlFrame(bottomFrames, index, hovered, pressed);
-        Image(Inset(rect, 2f * scale), MenuIconTexture(texture));
+        // Only the rack needs a standalone caption. Reserve a bottom strip inside
+        // its existing hit target so the icon and outlined text cannot overlap.
+        if (index == 7)
+        {
+            float labelHeight = Mathf.Min(rect.height, 18f * scale);
+            Rect icon = new Rect(rect.x, rect.y, rect.width, rect.height - labelHeight);
+            Image(Inset(icon, 2f * scale), MenuIconTexture(texture));
+            Label(new Rect(rect.x, rect.yMax - labelHeight, rect.width, labelHeight), "货架", scale);
+        }
+        else Image(Inset(rect, 2f * scale), MenuIconTexture(texture));
     }
 
     // The label and its outline are baked into ctrlbar pixels. Mobile gets an
@@ -238,7 +249,10 @@ internal static class MobileHudArtwork
             Color32 pixel = original[(18 - gy - y) * 20 + gx + x];
             if (!IsToggleGlyph(pixel)) continue;
             for (int dy = 0; dy < 2; dy++)
-            for (int dx = 0; dx < 2; dx++) result[(37 - (11 + y * 2 + dy)) * 40 + 13 + x * 2 + dx] = pixel;
+            for (int dx = 0; dx < 2; dx++)
+                // Top-origin (x,y) -> (7-y,x): up becomes right, down becomes left.
+                // The rotated 16x14 glyph stays centered on the 40x38 frame.
+                result[(37 - (12 + x * 2 + dy)) * 40 + 12 + (7 - y) * 2 + dx] = pixel;
         }
         return CacheMenuTexture(source, 40, 38, result);
     }

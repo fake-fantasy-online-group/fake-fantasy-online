@@ -39,7 +39,7 @@ public static class GUI {
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
 public static class NpcChatter { public static UnityEngine.Font CnFont()=>null; }
-public static class BitmapFont { public static bool Ready=true; public static float lastScale; public static string lastText; public static float Measure(string text,float scale)=>text.Length*12f*scale; public static void CenterOutline(UnityEngine.Rect r,string text,UnityEngine.Color color,float scale){lastScale=scale;lastText=text;} }
+public static class BitmapFont { public static bool Ready=true; public static UnityEngine.Rect lastRect; public static int labels; public static float lastScale; public static string lastText; public static float Measure(string text,float scale)=>text.Length*12f*scale; public static void CenterOutline(UnityEngine.Rect r,string text,UnityEngine.Color color,float scale){labels++;lastRect=r;lastScale=scale;lastText=text;} }
 public static class ArtworkSkin { public static bool pressed,selected; public static string text; public static readonly List<string> paths=new List<string>(); public static UnityEngine.Texture2D[] Frames(string path,int count){paths.Add(path);var a=new UnityEngine.Texture2D[count];for(int i=0;i<count;i++)a[i]=new UnityEngine.Texture2D{name=path+"#"+i};return a;} public static void ButtonFace(UnityEngine.Rect r,string value,float scale,bool enabled=true,bool selected=false,float fontScale=1f,bool pressed=false){text=value;ArtworkSkin.pressed=pressed;ArtworkSkin.selected=selected;} }
 }
 
@@ -116,24 +116,60 @@ static void Main(string[] args){
  Check(UnityEngine.GUI.color.a==prior.a,"Skill opacity restores GUI color");
  UnityEngine.Input.down=false;UnityEngine.Event.current.mousePosition=new UnityEngine.Vector2(-1,-1);
  Check(MobileHudArtwork.MenuButton(r,1,false),"Icon menu retains IMGUI release activation");
- Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#4","Collapsed menu uses native down arrow");
- MobileHudArtwork.MenuButton(r,1,true);Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#0","Expanded menu uses native up arrow");
+ Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#4","Collapsed menu selects down glyph rotated left");
+ MobileHudArtwork.MenuButton(r,1,true);Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#0","Expanded menu selects up glyph rotated right");
+ // All interaction states retain authored direction and original hit behavior.
+ for(int state=0;state<4;state++)for(int expanded=0;expanded<2;expanded++){
+  UnityEngine.GUI.enabled=state!=3;UnityEngine.Input.down=state==2;
+  UnityEngine.Event.current.mousePosition=state==1||state==2?new UnityEngine.Vector2(25,35):new UnityEngine.Vector2(-1,-1);
+  MobileHudArtwork.MenuButton(r,1,expanded==1);
+  Check(UnityEngine.GUI.last.name==MobileHudArtwork.MenuTogglePath+"#"+((expanded==1?0:4)+state),"Arrow direction for interaction state "+state);
+ }
+ UnityEngine.GUI.enabled=true;UnityEngine.Input.down=false;
+ BitmapFont.Ready=true;
+ foreach(float scale in new[]{.5f,.73f,1f,1.5f,2f,3f})for(int state=0;state<4;state++){
+  var target=new UnityEngine.Rect(13,17,48*scale,48*scale);
+  UnityEngine.GUI.enabled=state!=3;int labels=BitmapFont.labels;
+  MobileHudArtwork.ControlFace(target,frames,legacy,7,scale,state==1,state==2);
+  var icon=UnityEngine.GUI.lastRect;var label=BitmapFont.lastRect;
+  Check(BitmapFont.labels==labels+1&&BitmapFont.lastText=="货架","Rack alone draws the standalone caption");
+  Check(Near(BitmapFont.lastScale,scale)&&Near(label.center.x,target.center.x),"Rack text uses centered native size");
+  Check(icon.yMax<=label.y&&label.yMax<=target.yMax&&icon.x>=target.x&&icon.xMax<=target.xMax,"Rack icon and label stay separate inside the hit target");
+  for(int index=0;index<9;index++)if(index!=7){
+   MobileHudArtwork.ControlFace(target,frames,legacy,index,scale,state==1,state==2);
+   Check(BitmapFont.labels==labels+1&&Near(UnityEngine.GUI.lastRect.height,44*scale),"Other menu faces stay unchanged");
+  }
+ }
+ UnityEngine.GUI.enabled=true;
+ BitmapFont.Ready=false;MobileHudArtwork.ControlFace(r,null,null,7,1,false,false);
+ Check(UnityEngine.GUI.lastLabel=="货架"&&UnityEngine.GUI.lastLabelStyle.fontSize==12,"Missing rack texture/font retains readable fallback caption");
+ BitmapFont.Ready=true;
  // Regression fixtures use Unity's bottom-origin pixels, including odd native height.
  for(int state=0;state<8;state++){
   var native=new UnityEngine.Texture2D(20,19,UnityEngine.TextureFormat.RGBA32,false){name="toggle-fixture"};
   var raw=new UnityEngine.Color32[380];for(int i=0;i<raw.Length;i++)raw[i]=new UnityEngine.Color32(90,30,10,255);
   int gx=state%4==0?8:7,gy=state%4==0?7:6;
-  for(int y=0;y<8;y++)for(int x=0;x<7;x++)raw[(18-gy-y)*20+gx+x]=new UnityEngine.Color32(255,200,120,255);
+  for(int y=0;y<8;y++)for(int x=0;x<7;x++)raw[(18-gy-y)*20+gx+x]=new UnityEngine.Color32((byte)(220+x),200,(byte)(100+y),255);
   native.SetPixels32(raw);var fixedToggle=MobileHudArtwork.MenuToggleTexture(native,state);var output=fixedToggle.GetPixels32();
   Check(fixedToggle.width==40&&fixedToggle.height==38,"Toggle permits half-native-pixel alignment for state "+state);
   int minX=40,maxX=0,minY=38,maxY=0;
   for(int y=0;y<38;y++)for(int x=0;x<40;x++)if(output[y*40+x].g==200){minX=Math.Min(minX,x);maxX=Math.Max(maxX,x);minY=Math.Min(minY,y);maxY=Math.Max(maxY,y);}
-  Check(minX==13&&maxX==26&&minY==11&&maxY==26,"Real glyph bounds centered in state "+state);
+  Check(minX==12&&maxX==27&&minY==12&&maxY==25,"Real glyph bounds centered in state "+state);
   foreach(float scale in new[]{.5f,.73f,1f,1.25f,1.5f,2f,3f}){
    var target=new UnityEngine.Rect(13.25f,17.75f,48*scale,48*scale);var fit=MobileHudArtwork.Fit(MobileHudArtwork.Inset(target,6*scale),40,38);
    Check(Near(fit.x+(minX+maxX+1)*.5f/40*fit.width,target.center.x)&&Near(fit.y+(minY+maxY+1)*.5f/38*fit.height,target.center.y),"Visible glyph alignment at fractional scale "+scale);
   }
   Check(native.GetPixels32()[(18-gy)*20+gx].g==200&&output[0].g==30,"Native source and original button border preserved");
+  for(int y=0;y<8;y++)for(int x=0;x<7;x++)for(int dy=0;dy<2;dy++)for(int dx=0;dx<2;dx++){
+   var rotated=output[(37-(12+x*2+dy))*40+12+(7-y)*2+dx];
+   Check(rotated.r==220+x&&rotated.b==100+y,"Only glyph pixels rotate clockwise without mirroring");
+  }
+  for(int y=0;y<38;y++)for(int x=0;x<40;x++){
+   int sx=x/2,sy=y/2,top=18-sy;
+   bool oldGlyph=sx>=gx&&sx<gx+7&&top>=gy&&top<gy+8;
+   bool newGlyph=x>=12&&x<28&&y>=12&&y<26;
+   if(!oldGlyph&&!newGlyph)Check(output[y*40+x].r==raw[sy*20+sx].r&&output[y*40+x].g==raw[sy*20+sx].g,"Background stays upright and unchanged");
+  }
  }
  var labeled=new UnityEngine.Texture2D(42,55,UnityEngine.TextureFormat.RGBA32,false){name="label-fixture"};
  var labeledPixels=new UnityEngine.Color32[42*55];

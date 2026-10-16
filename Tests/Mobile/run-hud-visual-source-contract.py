@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Narrow provenance checks for the mobile HUD refinement; not runtime rendering."""
 from hashlib import sha256
+import re
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
@@ -29,6 +30,12 @@ hud = (source / "GameHud.Mobile.cs").read_text()
 assert "DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect" not in hud, "No second row of mobile map faces"
 art = (source / "MobileHudArtwork.cs").read_text()
 assert "MenuIconTexture(texture)" in art and "MenuToggleTexture(source, frame)" in art, "Mobile menu removes baked labels and centers native glyphs in owned copies"
+assert 'if (index == 7)' in art and '"货架", scale)' in art, "Standalone label is limited to the mobile rack entry"
+buttons = (source / "GameHud.Initialization.cs").read_text().split('CtrlBtns', 1)[1].split('};', 1)[0]
+assert re.findall(r'\("([^"]+)"', buttons)[7] == "rackbtn", "The mobile caption index maps to the native rack entry"
+assert '(expanded ? 0 : 4)' in art and '(7 - y) * 2' in art, "Expanded points right; collapsed points left through clockwise glyph-only rotation"
+layout = (source / 'MobileClientPresentation.cs').read_text()
+assert 'MenuToggleRect.x-8f*Scale-width' in layout, "Menu expands to the left of the toggle"
 assert "MobileClientPresentation.AvatarRect" in hud, "Avatar rendering uses the same safe-area anchor as pointer exclusion"
 assert "touchControls:true" in hud and "GUI.enabled=false" not in hud, "Mobile map is not greyed out to disable old inputs"
 assert "ctrlTex[index]" not in hud, "Function icons cannot index the three-frame array as one frame per entry"
