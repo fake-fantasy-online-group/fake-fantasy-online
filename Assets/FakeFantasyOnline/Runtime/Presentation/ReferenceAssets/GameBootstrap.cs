@@ -344,6 +344,18 @@ public partial class GameBootstrap : MonoBehaviour
         switching = false;
         // Ordinary direct-world map rebuilds also observe current native appearance/state.
         if (nativeStartupWorld) entry = CaptureNativeWorldEntryForIndependentRuntime();
+        else if (transitionOwnsFailure && entry != null &&
+            entry.EntityId == NetClient.SelfEntityId)
+        {
+            // A title-login entry is immutable. Equipment receipts update CharData, so
+            // a same-character rebuild must not reinstall the original login appearance.
+            // Preserve initial admission and never borrow another character's state.
+            entry = entry.WithAppearance(
+                new CharacterAppearanceRecord(CharData.apBody, CharData.apCap,
+                    CharData.apBackpack, CharData.apWeaponR, CharData.apWeaponL,
+                    CharData.apFace, CharData.atkVariant, CharData.weaponCType, CharData.atkDist),
+                CharData.glowMode, CharData.glowUnlock);
+        }
         System.Diagnostics.Stopwatch buildClock = System.Diagnostics.Stopwatch.StartNew();
         BuildWorldCheckpoints checkpoints = new BuildWorldCheckpoints(buildClock);
         ClearNetNpcs();

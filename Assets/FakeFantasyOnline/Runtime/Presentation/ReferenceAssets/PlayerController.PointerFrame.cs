@@ -56,9 +56,8 @@ public partial class PlayerController
 
             if (CursorManager.I != null)
             {
-                int attackKind = attackableMonster != null
-                    ? Math.Sign(unchecked(attackableMonster.level - CharData.level))
-                    : hostileRemote || CombatWorld.AwaitingTarget ? 0 : -2;
+                int attackKind = CursorManager.AttackKindForIndependentRuntime(
+                    attackableMonster, hostileRemote, CombatWorld.AwaitingTarget);
                 CursorManager.I.SetAttackHover(attackKind);
             }
             bool gatherAllowed = selected == null || selected is PlayerController ||

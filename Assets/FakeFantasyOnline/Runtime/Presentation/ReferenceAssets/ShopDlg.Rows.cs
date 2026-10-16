@@ -36,12 +36,24 @@ internal partial class ShopDlg
         {
             Cart entry = cart[i];
             Rect r = new Rect(0, rowH * i, w, 39f * s);
+            InventoryDlg.Item native = default;
+            bool nativeSale = !stallMode && sellMode && entry.tab < 3;
+            if (nativeSale)
+            {
+                native = InventoryDlg.ItemAt(entry.tab, entry.bagIdx);
+                nativeSale = native.id == entry.id;
+            }
+            int nameQuality = nativeSale ? EndgamePanel.BagNameQuality(entry.tab, native) : entry.quality;
             string label = string.Format("{0} ×{1}", entry.name, entry.qty);
             RowCard(r, entry.icon, label, unchecked(entry.unit * entry.qty), !block && r.Contains(mp),
-                itemBgR, false, entry.quality, entry.id);
+                itemBgR, false, nameQuality, entry.id);
             if (!block)
             {
-                if (r.Contains(mp)) tipText = TooltipContent.Fmt(TooltipContent.QualityName(entry.name, entry.quality), entry.desc);
+                if (r.Contains(mp))
+                {
+                    tipText = TooltipContent.Fmt(TooltipContent.QualityName(entry.name, entry.quality), entry.desc);
+                    if (nativeSale) tipText = EndgamePanel.BagTooltip(entry.tab, native, tipText);
+                }
                 if (GsaBtn(new Rect(r.xMax - 73f * s, r.y + 8f * s, 70f * s, 22f * s), giveupBtn, "放弃", mp))
                 {
                     cart.RemoveAt(i);

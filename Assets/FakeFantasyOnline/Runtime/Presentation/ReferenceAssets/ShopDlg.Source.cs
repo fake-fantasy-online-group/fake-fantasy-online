@@ -39,12 +39,14 @@ internal partial class ShopDlg
                     int remaining = unchecked(item.count - CartQtyOf(tab, item.bagIdx));
                     if (remaining <= 0 || item.locked) continue;
                     Rect r = new Rect(0, rowH * row, w, 39f * s);
+                    int nameQuality = EndgamePanel.BagNameQuality(tab, item);
                     string label = item.name + (remaining > 1 ? string.Format(" ×{0}", remaining) : "");
-                    RowCard(r, item.icon, label, item.sell, !block && r.Contains(mp), null, false, item.quality, item.id);
+                    RowCard(r, item.icon, label, item.sell, !block && r.Contains(mp), null, false, nameQuality, item.id);
                     row++;
                     if (!block && r.Contains(mp))
                     {
-                        tipText = TooltipContent.Fmt(TooltipContent.QualityName(item.name, item.quality), item.desc);
+                        tipText = EndgamePanel.BagTooltip(tab, item,
+                            TooltipContent.Fmt(TooltipContent.QualityName(item.name, item.quality), item.desc));
                         byte capturedTab = tab;
                         InventoryDlg.Item capturedItem = item;
                         int capturedRemaining = remaining;

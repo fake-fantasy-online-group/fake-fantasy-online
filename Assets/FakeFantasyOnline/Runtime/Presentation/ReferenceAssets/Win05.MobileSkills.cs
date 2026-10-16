@@ -3,16 +3,21 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public partial class Win05
 {
+    internal bool MobileOverlayContains(Vector2 point) => IsOpen &&
+        mobileSkillActions && mobileSkillActionsRect.Contains(point);
+
     private readonly MobileSkillSelection mobileSkills = new MobileSkillSelection();
     private Rect mobileSkillViewport, mobileSkillSafeArea, mobileSkillActionsRect;
     private int mobileSkillTab = -1, mobileBindingPage, mobileLifeSkill, mobileSkillFinger = -1;
     private float mobileSkillDownAt;
-    private bool mobileSkillHeld, mobileSkillActions;
+    private bool mobileSkillHeld, mobileSkillActions, mobileSkillInputBlocked;
+    private string mobileSkillWindow;
     private Vector2 mobileSkillAnchor;
-    private bool IsMobileSkillWindow => MobileClientPresentation.Enabled && (cur == "skilldlg" || cur == "studydlg");
+    private bool IsMobileSkillWindow => MobileClientPresentation.Enabled && (cur == "skilldlg" || cur == "studydlg" || cur == "petdlg");
     private void PrepareMobileSkillWindow(Def def)
     {
         if (!MobileClientPresentation.Enabled) { MobileClientPresentation.RemovePanel(this); return; }
+        if (mobileSkillWindow != cur) { ResetMobileSkills(); mobileSkillWindow = cur; }
         Rect safe = MobileClientPresentation.SafeAreaGui;
         if (safe != mobileSkillSafeArea || Input.touchCount > 1 ||
             (Input.touchCount == 1 && Input.GetTouch(0).phase == TouchPhase.Canceled))
@@ -30,6 +35,7 @@ public partial class Win05
     }
     private void ResetMobileSkills()
     {
+        mobilePetTouch.Reset();
         mobileSkills.Reset(); mobileSkillActions = mobileSkillHeld = false; mobileLifeSkill = 0; mobileSkillFinger = -1;
     }
     private bool MobileBookSkillUsable(SkInfo info)
@@ -84,6 +90,7 @@ public partial class Win05
     }
     private void DrawMobileSkillActions(System.Func<float,float,float,float,Rect> L, Def def)
     {
+        if (cur == "petdlg") { DrawMobilePetSkillSelection(); return; }
         if (!mobileSkillActions) return;
         SkInfo info = SkillInfo(mobileSkills.Skill);
         if (info == null) { ResetMobileSkills(); return; }

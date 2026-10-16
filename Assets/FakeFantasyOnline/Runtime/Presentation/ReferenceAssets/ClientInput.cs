@@ -42,7 +42,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 viewport = MobileClientPresentation.SafeAreaGui;
                 router.CancelAll(); SkillTargeting.CancelMobileHotSlot();
             }
-            if (MobileClientPresentation.ModalOpen || MobileClientPresentation.DiagramOpen)
+            if (MobileClientPresentation.ModalOpen)
             {
                 router.CancelAll(); pointer = router.Pointer;
                 SkillTargeting.CancelMobileHotSlot();
@@ -58,6 +58,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     touch.phase == TouchPhase.Ended ? ClientTouchPhase.Ended :
                     touch.phase == TouchPhase.Canceled ? ClientTouchPhase.Cancelled :
                     touch.phase == TouchPhase.Stationary ? ClientTouchPhase.Stationary : ClientTouchPhase.Moved;
+                router.CancelIfCovered(touch.fingerId, MobileClientPresentation.IsPanelPointer(touch.position));
                 router.Feed(touch.fingerId, touch.position, phase,
                     MobileClientPresentation.IsPointerOverUi(touch.position),
                     MobileClientPresentation.IsJoystickRegion(touch.position), center, stick.width * .5f);
@@ -69,6 +70,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Vector2 position = Input.mousePosition;
                 ClientTouchPhase phase = Input.GetMouseButtonDown(0) ? ClientTouchPhase.Began :
                     Input.GetMouseButtonUp(0) ? ClientTouchPhase.Ended : ClientTouchPhase.Moved;
+                router.CancelIfCovered(-1, MobileClientPresentation.IsPanelPointer(position));
                 router.Feed(-1, position, phase, MobileClientPresentation.IsPointerOverUi(position),
                     MobileClientPresentation.IsJoystickRegion(position), center, stick.width * .5f);
             }

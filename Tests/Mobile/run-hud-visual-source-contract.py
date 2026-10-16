@@ -14,7 +14,32 @@ map_source = (source / "ReferenceFirstWorldMinimapHud.cs").read_text()
 assert "bool touchControls = false" in map_source, "Desktop is the default map rendering path"
 assert map_source.count("!touchControls && GUI.Button(") == 5, "All legacy map input owners are disabled only for mobile"
 assert map_source.count("!touchControls && resources.Sketch") == 0, "Original map faces remain visible on mobile"
+# Strip only the reviewed touch-only repaint and its parameter plumbing. Keep the
+# original desktop digest: an unrelated change or extra action must still fail.
+mobile_map_repaint = """        // The expanded image can overlap the compact map on a small viewport.
+        // Keep the existing native actions visible above it; Update owns their touch
+        // dispatch, so these are artwork only, never a second GUI.Button action.
+        if (touchControls)
+        {
+            if (resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
+            if (resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
+            if (resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
+            if (resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
+        }
+"""
+mobile_diagram_call = "DrawDiagram(scale, viewportWidth, viewportHeight, touchControls);"
+mobile_diagram_signature = """    private void DrawDiagram(
+        float scale,
+        int? viewportWidth,
+        int? viewportHeight,
+        bool touchControls)"""
+assert map_source.count(mobile_map_repaint) == 1, "Only the exact artwork-only mobile repaint is normalized"
+assert map_source.count(mobile_diagram_call) == 3, "Every diagram draw forwards the unchanged mobile flag"
+assert map_source.count(mobile_diagram_signature) == 1, "Mobile diagram argument has one private owner"
 desktop_map = (map_source
+    .replace(mobile_map_repaint, "")
+    .replace(mobile_diagram_call, "DrawDiagram(scale, viewportWidth, viewportHeight);")
+    .replace(mobile_diagram_signature, mobile_diagram_signature.replace(",\n        bool touchControls)", ")"))
     .replace("int? viewportHeight = null,\n        bool touchControls = false)", "int? viewportHeight = null)")
     .replace("!touchControls && ", "")
     .replace("if (!touchControls) ShowNearestGateTip", "ShowNearestGateTip"))
@@ -30,9 +55,11 @@ hud = (source / "GameHud.Mobile.cs").read_text()
 assert "DrawMobileButton(MobileHudArtwork.Inset(MobileClientPresentation.MapActionRect" not in hud, "No second row of mobile map faces"
 art = (source / "MobileHudArtwork.cs").read_text()
 assert "MenuIconTexture(texture)" in art and "MenuToggleTexture(source, frame)" in art, "Mobile menu removes baked labels and centers native glyphs in owned copies"
-assert 'if (index == 7)' in art and '"货架", scale)' in art, "Standalone label is limited to the mobile rack entry"
+assert 'controlLabels[index], scale)' in art, "Every cropped mobile menu icon has a standalone caption"
+captions = re.findall(r'"([^"]+)"', art.split('controlLabels =', 1)[1].split(';', 1)[0])
+assert captions == ["角色", "物品", "交友", "家族", "技能", "任务", "信件", "货架", "设置"], "Captions match inspected native artwork without label boxes"
 buttons = (source / "GameHud.Initialization.cs").read_text().split('CtrlBtns', 1)[1].split('};', 1)[0]
-assert re.findall(r'\("([^"]+)"', buttons)[7] == "rackbtn", "The mobile caption index maps to the native rack entry"
+assert re.findall(r'\("([^"]+)"', buttons) == ["statusbtn", "warebtn", "teambtn", "familybtn", "skillbtn", "taskbtn", "emailbtn", "rackbtn", "optionbtn"], "All mobile caption indices map to native controls"
 assert '(expanded ? 0 : 4)' in art and '(7 - y) * 2' in art, "Expanded points right; collapsed points left through clockwise glyph-only rotation"
 layout = (source / 'MobileClientPresentation.cs').read_text()
 assert 'MenuToggleRect.x-8f*Scale-width' in layout, "Menu expands to the left of the toggle"
@@ -44,8 +71,9 @@ wheel_text = hud.split("private void DrawMobileGroupText", 1)[1].split("private 
 assert hud.count("GUI.Label(") == wheel_text.count("GUI.Label(") == 2, "Only scaled wheel text may use explicit GUI.Label"
 assert "Mathf.RoundToInt(size*scale)" in wheel_text and "mobileGroupWheelStyle" in wheel_text, "Wheel uses scaled explicit text style"
 wheel_draw = hud.split("private void DrawMobileGroupWheel", 1)[1].split("private void DrawMobileRoundCooldown", 1)[0]
-assert wheel_draw.count("DrawMobileRoundFace(") == 1, "One shared wheel background/outer circle is restored"
-for forbidden in ("GUI.Box(", "GUI.DrawTexture", "MobileHudArtwork.Image", "Handles.", "DrawLine"):
+assert wheel_draw.count("MobileGroupWheelArtwork.Face(pending)") == 1, "One flat wheel backdrop includes the true-size cancel disc"
+assert "DrawMobileRoundFace(" not in wheel_draw, "Do not magnify the tiny native button frame into a wheel"
+for forbidden in ("GUI.Box(", "GUI.DrawTexture", "Handles.", "DrawLine"):
     assert forbidden not in wheel_draw, "Wheel has no per-number frames or sector borders: " + forbidden
 mobile_input = (source / "GameHud.MobileInput.cs").read_text()
 assert "MobilePageSwipe" not in mobile_input and "PageAfter" not in mobile_input, "Group selector never cycles pages with swipes"

@@ -29,7 +29,7 @@ namespace UnityEngine
         public GUIStyleState normal=new GUIStyleState(); public GUIStyle() {} public GUIStyle(GUIStyle other) {}
     }
     public class GUIContent { public static GUIContent none=new GUIContent(); }
-    public enum EventType { Repaint, MouseDown, MouseUp, KeyDown, Used }
+    public enum EventType { Repaint, MouseDown, MouseUp, MouseDrag, ScrollWheel, KeyDown, Used }
     public enum KeyCode { None, Return, KeypadEnter }
     public class Event
     {
@@ -42,7 +42,13 @@ namespace UnityEngine
         public static int Max(int a,int b)=>Math.Max(a,b);
         public static int RoundToInt(float a)=>(int)Math.Round(a);
     }
-    public static class Input { public static bool GetMouseButton(int n)=>false; }
+    public enum TouchPhase { Canceled, Stationary }
+    public struct Touch { public TouchPhase phase; }
+    public static class Input {
+        public static int touchCount; public static TouchPhase Phase;
+        public static Touch GetTouch(int index)=>new Touch { phase=Phase };
+        public static bool GetMouseButton(int n)=>false;
+    }
     public static class GUI
     {
         public static readonly List<Rect> Buttons=new List<Rect>(), Textures=new List<Rect>();
@@ -77,10 +83,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class GameHud { public static bool MobileShortcutPointerOwned; }
     internal static class ArtworkSkin
     {
-        public static int Inputs, Icons;
+        public static int Inputs, Icons; public static Rect FirstIcon; public static Texture2D[] FirstFrames;
         public static void Panel(Rect r,float scale) {} public static void Row(Rect r,float scale,bool selected) {}
         public static void Input(Rect r,float scale) { Inputs++; }
-        public static void IconFace(Rect art,Texture2D[] frames,bool hover,bool pressed) { Icons++; }
+        public static void IconFace(Rect art,Texture2D[] frames,bool hover,bool pressed) { if (Icons++ == 0) { FirstIcon=art; FirstFrames=frames; } }
     }
     internal static class BitmapFont
     {
@@ -111,6 +117,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private static readonly string[] Channels={"附近","队伍","家族","世界"};
         private Texture2D inputBar=new Texture2D();
         private Texture2D[] dropBtn={new Texture2D()}, sendBtn={new Texture2D()}, sizeBtn={new Texture2D()};
+        private Texture2D[][] sideBtn={new[]{new Texture2D()}};
         private GUIStyle editSt=new GUIStyle(); private float s; private string inputText="",channel="附近",whisperTarget="";
         private bool chanOpen; private bool interactive; private int chIdx; private static bool _pendingFocus,TypingNow;
         private static int filters; private int panels,sends; private string sent,guardBefore; private Rect messageRect;
@@ -132,7 +139,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private static bool Overlap(Rect a,Rect b)=>a.x<b.xMax&&b.x<a.xMax&&a.y<b.yMax&&b.y<a.yMax;
         private static ChatUI Fresh(float scale=1)
         {
-            GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); GUI.Focus=null; BitmapFont.Ready=true; BitmapFont.Labels.Clear();
+            Input.touchCount=0; Input.Phase=TouchPhase.Canceled; GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); GUI.Focus=null; BitmapFont.Ready=true; BitmapFont.Labels.Clear();
             ArtworkSkin.Inputs=ArtworkSkin.Icons=0; UiInput.Result=null; UiInput.ConsumeReturn=false;
             HornDialog.Typing=DuelDlg.Typing=false; _pendingFocus=TypingNow=false;
             Event.current=new Event { type=EventType.Repaint };
@@ -157,12 +164,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Check((int)Math.Floor((chat.messageRect.height-10*scale)/(18*scale)+.0001f)==3,"Three full original-font rows fit");
                 Check(chat.drawnLines.Count==3&&chat.drawnLines[1].text=="second"&&chat.drawnLines[2].text=="third","Renderer uses filtered chronological messages");
                 Check(filters==1,"Renderer loads the character filter");
-                Check(GUI.Buttons.Count==2,"Exactly one channel and send target, no expansion button");
+                Check(GUI.Buttons.Count==2,"Channel and send keep their original GUI target order; expansion owns explicit pointer events");
                 Check(GUI.Buttons.TrueForAll(r=>Near(r.height,44*scale)&&r.width>=44*scale),"Touch targets retain at least 44 units");
                 Check(Near(UiInput.FieldRect.height,44*scale)&&UiInput.FieldRect.width>=200*scale,"Composer is directly tappable at full touch height");
                 foreach(Rect button in GUI.Buttons) Check(!Overlap(button,UiInput.FieldRect),"Input never overlaps channel/send/toggle target");
                 Check(GUI.Textures.Count==1&&Near(GUI.Textures[0].height,32*scale),"Only slim original input-bar artwork is drawn");
-                Check(ArtworkSkin.Icons==2,"Original channel/send sprites are used");
+                Check(ArtworkSkin.Icons==3&&ReferenceEquals(ArtworkSkin.FirstFrames,chat.sideBtn[0]),"Existing viewbtn, channel and send sprites are used");
+                Rect expand=new Rect(MobileClientPresentation.ChatRect.xMax-44*scale,MobileClientPresentation.ChatRect.y,44*scale,44*scale);
+                Check(!Overlap(expand,chat.messageRect)&&!Overlap(expand,UiInput.FieldRect),"Expand touch target avoids text and input");
+                foreach(Rect button in GUI.Buttons) Check(!Overlap(expand,button),"Expand touch target avoids channel and send");
+                Check(ArtworkSkin.FirstIcon.x>=expand.x&&ArtworkSkin.FirstIcon.xMax<=expand.xMax&&ArtworkSkin.FirstIcon.y>=expand.y&&ArtworkSkin.FirstIcon.yMax<=expand.yMax,"View artwork lies inside upper-right touch target");
                 Check(BitmapFont.Labels.Contains("附近")&&!BitmapFont.Labels.Contains("展开")&&BitmapFont.Labels.Contains("点击输入"),"Readable bitmap channel, expansion and empty-input affordance");
                 Check(Near(BitmapFont.LastScale,scale)&&chat.editSt.fontSize==Mathf.RoundToInt(12*scale),"Bitmap labels and field follow mobile scale");
             }
@@ -194,34 +205,86 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             GUI.Reset(); GUI.Click=5; c.DrawMobileChat();
             Check(!c.chanOpen&&c.channel=="世界"&&c.chIdx==3&&c.whisperTarget=="","Choosing specific channel exits whisper routing");
 
+            c=Fresh();
+            foreach(EventType type in new[]{EventType.MouseDown,EventType.MouseUp,EventType.MouseDrag,EventType.ScrollWheel})
+            {
+                GUI.Reset(); Event.current.type=type; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+                Check(!c.interactive&&Win05.Opens==0&&Event.current.type==type,"Message list is passive for "+type);
+            }
+            GUI.Reset(); Event.current.type=EventType.MouseUp; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+            Check(Win05.Opens==0,"Press on preview then release on icon never opens history");
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+            Check(Event.current.type==EventType.Used,"Expand press is owned by the icon");
+            GUI.Reset(); Event.current.type=EventType.MouseDrag; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            GUI.Reset(); Event.current.type=EventType.MouseUp; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+            Check(Win05.Opens==0,"Dragging off the icon cancels even if release returns inside");
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+            GUI.Reset(); Event.current.type=EventType.MouseUp; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            Check(Win05.Opens==0,"Release on the preview cancels an icon press");
+            c=Fresh(); Event.current.button=1; Event.current.mousePosition=new Vector2(320,420);
+            foreach(EventType type in new[]{EventType.MouseDown,EventType.MouseUp}) {
+                GUI.Reset(); Event.current.type=type; c.DrawMobileChat();
+                Check(!c.interactive&&Win05.Opens==0&&Event.current.type==type,"Preview right-click / synthesized long press remains passive");
+            }
+            c=Fresh(); c.chanOpen=true; Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+            GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+            Check(Win05.Opens==0,"Closing channel picker via icon does not also open history");
+
             c=Fresh(); MobileClientPresentation.MenuExpanded=true;
-            Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
             Check(!c.interactive&&!MobileClientPresentation.ChatExpanded,"Collapsed rows cannot expose actions on press");
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
-            Check(Win05.LastOpened=="historybar"&&Win05.Opens==1&&!MobileClientPresentation.MenuExpanded,"Message tap uses original viewbtn historybar entry and closes function grid");
+            Check(Win05.LastOpened=="historybar"&&Win05.Opens==1&&!MobileClientPresentation.MenuExpanded,"Expand icon tap uses original viewbtn historybar entry and closes function grid");
             Check(!MobileClientPresentation.ChatExpanded&&Event.current.type==EventType.Used,"Opening original details consumes release without enlarging HUD");
             GUI.Reset(); Event.current.type=EventType.Repaint; c.DrawMobileChat();
             Check(c.panels==0&&Near(c.messageRect.height,68)&&!c.interactive,"Details leave preview compact and display-only");
             GUI.Reset(); Event.current.type=EventType.MouseDown; c.DrawMobileChat();
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
-            Check(Win05.Opens==1,"Modal details block preview taps from reopening or stealing navigation");
+            Check(Win05.Opens==1,"Modal details block expand icon taps from reopening or stealing navigation");
             MobileClientPresentation.ModalOpen=false;
             GUI.Reset(); Event.current.type=EventType.MouseDown; c.DrawMobileChat();
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
             Check(Win05.Opens==2&&Win05.LastOpened=="historybar","After closing details a new tap reopens the same original history window");
-            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
             MobileClientPresentation.ModalOpen=true;
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
-            Check(Win05.Opens==0,"A modal opening during a press cancels the pending preview tap");
-            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.button=1; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            Check(Win05.Opens==0,"A modal opening during a press cancels the pending expand tap");
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.button=1; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
             Check(!c.interactive&&Win05.Opens==0,"Collapsed right-click / long press cannot expose copy menu");
 
-            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(320,420); c.DrawMobileChat();
+            c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
             GameHud.MobileShortcutPointerOwned=true; GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
-            GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); c.DrawMobileChat();
+            Input.touchCount=0; Input.Phase=TouchPhase.Canceled; GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); c.DrawMobileChat();
             Check(Win05.Opens==0,"Shortcut ownership cancels any pending chat tap, including its release frame");
             c=Fresh(); c.chanOpen=true; Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(50,50); c.DrawMobileChat();
             Check(!c.chanOpen&&c.channel=="附近","Outside tap closes picker without changing channel");
+
+            foreach(int interruption in new[]{0,1,2,3,4})
+            {
+                c=Fresh(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+                if(interruption==0) c.OnApplicationFocus(false);
+                if(interruption==1) c.OnApplicationPause(true);
+                if(interruption==2) c.OnDisable();
+                if(interruption==3) Input.touchCount=1;
+                if(interruption==4) { Input.touchCount=2; Input.Phase=TouchPhase.Stationary; }
+                GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+                Check(Win05.Opens==0&&!c.mobileExpandPressed,"Lifecycle/touch cancellation clears stale expand press "+interruption);
+            }
+            foreach(int missing in new[]{0,1,2,3})
+            {
+                c=Fresh();
+                if(missing==0) c.sideBtn=null;
+                if(missing==1) c.sideBtn=new Texture2D[0][];
+                if(missing==2) c.sideBtn[0]=null;
+                if(missing==3) c.sideBtn[0]=new Texture2D[3];
+                c.DrawMobileChat();
+                Check(ReferenceEquals(ArtworkSkin.FirstFrames,c.sizeBtn)&&ArtworkSkin.Icons==3,"Missing view frames fall back to existing size icon "+missing);
+                GUI.Reset(); ArtworkSkin.Icons=0; c.sizeBtn=null; c.DrawMobileChat();
+                Check(BitmapFont.Labels.Contains("展开")&&ArtworkSkin.Icons==2,"Missing both icon assets keeps a readable expansion label "+missing);
+                GUI.Reset(); Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(638,422); c.DrawMobileChat();
+                GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
+                Check(Win05.Opens==1&&Win05.LastOpened=="historybar","Fallback expansion label opens original history "+missing);
+            }
 
             c=Fresh(2); BitmapFont.Ready=false; c.inputBar=null; c.sendBtn=null; c.DrawMobileChat();
             Check(ArtworkSkin.Inputs==1,"Missing chat bar uses other original input artwork");

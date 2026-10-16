@@ -8,6 +8,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public sealed partial class EndgamePanel
 {
+    // Presentation only: instance identity takes precedence over the native base quality.
+    // Find/MatchesNative reject stale snapshots and items from another slot or world.
+    internal static int BagNameQuality(int nativeTab, InventoryDlg.Item item)
+    {
+        var instance = Current?.State?.Find("bag", nativeTab, item.bagIdx, item.id);
+        return instance != null && MatchesNative(instance) && IsSpecial(instance) ? 5 : item.quality;
+    }
     internal static string BagTooltip(int nativeTab, InventoryDlg.Item item, string original)
     {
         string result = OverlayTooltip(Current?.State?.Find("bag", nativeTab, item.bagIdx, item.id), original);

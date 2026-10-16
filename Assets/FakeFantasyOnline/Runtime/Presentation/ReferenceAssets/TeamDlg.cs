@@ -56,6 +56,20 @@ internal sealed partial class TeamDlg : MonoBehaviour
     public static void OpenParty() { Ensure(); I.visible = true; I.tab = 1; }
     public static bool Visible => I != null && I.visible;
     private static bool ChildModalOpen => SysMsgBox.Visible || TeamConfigDlg.Visible || FriendConfigDlg.Visible;
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = NW, height = NH;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;

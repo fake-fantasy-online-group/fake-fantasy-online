@@ -125,6 +125,20 @@ internal sealed partial class TradeDlg : MonoBehaviour
     // official test is not a Rect.Contains - it is a strict half-open box
     // (x <= px < x + 569*s and y <= py < y + 426*s) computed in Rect.contains' own comparison
     // order, which is why NaN in either coordinate answers false instead of throwing.
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = NW, height = NH;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
         => I != null && I.ContainsPointer(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y));
 

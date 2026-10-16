@@ -116,6 +116,33 @@ public partial class CursorManager : MonoBehaviour
         Cursor.SetCursor(texture, hot * Mathf.Max(1, cursorScale), CursorMode.Auto);
     }
 
+    // Keep desktop hover and mobile selected-target classification in one place.
+    internal static int AttackKindForIndependentRuntime(MonsterEntity monster, bool hostileRemote, bool awaitingTarget)
+        => monster != null ? System.Math.Sign(unchecked(monster.level - CharData.level))
+            : hostileRemote || awaitingTarget ? 0 : -2;
+
+    private Texture2D AttackTexture(int comparison)
+        => comparison > 0 ? atkHCur : comparison == -1 ? atkLCur : atkMCur;
+
+    internal Texture2D MobileAttackTexture(object selected)
+    {
+        MonsterEntity monster = selected as MonsterEntity;
+        if (monster != null && monster.NoAttack) monster = null;
+        RemotePlayer remote = selected as RemotePlayer;
+        // No attackable selection keeps the original middle/yellow cursor.
+        int comparison = AttackKindForIndependentRuntime(monster,
+            remote != null && remote.HostileToLocal, CombatWorld.AwaitingTarget);
+        return AttackTexture(comparison) ?? MobileCursorFrame(comparison > 0 ? "AttackH" : comparison == -1 ? "AttackL" : "AttackM");
+    }
+    internal Texture2D MobilePickupTexture => fetchCur ?? MobileCursorFrame("Fetch");
+
+    private static Texture2D MobileCursorFrame(string name)
+    {
+        // Original package artwork also supports installs without extracted Cursor PNGs.
+        Texture2D[] frames = ArtworkSkin.Frames("res/uires/cursor/" + name + ".gsa", 1);
+        return frames != null && frames.Length > 0 ? frames[0] : null;
+    }
+
     private void Refresh()
     {
         if (npcHover && !avatarMode && !repairMode && !castMode && gatherHover == 0 && attackCmp <= -2 && !fetchHover && chatFrames != null && chatFrames.Length >= 2)
@@ -126,7 +153,7 @@ public partial class CursorManager : MonoBehaviour
         else if (castMode) Set(castCur);
         else if (gatherHover == 1) Set(fishCur);
         else if (gatherHover == 2) Set(mineCur);
-        else if (attackCmp > -2) Set(attackCmp > 0 ? atkHCur : attackCmp == -1 ? atkLCur : atkMCur);
+        else if (attackCmp > -2) Set(AttackTexture(attackCmp));
         else if (fetchHover) Set(fetchCur);
         else Set(npcHover ? chatCur : normalCur);
     }

@@ -25,6 +25,8 @@ public static class MobileClientPresentation
     private static Rect Centered(Vector2 c, float size) => new Rect(c.x-size*.5f,c.y-size*.5f,size,size);
     public static Rect JoystickRect => Centered(new Vector2(SafeAreaGui.x+100f*Scale,SafeAreaGui.yMax-110f*Scale),160f*Scale);
     public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-100f*Scale,SafeAreaGui.yMax-110f*Scale),96f*Scale);
+    // Fits beside the lower attack edge with a 4px gap; attack/joystick centers remain symmetric.
+    public static Rect PickupRect => Centered(AttackRect.center+new Vector2(74f,64f)*Scale,44f*Scale);
     private static readonly Vector2[] SkillOffsets = { new Vector2(-108,32), new Vector2(-116,-40), new Vector2(-116,-116), new Vector2(-40,-156), new Vector2(36,-156), new Vector2(64,-80) };
     public static Rect SkillRect(int index) => Centered(AttackRect.center+SkillOffsets[index]*Scale,64f*Scale);
     // The avatar has no extra horizontal gutter beyond the device's real safe area.
@@ -119,7 +121,7 @@ public static class MobileClientPresentation
     {
         // Include a small gap, so a cancel release cannot also hit an adjacent button.
         Rect padded=new Rect(rect.x-6f*Scale,rect.y-6f*Scale,rect.width+12f*Scale,rect.height+12f*Scale);
-        if (padded.Overlaps(AttackRect) || padded.Overlaps(PageRect) || padded.Overlaps(JoystickRect) ||
+        if (padded.Overlaps(AttackRect) || padded.Overlaps(PickupRect) || padded.Overlaps(PageRect) || padded.Overlaps(JoystickRect) ||
             padded.Overlaps(ChatRect) || padded.Overlaps(MinimapRect) || padded.Overlaps(AvatarRect) ||
             padded.Overlaps(MenuToggleRect) || (MenuExpanded && padded.Overlaps(MenuRect))) return true;
         for (int k=0;k<6;k++) if (padded.Overlaps(SkillRect(k))) return true;
@@ -146,10 +148,13 @@ public static class MobileClientPresentation
         }
     }
     public static Vector2 GuiPoint(Vector2 screenPoint) => new Vector2(screenPoint.x,Screen.height-screenPoint.y);
-    // While legacy windows are being migrated, any visible window owns the mobile
-    // interaction layer. Never substitute the first finger's mouse position for a second touch.
+    // Unported legacy dialogs retain conservative modal ownership. Migrated normal
+    // panels own only their rectangles, independently for each physical pointer.
     public static bool ModalOpen =>
         AccountSecDlg.Visible ||
+        InventoryDlg.SplitOpen ||
+        MailDlg.ComposeVisible ||
+        (ShopDlg.Visible && ShopDlg.Picking) ||
         ArenaDeathDlg.Visible ||
         ArenaDraftDlg.Visible ||
         ArenaEscDlg.Visible ||
@@ -166,11 +171,9 @@ public static class MobileClientPresentation
         FaceDlg.Visible ||
         FamilyCreateDlg.get_Visible() ||
         FamilyDetailDlg.get_Visible() ||
-        FamilyDlg.get_Visible() ||
         FamilyMailDlg.get_Visible() ||
         FamilyRelationDlg.get_Visible() ||
         FamilyStashDlg.Visible ||
-        FigureDlg.Visible ||
         FindModeDlg.Visible ||
         FriendConfigDlg.Visible ||
         FriendInfoDlg.Visible ||
@@ -181,12 +184,10 @@ public static class MobileClientPresentation
         GroceryStatusDlg.Visible ||
         HelpWinDlg.Visible ||
         HornDialog.Visible ||
-        InventoryDlg.IsOpen ||
         JobCustomDlg.get_Visible() ||
         JobOfferDlg.get_Visible() ||
         JobRightDlg.get_Visible() ||
         MailConfigDlg.Visible ||
-        MailDlg.Visible ||
         MailResistDlg.Visible ||
         MasterInfoDlg.Visible ||
         MasterListDlg.Visible ||
@@ -204,40 +205,53 @@ public static class MobileClientPresentation
         SculpDlg.Visible ||
         SecCodeAskDlg.Visible ||
         SelectPopupDlg.Visible ||
-        ShopDlg.Visible ||
         StallDlg.Visible ||
-        StoreDlg.Visible ||
-        SysConfigDlg.Visible ||
         SysMsgBox.Visible ||
-        SysOptionDlg.Visible ||
-        TaskDlg.Visible ||
         TeamConfigDlg.Visible ||
-        TeamDlg.Visible ||
-        TradeDlg.Visible ||
         TransportUI.VisibleS ||
         VoiceSetDlg.Visible ||
-        WorldMapDlg.Visible ||
-        (EquipDlg.I!=null && EquipDlg.I.IsOpen) || (Win05.I!=null && Win05.I.IsOpen) ||
-        (UIManager.I!=null && UIManager.I.MobileWindowOpen);
-    public static bool IsJoystickRegion(Vector2 screenPoint) => !ModalOpen && !DiagramOpen && !IsPanelPointer(screenPoint) && JoystickRect.Contains(GuiPoint(screenPoint));
+        WorldMapDlg.Visible;
+    public static bool IsJoystickRegion(Vector2 screenPoint) => !ModalOpen && !IsPanelPointer(screenPoint) && JoystickRect.Contains(GuiPoint(screenPoint));
     public static void RegisterPanel(object owner, Rect guiRect) { if (owner != null) panels[owner] = guiRect; }
     public static void RemovePanel(object owner) { if (owner != null) panels.Remove(owner); }
     public static bool IsPanelPointer(Vector2 screenPoint)
     {
         Vector2 point=GuiPoint(screenPoint);
         if (AddonUiHost.PointerOver(point)) return true;
-        foreach (Rect panel in panels.Values) if (panel.Contains(point)) return true;
+        if (TeamDlg.MobileContainsPointer(point)) return true;
+        if (TradeDlg.MobileContainsPointer(point)) return true;
+        if (StoreDlg.MobileContainsPointer(point)) return true;
+        if (TaskDlg.MobileContainsPointer(point)) return true;
+        if (FigureDlg.MobileContainsPointer(point)) return true;
+        if (MailDlg.MobileContainsPointer(point)) return true;
+        if (ShopDlg.MobileContainsPointer(point)) return true;
+        if (FamilyDlg.MobileContainsPointer(point)) return true;
+        if (SysOptionDlg.MobileContainsPointer(point)) return true;
+        if (SysConfigDlg.MobileContainsPointer(point)) return true;
+        if (DiagramOpen && !MinimapRect.Contains(point) && GameHud.MobileDiagramRect.Contains(point)) return true;
+        if (UIManager.I != null && UIManager.I.MobileWindowContains(screenPoint)) return true;
+        if (WinZ.AnyWindowAt(point) || UITip.MobileContainsPointer(point)) return true;
+        if (InventoryDlg.I != null && InventoryDlg.I.MobileOverlayContains(point)) return true;
+        if (EquipDlg.I != null && EquipDlg.I.MobileOverlayContains(point)) return true;
+        if (Win05.I != null && Win05.I.MobileOverlayContains(point)) return true;
+        foreach (var panel in panels)
+        {
+            if (panel.Key is InventoryDlg && !InventoryDlg.IsOpen) continue;
+            if (panel.Key is EquipDlg equipment && !equipment.IsOpen) continue;
+            if (panel.Key is Win05 window && !window.IsOpen) continue;
+            if (panel.Value.Contains(point)) return true;
+        }
         return false;
     }
     public static bool IsPointerOverUi(Vector2 screenPoint)
     {
         if (!Enabled) return false;
-        if (ModalOpen || DiagramOpen) return true;
+        if (ModalOpen) return true;
         Vector2 point = GuiPoint(screenPoint);
         if (GameHud.I!=null && GameHud.I.showAvatar && AvatarRect.Contains(point)) return true;
         if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return true;
         // Includes reserved thumb areas even before the first OnGUI event.
-        if (GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
+        if (GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || PickupRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
         if (GameHud.I != null && GameHud.I.showChat && ChatRect.Contains(point)) return true;
         if (MenuExpanded && MenuRect.Contains(point)) return true;
         for (int i=0;i<6;i++) if (SkillRect(i).Contains(point)) return true;

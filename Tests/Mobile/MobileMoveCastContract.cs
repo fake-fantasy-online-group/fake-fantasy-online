@@ -9,7 +9,7 @@ public static class MobileMoveCastContract {
  static Touch Skill(TouchPhase p,float x=720,float y=175)=>T(20,p,x,y);
  static Touch T(int id,TouchPhase p,float x,float y)=>new Touch{fingerId=id,phase=p,position=new Vector2(x,y)};
  static void Frame(params Touch[] touches){Time.frameCount++;Input.touches=touches;if(sampleBeforeHud)ClientInput.Refresh();GameHud.I.Tick();ClientInput.Refresh();}
- static void Reset(){ClientInput.CancelAll();GameHud.I=new GameHud();MobileClientPresentation.ModalOpen=MobileClientPresentation.DiagramOpen=false;MobileClientPresentation.SafeAreaGui=new Rect(0,0,1000,1000);GameHud.hotSkill[0]=1;GameSettings.SmartCast=true;SkillTargeting.Mode=SkillTargeting.Aim.Single;PlayerController.I.worldX=PlayerController.I.worldY=500;PlayerController.I.Stops=0;NetClient.I=new NetClient();CombatWorld.I.monsters.Clear();CombatWorld.I.monsters[1]=new MonsterEntity{id=1,worldX=550,worldY=500};TargetSelect.CurrentSourceForIndependentRuntime=CombatWorld.I.monsters[1];Frame();}
+ static void Reset(){ClientInput.CancelAll();GameHud.I=new GameHud();MobileClientPresentation.ModalOpen=MobileClientPresentation.DiagramOpen=false;MobileClientPresentation.SafeAreaGui=new Rect(0,0,1000,1000);GameHud.hotSkill[0]=1;GameSettings.SmartCast=true;SkillTargeting.Mode=SkillTargeting.Aim.Single;PlayerController.I.worldX=PlayerController.I.worldY=500;PlayerController.I.Stops=0;PlayerController.I.Pickups=0;MobileClientPresentation.PanelPointer=false;NetClient.I=new NetClient();CombatWorld.I.monsters.Clear();CombatWorld.I.monsters[1]=new MonsterEntity{id=1,worldX=550,worldY=500};TargetSelect.CurrentSourceForIndependentRuntime=CombatWorld.I.monsters[1];Frame();}
  static void Moving(string name){Check(ClientInput.JoystickHeld&&ClientInput.MovementAxis.x>.5f,name);Check(PlayerController.I.Stops==0,"cast never stops movement");}
  public static void Main(){
   foreach(bool sampleFirst in new[]{false,true})foreach(bool skillFirst in new[]{false,true})foreach(bool smart in new[]{false,true})foreach(bool drag in new[]{false,true}){
@@ -61,6 +61,43 @@ public static class MobileMoveCastContract {
    Frame(Skill(TouchPhase.Began));Frame(Skill(TouchPhase.Ended));
    Check(NetClient.I.GroundUses==1&&CombatWorld.I.Approaches==0,"quick release uses current moved origin and never chases");
    AuthoritativeProfessionSkill.Enabled=false;
+  }
+  // Exact failing quick-tap scenario: 10206 cone reaches beyond its Dist=50.
+  foreach(bool smart in new[]{false,true})foreach(bool drag in new[]{false,true})foreach(bool authority in new[]{false,true}){
+   Reset();GameHud.hotSkill[0]=10206;GameSettings.SmartCast=smart;
+   AuthoritativeProfessionSkill.Enabled=authority;AuthoritativeProfessionSkill.Value.InputMode="direction";AuthoritativeProfessionSkill.Value.CastDistance=50;
+   SkillTargeting.Mode=SkillTargeting.Aim.Direction;SkillTargeting.Range=50;SkillTargeting.Radius=500;
+   CombatWorld.I.monsters[1].worldX=900;
+   Frame(Stick(TouchPhase.Began),Skill(TouchPhase.Began));
+   Frame(Stick(TouchPhase.Stationary),Skill(TouchPhase.Ended,drag?780:720));
+   Check(NetClient.I.GroundUses==(smart||drag?1:0),"multi-throw quick tap/manual drag smart="+smart+" drag="+drag+" authority="+authority);
+   if(smart&&!drag)Check(NetClient.I.X==900&&NetClient.I.Y==500,"multi-throw aims at selected enemy beyond cast distance");
+   Check(CombatWorld.I.Approaches==0,"multi-throw never creates approach");Moving("multi-throw preserves joystick");
+   AuthoritativeProfessionSkill.Enabled=false;SkillTargeting.Range=100;SkillTargeting.Radius=100;
+  }
+  // Pickup runs through production HUD ownership/release/cancellation code.
+  foreach(bool sampleFirst in new[]{false,true}) {
+   sampleBeforeHud=sampleFirst;Reset();
+   Frame(Stick(TouchPhase.Began),T(40,TouchPhase.Began,972,20));
+   Check(GameHud.I.Owner==40&&PlayerController.I.Pickups==0,"pickup press only acquires ownership");
+   Check(GameHud.MobileShortcutPointerOwned,"pickup owns synthetic mouse events");
+   Frame(Stick(TouchPhase.Stationary),T(40,TouchPhase.Ended,972,20));
+   Check(PlayerController.I.Pickups==1&&GameHud.I.Owner==-1,"pickup release dispatches exactly once");
+   Check(ClientInput.JoystickHeld,"pickup control does not steal joystick finger");
+   Frame(Stick(TouchPhase.Stationary));Check(PlayerController.I.Pickups==1,"pickup cannot repeat without a new tap");
+   Reset();Frame(T(40,TouchPhase.Began,972,20));Frame(T(40,TouchPhase.Ended,500,300));
+   Check(PlayerController.I.Pickups==0,"pickup release outside cancels");
+   Reset();Frame(T(40,TouchPhase.Began,972,20));Frame(T(40,TouchPhase.Canceled,972,20));
+   Check(PlayerController.I.Pickups==0,"canceled pickup never dispatches");
+   Reset();Frame(T(40,TouchPhase.Began,972,20));GameHud.I.LoseFocus();Frame(T(40,TouchPhase.Ended,972,20));
+   Check(PlayerController.I.Pickups==0,"focus loss cancels pickup");
+   Reset();Frame(T(40,TouchPhase.Began,972,20));MobileClientPresentation.ModalOpen=true;Frame(T(40,TouchPhase.Ended,972,20));
+   Check(PlayerController.I.Pickups==0,"modal opening cancels pickup");
+   Reset();MobileClientPresentation.PanelPointer=true;Frame(T(40,TouchPhase.Began,972,20));Frame(T(40,TouchPhase.Ended,972,20));
+   Check(PlayerController.I.Pickups==0&&GameHud.I.Owner==-1,"covering panel blocks pickup");
+   Reset();Frame(Skill(TouchPhase.Began));Frame(Skill(TouchPhase.Stationary),T(40,TouchPhase.Began,972,20));
+   Frame(Skill(TouchPhase.Stationary),T(40,TouchPhase.Ended,972,20));
+   Check(PlayerController.I.Pickups==0&&GameHud.I.Owner==20,"second pickup finger cannot steal active skill");
   }
   Console.WriteLine("PASS production mobile HUD/input/cast integration: "+checks+" checks");
  }

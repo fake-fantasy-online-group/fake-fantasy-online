@@ -63,6 +63,21 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (ended) owners.Remove(id);
         }
 
+        // A panel that covers a held pointer cancels its action, then retains UI
+        // ownership until physical release. Dragging back out cannot restart it.
+        public void CancelIfCovered(int id, bool covered)
+        {
+            Owner owner;
+            if (!covered || !owners.TryGetValue(id, out owner) || owner == Owner.Ui) return;
+            if (owner == Owner.Stick) { stick = null; MovementAxis = Vector2.zero; }
+            if (owner == Owner.World)
+            {
+                world = null;
+                Pointer = new ClientPointerFrame { Position = Pointer.Position, Cancelled = true };
+            }
+            owners[id] = Owner.Ui;
+        }
+
         public void EndFrame()
         {
             missing.Clear();

@@ -17,10 +17,15 @@ definitions = read('Win05.Initialization.cs')
 window = read('Win05.Window.cs')
 fit = read('Win05.MobileSkills.cs')
 checks = [
+    ('messages.Contains' not in mobile and 'mobileExpandPressed = expand.Contains(current.mousePosition);' in mobile
+     and 'DrawLines(mobileLines, messages, true, false);' in mobile,
+     'message list has no opening handler or interactive rows'),
+    ('sideBtn[0]' in mobile and 'DrawMobileChatIcon(new Rect(expand.x' in mobile,
+     'upper-right expand button reuses the original viewbtn asset'),
     ('Win05.Open("historybar");' in mobile and 'Win05.Open("historybar");' in original,
-     'compact tap uses the same entry as original viewbtn'),
+     'expand icon tap uses the same entry as original viewbtn'),
     ('DrawPanel(messages)' not in mobile and 'ChatExpanded = true' not in mobile,
-     'compact tap never substitutes a taller HUD message frame'),
+     'expand icon tap never substitutes a taller HUD message frame'),
     ('res/uires/chatbar/historybar.gsa' in definitions,
      'original history frame remains the resource owner'),
     (all(label in definitions for label in ['("systemtab", "系统")', '("teamtab", "队伍")',

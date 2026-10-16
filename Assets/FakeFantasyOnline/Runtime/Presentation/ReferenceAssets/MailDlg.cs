@@ -185,6 +185,20 @@ public partial class MailDlg : MonoBehaviour
         I.selected = I.mails.FindIndex(mail => mail.id == selectedId);
         if (I.selected < 0 && I.view == 1) I.view = 0;
     }
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = I.Width, height = I.Height;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;

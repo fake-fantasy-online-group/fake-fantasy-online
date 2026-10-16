@@ -16,6 +16,23 @@ public partial class SysConfigDlg
     private static float Ext => PickRowOn() ? EXT_H : 0f;
     private static float NH => BG_H + Ext;
 
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = NW, height = NH;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        if (I.pickOpen && PickRowOn() && new Rect(x + 104f * scale, y + 303f * scale, 122f * scale, 108f * scale).Contains(point)) return true;
+        float listHeight = GameSettings.ResOpts.Length * 20f + 8f;
+        if (I.resOpen && new Rect(x + 104f * scale, y + (RESY - listHeight - 2f) * scale, 122f * scale, listHeight * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;

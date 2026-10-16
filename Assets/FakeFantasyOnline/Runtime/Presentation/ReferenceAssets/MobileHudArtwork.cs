@@ -7,11 +7,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 internal static class MobileHudArtwork
 {
     internal const string RoundControlPath = "res/uires/petCircle/choosepetbtn.gsa";
-    internal const string AttackIconPath = "res/uires/badgen/hurttype0.gsa";
     internal const string SkillWellPath = "res/uires/composedlg/sculphole.gsa";
     internal const string MenuTogglePath = "res/uires/sketchmap/togglebtn.gsa";
     private static readonly Dictionary<Texture2D, Texture2D> roundTextures = new Dictionary<Texture2D, Texture2D>();
     private static readonly Dictionary<Texture2D, Texture2D> menuTextures = new Dictionary<Texture2D, Texture2D>();
+    // Native ctrlbar captions, in GameHud.CtrlBtns order. Render text separately
+    // because MenuIconTexture removes the baked captions and their outer boxes.
+    private static readonly string[] controlLabels =
+        { "角色", "物品", "交友", "家族", "技能", "任务", "信件", "货架", "设置" };
     private static GUIStyle labelStyle;
     private static readonly GUIContent labelContent = new GUIContent();
 
@@ -129,6 +132,7 @@ internal static class MobileHudArtwork
 
     internal static void ClearRoundTextures()
     {
+        MobileGroupWheelArtwork.Clear();
         foreach (Texture2D texture in roundTextures.Values) Object.Destroy(texture);
         roundTextures.Clear();
         foreach (Texture2D texture in menuTextures.Values) Object.Destroy(texture);
@@ -168,12 +172,19 @@ internal static class MobileHudArtwork
         Image(knob, face, opacity: .92f);
     }
 
-    internal static void AttackFace(Rect touchRect, float scale, bool pressed)
+    internal static void AttackFace(Rect touchRect, float scale, bool pressed, Texture2D cursor = null)
     {
         Image(Inset(touchRect, 2f * scale), ResourceFrame(RoundControlPath), pressed, opacity: .92f);
-        // The original 40x40 sword has transparent margins; a 64px canvas yields a
-        // visible 38px blade at the logical HUD scale without enlarging the touch area.
-        Image(Inset(touchRect, 16f * scale), ResourceFrame(AttackIconPath), pressed);
+        // Borrow the exact desktop cursor texture; preserve its native three colors.
+        Image(Inset(touchRect, 16f * scale), cursor, pressed);
+    }
+
+    internal static void PickupFace(Rect touchRect, float scale, bool pressed, Texture2D cursor)
+    {
+        Image(Inset(touchRect, 2f * scale), ResourceFrame(RoundControlPath), pressed, opacity: .92f);
+        Rect icon = new Rect(touchRect.x, touchRect.y, touchRect.width, touchRect.height - 15f * scale);
+        Image(Inset(icon, 4f * scale), cursor, pressed);
+        Label(new Rect(touchRect.x, touchRect.yMax - 16f * scale, touchRect.width, 16f * scale), "拾取道具", scale);
     }
 
     internal static void SkillFace(Rect touchRect, float scale, bool occupied, bool pressed)
@@ -187,16 +198,13 @@ internal static class MobileHudArtwork
     {
         Texture2D texture = ControlFrame(legacyFrames, index, hovered, pressed)
             ?? ControlFrame(bottomFrames, index, hovered, pressed);
-        // Only the rack needs a standalone caption. Reserve a bottom strip inside
-        // its existing hit target so the icon and outlined text cannot overlap.
-        if (index == 7)
-        {
-            float labelHeight = Mathf.Min(rect.height, 18f * scale);
-            Rect icon = new Rect(rect.x, rect.y, rect.width, rect.height - labelHeight);
-            Image(Inset(icon, 2f * scale), MenuIconTexture(texture));
-            Label(new Rect(rect.x, rect.yMax - labelHeight, rect.width, labelHeight), "货架", scale);
-        }
-        else Image(Inset(rect, 2f * scale), MenuIconTexture(texture));
+        // Every cropped menu icon needs its caption restored. Keep both inside
+        // the existing hit target, with one shared layout for all menu entries.
+        float labelHeight = Mathf.Min(rect.height, 18f * scale);
+        Rect icon = new Rect(rect.x, rect.y, rect.width, rect.height - labelHeight);
+        Image(Inset(icon, 2f * scale), MenuIconTexture(texture));
+        if (index >= 0 && index < controlLabels.Length)
+            Label(new Rect(rect.x, rect.yMax - labelHeight, rect.width, labelHeight), controlLabels[index], scale);
     }
 
     // The label and its outline are baked into ctrlbar pixels. Mobile gets an

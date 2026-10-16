@@ -930,7 +930,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         if (!MiniOpen)
         {
             ClearOpenRects();
-            DrawDiagram(scale, viewportWidth, viewportHeight);
+            DrawDiagram(scale, viewportWidth, viewportHeight, touchControls);
             return true;
         }
 
@@ -946,7 +946,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         if (!minimapOpen)
         {
             ClearOpenRects();
-            DrawDiagram(scale, viewportWidth, viewportHeight);
+            DrawDiagram(scale, viewportWidth, viewportHeight, touchControls);
             return true;
         }
 
@@ -1043,7 +1043,7 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
             StepZoom(false);
         }
 
-        DrawDiagram(scale, viewportWidth, viewportHeight);
+        DrawDiagram(scale, viewportWidth, viewportHeight, touchControls);
         return true;
     }
 
@@ -1417,7 +1417,8 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
     private void DrawDiagram(
         float scale,
         int? viewportWidth,
-        int? viewportHeight)
+        int? viewportHeight,
+        bool touchControls)
     {
         LastDiagramRect = default(Rect);
         LastDiagramSelfMarkerRect = default(Rect);
@@ -1498,6 +1499,16 @@ public sealed class ReferenceFirstWorldMinimapHud : IDisposable
         }
 
         DrawDiagramZoneOverlay(scale);
+        // The expanded image can overlap the compact map on a small viewport.
+        // Keep the existing native actions visible above it; Update owns their touch
+        // dispatch, so these are artwork only, never a second GUI.Button action.
+        if (touchControls)
+        {
+            if (resources.SketchToggle != null) GUI.DrawTexture(LastToggleRect, resources.SketchToggle);
+            if (resources.SketchWorldButton != null) GUI.DrawTexture(LastWorldButtonRect, resources.SketchWorldButton);
+            if (resources.SketchPlus != null) GUI.DrawTexture(LastPlusButtonRect, resources.SketchPlus);
+            if (resources.SketchMinus != null) GUI.DrawTexture(LastMinusButtonRect, resources.SketchMinus);
+        }
     }
 
     // Air-drop chest points of the full-map overlay, 060003d6 + the 06000414 slice behind

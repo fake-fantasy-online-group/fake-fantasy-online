@@ -562,6 +562,7 @@ public partial class Win05
             close != null ? GUIStyle.none : GUI.skin.button))
         {
             petSkillPanelOpen = false;
+            if (MobileClientPresentation.Enabled) ResetMobileSkills();
             current.Use();
         }
 
@@ -594,6 +595,19 @@ public partial class Win05
             if (lifeIndex < lifeCap) placed.Add((skill, lifeIndex++));
         }
 
+        if (MobileClientPresentation.Enabled)
+        {
+            ReadMobilePetSkills(current, point =>
+            {
+                if (UITip.MobileContainsPointer(point) || (mobileSkillActions && mobileSkillActionsRect.Contains(point))) return -1;
+                foreach (var entry in placed)
+                {
+                    var pos = positions[entry.cell];
+                    if (L(257f + pos.x, 120f + pos.y, 36f, 36f).Contains(point)) return entry.skill.id;
+                }
+                return -1;
+            });
+        }
         bool hovered = false;
         string tipName = string.Empty, tipDescription = string.Empty;
         foreach (var item in placed)
@@ -623,7 +637,7 @@ public partial class Win05
                 BitmapFont.CenterOutline(new Rect(rect.x, rect.yMax - 11f * scale,
                     rect.width, 10f * scale), "Lv." + skill.level.ToString(CultureInfo.CurrentCulture),
                     new Color32(255, 245, 200, 255), scale);
-            if (!rect.Contains(current.mousePosition)) continue;
+            if (MobileClientPresentation.Enabled || !rect.Contains(current.mousePosition)) continue;
             hovered = true;
             tipName = (skill.active ? "[主动] " : "[被动] ") + skill.name +
                 (skill.level > 0 ? "  Lv." + skill.level.ToString(CultureInfo.CurrentCulture) + "/" +

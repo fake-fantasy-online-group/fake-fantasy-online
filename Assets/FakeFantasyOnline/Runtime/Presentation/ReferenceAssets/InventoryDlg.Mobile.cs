@@ -4,10 +4,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 internal partial class InventoryDlg
 {
+    internal bool MobileOverlayContains(Vector2 point) => open &&
+        ((mobileActions && mobileActionsRect.Contains(point)) || (splitOpen && SL(0, 0, 147, 41).Contains(point)));
+
     private readonly MobilePanelTouch mobileTouch = new MobilePanelTouch();
     private int mobileSlot = -1, mobileId, mobileTab = -1;
     private Rect mobileViewport, mobileActionsRect;
-    private bool mobileActions;
+    private bool mobileActions, mobileBinding;
+    private int mobileBindingPage;
 
     internal static void ClearMobileSelectionForWorldChange()
     {
@@ -17,7 +21,7 @@ internal partial class InventoryDlg
     }
     private void ClearMobileSelection()
     {
-        mobileSlot = -1; mobileId = 0; mobileActions = false;
+        mobileSlot = -1; mobileId = 0; mobileActions = mobileBinding = false;
         mobileTouch.Reset();
     }
     private void OnApplicationFocus(bool focused)
@@ -54,14 +58,14 @@ internal partial class InventoryDlg
         if (splitOpen) { ClearMobileSelection(); return; }
         bool selected = mobileTouch.Read(ev, s, MobileInventoryHit, out int slot, out bool held);
         if (mobileTouch.Started && !UITip.MobileContainsPointer(mobileTouch.StartPoint) && (!mobileActions || !mobileActionsRect.Contains(mobileTouch.StartPoint)))
-        { mobileSlot = -1; mobileId = 0; mobileActions = false; }
+        { mobileSlot = -1; mobileId = 0; mobileActions = mobileBinding = false; }
         if (selected)
         {
             Item item = ItemAt(tab, slot);
             if (item.id > 0)
             {
                 mobileSlot = slot; mobileId = item.id; mobileTab = tab; mobileActions = held;
-                mobileActionsRect = MobilePanelLayout.Actions(mobileTouch.Anchor, 5, out _);
+                mobileActionsRect = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : 6, out _);
                 PlayerController.SuppressWorldClick();
             }
         }
@@ -81,17 +85,37 @@ internal partial class InventoryDlg
             ev.mousePosition = previous;
             return;
         }
-        Rect box = MobilePanelLayout.Actions(mobileTouch.Anchor, 5, out float scale);
+        Rect box = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : 6, out float scale);
         mobileActionsRect = box;
         int depth = GUI.depth; GUI.depth = 0;
         bool offered = DealDlg.IsOffered((byte)tab, item.bagIdx);
         bool available = !offered && !splitOpen && !HasHeldAny;
+        bool bindingAllowed = available && !DealDlg.Visible && !EquipFuseDlg.Picking && !ToolTarget.Active &&
+            !PetForgeDlg.Picking && !AttrWashDlg.Picking && !AvatarFuse.Active && !RepairDlg.Picking;
+        int bindingSkill = !item.pet.HasValue ? FabaoSkillOf(item.id) : 0;
+        bool bindable = bindingAllowed && MobileShortcutEligibility.Bag(tab, item.id, item.pet.HasValue, bindingSkill);
+        if (mobileBinding)
+        {
+            int target = MobilePanelLayout.HotbarSlot(box, scale, ref mobileBindingPage, out bool cancel);
+            if (target >= 0 && bindable)
+            {
+                GameHud.BindMobileShortcut(target, bindingSkill > 0 ? bindingSkill : item.id,
+                    bindingSkill > 0 ? null : item.icon, bindingSkill > 0 ? 0 : 2);
+                ClearMobileSelection();
+            }
+            if (cancel) mobileBinding = false;
+        }
+        else
+        {
         if (MobilePanelLayout.Action(box, 0, MobilePrimaryLabel(item), scale,
             DealDlg.Visible ? !splitOpen && !HasHeldAny && DealDlg.CanEditBagOffer : available)) ExecuteMobileAction(item, 0);
         if (MobilePanelLayout.Action(box, 1, item.locked ? "解锁" : "加锁", scale, available)) ExecuteMobileAction(item, 1);
         if (MobilePanelLayout.Action(box, 2, "拆分", scale, available && !item.pet.HasValue && item.count > 1)) ExecuteMobileAction(item, 2);
         if (MobilePanelLayout.Action(box, 3, "分享", scale, available)) ExecuteMobileAction(item, 3);
-        if (MobilePanelLayout.Action(box, 4, "取消", scale)) ClearMobileSelection();
+        if (MobilePanelLayout.Action(box, 4, "放入快捷栏", scale, bindable))
+        { mobileBinding = true; mobileBindingPage = 0; }
+        if (MobilePanelLayout.Action(box, 5, "取消", scale)) ClearMobileSelection();
+        }
         if (box.Contains(ev.mousePosition) && (ev.type == EventType.MouseDown || ev.type == EventType.MouseUp || ev.type == EventType.MouseDrag)) ev.Use();
         GUI.depth = depth;
     }

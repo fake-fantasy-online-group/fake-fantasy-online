@@ -45,6 +45,17 @@ static void Main(string[] args){
   foreach(bool present in quadrant)Check(present,"Inspected artwork covers all four quadrants: "+spec.Item1);
   Console.WriteLine("Verified local original frame: "+spec.Item1+" "+frame.width+"x"+frame.height);
  }
+ foreach(string name in new[]{"AttackH","AttackM","AttackL","Fetch"}) {
+  string path="res/uires/cursor/"+name+".gsa"; byte[] bytes=archive.Read(path);
+  Check(bytes!=null,"Original cursor present "+name);var frame=GsaDecoder.DecodeFrameAssembled(bytes,0);
+  Check(frame!=null,"Original cursor decoded "+name); int opaque=0;long red=0,green=0,blue=0;
+  foreach(var pixel in frame.pixels)if(pixel.a>32){opaque++;red+=pixel.r;green+=pixel.g;blue+=pixel.b;}
+  Check(opaque>30,"Original cursor visibly nonempty "+name);
+  if(name=="AttackM")Check(red>green && green>blue*2,"Original middle cursor is yellow/gold");
+  if(name=="AttackH")Check(red>green*2,"Original higher cursor is red");
+  if(name=="AttackL")Check(green>red && green>blue*2,"Original lower cursor is green");
+  Console.WriteLine("Verified original cursor "+name+" "+frame.width+"x"+frame.height+" sha256="+Hash(bytes));
+ }
  Console.WriteLine("PASS mobile HUD package resources: "+checks+" checks using production PkgArchive, Gbk and GsaDecoder. Texture storage is stubbed; no Unity screenshot.");
 }
 }

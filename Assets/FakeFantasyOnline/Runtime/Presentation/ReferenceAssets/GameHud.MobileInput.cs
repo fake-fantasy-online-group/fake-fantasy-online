@@ -25,9 +25,8 @@ public partial class GameHud
     {
         get
         {
-            if (I==null || I.mobileFinger!=-1 || !I.showHotbar || I.diagramOpen ||
-                !MobileClientPresentation.Enabled || MobileClientPresentation.ModalOpen ||
-                MobileClientPresentation.DiagramOpen) return false;
+            if (I==null || I.mobileFinger!=-1 || !I.showHotbar ||
+                !MobileClientPresentation.Enabled || MobileClientPresentation.ModalOpen) return false;
             for (int i=0;i<Input.touchCount;i++)
             {
                 Touch touch=Input.GetTouch(i);
@@ -61,8 +60,9 @@ public partial class GameHud
         if (!MobileClientPresentation.Enabled) { CancelMobileGesture(); return; }
         Rect viewport = MobileClientPresentation.SafeAreaGui;
         if (mobileViewport != viewport) { CancelMobileGesture(); mobileViewport = viewport; }
-        if (MobileClientPresentation.ModalOpen || MobileClientPresentation.DiagramOpen || !showHotbar)
+        if (MobileClientPresentation.ModalOpen)
         { CancelMobileGesture(); return; }
+        if (!showHotbar && mobileFinger != -1 && mobilePressed < 10) CancelMobileGesture();
         // Movement and HUD gestures own different finger IDs. A second (or third)
         // touch must not cancel the active skill; HandleMobilePointer ignores non-owners.
         // Give the group opener priority over another same-frame touch inside
@@ -96,19 +96,20 @@ public partial class GameHud
     {
         Vector2 point=MobileClientPresentation.GuiPoint(position);
         bool panelPointer=MobileClientPresentation.IsPanelPointer(position);
-        if (phase==TouchPhase.Began && !panelPointer && showHotbar && !diagramOpen)
+        if (phase==TouchPhase.Began && !panelPointer && showHotbar)
         {
             // Even an ignored second shortcut finger owns its synthesized events.
-            bool shortcut=MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point) || MobileClientPresentation.GroupWheelContains(point);
+            bool shortcut=MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PickupRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point) || MobileClientPresentation.GroupWheelContains(point);
             for (int k=0;k<6;k++) shortcut |= MobileClientPresentation.SkillRect(k).Contains(point);
             if (shortcut) mobileShortcutPointers.Claim(finger);
         }
         if (phase==TouchPhase.Began && mobileFinger==-1 && !panelPointer &&
             !(MobileGroupWheelClosing && MobileClientPresentation.GroupWheelContains(point)))
         {
-            int button=showHotbar && !diagramOpen && MobileClientPresentation.AttackRect.Contains(point) ? 6 : -1;
-            if (showHotbar && !diagramOpen) for (int k=0;k<6;k++) if (MobileClientPresentation.SkillRect(k).Contains(point)) button=k;
-            if (showHotbar && !diagramOpen && MobileClientPresentation.PageRect.Contains(point)) button=7;
+            int button=showHotbar && MobileClientPresentation.AttackRect.Contains(point) ? 6 : -1;
+            if (showHotbar) for (int k=0;k<6;k++) if (MobileClientPresentation.SkillRect(k).Contains(point)) button=k;
+            if (showHotbar && MobileClientPresentation.PageRect.Contains(point)) button=7;
+            if (showHotbar && MobileClientPresentation.PickupRect.Contains(point)) button=8;
             if (showMinimap && MobileClientPresentation.MinimapRect.Contains(point))
             {
                 button=10;
@@ -126,12 +127,15 @@ public partial class GameHud
                 if (button==7)
                 {
                     Vector2 center=MobileClientPresentation.GroupWheelCenter;
-                    mobileGroupWheel.Begin(finger,center.x,center.y,MobileClientPresentation.GroupWheelDeadZone);
+                    mobileGroupWheel.Begin(finger,center.x,center.y,MobileClientPresentation.GroupWheelDeadZone,point.x,point.y);
                     MobileClientPresentation.GroupWheelOpen=true;
                 }
             }
         }
         if (finger!=mobileFinger) return;
+        // An overlay may appear or move over a held HUD gesture. Cancel rather
+        // than firing through it; this finger cannot reacquire until a new Began.
+        if (panelPointer) { CancelMobileGesture(); return; }
         mobileSkillGesture.Sample(position.x,position.y);
         mobileCancelHighlighted=mobilePressed>=0 && mobilePressed<6 && MobileClientPresentation.CancelContains(point);
         bool cancel=phase==TouchPhase.Canceled || mobileCancelHighlighted;
@@ -147,6 +151,8 @@ public partial class GameHud
             if (cancel) SkillTargeting.CancelMobileHotSlot();
             else if (mobilePressed<6) SkillTargeting.ReleaseMobileHotSlot(MobileAimPosition(position),mobileSkillGesture.Dragged);
             else if (mobilePressed==6 && MobileClientPresentation.AttackRect.Contains(point)) MobileAttack();
+            else if (mobilePressed==8 && MobileClientPresentation.PickupRect.Contains(point))
+                PlayerController.I?.PickupNearestForIndependentRuntime();
             else if (mobilePressed>=10 && MobileClientPresentation.MinimapRect.Contains(point))
             {
                 if (mobilePressed==10 || mobilePressed==14) guiMinimap?.ToggleDiagram();

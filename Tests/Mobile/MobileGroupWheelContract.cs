@@ -65,6 +65,24 @@ public static class MobileGroupWheelContract {
     Check(GameHud.I.Page==order[sector],"return to center cancels without changing selected group");
    }
   }
+  // PageRect is a square: its corners are outside the circular cancel zone.
+  foreach(float dx in new[]{-29f,29f})foreach(float dy in new[]{-29f,29f}){
+   Reset();Frame(Stick(TouchPhase.Began),Wheel(TouchPhase.Began,dx,dy));
+   Frame(Stick(TouchPhase.Stationary),Wheel(TouchPhase.Stationary,dx,dy));
+   Check(GameHud.I.WheelHover==-1,"off-center stationary hold does not preview a group");
+   Frame(Stick(TouchPhase.Stationary),Wheel(TouchPhase.Ended,dx+1,dy+1));
+   Check(GameHud.I.Page==0&&!MobileClientPresentation.GroupWheelOpen&&ClientInput.JoystickHeld,"corner tap with jitter cancels and preserves joystick");
+  }
+  foreach(float scale in new[]{.5f,1f,2f}){
+   var gesture=new MobileGroupWheel();
+   gesture.Begin(41,100,100,24*scale,120*scale+100,120*scale+100);
+   Check(gesture.Sample(42,500,100,true,false)==-1&&gesture.Pointer==41,"foreign release cannot steal wheel");
+   Check(gesture.Sample(41,120*scale+100,120*scale+100,false,false)==-1&&gesture.Hovered==-1,"clamped popup cannot select before a drag");
+   Check(gesture.Sample(41,100+72*scale,100,true,false)==1,"intentional drag commits right at each scale");
+   gesture.Begin(41,100,100,24*scale,100,100);
+   gesture.Sample(41,100+72*scale,100,false,false);
+   Check(gesture.Sample(41,100,100,true,false)==-1,"return to visible center cancels after drag at each scale");
+  }
   Check(MobileGroupWheel.Hit(24,0,24)==-1&&MobileGroupWheel.Hit(0,0,24)==-1,"inclusive dead zone");
   Check(MobileGroupWheel.ClampCenter(1,0,200,96)==96&&MobileGroupWheel.ClampCenter(199,0,200,96)==104,"safe edge clamping");
   Check(MobileGroupWheel.ClampCenter(1,10,100,96)==60,"tiny viewport centers safely");

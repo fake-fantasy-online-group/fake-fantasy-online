@@ -16,7 +16,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class SocialClient {public static int SelectedMemberId;public static HashSet<int> Party=new HashSet<int>(); public static bool InParty(int id)=>Party.Contains(id);}
  public static class CharData {public static int hp=100;}
  public static class Win05 {public class SkInfo {public int canEnemy=1,canFriendly,canSelf;} public static SkInfo Info=new SkInfo();public static SkInfo SkillInfo(int id)=>Info;}
- public class Behavior {public float CastDistance=100; public string InputMode="entity"; public bool TargetSelf,SelfFallback,DeadTargetOnly,AllowsDeadTarget,TargetTeam,TargetEnemy=true;}
+ public class Area {public float Radius=500,Length; }
+ public static class SkillTargeting { public enum Aim {Single,Circle,Direction} public static Aim Resolve(int id,out float range,out float radius,out float angle,out float length,out float width,out bool trap) {var b=AuthoritativeProfessionSkill.Value;range=b.CastDistance;radius=b.Area.Radius;length=b.Area.Length;angle=120;width=0;trap=false;return b.InputMode=="direction"?Aim.Direction:b.InputMode=="point"?Aim.Circle:Aim.Single;} }
+ public class Behavior {public Area Area=new Area();public float CastDistance=100; public string InputMode="entity"; public bool TargetSelf,SelfFallback,DeadTargetOnly,AllowsDeadTarget,TargetTeam,TargetEnemy=true;}
  public static class AuthoritativeProfessionSkill {
   public static bool Enabled,Learned=true;public static Behavior Value=new Behavior();public static bool Uses(int id)=>Enabled;public static Behavior Current(int id)=>Enabled?Value:null;public static bool LearnedActive(int id)=>Learned;
   public static string ValidateTarget(int id,object source) {var v=Value;if(source is MonsterEntity m)return v.TargetEnemy&&!v.DeadTargetOnly&&m.hp>0&&!m.NoAttack?null:"illegal monster";if(source is RemotePlayer p)return v.TargetTeam&&SocialClient.InParty(p.id)&&(!p.IsDead||v.AllowsDeadTarget)&&(!v.DeadTargetOnly||p.IsDead)?null:"illegal player";return "illegal";}

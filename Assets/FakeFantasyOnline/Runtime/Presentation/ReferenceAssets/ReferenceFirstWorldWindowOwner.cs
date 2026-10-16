@@ -2874,9 +2874,8 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
         if (CursorManager.I != null)
         {
             CursorManager attackCursor = CursorManager.I;
-            int attackKind = attackableMonster != null
-                ? Math.Sign(unchecked(attackableMonster.level - CharData.level))
-                : hostileRemote || CombatWorld.AwaitingTarget ? 0 : -2;
+            int attackKind = CursorManager.AttackKindForIndependentRuntime(
+                    attackableMonster, hostileRemote, CombatWorld.AwaitingTarget);
             attackCursor.SetAttackHover(attackKind);
         }
         bool gatherAllowed = selected == null || selected is PlayerController ||

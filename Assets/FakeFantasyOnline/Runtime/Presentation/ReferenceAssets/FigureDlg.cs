@@ -37,6 +37,20 @@ public partial class FigureDlg : MonoBehaviour
         I.visible = !I.visible;
     }
 
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = NW, height = NH;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (!Visible) return false;

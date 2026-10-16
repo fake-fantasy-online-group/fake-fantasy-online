@@ -10,6 +10,22 @@ internal partial class ChatUI
     private bool mobileExpandPressed;
     private readonly object mobileChannelPanelOwner = new object();
 
+    private void OnApplicationFocus(bool focused)
+    {
+        if (!focused) mobileExpandPressed = false;
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) mobileExpandPressed = false;
+    }
+
+    private void OnDisable()
+    {
+        mobileExpandPressed = false;
+        MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
+    }
+
     private Rect MobileChannelPanelRect()
     {
         Rect chat = MobileClientPresentation.ChatRect;
@@ -51,25 +67,39 @@ internal partial class ChatUI
         // The collapsed 112-unit footprint reserves 68 units for three existing
         // 18-unit message rows. Channel/send share one touch band below it.
         // Opening details keeps this three-line preview and composer compact.
-        Rect messages = new Rect(panel.x, panel.y, panel.width, Mathf.Max(0f, panel.height - control));
+        Rect expand = new Rect(panel.xMax - control, panel.y, control, control);
+        // Keep the original viewbtn face clear of message text and the composer.
+        Rect messages = new Rect(panel.x, panel.y, Mathf.Max(0f, panel.width - control - 4f * s),
+            Mathf.Max(0f, panel.height - control));
         Event current = Event.current;
         if (mobileLines == null) mobileLines = new List<Line>();
         CollectMobileLines(mobileLines);
         DrawLines(mobileLines, messages, true, false);
-        // Compact rows are display-only. A complete primary tap opens the existing
-        // viewbtn -> Win05 historybar, including its original channel tabs.
-        // Right clicks / synthesized long presses cannot open message menus.
-        bool blocked = GameHud.MobileShortcutPointerOwned || MobileClientPresentation.ModalOpen;
+        // Only the explicit upper-right icon opens the original tabbed history.
+        // Compact message rows remain display-only, including long presses.
+        Texture2D[] expandFrames = sideBtn != null && sideBtn.Length > 0 && HasMobileChatIcon(sideBtn[0])
+            ? sideBtn[0] : sizeBtn;
+        DrawMobileChatIcon(new Rect(expand.x + 8f * s, expand.y + 8f * s,
+            28f * s, 28f * s), expand, expandFrames);
+        if (!HasMobileChatIcon(expandFrames)) DrawMobileChatLabel(expand, "展开");
+        bool touchCanceled = Input.touchCount > 1;
+        if (mobileExpandPressed)
+            for (int index = 0; index < Input.touchCount; index++)
+                if (Input.GetTouch(index).phase == TouchPhase.Canceled) touchCanceled = true;
+        bool blocked = GameHud.MobileShortcutPointerOwned || MobileClientPresentation.ModalOpen || chanOpen || touchCanceled;
         if (blocked) mobileExpandPressed = false;
         if (current != null && current.button == 0 && !blocked)
         {
             if (current.type == EventType.MouseDown)
             {
-                mobileExpandPressed = !chanOpen && messages.Contains(current.mousePosition);
+                mobileExpandPressed = expand.Contains(current.mousePosition);
+                if (mobileExpandPressed) current.Use();
             }
+            if (current.type == EventType.MouseDrag && !expand.Contains(current.mousePosition))
+                mobileExpandPressed = false;
             if (current.type == EventType.MouseUp)
             {
-                if (mobileExpandPressed && messages.Contains(current.mousePosition))
+                if (mobileExpandPressed && expand.Contains(current.mousePosition))
                 {
                     Win05.Open("historybar");
                     MobileClientPresentation.MenuExpanded = false;

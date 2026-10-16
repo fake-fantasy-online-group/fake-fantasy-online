@@ -77,6 +77,20 @@ public partial class TaskDlg : MonoBehaviour
 
     // Actual 1.6.0 token 06000e8e. Both centering decisions test winX; the non-centred
     // vertical position still reads winY. Keep the two sentinel reads separate.
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = 495f, height = 397f;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null) return false;

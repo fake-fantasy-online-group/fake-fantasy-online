@@ -4,6 +4,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 internal partial class EquipDlg
 {
+    internal bool MobileOverlayContains(Vector2 point) => open &&
+        mobileEquipmentActions && mobileEquipmentActionsRect.Contains(point);
+
     private readonly MobilePanelTouch mobileEquipmentTouch = new MobilePanelTouch();
     private int mobileEquipmentSlot = -1, mobileEquipmentId, mobileEquipmentTab = -1, mobileEquipmentPage;
     private bool mobileEquipmentActions, mobileEquipmentBinding;

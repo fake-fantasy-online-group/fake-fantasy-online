@@ -11,7 +11,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void UpdateMobileMovement()
         {
             if (!MobileClientPresentation.Enabled) return;
-            if (MobileClientPresentation.ModalOpen || MobileClientPresentation.DiagramOpen) { CancelMobileInput(); return; }
+            if (MobileClientPresentation.ModalOpen) { CancelMobileInput(); return; }
             Vector2 axis = ClientInput.MovementAxis;
             bool steering = ClientInput.JoystickHeld && axis.sqrMagnitude > .04f;
             if (!steering)

@@ -4,6 +4,23 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 public partial class GameHud
 {
+    // Resolve before OnGUI as well as during drawing, so opening/closing and viewport
+    // changes never leave stale panel bounds. Compact map controls remain the close route.
+    internal static Rect MobileDiagramRect
+    {
+        get
+        {
+            if (I==null || !I.showMinimap || !I.diagramOpen || I.guiMinimap==null)
+                return default(Rect);
+            Rect safe=MobileClientPresentation.SafeAreaGui;
+            Rect rect=ReferenceFirstWorldMinimapHud.DiagramRect(
+                MobileClientPresentation.MinimapViewportWidth,(int)safe.height,
+                I.guiMinimap.DiagramTexture,MobileClientPresentation.Scale);
+            rect.x+=safe.x; rect.y+=safe.y;
+            return rect;
+        }
+    }
+
     private void DrawMobileHud()
     {
         float scale=MobileClientPresentation.Scale;
@@ -34,9 +51,12 @@ public partial class GameHud
         }
         finally { GUI.matrix=previous; s=oldScale; uiScale=oldUiScale; }
         // Reuse original resources, icons, cooldown masks and dispatch; no replacement artwork.
-        if (showHotbar && !diagramOpen)
+        if (showHotbar)
         {
-            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==6);
+            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==6,
+                CursorManager.I != null ? CursorManager.I.MobileAttackTexture(TargetSelect.CurrentSourceForIndependentRuntime) : null);
+            MobileHudArtwork.PickupFace(MobileClientPresentation.PickupRect,scale,mobilePressed==8,
+                CursorManager.I != null ? CursorManager.I.MobilePickupTexture : null);
             for (int k=0;k<6;k++)
             {
                 int slot=MobileGroupWheel.HotbarSlot(mobilePage,k);
@@ -60,7 +80,7 @@ public partial class GameHud
             }
             MobileHudArtwork.Joystick(MobileClientPresentation.JoystickRect,ClientInput.MovementAxis,scale);
         }
-        if (showMenu && !diagramOpen)
+        if (showMenu)
         {
             if (MobileHudArtwork.MenuButton(MobileClientPresentation.MenuToggleRect,
                 scale,MobileClientPresentation.MenuExpanded))
@@ -92,7 +112,7 @@ public partial class GameHud
             }
             finally { GUI.color=old; }
         }
-        if (MobileClientPresentation.GroupWheelOpen && showHotbar && !diagramOpen)
+        if (MobileClientPresentation.GroupWheelOpen && showHotbar)
             DrawMobileGroupWheel(scale);
         LastGuiDrawSucceededForIndependentRuntime=ready;
     }
@@ -105,9 +125,20 @@ public partial class GameHud
                 clipping=TextClipping.Overflow, richText=false, wordWrap=false
             };
         Vector2 center=MobileClientPresentation.GroupWheelCenter;
-        // One shared background and outer circle; numbers stay unboxed.
+        // Flat translucent disc, thin perimeter and selected sector match the design preview.
+        // Numbers remain unboxed; the center boundary matches the actual cancel radius.
         float diameter=(MobileClientPresentation.GroupWheelRadius+24f*scale)*2f;
-        DrawMobileRoundFace(new Rect(center.x-diameter*.5f,center.y-diameter*.5f,diameter,diameter),scale,true,false);
+        int pending=mobileGroupWheel.Hovered;
+        MobileHudArtwork.Image(new Rect(center.x-diameter*.5f,center.y-diameter*.5f,diameter,diameter),
+            MobileGroupWheelArtwork.Face(pending));
+        if (pending>=0)
+        {
+            MobileGroupWheel.Direction(pending,out float arrowX,out float arrowY);
+            Vector2 arrow=center+new Vector2(arrowX,arrowY)*42f*scale;
+            string glyph=pending==0 ? "↑" : pending==1 ? "→" : pending==2 ? "↓" : "←";
+            DrawMobileGroupText(new Rect(arrow.x-12f*scale,arrow.y-12f*scale,24f*scale,24f*scale),
+                glyph,20f,new Color(1f,.88f,.48f,1f),scale);
+        }
         for (int group=0;group<4;group++)
         {
             MobileGroupWheel.Direction(group,out float x,out float y);
@@ -115,8 +146,11 @@ public partial class GameHud
             bool hovered=mobileGroupWheel.Hovered==group;
             Rect label=new Rect(position.x-24f*scale,position.y-24f*scale,48f*scale,48f*scale);
             Color color=hovered ? new Color(1f,.88f,.48f,1f) :
-                group==mobilePage ? new Color(.73f,.84f,.92f,1f) : Color.white;
+                group==mobilePage ? new Color(.82f,.69f,.40f,1f) : Color.white;
             DrawMobileGroupText(label,(group+1).ToString(),hovered ? 30f : 22f,color,scale);
+            if (group==mobilePage)
+                DrawMobileGroupText(new Rect(position.x-10f*scale,position.y+12f*scale,20f*scale,12f*scale),
+                    "•",12f,new Color(.82f,.69f,.40f,1f),scale);
         }
         DrawMobileGroupText(new Rect(center.x-28f*scale,center.y-16f*scale,56f*scale,32f*scale),
             "取消",12f,new Color(.8f,.8f,.8f,1f),scale);

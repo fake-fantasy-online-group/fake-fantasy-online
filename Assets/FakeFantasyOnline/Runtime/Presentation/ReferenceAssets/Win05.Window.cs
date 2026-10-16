@@ -55,12 +55,13 @@ public partial class Win05
         float width = baseWidth + extraWidth;
         var stacking = WinZ.Frame(this, new Rect(winX, winY, width, def.h * s), 10);
         GUI.depth = stacking.Item1;
+        mobileSkillInputBlocked = stacking.Item2;
         Vector2 oldMouse = ev.mousePosition;
         if (stacking.Item2) ev.mousePosition = new Vector2(-9999f, -9999f);
         try
         {
             if (IsMobileSkillWindow && stacking.Item2) ResetMobileSkills();
-            if (IsMobileSkillWindow && ev.type == EventType.MouseDown && !UITip.MobileContainsPointer(ev.mousePosition) &&
+            if (IsMobileSkillWindow && cur != "petdlg" && ev.type == EventType.MouseDown && !UITip.MobileContainsPointer(ev.mousePosition) &&
                 (!mobileSkillActions || !mobileSkillActionsRect.Contains(ev.mousePosition))) ResetMobileSkills();
             bool actionsCover = IsMobileSkillWindow && ((mobileSkillActions && mobileSkillActionsRect.Contains(ev.mousePosition)) ||
                 UITip.MobileContainsPointer(ev.mousePosition));

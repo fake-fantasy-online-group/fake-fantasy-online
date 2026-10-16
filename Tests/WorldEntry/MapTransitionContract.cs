@@ -119,14 +119,16 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public class NetClient
     {
-        public static NetClient I;
+        public static NetClient I; public static int SelfEntityId = 7;
         public void GmCmdForIndependentRuntime(string command) { }
     }
     public sealed class Doll { public PlayerController SourceControllerForIndependentRuntime; public Transform Root = new GameObject("player").transform; public float WorldX => SourceControllerForIndependentRuntime.worldX; public float WorldY => SourceControllerForIndependentRuntime.worldY; }
     public sealed class WorldEntryRecord
     {
-        public int MapId; public float X, Y;
-        public WorldEntryRecord WithMapPosition(int map, float x, float y) => new WorldEntryRecord { MapId = map, X = x, Y = y };
+        public int GlowMode, GlowUnlock; public int EntityId = 7; public int MapId; public float X, Y; public CharacterAppearanceRecord Appearance = new CharacterAppearanceRecord();
+        public WorldEntryRecord WithMapPosition(int map, float x, float y) => new WorldEntryRecord { EntityId = EntityId, MapId = map, X = x, Y = y, Appearance = Appearance, GlowMode = GlowMode, GlowUnlock = GlowUnlock };
+        public WorldEntryRecord WithAppearance(CharacterAppearanceRecord value, int glow, int unlock) =>
+            new WorldEntryRecord { EntityId = EntityId, MapId = MapId, X = X, Y = Y, Appearance = value, GlowMode = glow, GlowUnlock = unlock };
     }
     public enum ReferenceFirstWorldWindowFailure { None, UnexpectedConstructionFailure, MissingSourceAsset }
     public static class MusicManager { public static Music I; }
@@ -476,4 +478,26 @@ static class MapTransitionContract
 #endif
         Console.WriteLine($"PASS {checks} assertions across {scenarios} original-lifecycle source scenarios; Unity rendering not exercised");
     }
+}
+
+namespace FakeFantasyOnline.Presentation.ReferenceAssets {
+public class CharacterAppearanceRecord
+{
+    public int Body, Cap, Backpack, RightWeapon, LeftWeapon, Face;
+    public int AttackVariant, WeaponCategory, AttackDistance;
+    public CharacterAppearanceRecord() { }
+    public CharacterAppearanceRecord(int body, int cap, int backpack, int right, int left, int face,
+        int attackVariant, int weaponCategory, int attackDistance)
+    {
+        Body = body; Cap = cap; Backpack = backpack; RightWeapon = right; LeftWeapon = left; Face = face;
+        AttackVariant = attackVariant; WeaponCategory = weaponCategory; AttackDistance = attackDistance;
+    }
+}
+public static class CharData
+{
+    public static int apBody, apCap, apBackpack, apWeaponR, apWeaponL, apFace;
+    public static int atkVariant, weaponCType, atkDist, glowMode, glowUnlock;
+    public static void SetAppearance(int body, int cap, int backpack, int right, int left, int face)
+    { apBody = body; apCap = cap; apBackpack = backpack; apWeaponR = right; apWeaponL = left; apFace = face; }
+}
 }

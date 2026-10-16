@@ -17,6 +17,19 @@ public partial class CombatWorld
         return fallback > 0 ? fallback : 100f;
     }
 
+    // A direction point is an orientation, not a cast destination. Acquire and
+    // revalidate its target against the current footprint, not CastDistance (e.g.
+    // multi-throw has Dist 50 but a 500-pixel cone). Aiming at a rectangle's target
+    // puts it on the centerline, so length, not the corner search radius, is reach.
+    private static float MobileTargetRange(int skillId, float fallback)
+    {
+        var aim = SkillTargeting.Resolve(skillId, out _, out float radius, out _,
+            out float length, out _, out _);
+        if (aim == SkillTargeting.Aim.Direction)
+            return Mathf.Max(0f, length > 0f ? length : radius);
+        return MobileSkillRange(skillId, fallback);
+    }
+
     private static bool MobileReady(int skillId)
     {
         if (PlayerController.I == null) return false;
@@ -76,7 +89,7 @@ public partial class CombatWorld
     {
         targetId = 0; worldPixels = default;
         if (!MobileReady(skillId) || I == null) return false;
-        float range = MobileSkillRange(skillId, rangePx);
+        float range = MobileTargetRange(skillId, rangePx);
         object selected = TargetSelect.CurrentSourceForIndependentRuntime;
         if (MobileCandidate(skillId, selected, range, out targetId, out worldPixels)) return true;
         if (selected == null && SocialClient.SelectedMemberId != 0 &&
@@ -175,7 +188,7 @@ public partial class CombatWorld
         if (value != null && value.InputMode != (direction ? "direction" : "point")) return false;
         Vector2 point = new Vector2(gx, gy);
         if (requiredTargetId != 0 && !MobileTargetById(skillId, requiredTargetId,
-            MobileSkillRange(skillId, rangePx), out point)) return false;
+            (direction ? MobileTargetRange(skillId, rangePx) : MobileSkillRange(skillId, rangePx)), out point)) return false;
         // Direction points encode an orientation, not a destination. Never shorten or
         // replace that direction with the selected unit when manually aiming.
         if (!direction) point = ClampMobileGround(skillId, point, rangePx);

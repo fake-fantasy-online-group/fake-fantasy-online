@@ -69,6 +69,26 @@ internal sealed partial class StoreDlg : MonoBehaviour
         }
     }
     public static void OpenNow() { Ensure(); if (!I.visible) Toggle(); }
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!Visible) return false;
+        float scale = UIScale.Factor;
+        float width = 423f, height = 501f;
+        bool centered = float.IsNaN(I.winX);
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (I.needDock)
+        {
+            float limit = Mathf.Max(0f, Screen.width - 850f * scale);
+            x = centered ? limit * .5f : Mathf.Clamp(x, 0f, limit);
+            y = Mathf.Clamp(y, 0f, Mathf.Max(0f, Screen.height - height * scale));
+        }
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;

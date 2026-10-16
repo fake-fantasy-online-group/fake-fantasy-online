@@ -13,16 +13,23 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             (uint)group < GroupCount && (uint)button < SlotsPerGroup ? group * SlotsPerGroup + button : -1;
         internal int Pointer { get; private set; } = -1;
         internal int Hovered { get; private set; } = -1;
-        private float centerX, centerY, deadZone;
-        internal void Begin(int pointer, float x, float y, float deadZoneRadius)
+        private float centerX, centerY, deadZone, pressX, pressY;
+        private bool dragged;
+        internal void Begin(int pointer, float x, float y, float deadZoneRadius, float pressX, float pressY)
         {
             if (Pointer != -1) return;
             Pointer = pointer; centerX = x; centerY = y; deadZone = deadZoneRadius; Hovered = -1;
+            this.pressX = pressX; this.pressY = pressY; dragged = false;
         }
         internal int Sample(int pointer, float x, float y, bool end, bool cancel)
         {
             if (Pointer == -1 || Pointer != pointer) return -1;
-            Hovered = Hit(x - centerX, y - centerY, deadZone);
+            // A square trigger contains corners outside the circular cancel zone.
+            // Do not select from a stationary/off-center tap or tiny finger jitter.
+            float dx = x - pressX, dy = y - pressY;
+            float threshold = deadZone / 3f;
+            if (dx * dx + dy * dy >= threshold * threshold) dragged = true;
+            Hovered = dragged ? Hit(x - centerX, y - centerY, deadZone) : -1;
             if (!end && !cancel) return -1;
             int selected = cancel ? -1 : Hovered;
             Reset();
@@ -46,6 +53,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (extent <= padding * 2) return min + extent * .5f;
             return Math.Max(min + padding, Math.Min(desired, min + extent - padding));
         }
-        internal void Reset() { Pointer = -1; Hovered = -1; }
+        internal void Reset() { Pointer = -1; Hovered = -1; dragged = false; }
     }
 }

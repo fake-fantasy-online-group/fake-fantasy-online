@@ -78,6 +78,20 @@ public sealed partial class FamilyDlg : MonoBehaviour
 
     /// <summary>Window-level hit test used by adjacent dialogs (official MouseOver): true when the
     /// window exists, is visible and the real mouse is inside the 494x325 scaled rect.</summary>
+    // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
+    internal static bool MobileContainsPointer(Vector2 point)
+    {
+        if (!get_Visible()) return false;
+        float scale = UIScale.Factor;
+        float width = 494f, height = 325f;
+        bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
+        float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
+        float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
+        return false;
+    }
+
+
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;

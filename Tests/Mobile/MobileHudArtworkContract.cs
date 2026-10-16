@@ -40,6 +40,7 @@ public static class GUI {
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
 public static class NpcChatter { public static UnityEngine.Font CnFont()=>null; }
 public static class BitmapFont { public static bool Ready=true; public static UnityEngine.Rect lastRect; public static int labels; public static float lastScale; public static string lastText; public static float Measure(string text,float scale)=>text.Length*12f*scale; public static void CenterOutline(UnityEngine.Rect r,string text,UnityEngine.Color color,float scale){labels++;lastRect=r;lastScale=scale;lastText=text;} }
+internal static class MobileGroupWheelArtwork { internal static void Clear(){} }
 public static class ArtworkSkin { public static bool pressed,selected; public static string text; public static readonly List<string> paths=new List<string>(); public static UnityEngine.Texture2D[] Frames(string path,int count){paths.Add(path);var a=new UnityEngine.Texture2D[count];for(int i=0;i<count;i++)a[i]=new UnityEngine.Texture2D{name=path+"#"+i};return a;} public static void ButtonFace(UnityEngine.Rect r,string value,float scale,bool enabled=true,bool selected=false,float fontScale=1f,bool pressed=false){text=value;ArtworkSkin.pressed=pressed;ArtworkSkin.selected=selected;} }
 }
 
@@ -65,12 +66,13 @@ static void Main(string[] args){
  frames[3]=null;Check(MobileHudArtwork.ControlFrame(frames,1,true,true)==frames[5],"Missing pressed frame uses same entry idle");
  var r=new UnityEngine.Rect(10,20,48,48);
  MobileHudArtwork.ControlFace(r,frames,null,4,1,true,false);
+ Check(BitmapFont.lastText=="技能","Cropped non-rack icons must retain their caption");
  Check(UnityEngine.GUI.last.name==frames[13].name+" (mobile menu)","Complete bottom icon is preferred");
- Check(Near(UnityEngine.GUI.lastRect.width,44)&&Near(UnityEngine.GUI.lastRect.height,44),"Bottom artwork preserves inner padding");
+ Check(Near(UnityEngine.GUI.lastRect.width,44)&&Near(UnityEngine.GUI.lastRect.height,26),"Bottom artwork reserves the shared caption strip");
  var legacy=new UnityEngine.Texture2D[27];for(int i=0;i<27;i++)legacy[i]=new UnityEngine.Texture2D{name="legacy-"+i,width=42,height=55};
  MobileHudArtwork.ControlFace(r,null,legacy,8,1,false,true);
  Check(UnityEngine.GUI.last.name==legacy[24].name+" (mobile menu)","Legacy fallback uses corresponding entry and state");
- Check(Near(UnityEngine.GUI.lastRect.height,44),"Full legacy artwork fits the available height");
+ Check(Near(UnityEngine.GUI.lastRect.height,26),"Legacy icon reserves the shared caption strip");
  Check(UnityEngine.GUI.last.width==1 && UnityEngine.GUI.last.height==1,"Transparent menu source has no fabricated label or frame");
  MobileHudArtwork.ControlFace(r,frames,legacy,2,1,false,false);
  Check(UnityEngine.GUI.last.name==legacy[8].name+" (mobile menu)","Top menu prefers the original complete top artwork");
@@ -106,8 +108,9 @@ static void Main(string[] args){
  Check(Near(UnityEngine.GUI.lastRect.width,52)&&Near(UnityEngine.GUI.lastRect.center.x,120),"Thumb visual size and travel stay inside original touch region");
  Check(Near(UnityEngine.GUI.lastColor.a,prior.a*.92f),"Thumb face has deliberate opacity");
  Check(UnityEngine.GUI.color.a==prior.a,"Joystick opacity restores GUI color");
- MobileHudArtwork.AttackFace(new UnityEngine.Rect(0,0,96,96),1,false);
- Check(UnityEngine.GUI.last.name==MobileHudArtwork.AttackIconPath+"#0"&&Near(UnityEngine.GUI.lastRect.width,64),"Attack uses native sword canvas at visible icon size");
+ var attackCursor = new UnityEngine.Texture2D { name="original AttackM" };
+ MobileHudArtwork.AttackFace(new UnityEngine.Rect(0,0,96,96),1,false,attackCursor);
+ Check(UnityEngine.GUI.last==attackCursor&&Near(UnityEngine.GUI.lastRect.width,64),"Attack borrows original cursor at visible icon size");
  MobileHudArtwork.SkillFace(new UnityEngine.Rect(0,0,64,64),1,false,false);
  Check(UnityEngine.GUI.last.name==MobileHudArtwork.SkillWellPath+"#0"&&Near(UnityEngine.GUI.lastRect.width,60),"Skill uses thin original square well");
  Check(Near(UnityEngine.GUI.lastColor.a,prior.a*.48f),"Empty skill slots recede");
@@ -127,22 +130,28 @@ static void Main(string[] args){
  }
  UnityEngine.GUI.enabled=true;UnityEngine.Input.down=false;
  BitmapFont.Ready=true;
- foreach(float scale in new[]{.5f,.73f,1f,1.5f,2f,3f})for(int state=0;state<4;state++){
+ string[] captions={"角色","物品","交友","家族","技能","任务","信件","货架","设置"};
+ foreach(float scale in new[]{.5f,.73f,1f,1.5f,2f,3f})for(int state=0;state<4;state++)for(int index=0;index<9;index++){
   var target=new UnityEngine.Rect(13,17,48*scale,48*scale);
   UnityEngine.GUI.enabled=state!=3;int labels=BitmapFont.labels;
-  MobileHudArtwork.ControlFace(target,frames,legacy,7,scale,state==1,state==2);
+  MobileHudArtwork.ControlFace(target,frames,legacy,index,scale,state==1,state==2);
   var icon=UnityEngine.GUI.lastRect;var label=BitmapFont.lastRect;
-  Check(BitmapFont.labels==labels+1&&BitmapFont.lastText=="货架","Rack alone draws the standalone caption");
-  Check(Near(BitmapFont.lastScale,scale)&&Near(label.center.x,target.center.x),"Rack text uses centered native size");
-  Check(icon.yMax<=label.y&&label.yMax<=target.yMax&&icon.x>=target.x&&icon.xMax<=target.xMax,"Rack icon and label stay separate inside the hit target");
-  for(int index=0;index<9;index++)if(index!=7){
-   MobileHudArtwork.ControlFace(target,frames,legacy,index,scale,state==1,state==2);
-   Check(BitmapFont.labels==labels+1&&Near(UnityEngine.GUI.lastRect.height,44*scale),"Other menu faces stay unchanged");
-  }
+  Check(BitmapFont.labels==labels+1&&BitmapFont.lastText==captions[index],"Every menu draws exactly one correct caption: "+index);
+  Check(Near(BitmapFont.lastScale,scale)&&Near(label.center.x,target.center.x),"All captions use centered native size");
+  Check(icon.yMax<=label.y&&label.yMax<=target.yMax&&icon.x>=target.x&&icon.xMax<=target.xMax,"Icon and caption stay separate inside each hit target");
+  int frame=index*3+(state==2?0:state==1?1:2);
+  Check(UnityEngine.GUI.last.name==legacy[frame].name+" (mobile menu)","Caption layout retains correct native interaction frame");
  }
  UnityEngine.GUI.enabled=true;
- BitmapFont.Ready=false;MobileHudArtwork.ControlFace(r,null,null,7,1,false,false);
- Check(UnityEngine.GUI.lastLabel=="货架"&&UnityEngine.GUI.lastLabelStyle.fontSize==12,"Missing rack texture/font retains readable fallback caption");
+ for(int index=0;index<9;index++){
+  BitmapFont.Ready=false;MobileHudArtwork.ControlFace(r,null,null,index,1,false,false);
+  Check(UnityEngine.GUI.lastLabel==captions[index]&&UnityEngine.GUI.lastLabelStyle.fontSize==12,"Every missing texture/font retains readable fallback caption");
+ }
+ BitmapFont.Ready=true;
+ int priorLabels=BitmapFont.labels;
+ MobileHudArtwork.ControlFace(r,null,null,-1,1,false,false);
+ MobileHudArtwork.ControlFace(r,null,null,9,1,false,false);
+ Check(BitmapFont.labels==priorLabels,"Invalid menu indices do not draw misleading captions");
  BitmapFont.Ready=true;
  // Regression fixtures use Unity's bottom-origin pixels, including odd native height.
  for(int state=0;state<8;state++){
