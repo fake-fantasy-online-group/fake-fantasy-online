@@ -21,12 +21,28 @@ public static class MobileClientPresentation
             return new Rect(area.x, Screen.height - area.yMax, area.width, area.height);
         }
     }
-    public static float Scale => Mathf.Max(.1f, Mathf.Min(SafeAreaGui.height / 540f, SafeAreaGui.width / 960f));
+    // The persisted “界面大小” preference is shared with desktop settings, but
+    // mobile uses continuous scaling rather than the desktop integer rounding.
+    // Fit the full HUD at the upper end: never enlarge touch regions past safe edges.
+    public static float Scale => ResolveScale(SafeAreaGui.width, SafeAreaGui.height, UIScale.User);
+    internal static float ResolveScale(float width, float height, float user)
+    {
+        float automatic = Mathf.Min(height / 540f, width / 960f);
+        float preference = Mathf.Max(.6f, Mathf.Min(2f, user));
+        float fit = Mathf.Min(height / 520f, width / 940f);
+        return Mathf.Max(.001f, Mathf.Min(automatic * preference, fit));
+    }
+    // Past the fit limit, increase content within the existing touch targets.
+    // This keeps the upper half of the preference useful without control overlap.
+    internal static float Readability => Mathf.Max(0f, Mathf.Min(1f, UIScale.User - 1f));
+    internal static float TextSizeMultiplier => (16f + 4f * Readability) / 12f;
+    internal static float SkillIconPadding => 6f - 4f * Readability;
+    internal static float ChatPreviewHeight => 44f + 10f * TextSizeMultiplier + 54f * TextSizeMultiplier + 1f;
     private static Rect Centered(Vector2 c, float size) => new Rect(c.x-size*.5f,c.y-size*.5f,size,size);
     public static Rect JoystickRect => Centered(new Vector2(SafeAreaGui.x+100f*Scale,SafeAreaGui.yMax-110f*Scale),160f*Scale);
     public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-100f*Scale,SafeAreaGui.yMax-110f*Scale),96f*Scale);
-    // Fits beside the lower attack edge with a 4px gap; attack/joystick centers remain symmetric.
-    public static Rect PickupRect => Centered(AttackRect.center+new Vector2(74f,64f)*Scale,44f*Scale);
+    // Fits beside the lower attack edge with a 2px gap; attack/joystick centers remain symmetric.
+    public static Rect PickupRect => Centered(AttackRect.center+new Vector2(74f,64f)*Scale,48f*Scale);
     private static readonly Vector2[] SkillOffsets = { new Vector2(-108,32), new Vector2(-116,-40), new Vector2(-116,-116), new Vector2(-40,-156), new Vector2(36,-156), new Vector2(64,-80) };
     public static Rect SkillRect(int index) => Centered(AttackRect.center+SkillOffsets[index]*Scale,64f*Scale);
     // The avatar has no extra horizontal gutter beyond the device's real safe area.
@@ -48,14 +64,14 @@ public static class MobileClientPresentation
     public static bool DiagramOpen => GameHud.I!=null && GameHud.I.diagramOpen;
     // One compact switch and the original nine entries share the top safe-area band.
     // Neither the avatar's 171px band nor the compact map is covered by an entry.
-    public static Rect MenuToggleRect => new Rect(MinimapRect.x-60f*Scale,SafeAreaGui.y+36f*Scale,48f*Scale,48f*Scale);
+    public static Rect MenuToggleRect => new Rect(MinimapRect.x-68f*Scale,SafeAreaGui.y+36f*Scale,56f*Scale,56f*Scale);
     internal static int MenuColumnsForWidth(float width, float scale, int count)
     {
-        int columns=(int)((width+8f*scale)/(56f*scale));
+        int columns=(int)((width+8f*scale)/(64f*scale));
         if (columns<1) columns=1;
         return columns<count ? columns : count;
     }
-    private static float MenuAvailableWidth => Mathf.Max(48f*Scale,
+    private static float MenuAvailableWidth => Mathf.Max(56f*Scale,
         MenuToggleRect.x-8f*Scale-(SafeAreaGui.x+183f*Scale));
     public static int MenuColumns => MenuColumnsForWidth(MenuAvailableWidth,Scale,
         GameHud.ControlButtonCountForIndependentRuntime);
@@ -66,17 +82,17 @@ public static class MobileClientPresentation
             int count=GameHud.ControlButtonCountForIndependentRuntime;
             int columns=MenuColumns;
             int rows=(count+columns-1)/columns;
-            float width=(columns*56f-8f)*Scale;
+            float width=(columns*64f-8f)*Scale;
             return new Rect(MenuToggleRect.x-8f*Scale-width,MenuToggleRect.y,
-                width,(rows*56f-8f)*Scale);
+                width,(rows*64f-8f)*Scale);
         }
     }
     public static Rect MenuItemRect(int index)
     {
         Rect menu=MenuRect;
         int columns=MenuColumns;
-        return new Rect(menu.x+(index%columns)*56f*Scale,menu.y+(index/columns)*56f*Scale,
-            48f*Scale,48f*Scale);
+        return new Rect(menu.x+(index%columns)*64f*Scale,menu.y+(index/columns)*64f*Scale,
+            56f*Scale,56f*Scale);
     }
     public static Rect PageRect => new Rect(SafeAreaGui.xMax-308f*Scale,SafeAreaGui.yMax-280f*Scale,48f*Scale,48f*Scale);
     internal static bool GroupWheelOpen;
@@ -141,7 +157,7 @@ public static class MobileClientPresentation
             if (TouchScreenKeyboard.visible && TouchScreenKeyboard.area.height>0f)
                 safe.height=Mathf.Max(1f,safe.height-TouchScreenKeyboard.area.height);
             float width = Mathf.Min(360f*Scale,safe.width*.38f);
-            float height = (ChatExpanded ? 196f : 112f)*Scale;
+            float height = (ChatExpanded ? 196f : ChatPreviewHeight)*Scale;
             height=Mathf.Min(height,safe.height);
             float top=safe.yMax-height-12f*Scale;
             return new Rect(safe.center.x-width*.5f,Mathf.Max(safe.y,top),width,height);

@@ -15,12 +15,16 @@ classes={'TeamDlg':('TeamDlg.cs','internal static bool MobileContainsPointer',18
 for c,w,h in [('TaskDlg',495,397),('FigureDlg',345,476),('MailDlg',418,325),('ShopDlg',569,426),('FamilyDlg',494,325),('SysOptionDlg',192,207),('SysConfigDlg',267,445)]:
  f={'ShopDlg':'ShopDlg.Window.cs','SysConfigDlg':'SysConfigDlg.PickLayout.cs'}.get(c,c+'.cs');classes[c]=(f,'internal static bool MobileContainsPointer',w,h)
 stubs=(base/'Tests/Mobile/MobileLayoutStubs.cs').read_text();extra=''
+stubs=re.sub(r'public static class UIScale \{[^\n]*\}', '',stubs)
 stubs=stubs.replace('public static class Mathf {', 'public static class Mathf {public static float Clamp(float v,float min,float max)=>Math.Max(min,Math.Min(max,v));')
 if 'bool SplitOpen;' not in stubs: stubs=stubs.replace('public class InventoryDlg {', 'public class InventoryDlg {public static bool SplitOpen;')
 for c,(f,sig,w,h) in classes.items():
  stubs=re.sub(r'public static class '+c+r' \{[^\n]*\}', '',stubs)
- extra+='public class '+c+' {public static '+c+' I;public bool visible;public int _wdGen=0;private static bool PickRowOn()=>true;public static bool Visible=>I!=null&&I.visible;public float winX=float.NaN,winY;const float NW='+str(w)+'f;public static float NH='+str(h)+'f;public float Width='+str(w)+'f,Height='+str(h)+'f;public bool pickOpen,resOpen,needDock;const float RESY=362f;public static bool ComposeVisible,Picking;'+body(f,sig).replace('get_Visible()', 'Visible')+'}\n'
-stubs+='\nnamespace FakeFantasyOnline.Presentation.ReferenceAssets {using UnityEngine;public static class WinDrag {public static int Gen;}public static class UIScale {public static float Factor=1f;}public static class GameSettings {public static int[] ResOpts=new int[25];}'+extra+'}'
+ # Settings hits share the production safe-area resolver with OnGUI. Compile
+ # that dependency too; do not substitute a second layout implementation.
+ helper=body(f,'private Rect MobileLayout') if c=='SysConfigDlg' else ''
+ extra+='public class '+c+' {public static '+c+' I;public bool visible;public int _wdGen=0;private static bool PickRowOn()=>true;public static bool Visible=>I!=null&&I.visible;public float winX=float.NaN,winY;const float NW='+str(w)+'f;public static float NH='+str(h)+'f;public float Width='+str(w)+'f,Height='+str(h)+'f;public bool pickOpen,resOpen,needDock;const float RESY=362f;public static bool ComposeVisible,Picking;'+helper+body(f,sig).replace('get_Visible()', 'Visible')+'}\n'
+stubs+='\nnamespace FakeFantasyOnline.Presentation.ReferenceAssets {using UnityEngine;public static class WinDrag {public static int Gen;}public static class UIScale {public static float User=1f;public static float Factor=1f;}public static class GameSettings {public static int[] ResOpts=new int[25];}'+extra+'}'
 checks=''
 for c in classes:
  checks+='''{

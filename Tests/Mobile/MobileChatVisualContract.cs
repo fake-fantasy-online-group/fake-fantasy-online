@@ -72,6 +72,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     internal static class MobileClientPresentation
     {
+        internal static float TextSizeMultiplier=4f/3f;
         public static float Scale=1; public static Rect ChatRect; public static bool ChatExpanded, MenuExpanded, ModalOpen;
         public static void RegisterPanel(object owner,Rect panel) {} public static void RemovePanel(object owner) {}
     }
@@ -146,22 +147,25 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             MobileClientPresentation.Scale=scale; MobileClientPresentation.ChatExpanded=false;
             MobileClientPresentation.MenuExpanded=false; MobileClientPresentation.ModalOpen=false;
             Win05.LastOpened=null; Win05.Opens=0;
-            MobileClientPresentation.ChatRect=new Rect(300*scale,400*scale,360*scale,112*scale);
+            MobileClientPresentation.ChatRect=new Rect(300*scale,400*scale,360*scale,130*scale);
             chatLines.Clear(); filters=0;
             return new ChatUI();
         }
         private static void Main()
         {
+            foreach(float textMultiplier in new[]{4f/3f,1.5f,5f/3f})
             foreach(float scale in new[]{.65f,1f,1.75f,2.5f})
             {
                 ChatUI chat=Fresh(scale);
+                MobileClientPresentation.TextSizeMultiplier=textMultiplier;
+                MobileClientPresentation.ChatRect=new Rect(300*scale,400*scale,360*scale,(45+64*textMultiplier)*scale);
                 chatLines.Add(new Line{ch="附近",text="first"});
                 chatLines.Add(new Line{ch="系统",text="second"});
                 chatLines.Add(new Line{ch="hidden",text="filtered"});
                 chatLines.Add(new Line{ch="世界",text="third"});
                 chat.DrawMobileChat();
                 Check(chat.panels==0,"Collapsed messages never draw a giant enclosing frame");
-                Check((int)Math.Floor((chat.messageRect.height-10*scale)/(18*scale)+.0001f)==3,"Three full original-font rows fit");
+                Check((int)Math.Floor((chat.messageRect.height-10*scale*textMultiplier)/(18*scale*textMultiplier)+.0001f)==3,"Three enlarged message rows fit");
                 Check(chat.drawnLines.Count==3&&chat.drawnLines[1].text=="second"&&chat.drawnLines[2].text=="third","Renderer uses filtered chronological messages");
                 Check(filters==1,"Renderer loads the character filter");
                 Check(GUI.Buttons.Count==2,"Channel and send keep their original GUI target order; expansion owns explicit pointer events");
@@ -175,9 +179,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 foreach(Rect button in GUI.Buttons) Check(!Overlap(expand,button),"Expand touch target avoids channel and send");
                 Check(ArtworkSkin.FirstIcon.x>=expand.x&&ArtworkSkin.FirstIcon.xMax<=expand.xMax&&ArtworkSkin.FirstIcon.y>=expand.y&&ArtworkSkin.FirstIcon.yMax<=expand.yMax,"View artwork lies inside upper-right touch target");
                 Check(BitmapFont.Labels.Contains("附近")&&!BitmapFont.Labels.Contains("展开")&&BitmapFont.Labels.Contains("点击输入"),"Readable bitmap channel, expansion and empty-input affordance");
-                Check(Near(BitmapFont.LastScale,scale)&&chat.editSt.fontSize==Mathf.RoundToInt(12*scale),"Bitmap labels and field follow mobile scale");
+                Check(Near(BitmapFont.LastScale,scale*textMultiplier)&&chat.editSt.fontSize==Mathf.RoundToInt(12*scale*textMultiplier),"Bitmap labels and field follow mobile scale");
             }
 
+            MobileClientPresentation.TextSizeMultiplier=4f/3f;
             ChatUI c=Fresh(); c.inputText="before"; UiInput.Result="edited"; GUI.Click=1; c.DrawMobileChat();
             Check(c.sends==1&&c.sent=="edited"&&c.guardBefore=="before","Send uses guarded current edit through existing sender");
             Check(string.Join(",",GUI.Trace)=="field,guard,send,focus:none","Edit/share guard/send/focus release ordering is preserved");
@@ -237,7 +242,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             Check(Win05.LastOpened=="historybar"&&Win05.Opens==1&&!MobileClientPresentation.MenuExpanded,"Expand icon tap uses original viewbtn historybar entry and closes function grid");
             Check(!MobileClientPresentation.ChatExpanded&&Event.current.type==EventType.Used,"Opening original details consumes release without enlarging HUD");
             GUI.Reset(); Event.current.type=EventType.Repaint; c.DrawMobileChat();
-            Check(c.panels==0&&Near(c.messageRect.height,68)&&!c.interactive,"Details leave preview compact and display-only");
+            Check(c.panels==0&&Near(c.messageRect.height,86)&&!c.interactive,"Details leave preview compact and display-only");
             GUI.Reset(); Event.current.type=EventType.MouseDown; c.DrawMobileChat();
             GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
             Check(Win05.Opens==1,"Modal details block expand icon taps from reopening or stealing navigation");
@@ -288,7 +293,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
             c=Fresh(2); BitmapFont.Ready=false; c.inputBar=null; c.sendBtn=null; c.DrawMobileChat();
             Check(ArtworkSkin.Inputs==1,"Missing chat bar uses other original input artwork");
-            Check(GUI.LastLabelStyle.font==NpcChatter.Font&&GUI.LastLabelStyle.fontSize==24,"Missing bitmap atlas gets scaled Chinese font, never generic Unity labels");
+            Check(GUI.LastLabelStyle.font==NpcChatter.Font&&GUI.LastLabelStyle.fontSize==32,"Missing bitmap atlas gets scaled Chinese font, never generic Unity labels");
             Check(c.sends==0&&GUI.Buttons.Count==2,"Missing sprites keep controls active without automatic sends");
             Console.WriteLine("PASS mobile chat visuals: "+assertions+" assertions; actual renderer/collector, deterministic Unity/input recorders. No Unity or native IME execution.");
         }

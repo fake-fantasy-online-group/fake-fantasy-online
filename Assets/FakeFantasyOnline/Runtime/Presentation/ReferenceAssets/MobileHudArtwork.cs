@@ -166,7 +166,7 @@ internal static class MobileHudArtwork
     {
         Texture2D face = ResourceFrame(RoundControlPath);
         bool moving = axis.x * axis.x + axis.y * axis.y > .01f;
-        Image(Inset(touchRect, 10f * scale), face, opacity: moving ? .38f : .28f);
+        Image(Inset(touchRect, (10f - 6f * MobileClientPresentation.Readability) * scale), face, opacity: moving ? .38f : .28f);
         Rect knob = new Rect(touchRect.center.x - 26f * scale + axis.x * 40f * scale,
             touchRect.center.y - 26f * scale - axis.y * 40f * scale, 52f * scale, 52f * scale);
         Image(knob, face, opacity: .92f);
@@ -176,15 +176,15 @@ internal static class MobileHudArtwork
     {
         Image(Inset(touchRect, 2f * scale), ResourceFrame(RoundControlPath), pressed, opacity: .92f);
         // Borrow the exact desktop cursor texture; preserve its native three colors.
-        Image(Inset(touchRect, 16f * scale), cursor, pressed);
+        Image(Inset(touchRect, (10f - 6f * MobileClientPresentation.Readability) * scale), cursor, pressed);
     }
 
     internal static void PickupFace(Rect touchRect, float scale, bool pressed, Texture2D cursor)
     {
         Image(Inset(touchRect, 2f * scale), ResourceFrame(RoundControlPath), pressed, opacity: .92f);
-        Rect icon = new Rect(touchRect.x, touchRect.y, touchRect.width, touchRect.height - 15f * scale);
-        Image(Inset(icon, 4f * scale), cursor, pressed);
-        Label(new Rect(touchRect.x, touchRect.yMax - 16f * scale, touchRect.width, 16f * scale), "拾取道具", scale);
+        Rect icon = new Rect(touchRect.x, touchRect.y, touchRect.width, touchRect.height - 20f * scale);
+        Image(Inset(icon, 2f * scale), cursor, pressed);
+        Label(new Rect(touchRect.x, touchRect.yMax - 20f * scale, touchRect.width, 20f * scale), "拾取", scale);
     }
 
     internal static void SkillFace(Rect touchRect, float scale, bool occupied, bool pressed)
@@ -200,9 +200,9 @@ internal static class MobileHudArtwork
             ?? ControlFrame(bottomFrames, index, hovered, pressed);
         // Every cropped menu icon needs its caption restored. Keep both inside
         // the existing hit target, with one shared layout for all menu entries.
-        float labelHeight = Mathf.Min(rect.height, 18f * scale);
+        float labelHeight = Mathf.Min(rect.height, (22f + 2f * MobileClientPresentation.Readability) * scale);
         Rect icon = new Rect(rect.x, rect.y, rect.width, rect.height - labelHeight);
-        Image(Inset(icon, 2f * scale), MenuIconTexture(texture));
+        Image(Inset(icon, (2f - 2f * MobileClientPresentation.Readability) * scale), MenuIconTexture(texture));
         if (index >= 0 && index < controlLabels.Length)
             Label(new Rect(rect.x, rect.yMax - labelHeight, rect.width, labelHeight), controlLabels[index], scale);
     }
@@ -298,7 +298,8 @@ internal static class MobileHudArtwork
     {
         if (string.IsNullOrEmpty(text)) return;
         float available = Mathf.Max(0f, rect.width - 10f * scale);
-        float fontScale = Mathf.Min(scale, Mathf.Max(0f, rect.height - 6f * scale) / 12f);
+        float fontScale = Mathf.Min(scale * MobileClientPresentation.TextSizeMultiplier,
+            Mathf.Max(0f, rect.height - 4f * scale) / 12f);
         float width = BitmapFont.Measure(text, fontScale);
         Color color = GUI.enabled ? new Color(1f, .94f, .78f, 1f) : new Color(.58f, .56f, .53f, 1f);
         if (BitmapFont.Ready)

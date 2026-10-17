@@ -35,6 +35,7 @@ public class CameraFollow : MonoBehaviour
     public float worldHalfH;
     public bool isoDiamond;
     private Camera cam;
+    private int appliedWorldMagnification = 1;
 
     // Decision-free observations used by existing world adapters. Native methods below
     // remain the sole behavior owners; these aliases do not refresh or mutate anything.
@@ -75,6 +76,12 @@ public class CameraFollow : MonoBehaviour
     {
         if (cam == null) return;
 
+        // Restore the unscaled view before native wheel/snap calculations. This also
+        // handles simulation-mode switches without accumulating zoom between frames.
+        if (appliedWorldMagnification != 1)
+            cam.orthographicSize *= appliedWorldMagnification;
+        int worldMagnification = MobileClientPresentation.Enabled ? 2 : 1;
+
         if (wheelZoom)
         {
             Vector2 delta = Input.mouseScrollDelta;
@@ -106,9 +113,15 @@ public class CameraFollow : MonoBehaviour
                 // replaces with 1. Both architectures therefore end at 1.
                 if (float.IsInfinity(f)) px = 1;
                 cam.orthographicSize = (float)Screen.height / ((ppu + ppu) * (px * k));
-                ArtDetail.SetPixelScale(px * k);
+                ArtDetail.SetPixelScale(px * k * worldMagnification);
             }
         }
+
+        // Only the rendered viewport changes: world coordinates, movement, combat,
+        // sprite PPU and the art-grid snap remain untouched. Bounds use the final view.
+        if (worldMagnification != 1)
+            cam.orthographicSize /= worldMagnification;
+        appliedWorldMagnification = worldMagnification;
 
         if (target == null) return;
         // 1.6.0 0x22eb54/0x22eb7c: lock is sampled after zoom/art scale and

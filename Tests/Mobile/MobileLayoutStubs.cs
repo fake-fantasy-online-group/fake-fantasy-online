@@ -8,6 +8,7 @@ public static class Screen {public static int width,height;public static Rect sa
 public static class TouchScreenKeyboard {public static bool visible;public static Rect area;}
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
+public static class UIScale { public static float User=1f; }
 public static class AddonUiHost {public static bool PointerOver(UnityEngine.Vector2 point)=>false;}
 public class GameHud {internal static UnityEngine.Rect MobileDiagramRect=>new UnityEngine.Rect(250,100,300,200);internal static bool MobileGroupWheelOpening,MobileGroupWheelClosing;public static GameHud I;public bool showChat=true,showAvatar=true,showMinimap=true,diagramOpen;internal static int ControlButtonCountForIndependentRuntime=>9;}
 public class EquipDlg {public bool MobileOverlayContains(UnityEngine.Vector2 p)=>false;public static EquipDlg I;public bool IsOpen;}

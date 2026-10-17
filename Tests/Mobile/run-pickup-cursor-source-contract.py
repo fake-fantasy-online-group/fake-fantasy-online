@@ -24,5 +24,5 @@ layout=read('MobileClientPresentation.cs')
 assert 'padded.Overlaps(PickupRect)' in layout and 'PickupRect.Contains(point) || MenuToggleRect' in layout
 hud=read('GameHud.Mobile.cs'); art=read('MobileHudArtwork.cs')
 assert 'TargetSelect.CurrentSourceForIndependentRuntime' in hud and 'MobilePickupTexture' in hud
-assert '"拾取道具"' in art and 'hurttype0.gsa' not in art
+assert '"拾取"' in art and 'hurttype0.gsa' not in art
 print('PASS pickup/cursor source integration: shared desktop classification and pickup path; touch ownership, cancellation and UI exclusions retained.')

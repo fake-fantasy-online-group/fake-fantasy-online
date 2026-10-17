@@ -8,9 +8,16 @@ static bool Within(Rect a,Rect b)=>a.x>=b.x-.01f&&a.y>=b.y-.01f&&a.xMax<=b.xMax+
 static bool Overlap(Rect a,Rect b)=>a.x<b.xMax-.01f&&a.xMax>b.x+.01f&&a.y<b.yMax-.01f&&a.yMax>b.y+.01f;
 static void Main(){
 Check(!MobileClientPresentation.Enabled,"Desktop default unchanged");MobileClientPresentation.Simulate=true;GameHud.I=new GameHud();
-foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{2340,1080},new[]{1920,1200}}){
-Screen.width=size[0];Screen.height=size[1];Screen.safeArea=new Rect(24,16,size[0]-48,size[1]-32);
+foreach(bool expanded in new[]{false,true})
+foreach(bool notch in new[]{false,true})
+foreach(float preference in new[]{.6f,.8f,1f,1.2f,1.5f,2f})
+foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{2340,1080},new[]{1920,1200},new[]{640,360},new[]{320,240},new[]{375,812}}){
+UIScale.User=preference;MobileClientPresentation.MenuExpanded=expanded;
+Screen.width=size[0];Screen.height=size[1];Screen.safeArea=notch ? new Rect(44,10,size[0]-52,size[1]-34) : new Rect(24,16,size[0]-48,size[1]-32);
 Rect safe=MobileClientPresentation.SafeAreaGui;
+Check(MobileClientPresentation.Scale<=safe.width/940f+.001f && MobileClientPresentation.Scale<=safe.height/520f+.001f,"Scale fit cap");
+Check(Math.Abs(MobileClientPresentation.TextSizeMultiplier-(16f+4f*Math.Max(0,Math.Min(1,preference-1)))/12f)<.001f,"Upper slider enlarges text after geometry cap");
+Check(Math.Abs((64f-2f*MobileClientPresentation.SkillIconPadding)-(52f+8f*Math.Max(0,Math.Min(1,preference-1))))<.001f,"Upper slider enlarges skill imagery");
 Check(Math.Abs(MobileClientPresentation.AttackRect.center.x+MobileClientPresentation.JoystickRect.center.x-2*safe.center.x)<.01f && Math.Abs(MobileClientPresentation.AttackRect.center.y-MobileClientPresentation.JoystickRect.center.y)<.01f,"Thumb centers mirror exactly in safe area");
 Check(MobileClientPresentation.AvatarRect.x==safe.x && MobileClientPresentation.AvatarRect.y==safe.y,"Avatar starts at actual safe area without added gutter");
 Check(MobileClientPresentation.IsPointerOverUi(new Vector2(MobileClientPresentation.PickupRect.center.x,Screen.height-MobileClientPresentation.PickupRect.center.y)),"Pickup excludes world pointer");
@@ -31,7 +38,7 @@ Check(MobileClientPresentation.MenuToggleRect.x>=safe.x+171f*MobileClientPresent
 Check(MobileClientPresentation.MenuRect.xMax<=MobileClientPresentation.MinimapRect.x-12f*MobileClientPresentation.Scale+.01f,"Menu avoids map");
 for(int i=0;i<9;i++){Rect entry=MobileClientPresentation.MenuItemRect(i);Check(Within(entry,MobileClientPresentation.MenuRect),"Entry within menu "+i);Check(!Overlap(entry,MobileClientPresentation.MenuToggleRect),"Entry avoids switch "+i);for(int j=0;j<i;j++)Check(!Overlap(entry,MobileClientPresentation.MenuItemRect(j)),"Distinct menu entry "+i+","+j);}
 MobileClientPresentation.ChatExpanded=false;Check(Within(MobileClientPresentation.ChatRect,safe),"Compact chat safe");
-Check(Math.Abs(MobileClientPresentation.ChatRect.height-112f*MobileClientPresentation.Scale)<.01f,"Compact chat height");
+Check(Math.Abs(MobileClientPresentation.ChatRect.height-MobileClientPresentation.ChatPreviewHeight*MobileClientPresentation.Scale)<.01f,"Compact chat height");
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.JoystickRect),"Chat avoids joystick");
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.AttackRect),"Chat avoids attack");
 for(int i=0;i<6;i++)Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.SkillRect(i)),"Chat avoids skill "+i);
@@ -44,12 +51,13 @@ foreach(Rect control in controls)Check(!Overlap(cancel,control),"Cancel avoids c
 Check(!Overlap(cancel,MobileClientPresentation.ChatRect),"Cancel avoids expanded chat "+button);
 Check(MobileClientPresentation.CancelContains(cancel.center),"Cancel center accepted "+button);
 Check(!MobileClientPresentation.CancelContains(new Vector2(cancel.x,cancel.y)),"Cancel bounding corner rejected "+button);
-Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(200f*ms)*(200f*ms),"Cancel remains within thumb reach "+button);
+Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(200f*ms)*(200f*ms),"Cancel remains within thumb reach "+button+" size="+size[0]+"x"+size[1]+" preference="+preference+" expanded="+expanded+" notch="+notch+" distance="+Math.Sqrt((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude)/ms);
 }
 MobileClientPresentation.ActiveSkillButton=-1;Check(!MobileClientPresentation.CancelContains(MobileClientPresentation.CancelRect.center),"Inactive cancel has no hit area");
 Vector2 joy=MobileClientPresentation.JoystickRect.center;joy.y=Screen.height-joy.y;Check(MobileClientPresentation.IsJoystickRegion(joy),"Joystick region");SysMsgBox.Visible=true;Check(!MobileClientPresentation.IsJoystickRegion(joy),"Modal blocks joystick");Check(MobileClientPresentation.IsPointerOverUi(new Vector2(400,250)),"Modal blocks world");SysMsgBox.Visible=false;
 object owner=new object();MobileClientPresentation.RegisterPanel(owner,safe);Check(MobileClientPresentation.IsPanelPointer(joy),"Panel registers");Check(!MobileClientPresentation.IsJoystickRegion(joy),"Panel owns pointer");MobileClientPresentation.RemovePanel(owner);Check(!MobileClientPresentation.IsPanelPointer(joy),"Panel removed");
 }
+UIScale.User=1f;MobileClientPresentation.MenuExpanded=false;
 // Actual production wheel layout across landscape, portrait, and compact safe areas.
 foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{375,812},new[]{320,240},new[]{240,320}}){
  Screen.width=size[0];Screen.height=size[1];Screen.safeArea=new Rect(12,12,size[0]-24,size[1]-24);
@@ -67,9 +75,9 @@ foreach(var size in new[]{new[]{1280,720},new[]{812,375},new[]{375,812},new[]{32
  MobileClientPresentation.GroupWheelOpen=false;GameHud.MobileGroupWheelOpening=true;
  Check(MobileClientPresentation.GroupWheelContains(center),"opening frame also captured");GameHud.MobileGroupWheelOpening=false;
 }
-Check(MobileClientPresentation.MenuColumnsForWidth(496f,1f,9)==9,"Full-width row has all nine entries");
-Check(MobileClientPresentation.MenuColumnsForWidth(272f,1f,9)==5,"Narrow menu wraps after fifth entry");
-Check(MobileClientPresentation.MenuColumnsForWidth(48f,1f,9)==1,"Small menu retains one full touch column");
+Check(MobileClientPresentation.MenuColumnsForWidth(568f,1f,9)==9,"Full-width row has all nine entries");
+Check(MobileClientPresentation.MenuColumnsForWidth(312f,1f,9)==5,"Narrow menu wraps after fifth entry");
+Check(MobileClientPresentation.MenuColumnsForWidth(56f,1f,9)==1,"Small menu retains one full touch column");
 // Ordinary windows own only their explicit per-pointer rectangles. The companion
 // run-more-panel-contract.py compiles actual window getters, including resize/dock geometry.
 Screen.width=960;Screen.height=540;Screen.safeArea=new Rect(0,0,960,540);

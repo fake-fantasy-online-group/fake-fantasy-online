@@ -67,7 +67,7 @@ public partial class GameHud
                 {
                     Texture2D icon=HotIconForIndependentRuntime(slot);
                     // Both artwork and cooldown are alpha-masked circles, not squares inside a rim.
-                    Rect iconRect=MobileHudArtwork.Inset(rect,13f*scale);
+                    Rect iconRect=MobileHudArtwork.Inset(rect,MobileClientPresentation.SkillIconPadding*scale);
                     MobileHudArtwork.Image(iconRect,MobileHudArtwork.RoundTexture(icon),
                         mobileFinger!=-1 && mobilePressed==k);
                     DrawMobileRoundCooldown(iconRect,hotSkill[slot]);
@@ -153,7 +153,7 @@ public partial class GameHud
                     "•",12f,new Color(.82f,.69f,.40f,1f),scale);
         }
         DrawMobileGroupText(new Rect(center.x-28f*scale,center.y-16f*scale,56f*scale,32f*scale),
-            "取消",12f,new Color(.8f,.8f,.8f,1f),scale);
+            "取消",12f*MobileClientPresentation.TextSizeMultiplier,new Color(.8f,.8f,.8f,1f),scale);
     }
     private void DrawMobileGroupText(Rect rect,string text,float size,Color color,float scale)
     {

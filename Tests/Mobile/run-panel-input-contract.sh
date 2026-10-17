@@ -24,6 +24,7 @@ s+='\nnamespace UnityEngine {public static class TouchScreenKeyboard {public sta
 s+='''\nnamespace FakeFantasyOnline.Presentation.ReferenceAssets {
 public class EquipDlg {public static EquipDlg I;public bool IsOpen;public bool MobileOverlayContains(UnityEngine.Vector2 p)=>false;}
 public class UIManager {public static UIManager I;public bool MobileWindowContains(UnityEngine.Vector2 p)=>false;}
+public static class UIScale {public static float User=1f;}
 public static class AddonUiHost {public static bool PointerOver(UnityEngine.Vector2 p)=>false;}
 public static class WinZ {public static bool AnyWindowAt(UnityEngine.Vector2 p)=>false;}
 public static class UITip {public static bool MobileContainsPointer(UnityEngine.Vector2 p)=>false;}

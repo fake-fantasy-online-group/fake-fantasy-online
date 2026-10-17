@@ -64,8 +64,8 @@ internal partial class ChatUI
         MobileClientPresentation.ChatExpanded = false;
         Rect panel = MobileClientPresentation.ChatRect;
         float control = 44f * s;
-        // The collapsed 112-unit footprint reserves 68 units for three existing
-        // 18-unit message rows. Channel/send share one touch band below it.
+        // Reserve three enlarged message rows (24 to 30 units as size increases).
+        // Channel/send share one touch band below the passive preview.
         // Opening details keeps this three-line preview and composer compact.
         Rect expand = new Rect(panel.xMax - control, panel.y, control, control);
         // Keep the original viewbtn face clear of message text and the composer.
@@ -74,13 +74,19 @@ internal partial class ChatUI
         Event current = Event.current;
         if (mobileLines == null) mobileLines = new List<Line>();
         CollectMobileLines(mobileLines);
-        DrawLines(mobileLines, messages, true, false);
+        float layoutScale = s;
+        try
+        {
+            s = layoutScale * MobileClientPresentation.TextSizeMultiplier;
+            DrawLines(mobileLines, messages, true, false);
+        }
+        finally { s = layoutScale; }
         // Only the explicit upper-right icon opens the original tabbed history.
         // Compact message rows remain display-only, including long presses.
         Texture2D[] expandFrames = sideBtn != null && sideBtn.Length > 0 && HasMobileChatIcon(sideBtn[0])
             ? sideBtn[0] : sizeBtn;
-        DrawMobileChatIcon(new Rect(expand.x + 8f * s, expand.y + 8f * s,
-            28f * s, 28f * s), expand, expandFrames);
+        DrawMobileChatIcon(new Rect(expand.x + 6f * s, expand.y + 6f * s,
+            32f * s, 32f * s), expand, expandFrames);
         if (!HasMobileChatIcon(expandFrames)) DrawMobileChatLabel(expand, "展开");
         bool touchCanceled = Input.touchCount > 1;
         if (mobileExpandPressed)
@@ -110,7 +116,7 @@ internal partial class ChatUI
         }
 
         Rect bar = new Rect(panel.x, panel.yMax - control, panel.width, control);
-        Rect channelRect = new Rect(bar.x, bar.y, 56f * s, control);
+        Rect channelRect = new Rect(bar.x, bar.y, 64f * s, control);
         Rect sendRect = new Rect(bar.xMax - control, bar.y, control, control);
         Rect inputRect = new Rect(channelRect.xMax + 4f * s, bar.y,
             Mathf.Max(0f, sendRect.x - channelRect.xMax - 8f * s), control);
@@ -123,7 +129,7 @@ internal partial class ChatUI
             chanOpen = false;
         if (!chanOpen) MobileClientPresentation.RemovePanel(mobileChannelPanelOwner);
         DrawMobileChatLabel(new Rect(channelRect.x + 2f * s, channelRect.y,
-            36f * s, control), channel);
+            44f * s, control), channel);
         DrawMobileChatIcon(new Rect(channelRect.xMax - 18f * s, bar.y + 14f * s,
             16f * s, 16f * s), channelRect, dropBtn);
         if (GUI.Button(channelRect, GUIContent.none, GUIStyle.none))
@@ -133,6 +139,7 @@ internal partial class ChatUI
         }
 
         EnsureEditStyle();
+        editSt.fontSize = Mathf.Max(1, Mathf.RoundToInt(12f * s * MobileClientPresentation.TextSizeMultiplier));
         bool inputFocused = GUI.GetNameOfFocusedControl() == "chatinput";
         // Capture before TextField can consume Return. Horn/duel typing is not
         // ownership of this input and must never send the pending chat text.
@@ -151,8 +158,8 @@ internal partial class ChatUI
         if (string.IsNullOrEmpty(inputText) && !focused)
             DrawMobileChatLabel(inputRect, "点击输入");
 
-        DrawMobileChatIcon(new Rect(sendRect.x + 8f * s, sendRect.y + 8f * s,
-            28f * s, 28f * s), sendRect, sendBtn);
+        DrawMobileChatIcon(new Rect(sendRect.x + 6f * s, sendRect.y + 6f * s,
+            32f * s, 32f * s), sendRect, sendBtn);
         if (!HasMobileChatIcon(sendBtn)) DrawMobileChatLabel(sendRect, "发送");
         if (GUI.Button(sendRect, GUIContent.none, GUIStyle.none))
         {
@@ -189,10 +196,11 @@ internal partial class ChatUI
     {
         // Use the same bitmap alphabet as the messages and original HUD. The
         // named Chinese-font fallback also scales; never use Unity's tiny skin.
-        BitmapFont.Measure(text, s);
+        float textScale = s * MobileClientPresentation.TextSizeMultiplier;
+        BitmapFont.Measure(text, textScale);
         if (BitmapFont.Ready)
         {
-            BitmapFont.CenterOutline(rect, text, new Color32(255, 230, 160, 255), s);
+            BitmapFont.CenterOutline(rect, text, new Color32(255, 230, 160, 255), textScale);
             return;
         }
         if (mobileChatLabelStyle == null)
@@ -205,7 +213,7 @@ internal partial class ChatUI
             };
             mobileChatLabelStyle.normal.textColor = new Color(1f, .90f, .63f, 1f);
         }
-        mobileChatLabelStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(12f * s));
+        mobileChatLabelStyle.fontSize = Mathf.Max(1, Mathf.RoundToInt(12f * s * MobileClientPresentation.TextSizeMultiplier));
         GUI.Label(rect, text, mobileChatLabelStyle);
     }
 }
