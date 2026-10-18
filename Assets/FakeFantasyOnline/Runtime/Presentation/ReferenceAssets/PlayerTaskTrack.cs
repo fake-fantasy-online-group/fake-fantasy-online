@@ -14,6 +14,7 @@ public class PlayerTaskTrack : MonoBehaviour
     private readonly HashSet<int> changedIds = new HashSet<int>();
     private readonly List<int> tmpRemove = new List<int>();
     private static PlayerTaskTrack inst;
+    private readonly TaskPromptLayout layout = new TaskPromptLayout();
     private static readonly Color RED = new Color(1f, 0.3529411852359772f, 0.3529411852359772f, 1f);
 
     internal IReadOnlyList<string> Lines => lines;
@@ -82,11 +83,15 @@ public class PlayerTaskTrack : MonoBehaviour
         if (screen.z < 0f) return;
         float s = UIScale.Factor;
         float h = s * 16f;
-        float y = ((float)Screen.height - screen.y) - h * (float)lines.Count + s * (-8f);
-        foreach (string line in lines)
+        float margin = 12f * s;
+        float maxWidth = Mathf.Max(1f, Mathf.Min(320f * s, Screen.width - 2f * margin));
+        layout.Update(lines, maxWidth, s, text => BitmapFont.Measure(text, s));
+        float y = Mathf.Max(8f * s, Screen.height - screen.y - h * layout.Rows.Count - 8f * s);
+        for (int i = 0; i < layout.Rows.Count; i++)
         {
-            float width = BitmapFont.Measure(line, s);
-            BitmapFont.DrawOutline(screen.x + width * (-0.5f), y, line, RED, s);
+            float width = layout.Widths[i];
+            float x = Mathf.Max(margin, Mathf.Min(screen.x - width * 0.5f, Screen.width - margin - width));
+            BitmapFont.DrawOutline(x, y, layout.Rows[i], RED, s);
             y = h + y;
         }
     }

@@ -39,6 +39,7 @@ internal sealed class ReferenceWorldPlayerTaskTrack
     private readonly List<int> removedIds = new List<int>();
 
     private float showUntil = -1f;
+    private readonly TaskPromptLayout layout = new TaskPromptLayout();
 
     private ReferenceWorldPlayerTaskTrack(
         ReferenceWorldNpcTaskFeedback taskDefinitions,
@@ -172,25 +173,28 @@ internal sealed class ReferenceWorldPlayerTaskTrack
                          Vector3.up * (HeadOffsetPixels /
                                        ReferenceWorldLocalPlayerDoll.PixelsPerUnit);
         Vector3 screenPoint = camera.WorldToScreenPoint(anchor);
+        float margin = 12f * uiScale;
+        float maxWidth = Mathf.Max(1f, Mathf.Min(320f * uiScale, screenWidth - 2f * margin));
+        layout.Update(lines, maxWidth, uiScale, text => font.Measure(text, uiScale));
         float firstLineTop;
         if (!TryResolveFirstLineTop(
                 screenPoint,
                 screenHeight,
                 uiScale,
-                lines.Count,
+                layout.Rows.Count,
                 out firstLineTop))
         {
             return true;
         }
 
-        float lineTop = firstLineTop;
+        float lineTop = Mathf.Max(8f * uiScale, firstLineTop);
         float lineHeight = uiScale * LineHeightUnits;
-        for (int index = 0; index < lines.Count; index++)
+        for (int index = 0; index < layout.Rows.Count; index++)
         {
-            string line = lines[index];
-            float width = font.Measure(line, uiScale);
+            string line = layout.Rows[index];
+            float width = layout.Widths[index];
             font.DrawOutline(
-                screenPoint.x - width * 0.5f,
+                Mathf.Max(margin, Mathf.Min(screenPoint.x - width * 0.5f, screenWidth - margin - width)),
                 lineTop,
                 line,
                 ProgressColor,

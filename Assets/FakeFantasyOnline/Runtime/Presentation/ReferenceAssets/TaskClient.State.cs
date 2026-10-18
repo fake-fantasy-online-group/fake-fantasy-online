@@ -29,6 +29,7 @@ public static partial class TaskClient
         Active.AddRange(active);
         Done.Clear();
         foreach (int id in done) Done.Add(id);
+        DialogUI.I?.ObserveTaskCompletionReceipt();
         OnStateChanged?.Invoke();
     }
 }

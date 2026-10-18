@@ -93,7 +93,11 @@ public static partial class TaskClient
 
     public static void Complete(int id)
     {
-        if (NetClient.I != null) NetClient.I.TaskCompleteForIndependentRuntime(id);
+        if (NetClient.I != null)
+        {
+            DialogUI.I?.TrackTaskCompletion(id);
+            NetClient.I.TaskCompleteForIndependentRuntime(id);
+        }
     }
 }
 
