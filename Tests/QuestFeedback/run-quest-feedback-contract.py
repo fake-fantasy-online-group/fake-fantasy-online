@@ -10,6 +10,6 @@ for file in ['PlayerTaskTrack.cs','ReferenceWorldPlayerTaskTrack.cs']:
 assert (src/'TaskClient.State.cs').read_text().index('ObserveTaskCompletionReceipt') < (src/'TaskClient.State.cs').read_text().index('OnStateChanged?.Invoke')
 with tempfile.TemporaryDirectory(prefix='quest-feedback-') as temp:
  exe=Path(temp)/'Contract.exe';command=[a.mono,a.csc] if a.csc.endswith('.exe') else [a.csc]
- subprocess.run(command+['-nologo','-out:'+str(exe)]+[str(src/name) for name in ['DialogUI.TaskCompletion.cs','TaskPromptLayout.cs','TaskClient.State.cs','TaskClient.Offers.cs']]+[str(Path(__file__).with_name('QuestFeedbackContract.cs'))],check=True)
+ subprocess.run(command+['-nologo','-out:'+str(exe)]+[str(src/name) for name in ['DialogUI.TaskCompletion.cs','TaskPromptLayout.cs','TaskClient.State.cs','TaskClient.Offers.cs','ReferenceNpcNoticeReceipt.cs']]+[str(Path(__file__).with_name('QuestFeedbackContract.cs'))],check=True)
  subprocess.run([a.mono,str(exe)],check=True)
 print('PASS: both live and snapshot prompt renderers use measured wrapping; receipt closes before observers')

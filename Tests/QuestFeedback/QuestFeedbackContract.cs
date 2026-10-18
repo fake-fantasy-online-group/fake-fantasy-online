@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
+namespace UnityEngine { public struct Color {public Color(float r,float g,float b,float a){}} }
 namespace FakeFantasyOnline.Application {
  public class WorldNpcTaskOfferState { public int TaskId; public byte State; public string Title,Description,Award; }
 }
@@ -8,8 +9,12 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public sealed partial class DialogUI {
   public static DialogUI I; public bool Visible,InSubView;
   public FakeFantasyOnline.Application.WorldNpcTaskOfferState LastOfferIntent;
-  public int CurrentNpcEntityId; public void Close(){Visible=false;}
+  public int CurrentNpcEntityId; public void Close(){Visible=false;} public void ShowSay(string text){Visible=true;LastOfferIntent=null;}
  }
+ public static class ChatUI {public static int Messages; public static void Add(string a,string b,UnityEngine.Color c,string d,object e){Messages++;}}
+ public class PlayerController {public static PlayerController I; public void CancelWork(){} public static implicit operator bool(PlayerController p){return p!=null;}}
+ public static class PlayerTaskTrack {public static void Show(string s){}}
+ public static class NewbieTipBox {public static void PushText(string s){}}
  public static partial class TaskClient { public static ActiveTask GetActive(int id){return Active.Find(t=>t.id==id);} }
  public class NetClient {
   public static NetClient I; public Action OnComplete;
@@ -25,8 +30,11 @@ class QuestFeedbackContract {
  static void Main(){
   NetClient.I=new NetClient();State(7,2);var d=Open();TaskClient.Complete(7);
   Assert(d.Visible,"send is not confirmation"); State(7,2);Assert(d.Visible,"unchanged/rejected snapshot stays open");
+  ReferenceNpcNoticeReceipt.ReceiveNotice("背包空间不足",6,()=>d);Assert(d.Visible&&ChatUI.Messages==0,"failure detail remains accessible");
+  d=Open();TaskClient.Complete(7);
   State(7,3);Assert(!d.Visible,"matching step advance closes");
   State(7,2);d=Open();TaskClient.Complete(7);State(0,0,true);Assert(!d.Visible,"completed hand-in closes");
+  ReferenceNpcNoticeReceipt.ReceiveNotice("奖励经验：100点",6,()=>d);Assert(!d.Visible&&ChatUI.Messages==1,"subsequent reward notice goes to chat without reopening");
   State(7,2);d=Open();TaskClient.Complete(7);State(0,0);Assert(!d.Visible,"repeatable removed task closes without done bit");
   State(7,2);d=Open();TaskClient.Complete(8);State(7,3);Assert(d.Visible,"unrelated command does not arm close");
   State(7,2);d=Open();TaskClient.Complete(7);d.LastOfferIntent=new FakeFantasyOnline.Application.WorldNpcTaskOfferState{TaskId=7};State(7,3);Assert(d.Visible,"late reply cannot close reopened offer");

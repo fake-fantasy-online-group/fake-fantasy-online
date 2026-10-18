@@ -23,3 +23,11 @@ These tests do not launch Unity or prove real-game visual behavior. A client bui
 still verify long red prompts near screen edges and successive/nonterminal/repeatable
 NPC hand-ins with actual resources and server receipts.
 
+
+Deployed server trace at `0287562`: structured middle steps call `pushQuestLog` or
+`pushInventory`; final, legacy, exchange and trial hand-ins call `pushInventory`,
+which emits the log at `inventory.go:968`. Cube recovery uses a successful commit
+callback with `pushQuestLog`. Rejections return before those success mutations.
+`ReferenceNpcNoticeReceipt` mode 6 routes the subsequent reward text to chat if the
+dialog has closed, so it does not reopen the completed detail. The compiled test
+includes that actual notice router as well as a rejection-detail case.
