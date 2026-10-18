@@ -358,7 +358,15 @@ public sealed partial class ReferenceWorldReceiveOwner : IWorldReceiveOwner, ISk
             return;
         }
 
+        int previousLevel = CharData.level;
         StoreSevenAttributeFields(attributes);
+        // The shipped EffectPlayer prewarms this original named template, but the
+        // independent attribute receipt never requested it. Only an authoritative
+        // increase for an already-present local player is a level-up presentation.
+        // Entry uses ReceiveEnterAttributeFields below and must not play this pulse;
+        // repeated snapshots compare equal after the stores above.
+        if (previousLevel > 0 && CharData.level > previousLevel && CombatNumber.PlayerTransform != null)
+            EffectPlayer.SpawnOn(0, "升级特效");
     }
 
     public void ReceiveEnterAttributeFields(IReadOnlyList<int> attributes)

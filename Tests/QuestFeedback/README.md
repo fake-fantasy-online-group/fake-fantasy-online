@@ -22,3 +22,4 @@ only wrapping and screen-edge placement change.
 These tests do not launch Unity or prove real-game visual behavior. A client build must
 still verify long red prompts near screen edges and successive/nonterminal/repeatable
 NPC hand-ins with actual resources and server receipts.
+
