@@ -13,7 +13,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// </summary>
 /// <remarks>
 /// The complete official identities are frozen by the module's ARM64 translation,
-/// independent x86_64 verification and exact third-comparison packets. The official
+/// independent x86_64 verification and exact third-comparison packets. Playback lifecycle
+/// now also retires stale map audio and guards failed/obsolete loads. The official
 /// binary remains development evidence only; this source owner reads source-owned OGG bytes.
 /// </remarks>
 public class MusicManager : MonoBehaviour
@@ -44,6 +45,7 @@ public class MusicManager : MonoBehaviour
     private UnityWebRequest activeReq;
     private UnityWebRequest inflightReq;
     private AudioClip curClip;
+    private long selectionVersion;
     private float musicVol = 0.6f;
 
     private void Awake()
@@ -116,19 +118,42 @@ public class MusicManager : MonoBehaviour
 
     public void Play(string clipName)
     {
-        if (string.IsNullOrEmpty(clipName) || clipName == cur)
-        {
+        // A map without usable music must not inherit the outgoing map's clip.
+        // Keep a shared, already selected track running across floors/instances.
+        if (!string.IsNullOrEmpty(clipName) && clipName == cur)
             return;
-        }
 
+        StopSelection();
+        if (!HasTrackFile(clipName)) return;
         cur = clipName;
+        loading = StartCoroutine(LoadAndPlay(clipName, selectionVersion));
+    }
+
+    private void StopSelection()
+    {
+        ++selectionVersion;
+        cur = string.Empty;
         if (loading != null)
         {
             StopCoroutine(loading);
-            DisposeInflight();
+            loading = null;
         }
-
-        loading = StartCoroutine(LoadAndPlay(clipName));
+        DisposeInflight();
+        if (src)
+        {
+            src.Stop();
+            src.clip = null;
+        }
+        if (curClip)
+        {
+            Destroy(curClip);
+            curClip = null;
+        }
+        if (activeReq != null)
+        {
+            activeReq.Dispose();
+            activeReq = null;
+        }
     }
 
     private void DisposeInflight()
@@ -140,78 +165,46 @@ public class MusicManager : MonoBehaviour
         }
     }
 
-    private IEnumerator LoadAndPlay(string clipName)
+    private IEnumerator LoadAndPlay(string clipName, long version)
     {
-        string path = Path.Combine(musicDir, clipName + ".ogg");
-        if (!File.Exists(path))
+        UnityWebRequest req;
+        if (!TryCreateLoadRequest(clipName, out req))
         {
+            if (version == selectionVersion) cur = string.Empty;
             yield break;
         }
-
-        UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(
-            new Uri(path).AbsoluteUri,
-            AudioType.OGGVORBIS);
-        ((DownloadHandlerAudioClip)req.downloadHandler).streamAudio = true;
         inflightReq = req;
         yield return req.SendWebRequest();
-        inflightReq = null;
 
-        if (req != null && string.IsNullOrEmpty(req.error))
+        // Track name alone is insufficient for A -> B -> A: an old A completion
+        // must not replace the newer A selection or clear its in-flight request.
+        if (version != selectionVersion)
+            yield break; // StopSelection already disposed this obsolete request.
+        inflightReq = null;
+        loading = null;
+        if (string.IsNullOrEmpty(req.error))
         {
             AudioClip clip = DownloadHandlerAudioClip.GetContent(req);
-            if (clip != null && cur == clipName)
+            if (clip != null && src != null)
             {
                 clip.name = clipName;
-                AudioClip oldClip = curClip;
-                src.Stop();
                 src.clip = clip;
                 src.Play();
                 curClip = clip;
-                if (oldClip && oldClip != clip)
-                {
-                    Destroy(oldClip);
-                }
-
-                if (activeReq != null)
-                {
-                    activeReq.Dispose();
-                }
-
                 activeReq = req;
                 yield break;
             }
         }
 
-        if (req != null)
-        {
-            req.Dispose();
-        }
+        req.Dispose();
+        cur = string.Empty; // A failed request may be retried on the next entry.
     }
 
     private void OnDestroy()
     {
-        if (I != this)
-        {
-            return;
-        }
-
-        if (src)
-        {
-            src.Stop();
-        }
-
-        if (curClip)
-        {
-            Destroy(curClip);
-            curClip = null;
-        }
-
-        DisposeInflight();
-        if (activeReq != null)
-        {
-            activeReq.Dispose();
-            activeReq = null;
-        }
+        if (I != this) return;
+        StopSelection();
+        I = null;
     }
 
     public void PlayLogin()
@@ -243,8 +236,8 @@ public class MusicManager : MonoBehaviour
 
     public void PlayMap(string mapFile)
     {
-        string track;
-        mapMus.TryGetValue(mapFile, out track);
+        string track = null;
+        if (!string.IsNullOrEmpty(mapFile)) mapMus.TryGetValue(mapFile, out track);
         Play(track);
     }
 
@@ -322,8 +315,10 @@ public class MusicManager : MonoBehaviour
     public bool TryPlayMap(string mapFile)
     {
         string track;
-        if (!mapMus.TryGetValue(mapFile, out track) || !HasTrackFile(track))
+        if (string.IsNullOrEmpty(mapFile) || !mapMus.TryGetValue(mapFile, out track) ||
+            !HasTrackFile(track))
         {
+            Play(null);
             return false;
         }
 
