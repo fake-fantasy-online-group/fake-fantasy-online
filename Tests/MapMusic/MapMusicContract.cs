@@ -16,6 +16,7 @@ namespace UnityEngine {
  public enum AudioType { OGGVORBIS }
  public static class Application { public static bool isPlaying=false,isMobilePlatform=false;public static string dataPath="/tmp"; }
  public static class PlayerPrefs { public static float GetFloat(string k,float d)=>d;public static void SetFloat(string k,float v){} }
+ public static class Debug { public static int Warnings; public static void LogWarning(object m){Warnings++;} }
  public static class JsonUtility { public static T FromJson<T>(string s)=>default(T); }
 }
 namespace UnityEngine.Networking {
@@ -26,7 +27,10 @@ namespace UnityEngine.Networking {
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class ResourceFileRoot { public static string Path="/tmp"; }
  public static class GameTables { public static string LoadText(string n)=>null; }
- public static class MapDef { public class Entry {public string file;} public static bool TryGet(int id,out Entry e){e=null;return false;} }
+ public class PkgArchive { public static byte[] DefBytes; public byte[] Read(string p)=>DefBytes; }
+ public class ReferenceResourceLoader { public PkgArchive PrimaryPackageForIndependentRuntime; }
+ public class ResLoader { public static ResLoader I;public PkgArchive Pkg=new PkgArchive();public static byte[] Table; public static byte[] Read24Res(string p)=>Table; }
+ public static class Gbk { public static string GetString(byte[] b)=>System.Text.Encoding.ASCII.GetString(b); }
 }
 class MapMusicContract {
  static void Check(bool ok,string name){if(!ok)throw new Exception(name);Console.WriteLine("PASS "+name);}
@@ -34,6 +38,7 @@ class MapMusicContract {
  static void Set(MusicManager m,string n,object v)=>typeof(MusicManager).GetField(n,BindingFlags.NonPublic|BindingFlags.Instance).SetValue(m,v);
  static void Enter(MusicManager m,int id)=>m.PlayMap(GameBootstrap.MapSourceName(id));
  static void Complete(MusicManager m){UnityWebRequestMultimedia.Last.isDone=true;m.Last.Iterator.MoveNext();}
+ static byte[] Table(int id,string name){using(var stream=new MemoryStream()){using(var w=new BinaryWriter(stream)){w.Write(0x5566);w.Write(1);w.Write(20);w.Write(1);w.Write(id);var n=new byte[16];System.Text.Encoding.ASCII.GetBytes(name).CopyTo(n,0);w.Write(n);return stream.ToArray();}}}
  static int Main(){string dir=Path.Combine(Path.GetTempPath(),"music-contract-"+Guid.NewGuid());Directory.CreateDirectory(dir);try{
  foreach(string n in new[]{"M002","M003","M034"})File.WriteAllText(Path.Combine(dir,n+".ogg"),"test boundary bytes");
  var m=new MusicManager();Set(m,"src",new AudioSource());Set(m,"musicDir",dir);MusicManager.I=m;
@@ -52,6 +57,22 @@ class MapMusicContract {
  stale.Iterator.MoveNext();Check(old.Disposed&&m.HasInflightRequest&&!newest.Disposed&&m.Source.clip==null,"A B A obsolete completion cannot overwrite or clear new request");Complete(m);Check(m.CurrentClipName=="M003","latest A request wins");
  Enter(m,38);UnityWebRequestMultimedia.Last.error="decode failed";Complete(m);Check(m.CurrentTrack==""&&m.Source.clip==null&&!m.HasInflightRequest,"decode failure clears pending selection");Enter(m,38);Complete(m);Check(m.CurrentClipName=="M034","failed same track can retry");
  Enter(m,37);stale=m.Last;Check(!m.TryPlayMap("unknown")&&m.Source.clip==null,"TryPlayMap unknown also clears stale music");stale.Iterator.MoveNext();Check(m.CurrentTrack==""&&!m.HasInflightRequest,"obsolete completion after unmapped map is ignored");
- m.PlayMap(null);Check(m.CurrentTrack=="","null map is safe");return 0;
+ m.PlayMap(null);Check(m.CurrentTrack=="","null map is safe");
+#if ORIGINAL_TABLE
+ string original=Environment.GetEnvironmentVariable("FFO_ORIGINAL_MUSIC_TABLE");
+ string defs=Environment.GetEnvironmentVariable("FFO_ORIGINAL_MAP_DEF");
+ PkgArchive.DefBytes=defs!=null?File.ReadAllBytes(defs):System.Text.Encoding.ASCII.GetBytes("[MapDef]\nMapId=2\nFile=qw0002\n[MapDef]\nMapId=7\nFile=qw0007\n[MapDef]\nMapId=37\nFile=qw0037\n[MapDef]\nMapId=38\nFile=qw0038\n");
+ ResLoader.I=new ResLoader();MapDef.EnsureLoaded(ResLoader.I.Pkg);
+ Check(m.AddOriginalMapMusic(Table(2,"M003"))&&m.TryGetMapTrack("qw0002",out var added)&&added=="M003","original table joins authored map file");
+ Check(m.AddOriginalMapMusic(Table(7,"M034"))&&m.TryGetMapTrack("qw0007",out added)&&added=="M002","explicit JSON track wins over original table");
+ maps["qw0002"]="";Check(m.AddOriginalMapMusic(Table(2,"M003"))&&maps["qw0002"]=="","explicit blank mapping is preserved");
+ int size=m.MapCount;Check(m.AddOriginalMapMusic(Table(999999,"M003"))&&m.MapCount==size,"unknown original map ID is not guessed");
+ foreach(int offset in new[]{0,4,8,12}){var invalid=Table(2,"M003");invalid[offset]=255;Check(!m.AddOriginalMapMusic(invalid)&&m.MapCount==size,"invalid original table header rejected at "+offset);}
+ Check(!m.AddOriginalMapMusic(new byte[12])&&!m.AddOriginalMapMusic(Table(2,"../evil")),"truncated table and path-like track rejected");
+ var fresh=new MusicManager();Set(fresh,"src",new AudioSource());Set(fresh,"musicDir",dir);ResLoader.Table=Table(2,"M003");fresh.PlayMap("qw0002");Complete(fresh);Check(fresh.CurrentClipName=="M003","lazy production fallback restores missing JSON mapping");
+ var broken=new MusicManager();Set(broken,"src",new AudioSource());Set(broken,"musicDir",dir);ResLoader.Table=new byte[1];int warnings=Debug.Warnings;broken.PlayMap("unknown");broken.PlayMap("unknown");Check(Debug.Warnings==warnings+1,"bad fallback table is logged once");
+ if(original!=null){var actual=new MusicManager();Check(actual.AddOriginalMapMusic(File.ReadAllBytes(original)),"actual original PKG table parses and joins real map.def");Check(actual.MapCount==230,"actual table has 230 distinct authored map-file joins");foreach(var pair in new[]{"qw0007:M002","qw0037:M015a","qw0038:M016","qw0088:M034","qw0090:M033","qw0127:M046"}){var kv=pair.Split(':');Check(actual.TryGetMapTrack(kv[0],out added)&&added==kv[1],"actual original assignment "+pair);}}
+#endif
+ return 0;
  }finally{Directory.Delete(dir,true);}}
 }

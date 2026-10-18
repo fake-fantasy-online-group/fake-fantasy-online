@@ -15,5 +15,6 @@ assert 'if (MusicManager.I != null) MusicManager.I.PlayMap(mapName);' in s
 with tempfile.TemporaryDirectory(prefix='map-music-') as temp:
  d=Path(temp);bootstrap=d/'MapSource.cs';exe=d/'MapMusic.exe'
  bootstrap.write_text('namespace FakeFantasyOnline.Presentation.ReferenceAssets { public class GameBootstrap {\n'+s[a:b]+'}}')
- command=[os.environ['FFO_MONO'],os.environ['FFO_CSC'],'-noconfig','-nostdlib+','@'+os.environ['FFO_COMPILE_DIR']+'/framework.rsp','-nologo','-langversion:9.0','-out:'+str(exe),str(Path(__file__).with_name('MapMusicContract.cs')),str(args.music_source or p/'ReferenceWorldMapMusic.cs'),str(p/'CustomMaps.cs'),str(bootstrap)]
+ command=[os.environ['FFO_MONO'],os.environ['FFO_CSC'],'-noconfig','-nostdlib+','@'+os.environ['FFO_COMPILE_DIR']+'/framework.rsp','-nologo','-langversion:9.0','-out:'+str(exe),str(Path(__file__).with_name('MapMusicContract.cs')),str(args.music_source or p/'ReferenceWorldMapMusic.cs'),str(p/'CustomMaps.cs'),str(p/'MapDef.cs'),str(bootstrap)]
+ if not args.music_source:command.append("-define:ORIGINAL_TABLE")
  subprocess.run(command,check=True);subprocess.run([os.environ['FFO_MONO'],str(exe)],check=True)

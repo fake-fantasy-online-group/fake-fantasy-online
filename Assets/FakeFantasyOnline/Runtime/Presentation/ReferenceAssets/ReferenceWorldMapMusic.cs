@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -46,6 +47,7 @@ public class MusicManager : MonoBehaviour
     private UnityWebRequest inflightReq;
     private AudioClip curClip;
     private long selectionVersion;
+    private bool originalTableAttempted;
     private float musicVol = 0.6f;
 
     private void Awake()
@@ -234,8 +236,66 @@ public class MusicManager : MonoBehaviour
         return musicVol;
     }
 
+    private void EnsureOriginalMapMusic()
+    {
+        if (originalTableAttempted || ResLoader.I == null) return;
+        originalTableAttempted = true;
+        try
+        {
+            MapDef.EnsureLoaded(ResLoader.I.Pkg);
+            byte[] bytes = ResLoader.Read24Res("zipbin/ov_music.bin");
+            if (bytes == null || !AddOriginalMapMusic(bytes))
+                Debug.LogWarning("[Music] Original map music table is missing or invalid; keeping explicit JSON mappings.");
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[Music] Cannot read original map music table: " + exception.Message);
+        }
+    }
+
+    // Original ov_music: little-endian magic 0x5566, version 1, 20-byte rows,
+    // each containing an int map ID and a 16-byte, NUL-padded ASCII track name.
+    // Join through authored map.def filenames; never guess a dungeon soundtrack.
+    internal bool AddOriginalMapMusic(byte[] bytes)
+    {
+        if (bytes == null || bytes.Length < 16) return false;
+        var additions = new Dictionary<string, string>();
+        using (var reader = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII))
+        {
+            int magic = reader.ReadInt32();
+            int version = reader.ReadInt32();
+            int stride = reader.ReadInt32();
+            int count = reader.ReadInt32();
+            if (magic != 0x5566 || version != 1 || stride != 20 || count < 0 ||
+                16L + (long)count * stride != bytes.Length) return false;
+            for (int i = 0; i < count; ++i)
+            {
+                int mapId = reader.ReadInt32();
+                byte[] name = reader.ReadBytes(16);
+                int length = Array.IndexOf(name, (byte)0);
+                if (length < 0) length = name.Length;
+                for (int n = 0; n < length; ++n)
+                    if (!((name[n] >= 'A' && name[n] <= 'Z') ||
+                          (name[n] >= 'a' && name[n] <= 'z') ||
+                          (name[n] >= '0' && name[n] <= '9') ||
+                          name[n] == '_' || name[n] == '-')) return false;
+                MapDef.Entry descriptor;
+                if (mapId <= 0 || length == 0 || !MapDef.TryGet(mapId, out descriptor) ||
+                    string.IsNullOrEmpty(descriptor.file) || mapMus.ContainsKey(descriptor.file)) continue;
+                string track = Encoding.ASCII.GetString(name, 0, length);
+                string previous;
+                if (additions.TryGetValue(descriptor.file, out previous) && previous != track)
+                    return false; // An ambiguous source mapping is not a soundtrack choice.
+                additions[descriptor.file] = track;
+            }
+        }
+        foreach (var entry in additions) mapMus.Add(entry.Key, entry.Value);
+        return true;
+    }
+
     public void PlayMap(string mapFile)
     {
+        EnsureOriginalMapMusic();
         string track = null;
         if (!string.IsNullOrEmpty(mapFile)) mapMus.TryGetValue(mapFile, out track);
         Play(track);
@@ -298,6 +358,7 @@ public class MusicManager : MonoBehaviour
             musicDir = candidate;
         }
 
+        EnsureOriginalMapMusic();
         return mapMus.Count > 0 && HasTrackFile(loginTrack);
     }
 
@@ -314,6 +375,7 @@ public class MusicManager : MonoBehaviour
 
     public bool TryPlayMap(string mapFile)
     {
+        EnsureOriginalMapMusic();
         string track;
         if (string.IsNullOrEmpty(mapFile) || !mapMus.TryGetValue(mapFile, out track) ||
             !HasTrackFile(track))
