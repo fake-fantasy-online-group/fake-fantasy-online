@@ -32,7 +32,7 @@ internal static class ReferenceRackShopReceipt
             goods.Add(new RackShopDlg.Good { id = row.Id, name = row.Name,
                 desc = row.Description, weight = row.Weight, group = row.Group,
                 price = row.Price, flags = row.Flags, remain = row.Remain, part = row.Part,
-                blocked = row.Blocked, icon = NetClient.LoadItemIcon(row.Id > 89999999 ? 3385 : row.Id) });
+                blocked = row.Blocked });
         }
         public void SetBlocked(int index, byte blocked)
         {

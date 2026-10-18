@@ -118,7 +118,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Rect icon = L(73f, y + 4f, 30f, 30f);
                 Rect add = L(112f, y + 7f, 24f, 24f);
                 if (row.Contains(mouse)) tipText = TooltipContent.Fmt(good.name, good.desc);
-                if (good.icon != null) ItemIconUI.Draw(icon, good.icon, s);
+                DrawGoodIcon(icon, good);
                 BlockMask(icon, good.blocked);
                 Texture2D texture = carBtn == null ? null : (carBtn[add.Contains(mouse) ? 1 : 0] ?? carBtn[0]);
                 if (texture != null) GUI.DrawTexture(add, texture);
@@ -156,7 +156,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 }
                 if (row.Contains(mouse) || add.Contains(mouse)) tipText = TooltipContent.Fmt(good.name, good.desc);
                 Rect icon = L(x + 3f, y + 8f, 32f, 32f);
-                if (good.icon != null) ItemIconUI.Draw(icon, good.icon, s);
+                DrawGoodIcon(icon, good);
                 BlockMask(icon, good.blocked);
                 LblC(L(x + 40f, y + 3f, 104f, 12f), Trunc(good.name, 8), inCart ? GOLD : Color.white);
                 bool gold = IsGold(good.flags);

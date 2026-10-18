@@ -38,7 +38,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Good good = FindGood(id);
                 float y = 100f + i * 36f;
                 if (L(592f, y, 200f, 34f).Contains(mouse)) tipText = TooltipContent.Fmt(good.name, good.desc);
-                if (good.icon != null) ItemIconUI.Draw(L(596f, y + 2f, 30f, 30f), good.icon, s);
+                DrawGoodIcon(L(596f, y + 2f, 30f, 30f), good);
                 Lbl(630f, y + 4f, Trunc(good.name, 7), GOLD);
                 int maximum = good.remain > 0 ? Mathf.Min(good.remain, CartQtyMax) : CartQtyMax;
                 // Native 20x19 quantity icons have their own space; text and remove no longer overlap.

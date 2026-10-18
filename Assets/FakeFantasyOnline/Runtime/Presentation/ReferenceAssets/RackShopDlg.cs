@@ -48,6 +48,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             goods = value ?? new List<Good>();
             if (I != null)
             {
+                // A fresh catalog may follow an icon-map override or resource recovery.
+                I.visibleGoodIcons.Clear();
                 I.viewCount = -1;
                 I.page = 0;
                 I.PruneCart();

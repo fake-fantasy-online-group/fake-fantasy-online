@@ -27,7 +27,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Rect icon = L(73f, y + 4f, 30f, 30f);
                 Rect add = L(112f, y + 7f, 24f, 24f);
                 if (row.Contains(mouse)) tipText = TooltipContent.Fmt(good.name, good.desc);
-                if (good.icon != null) ItemIconUI.Draw(icon, good.icon, s);
+                DrawGoodIcon(icon, good);
                 BlockMask(icon, good.blocked);
                 DrawFlagAdd(add, mouse);
                 if (IsGold(good.flags))
@@ -71,7 +71,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 }
                 if (hover) tipText = TooltipContent.Fmt(good.name, good.desc);
 
-                if (good.icon != null) ItemIconUI.Draw(icon, good.icon, s);
+                DrawGoodIcon(icon, good);
                 BlockMask(icon, good.blocked);
                 int nameLength = good.remain < 0 ? 8 : 6;
                 LblC(L(x + 42f, y + 8f, good.remain < 0 ? 104f : 74f, 12f),
