@@ -99,7 +99,7 @@ public partial class UIManager
         }
         if (Input.GetKeyDown(KeyCode.O))
         {
-            SysConfigDlg.Toggle();
+            SysOptionDlg.Toggle();
         }
         if (Input.GetKeyDown(KeyCode.M) && GameHud.I != null)
         {

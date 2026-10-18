@@ -26,7 +26,7 @@ public partial class GameHud
         }
         else if (button.Item1 == "taskbtn") TaskDlg.Toggle();
         else if (button.Item1 == "emailbtn") MailDlg.Toggle();
-        else if (button.Item1 == "optionbtn") SysConfigDlg.Toggle();
+        else if (button.Item1 == "optionbtn") SysOptionDlg.Toggle();
         else if (button.Item1 == "rackbtn") RackShopDlg.Toggle();
         else if (button.Item4 != null && UIManager.I != null) UIManager.I.Toggle(button.Item4);
     }

@@ -36,12 +36,14 @@ public partial class SysOptionDlg : MonoBehaviour
     {
         Ensure();
         I.visible = !I.visible;
+        if (I.visible) SysConfigDlg.Hide();
     }
 
     public static void Open()
     {
         Ensure();
         I.visible = true;
+        SysConfigDlg.Hide();
     }
 
     public static void Hide()
@@ -61,6 +63,19 @@ public partial class SysOptionDlg : MonoBehaviour
 
     public static bool Visible => I != null && I.visible;
 
+    // Reuse the detailed settings safe-area fit without changing the user's UI scale.
+    private Rect MobileLayout(out float scale)
+    {
+        Rect safe = MobileClientPresentation.SafeAreaGui;
+        scale = Mathf.Min(UIScale.Factor, Mathf.Min(safe.width / NW, safe.height / NH));
+        float width = NW * scale, height = NH * scale;
+        bool centered = float.IsNaN(winX) || _wdGen != WinDrag.Gen;
+        float x = centered ? safe.x + (safe.width - width) * .5f : winX;
+        float y = centered ? safe.y + (safe.height - height) * .5f : winY;
+        return new Rect(Mathf.Clamp(x, safe.x, safe.xMax - width),
+            Mathf.Clamp(y, safe.y, safe.yMax - height), width, height);
+    }
+
     // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
     internal static bool MobileContainsPointer(Vector2 point)
     {
@@ -70,6 +85,7 @@ public partial class SysOptionDlg : MonoBehaviour
         bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;
         float x = centered ? (Screen.width - width * scale) * .5f : I.winX;
         float y = centered ? (Screen.height - height * scale) * .5f : I.winY;
+        if (MobileClientPresentation.Enabled) return I.MobileLayout(out scale).Contains(point);
         if (new Rect(x, y, width * scale, height * scale).Contains(point)) return true;
         return false;
     }
@@ -78,6 +94,8 @@ public partial class SysOptionDlg : MonoBehaviour
     public static bool MouseOver()
     {
         if (I == null || !I.visible) return false;
+        if (MobileClientPresentation.Enabled)
+            return MobileContainsPointer(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y));
         float scale = UIScale.Factor;
         float px = Input.mousePosition.x;
         float py = Screen.height - Input.mousePosition.y;

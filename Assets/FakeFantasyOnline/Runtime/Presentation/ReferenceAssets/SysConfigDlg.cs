@@ -66,6 +66,12 @@ public partial class SysConfigDlg : MonoBehaviour
     {
         Ensure();
         I.visible = !I.visible;
+        if (I.visible) SysOptionDlg.Hide();
+    }
+
+    public static void Hide()
+    {
+        if (I != null) I.visible = false;
     }
 
     public static bool Visible => I != null && I.visible;

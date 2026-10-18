@@ -10,7 +10,14 @@ public partial class SysOptionDlg
         if (!visible) return;
         if (!tried) Load();
         s = UIScale.Factor;
-        if (WinDrag.Stale(winX, ref _wdGen))
+        if (MobileClientPresentation.Enabled)
+        {
+            Rect layout = MobileLayout(out s);
+            winX = layout.x;
+            winY = layout.y;
+            _wdGen = WinDrag.Gen;
+        }
+        else if (WinDrag.Stale(winX, ref _wdGen))
         {
             winX = (Screen.width - NW * s) * 0.5f;
             winY = (Screen.height - NH * s) * 0.5f;

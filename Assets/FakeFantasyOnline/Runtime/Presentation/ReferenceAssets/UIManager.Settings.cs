@@ -13,7 +13,7 @@ public partial class UIManager
         if (MailDlg.Typing) return;
         if (gossip != null && gossip.Typing) return;
         if (GUIUtility.keyboardControl != 0) return;
-        if (Input.GetKeyDown(KeyCode.O)) SysConfigDlg.Toggle();
+        if (Input.GetKeyDown(KeyCode.O)) SysOptionDlg.Toggle();
     }
 }
 }
