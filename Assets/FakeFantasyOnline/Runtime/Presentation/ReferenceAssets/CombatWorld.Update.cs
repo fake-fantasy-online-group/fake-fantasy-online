@@ -60,6 +60,18 @@ public partial class CombatWorld
             return;
         }
 
+        // A sent swing owns its full recovery interval. Target motion or a transient
+        // LOS failure must not turn it back into Idle and restart the pose/request.
+        // Explicit StopAttack, target changes and skill casts still own cancellation.
+        if (atkState == AtkState.Recovery)
+        {
+            atkPhaseT += Time.deltaTime;
+            if (!(atkPhaseT >= AtkInterval)) return;
+            atkState = AtkState.Idle;
+            atkPhaseT = 0f;
+            return;
+        }
+
         // Null target, disabled autoattack, pause and range failure clear only these two fields.
         // In particular, a lost target preserves autoAttacking and TargetSelect (WB-174).
         if (target == null || !autoAttacking || Time.time < castPauseUntil || !InRange())
@@ -98,11 +110,6 @@ public partial class CombatWorld
                 // not: the state/phase stores occur only after the void call returned.
                 TryAttack();
                 atkState = AtkState.Recovery;
-                atkPhaseT = 0f;
-                return;
-            case AtkState.Recovery:
-                if (!(atkPhaseT >= AtkInterval)) return;
-                atkState = AtkState.Idle;
                 atkPhaseT = 0f;
                 return;
         }

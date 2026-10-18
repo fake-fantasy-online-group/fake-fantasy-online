@@ -4,6 +4,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// <summary>
 /// Recovered official CombatWorld monster targeting entry: a monster click writes the target, drops
 /// any player target and resets the attack clock through the same owner fields.
+/// Product fix: repeating an unchanged active target preserves that clock.
 /// </summary>
 /// <remarks>
 /// Official CombatWorld.SetTarget (0x0600014b, arm64 0x2439c8 / x86_64 0x251200) runs Ensure first
@@ -21,6 +22,14 @@ public partial class CombatWorld
         Ensure();
         I.pluginAttackIntentRevision++;
         I.pluginSkillIntentRevision++;
+        // Repeated clicks/taps express the same intent, not a new attack clock.
+        // Keep revision notifications, including invalidation of plugin skill intent.
+        if (me != null && I.target == me && I.pvpTarget == null &&
+            I.autoAttacking == attack)
+        {
+            TargetSelect.Select(me);
+            return;
+        }
         I.target = me;
         I.pvpTarget = null;
         I.autoAttacking = attack;
@@ -59,6 +68,11 @@ public partial class CombatWorld
         Ensure();
         I.pluginAttackIntentRevision++;
         I.pluginSkillIntentRevision++;
+        if (rp != null && I.pvpTarget == rp && I.target == null && I.autoAttacking)
+        {
+            TargetSelect.Select(rp);
+            return;
+        }
         I.pvpTarget = rp;
         I.target = null;
         I.autoAttacking = true;

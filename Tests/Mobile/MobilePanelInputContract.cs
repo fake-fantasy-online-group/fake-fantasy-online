@@ -16,6 +16,8 @@ public static class MobilePanelInputContract
  Check(!MobileClientPresentation.ModalOpen,"ordinary inventory is not global modal");
  Frame(At(1,TouchPhase.Began,joy),At(2,TouchPhase.Began,attack));
  Check(ClientInput.JoystickHeld&&ClientInput.MovementAxis.x>0,"bag open: joystick outside continues");Check(GameHud.I.Owner==2,"bag open: second attack finger owns HUD");
+ for(int i=0;i<8;i++) Frame(At(1,TouchPhase.Stationary,joy),At(2,TouchPhase.Stationary,attack));
+ Check(CombatWorld.Attacks==0,"held attack does not repeat commands before release");
  Frame(At(1,TouchPhase.Stationary,joy),At(2,TouchPhase.Ended,attack));Check(CombatWorld.Attacks==1,"bag open: attack releases once");Check(ClientInput.JoystickHeld,"attack release does not stop stick");
  Frame(At(1,TouchPhase.Ended,joy));Check(!ClientInput.JoystickHeld,"stick release clears");
  Frame(At(3,TouchPhase.Began,rect.center));Check(!ClientInput.Pointer.Down&&!ClientInput.JoystickHeld&&GameHud.I.Owner==-1,"inside bag no world/HUD owner");
