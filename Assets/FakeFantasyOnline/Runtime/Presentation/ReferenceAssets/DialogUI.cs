@@ -845,7 +845,10 @@ public sealed partial class DialogUI : MonoBehaviour
         {
             AddTrialOption("领取试炼任务", "trialtask");
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
-            if (GameBootstrap.CurMapId == 37)
+            // All four village claim NPCs have server-configured trialgo routes.
+            // Keep travel server-authoritative: it resolves the guard and charges 5 silver.
+            int trialMap = GameBootstrap.CurMapId;
+            if (trialMap == 37 || trialMap == 38 || trialMap == 61 || trialMap == 62)
                 AddTrialOption("传送到妖魔结界守卫(5银)", "trialgo");
         }
         if (NpcName.Contains("妖魔结界守卫") || NpcName.Contains("结界使"))
