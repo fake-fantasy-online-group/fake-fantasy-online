@@ -8,12 +8,13 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 public static class EmoteText
 {
     private static readonly Dictionary<int, Texture2D[]> cache = new Dictionary<int, Texture2D[]>();
-    private static readonly Dictionary<(string, int), List<string>> wrapCache =
-        new Dictionary<(string, int), List<string>>();
+    private static readonly Dictionary<(string, float, float, object), List<string>> wrapCache =
+        new Dictionary<(string, float, float, object), List<string>>();
 
     public static List<string> Wrap(string text, float maxWidth, float s)
     {
-        var key = (text ?? string.Empty, Mathf.RoundToInt(maxWidth / Mathf.Max(0.01f, s)));
+        // Exact layout inputs avoid reusing a row just across a glyph boundary.
+        var key = (text ?? string.Empty, maxWidth, s, BitmapFont.LayoutIdentity);
         if (wrapCache.TryGetValue(key, out List<string> cached)) return cached;
 
         var rows = new List<string>();
@@ -30,7 +31,7 @@ public static class EmoteText
         {
             bool emote = IsEmote(text, i, out int nn);
             int length = emote ? 4 : 1;
-            float tokenWidth = emote ? emoteWidth : BitmapFont.Measure(text[i].ToString(), s);
+            float tokenWidth = emote ? emoteWidth : BitmapFont.Measure(text, i, 1, s);
             if (width + tokenWidth > maxWidth && line.Length > 0)
             {
                 rows.Add(line.ToString());
@@ -42,7 +43,7 @@ public static class EmoteText
             i += length;
         }
         if (line.Length > 0 || rows.Count == 0) rows.Add(line.ToString());
-        if (wrapCache.Count > 512) wrapCache.Clear();
+        if (wrapCache.Count >= 512) wrapCache.Clear();
         wrapCache[key] = rows;
         return rows;
     }
@@ -77,18 +78,19 @@ public static class EmoteText
     {
         if (string.IsNullOrEmpty(text) || !BitmapFont.Ready) return 0f;
         float width = 0f;
-        var sb = new StringBuilder();
+        int start = 0;
         for (int i = 0; i < text.Length;)
         {
             if (IsEmote(text, i, out int nn))
             {
-                if (sb.Length > 0) { width += BitmapFont.Measure(sb.ToString(), s); sb.Clear(); }
+                if (i > start) width += BitmapFont.Measure(text, start, i - start, s);
                 width = 17f * s + width;
                 i += 4;
+                start = i;
             }
-            else { sb.Append(text[i]); i++; }
+            else i++;
         }
-        if (sb.Length > 0) width += BitmapFont.Measure(sb.ToString(), s);
+        if (start < text.Length) width += BitmapFont.Measure(text, start, text.Length - start, s);
         return width;
     }
 
@@ -96,22 +98,24 @@ public static class EmoteText
     {
         if (string.IsNullOrEmpty(text) || !BitmapFont.Ready) return;
         x = Mathf.Round(x); y = Mathf.Round(y);
-        var sb = new StringBuilder();
         float emoteSize = 16f * s;
-        void Flush()
+        int start = 0;
+        // Draw slices of the original immutable string. This preserves run-level
+        // rounding and all eight outline passes without builders/substrings on
+        // every GUI event. Emoji frames are still selected from live Time.time.
+        void Flush(int end)
         {
-            if (sb.Length < 1) return;
-            string run = sb.ToString();
-            if (outline) BitmapFont.DrawOutline(x, y, run, col, s);
-            else BitmapFont.Draw(x, y, run, col, s);
-            x = x + BitmapFont.Measure(run, s);
-            sb.Clear();
+            int length = end - start;
+            if (length < 1) return;
+            if (outline) BitmapFont.DrawOutline(x, y, text, start, length, col, s);
+            else BitmapFont.Draw(x, y, text, start, length, col, s);
+            x = x + BitmapFont.Measure(text, start, length, s);
         }
         for (int i = 0; i < text.Length;)
         {
             if (IsEmote(text, i, out int nn))
             {
-                Flush();
+                Flush(i);
                 Texture2D[] frames = Frames(nn);
                 if (frames != null && frames.Length > 0)
                 {
@@ -121,45 +125,15 @@ public static class EmoteText
                 }
                 x = x + (emoteSize + s);
                 i += 4;
+                start = i;
             }
-            else { sb.Append(text[i]); i++; }
+            else i++;
         }
-        Flush();
+        Flush(text.Length);
     }
 
     public static void DrawOutline(float x, float y, string text, Color col, float s)
-    {
-        if (string.IsNullOrEmpty(text) || !BitmapFont.Ready) return;
-        x = Mathf.Round(x); y = Mathf.Round(y);
-        var sb = new StringBuilder();
-        float emoteSize = 16f * s;
-        void Flush()
-        {
-            if (sb.Length < 1) return;
-            string run = sb.ToString();
-            BitmapFont.DrawOutline(x, y, run, col, s);
-            x = x + BitmapFont.Measure(run, s);
-            sb.Clear();
-        }
-        for (int i = 0; i < text.Length;)
-        {
-            if (IsEmote(text, i, out int nn))
-            {
-                Flush();
-                Texture2D[] frames = Frames(nn);
-                if (frames != null && frames.Length > 0)
-                {
-                    Texture2D frame = frames[unchecked((int)(Time.time / 0.2f)) % frames.Length];
-                    if (ReferenceEquals(frame, null)) frame = frames[0];
-                    if (frame != null) GUI.DrawTexture(new Rect(x, y + s * (-3f), emoteSize, emoteSize), frame);
-                }
-                x = x + (emoteSize + s);
-                i += 4;
-            }
-            else { sb.Append(text[i]); i++; }
-        }
-        Flush();
-    }
+        => DrawColored(x, y, text, col, s, true);
 }
 
 }

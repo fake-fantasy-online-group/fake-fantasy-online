@@ -16,8 +16,12 @@ internal partial class ChatUI
     }
     internal static IReadOnlyList<Line> SystemLinesForIndependentRuntime => _sysTmp;
     internal static IReadOnlyList<Line> OrdinaryLinesForIndependentRuntime => _chatTmp;
+    private static bool partitionCacheValid;
+    private static LineCacheKey partitionCacheKey;
     internal static void PartitionLinesForIndependentRuntime()
     {
+        LineCacheKey key = CurrentLineCacheKey;
+        if (partitionCacheValid && partitionCacheKey.Equals(key)) return;
         _sysTmp.Clear();
         _chatTmp.Clear();
         foreach (Line line in chatLines)
@@ -26,6 +30,8 @@ internal partial class ChatUI
             if (line.ch == "系统") _sysTmp.Add(line);
             else _chatTmp.Add(line);
         }
+        partitionCacheKey = key;
+        partitionCacheValid = true;
     }
 
     public static int Ver;
@@ -74,6 +80,7 @@ internal partial class ChatUI
     public static void Add(string ch, string text, Color col, string who = "", List<Share> shares = null)
     {
         chatLines.Add(new Line { ch = ch, text = text, col = col, who = who, shares = shares });
+        lineContentRevision = unchecked(lineContentRevision + 1);
         Ver = unchecked(Ver + 1);
         if (chatLines.Count > 800) chatLines.RemoveAt(0);
         if (ch == "系统") sysSeq = unchecked(sysSeq + 1);
@@ -102,6 +109,10 @@ internal partial class ChatUI
 
     internal static int LineCountForIndependentRuntime => chatLines.Count;
     internal static int SystemSequenceForIndependentRuntime => sysSeq;
-    internal static void ClearLinesForIndependentRuntime() => chatLines.Clear();
+    internal static void ClearLinesForIndependentRuntime()
+    {
+        chatLines.Clear();
+        lineContentRevision = unchecked(lineContentRevision + 1);
+    }
 }
 }

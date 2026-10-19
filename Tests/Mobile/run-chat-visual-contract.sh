@@ -7,5 +7,6 @@ find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$
 "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -noconfig -nostdlib+ @"$OUT/framework.rsp" -nologo -langversion:9.0 -out:"$OUT/Contract.exe" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/ChatUI.Mobile.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/ChatUI.MobileLines.cs" \
+ "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/ChatUI.LineCache.cs" \
  "$ROOT/Tests/Mobile/MobileChatVisualContract.cs"
 "$FFO_MONO_ROOT/bin/mono" "$OUT/Contract.exe"

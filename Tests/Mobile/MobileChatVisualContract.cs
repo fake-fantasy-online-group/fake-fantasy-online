@@ -122,6 +122,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private Texture2D[][] sideBtn={new[]{new Texture2D()}};
         private GUIStyle editSt=new GUIStyle(); private float s; private string inputText="",channel="附近",whisperTarget="";
         private bool chanOpen; private bool interactive; private int chIdx; private static bool _pendingFocus,TypingNow;
+        private static int filterHide; private static string _filterChar;
         private static int filters; private int panels,sends; private string sent,guardBefore; private Rect messageRect;
         private List<Line> drawnLines;
         private static void LoadFilter() { filters++; }

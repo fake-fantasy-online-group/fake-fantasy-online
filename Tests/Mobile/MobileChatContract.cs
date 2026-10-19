@@ -5,9 +5,10 @@ internal partial class ChatUI {
  internal struct Line {public string ch,text;}
  private static readonly List<Line> chatLines=new List<Line>();
  private static string requestedFilter,loadedFilter;
- private static int loadCount;
- private static void LoadFilter(){loadedFilter=requestedFilter;loadCount++;}
- public static bool ChanShown(string channel)=>channel!=loadedFilter;
+ private static int loadCount, filterCalls, filterHide;
+ private static string _filterChar;
+ private static void LoadFilter(){loadedFilter=requestedFilter;_filterChar=requestedFilter;loadCount++;}
+ public static bool ChanShown(string channel){filterCalls++;return channel!=loadedFilter;}
  static int checks;
  static void Check(bool value,string label){checks++;if(!value)throw new Exception(label);}
  static void Main(){
@@ -27,7 +28,12 @@ internal partial class ChatUI {
  requestedFilter="附近";CollectMobileLines(output);
  Check(loadCount==2,"Character change/filter rechecked");
  Check(output.Count==3&&output[0].ch=="系统"&&output[1].ch=="世界","Updated filter and chronological interleaving");
- CollectMobileLines(output);Check(output.Count==3,"Repeated draws do not duplicate rows");
+ int scanned=filterCalls;
+ for(int i=0;i<1000;i++) CollectMobileLines(output);
+ Check(output.Count==3,"Repeated draws do not duplicate rows");
+ Check(filterCalls==scanned,"Unchanged mobile passes perform no history rescan");
+ var other=new List<Line>();CollectMobileLines(other);
+ Check(other.Count==3&&filterCalls==scanned+4,"A replacement view gets current rows");
  chatLines.Clear();CollectMobileLines(output);Check(output.Count==0,"Clear removes stale system and ordinary text");
  Console.WriteLine("PASS mobile chat: "+checks+" assertions; actual collection source, deterministic chat/filter substitutes.");
  }

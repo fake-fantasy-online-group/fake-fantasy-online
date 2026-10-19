@@ -14,8 +14,17 @@ char=(BASE/'TitleFlow.CharacterSelection.cs').read_text();server=(BASE/'TitleFlo
 for filename,names in [('TitleFlow.CharacterSelection.cs',['private PlayerAvatar SlotDoll','private void DrawDollInFrame','private void DrawSprite','private void MirrorSlotToCharData','private void EnterGame']),('TitleFlow.Servers.cs',['private int LevelOf','private int WorldLevel','private void BuildSrvTree','private void ConfirmServer','private void AutoPickServer'])]:
  p=BASE/filename;s=p.read_text();old=original(p)
  for name in names:assert method(s,name)==method(old,name),name
-for filename in ['TitleFlow.Creation.cs','TitleFlow.AccountConnections.cs','TitleFlow.Resources.cs','BitmapFont.cs']:
+for filename in ['TitleFlow.Creation.cs','TitleFlow.AccountConnections.cs','TitleFlow.Resources.cs']:
  p=BASE/filename;assert p.read_text()==original(p),filename
+# Bitmap measurement/draw now accepts allocation-free string ranges. Preserve all
+# unrelated font behavior; UiPerformance's actual-source draw oracle covers the
+# approved hot-path change, including every original outline sample.
+p=BASE/'BitmapFont.cs';font=p.read_text();old_font=original(p)
+for name in ['private static void Ensure()', 'private static int CellOf(', 'private static float Adv(',
+             'public static Texture2D BakeNameTag(', 'public static List<string> Wrap(',
+             'public static string Elide(', 'public static void CenterOutline(',
+             'public static void CenterOutlineBold(']:
+ assert method(font,name)==method(old_font,name),name
 assert '＋ 创建角色' not in char and 'smalllogo.gsa' not in char
 assert 'SlotDoll(i)' in char and 'DrawSprite(fallback[row.Gender > 0 ? 1 : 0, head, hair]' in char
 assert '!pendingDelete && GUI.Button(new Rect(x, 121f, 195f, 167f)' in char

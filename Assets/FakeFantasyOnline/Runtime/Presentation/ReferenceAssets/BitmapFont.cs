@@ -17,6 +17,9 @@ public static class BitmapFont
     private static bool tried;
 
     public static bool Ready => atlas && idx != null;
+    // Font metrics are replaced as a set by Ensure. Layout caches must not reuse
+    // rows measured against a previous index table after a reload.
+    internal static object LayoutIdentity => idx;
 
     private static void Ensure()
     {
@@ -54,16 +57,25 @@ public static class BitmapFont
     }
 
     public static float Measure(string s, float scale)
+        => Measure(s, 0, s == null ? 0 : s.Length, scale);
+
+    internal static float Measure(string s, int start, int length, float scale)
     {
         Ensure();
         if (!Ready || string.IsNullOrEmpty(s)) return 0f;
         float width = 0f;
-        foreach (char c in s)
+        for (int index = start; index < start + length; index++)
+        {
+            char c = s[index];
             width += (c == ' ' ? 6f : Adv(CellOf(c))) * scale;
+        }
         return width;
     }
 
     public static void Draw(float px, float py, string s, Color col, float scale)
+        => Draw(px, py, s, 0, s == null ? 0 : s.Length, col, scale);
+
+    internal static void Draw(float px, float py, string s, int start, int length, Color col, float scale)
     {
         Ensure();
         if (!Ready || string.IsNullOrEmpty(s)) return;
@@ -73,8 +85,9 @@ public static class BitmapFont
         int ah = atlas.height;
         Color previous = GUI.color;
         GUI.color = col;
-        foreach (char c in s)
+        for (int index = start; index < start + length; index++)
         {
+            char c = s[index];
             if (c == ' ')
             {
                 px += 6f * scale;
@@ -97,6 +110,9 @@ public static class BitmapFont
     }
 
     public static void DrawOutline(float px, float py, string s, Color fill, float scale)
+        => DrawOutline(px, py, s, 0, s == null ? 0 : s.Length, fill, scale);
+
+    internal static void DrawOutline(float px, float py, string s, int start, int length, Color fill, float scale)
     {
         if (!Ready)
         {
@@ -109,8 +125,8 @@ public static class BitmapFont
         for (int x = -1; x <= 1; x++)
             for (int y = -1; y <= 1; y++)
                 if (x != 0 || y != 0)
-                    Draw(px + x * offset, py + y * offset, s, Color.black, scale);
-        Draw(px, py, s, fill, scale);
+                    Draw(px + x * offset, py + y * offset, s, start, length, Color.black, scale);
+        Draw(px, py, s, start, length, fill, scale);
     }
 
     public static Texture2D BakeNameTag(string name, string title, Color nameCol, Color titleCol,

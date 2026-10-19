@@ -269,22 +269,14 @@ internal partial class ChatUI
         int capacity = Mathf.FloorToInt((panel.height + s * -10f) / lineHeight);
         float padding = (withChannel ? 48f : 8f) * s;
         float textWidth = (panel.width - padding) + s * -8f;
-        var visible = new List<ReferenceChatVisualRow>();
-        for (int lineIndex = lines.Count - 1; lineIndex >= 0 && visible.Count < capacity; lineIndex--)
-        {
-            ChatUI.Line line = lines[lineIndex];
-            List<string> wrapped = EmoteText.Wrap(line.text, textWidth, s);
-            for (int wrapIndex = wrapped.Count - 1; wrapIndex >= 0 && visible.Count < capacity; wrapIndex--)
-                visible.Add(new ReferenceChatVisualRow(line, wrapped[wrapIndex], wrapIndex == 0));
-        }
-        visible.Reverse();
+        List<ReferenceChatVisualRow> visible = VisibleRows(lines, textWidth, capacity, s);
         for (int index = 0; index < visible.Count; index++)
         {
             ReferenceChatVisualRow row = visible[index];
             float y = (lineHeight + s * -12f) +
                 (((panel.y + panel.height) + s * -7f) - lineHeight * (visible.Count - index));
             if (withChannel && row.First && !string.IsNullOrEmpty(row.Line.ch))
-                BitmapFont.DrawOutline(panel.x + 4f * s, y, "[" + row.Line.ch + "]",
+                BitmapFont.DrawOutline(panel.x + 4f * s, y, row.Channel,
                     new Color32(255, 220, 120, 255), s);
             ChatUI.DrawShareRow(panel.x + padding, y, row.Text, row.Line.col, row.Line.shares, s, true);
             if (!interactive) continue;
@@ -449,21 +441,5 @@ internal partial class ChatUI
         GUI.DrawTexture(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), Texture2D.whiteTexture);
     }
 
-    private sealed class ReferenceChatVisualRow
-    {
-        public ReferenceChatVisualRow(
-            ChatUI.Line line,
-            string text,
-            bool first)
-        {
-            Line = line;
-            Text = text ?? string.Empty;
-            First = first;
-        }
-
-        public ChatUI.Line Line { get; }
-        public string Text { get; }
-        public bool First { get; }
-    }
 }
 }
