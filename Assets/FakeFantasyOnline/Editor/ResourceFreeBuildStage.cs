@@ -39,6 +39,7 @@ public sealed class ResourceFreeBuildStage : IDisposable
     };
     private readonly DirectoryStage streamingAssets;
     private readonly DirectoryStage resources;
+    private readonly DirectoryStage branding;
 
     public ResourceFreeBuildStage(string assetsRoot, string backupRoot, string configName, string configJson)
     {
@@ -54,10 +55,12 @@ public sealed class ResourceFreeBuildStage : IDisposable
         // Check every destination before moving anything, including interrupted builds.
         DirectoryStage.Validate(Path.Combine(assetsRoot, "StreamingAssets"), Path.Combine(backupRoot, "StreamingAssets"));
         DirectoryStage.Validate(Path.Combine(assetsRoot, "Resources"), Path.Combine(backupRoot, "Resources"));
+        DirectoryStage.Validate(Path.Combine(assetsRoot, "LocalBranding"), Path.Combine(backupRoot, "LocalBranding"));
         try
         {
             streamingAssets = new DirectoryStage(Path.Combine(assetsRoot, "StreamingAssets"), Path.Combine(backupRoot, "StreamingAssets"));
             resources = new DirectoryStage(Path.Combine(assetsRoot, "Resources"), Path.Combine(backupRoot, "Resources"));
+            branding = new DirectoryStage(Path.Combine(assetsRoot, "LocalBranding"), Path.Combine(backupRoot, "LocalBranding"));
             File.WriteAllText(Path.Combine(assetsRoot, "StreamingAssets", configName), configJson, new UTF8Encoding(false));
         }
         catch { Dispose(); throw; }
@@ -115,8 +118,12 @@ public sealed class ResourceFreeBuildStage : IDisposable
 
     public void Dispose()
     {
-        try { resources?.Dispose(); }
-        finally { streamingAssets?.Dispose(); }
+        try { branding?.Dispose(); }
+        finally
+        {
+            try { resources?.Dispose(); }
+            finally { streamingAssets?.Dispose(); }
+        }
     }
 
     private sealed class DirectoryStage : IDisposable
@@ -124,14 +131,19 @@ public sealed class ResourceFreeBuildStage : IDisposable
         private readonly string root;
         private readonly string backup;
         private readonly bool existed;
+        private readonly bool existedMeta;
         private bool active;
+        private bool movedRoot;
+        private bool movedMeta;
 
         internal static void Validate(string root, string backup)
         {
-            if (Directory.Exists(backup) || File.Exists(backup))
+            if (Directory.Exists(backup) || File.Exists(backup) || File.Exists(backup + ".meta") || Directory.Exists(backup + ".meta"))
                 throw new IOException("Interrupted resource-free build: restore " + backup + " to " + root + " before retrying; do not delete original resources.");
             if (File.Exists(root) || (Directory.Exists(root) && (File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0))
                 throw new IOException("Resource staging requires real directories, not files or symbolic links: " + root);
+            if (Directory.Exists(root + ".meta") || (File.Exists(root + ".meta") && (File.GetAttributes(root + ".meta") & FileAttributes.ReparsePoint) != 0))
+                throw new IOException("Resource staging metadata must be a regular file: " + root + ".meta");
         }
 
         internal DirectoryStage(string root, string backup)
@@ -139,10 +151,15 @@ public sealed class ResourceFreeBuildStage : IDisposable
             this.root = root;
             this.backup = backup;
             existed = Directory.Exists(root);
+            existedMeta = File.Exists(root + ".meta");
             Directory.CreateDirectory(Path.GetDirectoryName(backup));
-            if (existed) Directory.Move(root, backup);
             active = true;
-            try { Directory.CreateDirectory(root); }
+            try
+            {
+                if (existed) { Directory.Move(root, backup); movedRoot = true; }
+                if (File.Exists(root + ".meta")) { File.Move(root + ".meta", backup + ".meta"); movedMeta = true; }
+                Directory.CreateDirectory(root);
+            }
             catch { Dispose(); throw; }
         }
 
@@ -151,9 +168,12 @@ public sealed class ResourceFreeBuildStage : IDisposable
             if (!active) return;
             // Keep only the tiny generated stage for recovery/inspection; never recursively
             // delete a source tree, or traverse any local-resource symlink children.
-            if (Directory.Exists(root))
+            if (Directory.Exists(root) && (!existed || movedRoot))
                 Directory.Move(root, backup + ".generated-" + Guid.NewGuid().ToString("N"));
-            if (existed) Directory.Move(backup, root);
+            if (movedRoot) { Directory.Move(backup, root); movedRoot = false; }
+            if (File.Exists(root + ".meta") && (!existedMeta || movedMeta))
+                File.Move(root + ".meta", backup + ".generated-" + Guid.NewGuid().ToString("N") + ".meta");
+            if (movedMeta) { File.Move(backup + ".meta", root + ".meta"); movedMeta = false; }
             active = false;
         }
     }

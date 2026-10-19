@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace FakeFantasyOnline.Editor
 {
-/// <summary>Opt-in Android foundation build. Does not install SDKs or change signing. Development HTTP requires explicit build opt-in.</summary>
+/// <summary>Opt-in Android builds. Formal mode preserves existing signing; HTTP requires explicit development opt-in.</summary>
 public static class MobileClientBuild
 {
     public static void BuildAndroid()
@@ -35,8 +35,11 @@ public static class MobileClientBuild
             throw new ArgumentException("Resource mode must be offline, bundled, or resource-free.");
         bool offline = mode == "offline";
         bool resourceFree = mode == "resource-free";
-        bool development = offline || resourceFree;
-        bool developmentHttp = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP") == "1";
+        var profile = resourceFree ? new ResourceFreeBuildProfile("android", PlayerSettings.bundleVersion,
+            Environment.GetEnvironmentVariable, "development") : null;
+        bool development = resourceFree ? profile.Development : offline;
+        bool developmentHttp = resourceFree ? profile.Bootstrap.developmentHttp :
+            Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP") == "1";
         if (developmentHttp && !development) throw new InvalidOperationException("HTTP opt-in is restricted to development builds.");
         string root = UnityEngine.Application.streamingAssetsPath;
         string backup = Path.GetFullPath("LocalMobileBuild/OriginalStreamingAssets");
@@ -49,30 +52,24 @@ public static class MobileClientBuild
         bool appBundle = EditorUserBuildSettings.buildAppBundle;
         bool customKeystore = PlayerSettings.Android.useCustomKeystore;
         string applicationId = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android);
+        if (resourceFree && !development)
+            profile.ValidateAndroidSigning(customKeystore, PlayerSettings.Android.keystoreName,
+                PlayerSettings.Android.keyaliasName, applicationId, PlayerSettings.Android.bundleVersionCode);
         var previousHttpPolicy = PlayerSettings.insecureHttpOption;
-        Texture2D[] defaultIcons = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, IconKind.Any);
-        Texture2D[] androidIcons = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Android, IconKind.Any);
+        var defaultIcons = new BuildIconSnapshot(UnityEditor.Build.NamedBuildTarget.Unknown);
+        var androidIcons = new BuildIconSnapshot(UnityEditor.Build.NamedBuildTarget.Android);
         try
         {
             if (resourceFree)
             {
-                var config = new MobileResourceBootstrapConfig
-                {
-                    schemaVersion = 1,
-                    mode = "resource-free",
-                    appVersion = PlayerSettings.bundleVersion,
-                    dispatchUrl = Environment.GetEnvironmentVariable("FFO_RESOURCE_DISPATCH_URL") ?? "",
-                    developmentHttp = developmentHttp
-                };
-                config.Validate(development);
                 // Never generate or hash a game-resource manifest for this build mode.
                 stage = new ResourceFreeBuildStage(UnityEngine.Application.dataPath,
                     Path.GetFullPath("LocalMobileBuild/ResourceFree"),
-                    MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(config, true));
+                    MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(profile.Bootstrap, true));
                 GbkBuildTable.WriteTo(Path.Combine(UnityEngine.Application.dataPath, "Resources"));
                 PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
                 PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, new Texture2D[0], IconKind.Any);
-                PlayerSettings.Android.useCustomKeystore = false;
+                if (development) PlayerSettings.Android.useCustomKeystore = false;
                 // Resource delivery mode must not change the application identity.
                 // Preserve the project identifier (including Unity's resolved default).
                 PlayerSettings.insecureHttpOption = developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
@@ -107,7 +104,7 @@ public static class MobileClientBuild
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Android build failed: " + report.summary.result);
-            Debug.Log("Android " + mode + " APK built at " + output + "; applicationId=" + applicationId +
+            Debug.Log("Android " + mode + (development ? " development" : " formal") + " APK built at " + output + "; applicationId=" + applicationId +
                 "; version=" + PlayerSettings.bundleVersion + "; versionCode=" + PlayerSettings.Android.bundleVersionCode +
                 ". Actual APK identity/signature and device/resource/IL2CPP acceptance are still required.");
         }
@@ -123,8 +120,9 @@ public static class MobileClientBuild
                 EditorUserBuildSettings.buildAppBundle = appBundle;
                 if (resourceFree)
                 {
-                    PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, defaultIcons, IconKind.Any);
-                    PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, androidIcons, IconKind.Any);
+                    AssetDatabase.Refresh();
+                    defaultIcons.Restore();
+                    androidIcons.Restore();
                 }
                 else if (previousManifest == null) File.Delete(manifestPath);
                 else File.WriteAllBytes(manifestPath, previousManifest);

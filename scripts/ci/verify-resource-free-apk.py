@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Structural check only: not an Android installation or runtime acceptance test."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,9 @@ def setting(name):
     return match.group(1)
 
 
-def verify(apk):
+def verify(apk, configuration='development', expected_dispatch=None, source_commit=None):
+    if configuration not in ('development', 'formal'):
+        raise ValueError('Configuration must be development or formal')
     apk = Path(apk)
     app_version = setting('bundleVersion')
     with zipfile.ZipFile(apk) as archive:
@@ -40,21 +43,31 @@ def verify(apk):
         if marker.file_size > 16384:
             raise ValueError('Oversized bootstrap config')
         config = json.loads(archive.read(marker).decode('utf-8-sig'))
-        if config.get('schemaVersion') != 1 or config.get('mode') != 'resource-free':
+        if type(config.get('schemaVersion')) is not int or config.get('schemaVersion') != 1 or config.get('mode') != 'resource-free':
             raise ValueError('Invalid resource-free bootstrap config')
         if config.get('appVersion') != app_version:
             raise ValueError('APK bootstrap version differs from the single application version source')
+        if expected_dispatch is not None and config.get('dispatchUrl') != expected_dispatch:
+            raise ValueError('APK default dispatch differs from the explicitly requested endpoint')
+        if configuration == 'formal' and (not config.get('dispatchUrl') or config.get('developmentHttp')):
+            raise ValueError('Formal APK must contain its HTTPS default dispatch and must not enable development HTTP')
+        if configuration == 'formal':
+            spec = importlib.util.spec_from_file_location('build_inputs', Path(__file__).with_name('build-resource-free.py'))
+            inputs = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(inputs)
+            inputs.validate_dispatch(config['dispatchUrl'])
     digest = hashlib.sha256()
     with apk.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
-    commit = os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    commit = source_commit or os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     if not re.fullmatch(r'[a-fA-F0-9]{40}', commit):
         raise ValueError('Source commit must be an immutable 40-character Git SHA')
     protocol = re.search(r'public const string ClientVersion = "([^"]+)";', (ROOT / 'Assets/FakeFantasyOnline/Runtime/Protocol/NetClient.cs').read_text()).group(1)
     metadata = {
         'schemaVersion': 1,
-        'status': 'development-candidate',
+        'status': configuration + '-candidate',
+        'configuration': configuration,
         'appVersion': app_version,
         'sourceCommit': commit,
         'unityVersion': '6000.4.9f1',
@@ -66,7 +79,8 @@ def verify(apk):
         # the APK's binary AndroidManifest.xml. Never substitute a fixed candidate ID.
         'configuredApplicationId': None,
         'applicationIdSource': 'Unity project settings preserved; verify actual APK manifest separately',
-        'signing': 'Unity development default; certificate not verified by this script',
+        'signing': ('Existing custom keystore required by formal build entry; certificate not verified by this script'
+                    if configuration == 'formal' else 'Unity development default; certificate not verified by this script'),
         'loginProtocolMarker': protocol,
         'serverCompatibility': 'not verified; application version does not migrate login protocol',
         'resourceMode': 'resource-free',

@@ -22,7 +22,7 @@ public static class ClientBuild
         PrepareClientScene(false);
     }
 
-    // Resource-free Android builds use the source scene and Unity defaults, with no local icon.
+    // Resource-free builds use the source scene and Unity defaults, with no local icon.
     internal static void PrepareClientScene(bool resourceFree)
     {
         // Shared by desktop and mobile: all Players must contain the reviewed startup
@@ -266,7 +266,7 @@ public static class ClientBuild
         }
     }
 
-    private static void InstallCodePageAssembliesFromDirectory(
+    internal static void InstallCodePageAssembliesFromDirectory(
         string dataDirectory,
         string sourceDirectory)
     {
@@ -288,7 +288,7 @@ public static class ClientBuild
         }
     }
 
-    private static string ResolveCodePageAssemblyDirectory(
+    internal static string ResolveCodePageAssemblyDirectory(
         string editorContentsPath,
         string targetName,
         params string[] directoryNames)
@@ -414,7 +414,7 @@ public static class ClientBuild
         RunMacTool("/usr/bin/codesign", "--verify --deep --strict " + Quote(appPath));
     }
 
-    private static void RunMacTool(
+    internal static void RunMacTool(
         string executable,
         string arguments,
         bool allowFailure = false)
@@ -444,7 +444,7 @@ public static class ClientBuild
         }
     }
 
-    private static string Quote(string value)
+    internal static string Quote(string value)
     {
         if (value.IndexOf('"') >= 0)
         {

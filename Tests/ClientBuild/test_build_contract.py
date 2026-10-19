@@ -29,7 +29,7 @@ class BuildContract(unittest.TestCase):
         desktop = (ROOT / 'Assets/FakeFantasyOnline/Editor/ClientBuild.cs').read_text()
         self.assertNotIn('PlayerSettings.bundleVersion =', desktop)
         mobile = (ROOT / 'Assets/FakeFantasyOnline/Editor/MobileClientBuild.cs').read_text()
-        self.assertIn('appVersion = PlayerSettings.bundleVersion', mobile)
+        self.assertIn('ResourceFreeBuildProfile("android", PlayerSettings.bundleVersion', mobile)
         self.assertIn('PlayerSettings.GetApplicationIdentifier', mobile)
         self.assertNotIn('PlayerSettings.SetApplicationIdentifier', mobile)
         self.assertNotRegex(mobile, r'PlayerSettings\.applicationIdentifier\s*=')

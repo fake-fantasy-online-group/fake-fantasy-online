@@ -73,9 +73,18 @@ public static class ResourceFreeBuildStageContract
             string embedded = CreateEmbeddedBackground(assets);
             File.WriteAllText(Path.Combine(streaming, "private.pkg"), "original-private-resource");
             File.WriteAllText(Path.Combine(resources, "private.txt"), "original-resource");
+            File.WriteAllText(resources + ".meta", "original-resource-guid");
+            string branding = Path.Combine(assets, "LocalBranding");
+            Directory.CreateDirectory(branding);
+            File.WriteAllText(Path.Combine(branding, "AppIcon.png"), "local-branding-fixture");
+            File.WriteAllText(branding + ".meta", "original-branding-guid");
             var stage = new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}");
             Check(Directory.GetFiles(streaming).Length == 1, "Only bootstrap marker must remain in StreamingAssets");
             Check(Directory.GetFiles(resources).Length == 0, "Resources must be isolated without a recursive file scan");
+            Check(Directory.GetFiles(branding).Length == 0, "Local artwork must be outside the import tree");
+            Check(!File.Exists(resources + ".meta"), "Original directory metadata is kept with its backup");
+            File.WriteAllText(resources + ".meta", "generated-resource-guid");
+            File.WriteAllText(streaming + ".meta", "generated-streaming-guid");
             Check(File.ReadAllText(embedded) == "source-owned-artwork-fixture", "Exact source-owned background must remain in Unity's import tree during resource-free builds");
             Check(File.Exists(embedded + ".meta"), "Embedded background import settings must remain available");
             Check(File.ReadAllText(Path.Combine(backup, "StreamingAssets/private.pkg")) == "original-private-resource", "Original StreamingAssets must remain recoverable");
@@ -83,6 +92,10 @@ public static class ResourceFreeBuildStageContract
             stage.Dispose();
             Check(File.ReadAllText(Path.Combine(streaming, "private.pkg")) == "original-private-resource", "StreamingAssets bytes must be restored");
             Check(File.ReadAllText(Path.Combine(resources, "private.txt")) == "original-resource", "Resources bytes must be restored");
+            Check(File.ReadAllText(resources + ".meta") == "original-resource-guid", "Original directory GUID must be restored");
+            Check(!File.Exists(streaming + ".meta"), "A newly generated directory GUID must not pollute an existing directory without a meta");
+            Check(File.ReadAllText(Path.Combine(branding, "AppIcon.png")) == "local-branding-fixture", "Local branding restored byte-for-byte");
+            Check(File.ReadAllText(branding + ".meta") == "original-branding-guid", "Local branding GUID restored");
             Check(!File.Exists(Path.Combine(streaming, "resource-bootstrap.json")), "Generated config must not pollute the restored source tree");
             Check(File.ReadAllText(embedded) == "source-owned-artwork-fixture", "Staging must not move or rewrite the embedded background");
             // Failure after setup follows the exact using/finally restoration path used by a build.
@@ -160,6 +173,7 @@ public static class ResourceFreeBuildStageContract
             }
             Check(!Directory.Exists(Path.Combine(clean, "Resources")), "Absent Resources must remain absent after restoration");
             Check(!Directory.Exists(Path.Combine(clean, "StreamingAssets")), "Absent StreamingAssets must remain absent after restoration");
+            Check(!Directory.Exists(Path.Combine(clean, "LocalBranding")), "Absent local branding remains absent after restoration");
             // A failed restore must keep original bytes, restore the other directory, and
             // allow a retry once the external obstruction is removed.
             string restoreAssets = Path.Combine(temp, "RestoreAssets");

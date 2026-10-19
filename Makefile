@@ -35,3 +35,10 @@ build-android:
 .PHONY: build-android-resource-free
 build-android-resource-free:
 	@UNITY_EDITOR_BIN="$(UNITY_EDITOR_BIN)" ./scripts/ci/build-android-resource-free.sh
+
+# Explicit local resource-free formal candidate. BUILD_ARGS may add --release
+# --source-tag, desktop --updater-directory and the existing public signing pin.
+.PHONY: build-resource-free
+build-resource-free:
+	@UNITY_EDITOR_BIN="$(UNITY_EDITOR_BIN)" ./scripts/ci/build-resource-free.sh \
+		--platform "$(PLATFORM)" --version "$(VERSION)" --dispatch-url "$(DISPATCH_URL)" $(BUILD_ARGS)
