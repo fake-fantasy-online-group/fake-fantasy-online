@@ -89,6 +89,28 @@ class BuildContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 manifest.generate(root, '1.0.0')
 
+    def test_manifest_targets_and_stable_versions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'resources'
+            (root / 'data').mkdir(parents=True)
+            (root / 'data' / 'a.pkg').write_bytes(b'synthetic resource')
+            for platform in ('android', 'windows', 'macos', 'linux'):
+                self.assertTrue(manifest.generate(root, '1.0.0', platform).startswith(
+                    'FFO-MOBILE-1\n@client\t' + platform + '\t1.0.0\n'))
+            for platform in ('ios', 'any', '', 'Windows'):
+                with self.assertRaises(ValueError):
+                    manifest.generate(root, '1.0.0', platform)
+            for version in ('01.0.0', '1.0.0-rc.1', '1.0.0+build', '1.0', '4294967296.0.0'):
+                with self.assertRaises(ValueError):
+                    manifest.generate(root, version)
+            self.assertIn('@client\tlinux\t4294967295.0.0', manifest.generate(root, '4294967295.0.0', 'linux'))
+            output = Path(temp) / 'windows.tsv'
+            result = subprocess.run([os.sys.executable, str(ROOT / 'scripts/generate-resource-manifest.py'),
+                str(root), '--client-version', '1.0.0', '--client-platform', 'windows', '--output', str(output)],
+                text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('@client\twindows\t1.0.0', output.read_text())
+
     def test_manifest_rejects_case_collision_symlinks_and_empty(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

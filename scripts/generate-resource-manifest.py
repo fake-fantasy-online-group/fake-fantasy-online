@@ -7,6 +7,7 @@ import re
 import unicodedata
 
 RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL'} | {prefix + str(index) for prefix in ('COM', 'LPT') for index in range(1, 10)}
+PLATFORMS = ('android', 'windows', 'macos', 'linux')
 PASSIVE_GAME_EXTENSIONS = {'.json', '.png', '.jpg', '.jpeg', '.bytes', '.txt', '.bin', '.ogg', '.wav'}
 
 
@@ -45,11 +46,14 @@ def validate_path(path):
             raise ValueError('Reserved resource filename: ' + path)
 
 
-def generate(root, version):
+def generate(root, version, platform='android'):
+    if platform not in PLATFORMS:
+        raise ValueError('Unsupported client platform')
     root = Path(root).resolve(strict=True)
     if not root.is_dir():
         raise ValueError('Resource root must be a directory')
-    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
+    if (len(version) > 64 or not re.fullmatch(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', version)
+            or any(int(part) > 4294967295 for part in version.split('.'))):
         raise ValueError('Client version must be an explicit application SemVer')
     entries = []
     sources = set()
@@ -97,7 +101,7 @@ def generate(root, version):
         entries.append(f'{relative}\t{target}\t{size}\t{hasher.hexdigest()}')
     if not entries:
         raise ValueError('Refusing to generate an empty resource manifest')
-    text = 'FFO-MOBILE-1\n@client\tandroid\t' + version + '\n' + '\n'.join(entries) + '\n'
+    text = 'FFO-MOBILE-1\n@client\t' + platform + '\t' + version + '\n' + '\n'.join(entries) + '\n'
     if len(text.encode('utf-8')) > 8 * 1024 * 1024:
         raise ValueError('Manifest exceeds runtime 8 MiB limit')
     return text
@@ -106,10 +110,11 @@ def generate(root, version):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('resource_root', type=Path, help='Materialized passive-resource directory to serve over HTTPS')
+    parser.add_argument('--client-platform', choices=PLATFORMS, default='android', help='Exact target platform; defaults to android for existing callers')
     parser.add_argument('--client-version', required=True, help='Exact supported application version (PlayerSettings bundleVersion)')
     parser.add_argument('--output', type=Path, required=True, help='New manifest path; existing files are never overwritten')
     args = parser.parse_args()
-    text = generate(args.resource_root, args.client_version)
+    text = generate(args.resource_root, args.client_version, args.client_platform)
     with args.output.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(text)
     print('Created manifest; serve it at the resource root so relative source URLs resolve correctly. No upload or publishing was performed.')

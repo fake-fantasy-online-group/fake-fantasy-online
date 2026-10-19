@@ -10,17 +10,23 @@ using UnityEngine.Networking;
 
 namespace FakeFantasyOnline.Bootstrap
 {
-/// <summary>Owns the mobile startup screen until the title has actually initialized.</summary>
+/// <summary>Cross-platform, asset-independent update gate. Keeps the title behind verified resources.</summary>
 public sealed class MobileResourceInstaller : MonoBehaviour
 {
-    private string status = "Reading resource manifest";
-    private string detail = "Preparing your journey";
+    private string status = "准备更新";
+    private string detail = "读取启动配置…";
     private long completedBytes, totalBytes;
-    private bool measurable, failed;
+    private bool measurable, failed, terminalFailure;
     private Camera clearCamera;
     private GUIStyle titleStyle, statusStyle, detailStyle, fieldStyle, buttonStyle;
-    private bool resourceFree, awaitingChoice, downloadRequested, installedRequested;
-    private string manifestUrl = "", dispatchUrl = "";
+    private bool resourceFree, awaitingChoice, downloadRequested, repairRequested, enterRequested, bundledRequested;
+    private bool allowBundled, ready, configurationOpen, configurationRequired, allowDevelopmentHttp;
+    private string draftDispatchUrl = "", configurationError = "", conciseError = "";
+    private Texture2D buttonTexture, buttonHoverTexture, repairIcon, configureIcon;
+    private readonly ClientDownloadRate downloadRate = new ClientDownloadRate();
+    private double? downloadBytesPerSecond;
+    private string dispatchUrl = "", verifiedDispatchUrl = "", verifiedRoot;
+    private ClientUpdatePlan updatePlan;
     private CancellationTokenSource remoteCancellation;
     private readonly object remoteProgressLock = new object();
     private string remoteStatus, remoteDetail;
@@ -48,6 +54,8 @@ public sealed class MobileResourceInstaller : MonoBehaviour
     private void Phase(string label, string description, long bytes)
     {
         status = label; detail = description;
+        downloadBytesPerSecond = null;
+        lock (remoteProgressLock) downloadRate.Reset();
         totalBytes = bytes;
         Interlocked.Exchange(ref completedBytes, 0);
         measurable = bytes > 0;
@@ -80,6 +88,23 @@ public sealed class MobileResourceInstaller : MonoBehaviour
             IEnumerator remote = InstallRemote(config);
             while (remote.MoveNext()) yield return remote.Current;
             yield break;
+        }
+        // Existing local packs are an explicit development choice, never an implicit network fallback.
+        if (configText == null)
+        {
+            allowBundled = Debug.isDebugBuild || UnityEngine.Application.isEditor;
+            var config = new MobileResourceBootstrapConfig { schemaVersion = 1, mode = "resource-free",
+                appVersion = UnityEngine.Application.version, dispatchUrl = "" };
+            IEnumerator configured = InstallRemote(config);
+            while (configured.MoveNext()) yield return configured.Current;
+            if (!bundledRequested) yield break;
+            resourceFree = false;
+            if (!UnityEngine.Application.isMobilePlatform)
+            {
+                ClientResourcePaths.UseBundled();
+                BeginClientStartup();
+                yield break;
+            }
         }
         string storage = Path.Combine(UnityEngine.Application.persistentDataPath, "MobileResources");
         Directory.CreateDirectory(storage);
@@ -157,65 +182,133 @@ public sealed class MobileResourceInstaller : MonoBehaviour
     private IEnumerator InstallRemote(MobileResourceBootstrapConfig config)
     {
         resourceFree = true;
-        manifestUrl = string.IsNullOrWhiteSpace(config.resourceManifestUrl)
-            ? PlayerPrefs.GetString("FFO.ResourceManifestUrl", "") : config.resourceManifestUrl;
-        dispatchUrl = string.IsNullOrWhiteSpace(config.dispatchUrl)
-            ? PlayerPrefs.GetString("FFO.ResourceDispatchUrl", "") : config.dispatchUrl;
-        bool allowHttp = config.developmentHttp && Debug.isDebugBuild;
+        string addressDirectory = UnityEngine.Application.persistentDataPath;
+        try { dispatchUrl = ClientUpdateAddressStore.Read(addressDirectory); }
+        catch (Exception) { dispatchUrl = ""; } // Recover in the editable single-address field.
+        if (string.IsNullOrEmpty(dispatchUrl)) dispatchUrl = PlayerPrefs.GetString("FFO.ResourceDispatchUrl", "");
+        if (string.IsNullOrEmpty(dispatchUrl)) dispatchUrl = config.dispatchUrl ?? "";
+        configurationRequired = string.IsNullOrWhiteSpace(dispatchUrl);
+        configurationOpen = configurationRequired;
+        draftDispatchUrl = dispatchUrl;
+        bool allowHttp = allowDevelopmentHttp = config.developmentHttp && Debug.isDebugBuild;
+        // A configured endpoint is an explicit remote mode. First-run mode makes no request until confirmed.
+        if (!configurationRequired) downloadRequested = true;
         string storage = Path.Combine(UnityEngine.Application.persistentDataPath, "MobileResources", "Remote");
-        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, new MobileResourceHttpTransport());
-        Phase("Set up game resources", "Enter the resource manifest URL and the separate game dispatch URL. HTTPS is required unless this is an explicitly enabled LAN development build.", 0);
+        var transport = new MobileResourceHttpTransport();
+        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey());
+        Phase("检查并更新", "填写 dispatch.json 地址。资源清单、客户端版本和下载信息均由此获取。", 0);
         while (true)
         {
             awaitingChoice = true;
-            while (!downloadRequested && !installedRequested) yield return null;
+            while (!downloadRequested && !repairRequested && !enterRequested && !bundledRequested) yield return null;
             awaitingChoice = false;
-            bool useInstalled = installedRequested;
-            downloadRequested = installedRequested = false;
-            failed = false;
-            string selectedManifest = manifestUrl.Trim(), selectedDispatch = dispatchUrl.Trim();
-            Exception configurationError = null;
-            try
+            if (bundledRequested)
             {
-                MobileResourceBootstrapConfig.ValidateEndpoint(selectedDispatch, allowHttp);
-                if (!useInstalled) MobileResourceBootstrapConfig.ValidateEndpoint(selectedManifest, allowHttp);
+                if (allowBundled && (updatePlan == null || !updatePlan.Required)) yield break;
+                bundledRequested = false;
+                continue;
             }
+            if (enterRequested)
+            {
+                enterRequested = false;
+                if (ready && verifiedRoot != null && verifiedDispatchUrl == dispatchUrl.Trim() &&
+                    updatePlan != null && !updatePlan.Required)
+                {
+                    DispatchUrl = verifiedDispatchUrl;
+                    ClientUpdateSession.Publish(updatePlan);
+                    ClientResourcePaths.Activate(verifiedRoot);
+                    BeginClientStartup();
+                    yield break;
+                }
+                continue;
+            }
+            bool repair = repairRequested;
+            downloadRequested = repairRequested = false;
+            failed = ready = false;
+            verifiedRoot = null;
+            updatePlan = null;
+            string selectedDispatch = dispatchUrl.Trim();
+            Exception configurationError = null;
+            try { MobileResourceBootstrapConfig.ValidateEndpoint(selectedDispatch, allowHttp); }
             catch (Exception exception) { configurationError = exception; }
             if (configurationError != null) { RemoteFailure(configurationError); continue; }
-            // Persist only validated, credential-free URLs. Resource and game endpoints stay separate.
-            PlayerPrefs.SetString("FFO.ResourceDispatchUrl", selectedDispatch);
-            if (!useInstalled) PlayerPrefs.SetString("FFO.ResourceManifestUrl", selectedManifest);
-            PlayerPrefs.Save();
-            Phase("Preparing resources", "Completed verified files can be reused. An interrupted current file is downloaded again.", 0);
+            Phase("读取更新配置", "正在从 dispatch.json 检查客户端与资源版本…", 0);
             lock (remoteProgressLock) { remoteStatus = null; }
             remoteCancellation = new CancellationTokenSource();
             CancellationToken cancellation = remoteCancellation.Token;
-            Task<string> operation = Task.Run(() => useInstalled
-                ? installer.UseInstalled(cancellation, SetRemoteProgress)
-                : installer.Install(selectedManifest, cancellation, SetRemoteProgress));
-            while (!operation.IsCompleted)
-            {
-                ReadRemoteProgress();
-                yield return null;
-            }
-            ReadRemoteProgress();
-            string root = null;
+            string temporaryDispatch = Path.Combine(UnityEngine.Application.temporaryCachePath,
+                "dispatch-" + Guid.NewGuid().ToString("N") + ".part");
+            Task<ClientUpdatePlan> dispatchTask = Task.Run(() => ReadDispatch(selectedDispatch, config.appVersion,
+                allowHttp, transport, cancellation, temporaryDispatch));
+            while (!dispatchTask.IsCompleted) yield return null;
             Exception failure = null;
-            try { root = operation.GetAwaiter().GetResult(); }
+            ClientUpdatePlan plan = null;
+            try { plan = dispatchTask.GetAwaiter().GetResult(); cancellation.ThrowIfCancellationRequested(); }
             catch (Exception exception) { failure = exception; }
+            if (failure == null)
+            {
+                updatePlan = plan;
+                // Persist migration/embedded defaults only after the complete dispatch is validated.
+                try { ClientUpdateAddressStore.Save(addressDirectory, selectedDispatch, allowHttp); }
+                catch (Exception exception) { failure = exception; }
+                if (plan.Required)
+                    Phase("需要更新客户端", "当前 v" + config.appVersion + "，最低要求 v" + plan.Artifact.MinVersion +
+                        "。请通过下方地址下载并手动安装，再重新启动。", 0);
+                else if (failure == null)
+                {
+                    Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
+                        SetRemoteProgress, plan.ResourceManifestSizeBytes, plan.ResourceManifestSha256, repair));
+                    while (!operation.IsCompleted) { ReadRemoteProgress(); yield return null; }
+                    ReadRemoteProgress();
+                    try { verifiedRoot = operation.GetAwaiter().GetResult(); cancellation.ThrowIfCancellationRequested(); }
+                    catch (Exception exception) { failure = exception; }
+                }
+            }
+            if (cancellation.IsCancellationRequested) failure = new OperationCanceledException("操作已暂停，可重试继续。");
             remoteCancellation.Dispose(); remoteCancellation = null;
             if (failure != null) { RemoteFailure(failure); continue; }
-            DispatchUrl = selectedDispatch;
-            ClientResourcePaths.Activate(root);
-            BeginClientStartup();
-            yield break;
+            verifiedDispatchUrl = selectedDispatch;
+            if (plan.Required) continue;
+            ready = true;
+            Phase("准备就绪", plan.Available ? "资源已验证。另有客户端 v" + plan.Artifact.Version + " 可下载，当前版本仍可进入。" :
+                "资源已验证并安全保存，可以进入游戏。", 0);
         }
+    }
+
+    private static ClientUpdatePlan ReadDispatch(string address, string version, bool allowHttp,
+        IMobileResourceTransport transport, CancellationToken cancellation, string temporary)
+    {
+        try
+        {
+            transport.Download(MobileResourceBootstrapConfig.ValidateEndpoint(address, allowHttp), temporary,
+                ClientUpdatePlan.MaxDispatchBytes, cancellation, null);
+            cancellation.ThrowIfCancellationRequested();
+            return ClientUpdatePlan.Parse(new System.Text.UTF8Encoding(false, true).GetString(File.ReadAllBytes(temporary)),
+                PlatformKey(), version, allowHttp);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static string PlatformKey()
+    {
+#if UNITY_ANDROID
+        return "android";
+#elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        return "windows";
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+        return "macos";
+#else
+        return "linux";
+#endif
     }
 
     private void SetRemoteProgress(string phase, string description, long done, long total)
     {
         lock (remoteProgressLock)
-        { remoteStatus = phase; remoteDetail = description; remoteDone = done; remoteTotal = total; }
+        {
+            remoteStatus = phase; remoteDetail = description; remoteDone = done; remoteTotal = total;
+            downloadRate.Observe(phase + "|" + description, done, MonotonicSeconds(), phase == "Downloading resources");
+        }
     }
 
     private void ReadRemoteProgress()
@@ -223,17 +316,32 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         lock (remoteProgressLock)
         {
             if (remoteStatus == null) return;
-            status = remoteStatus; detail = remoteDetail;
+            status = FriendlyPhase(remoteStatus); detail = remoteDetail;
             totalBytes = remoteTotal; measurable = totalBytes > 0;
             Interlocked.Exchange(ref completedBytes, remoteDone);
+            downloadBytesPerSecond = downloadRate.BytesPerSecond(MonotonicSeconds());
         }
     }
 
     private void RemoteFailure(Exception exception)
     {
         failed = true;
-        Phase("Resource setup stopped", exception.Message + "\nCheck the URLs, network and free storage, then retry. Existing installed resources are kept.", 0);
-        Debug.LogWarning("Remote resource setup stopped: " + exception.GetType().Name + ": " + exception.Message);
+        conciseError = SafeFailureMessage(exception);
+        Phase("更新未完成", exception.Message, 0);
+        Debug.LogWarning("Remote resource setup stopped: " + exception);
+    }
+
+    private static string FriendlyPhase(string value)
+    {
+        switch (value)
+        {
+            case "Downloading resource manifest": return "读取资源清单";
+            case "Checking resources": case "Checking installed resources": return "校验本地资源";
+            case "Downloading resources": return "正在下载资源";
+            case "Verifying downloaded resource": return "验证下载内容";
+            case "Finishing resource check": return "启用完整资源";
+            default: return value;
+        }
     }
 
     public void BeginClientStartup()
@@ -276,11 +384,12 @@ public sealed class MobileResourceInstaller : MonoBehaviour
 
     public void Fail(Exception exception)
     {
-        failed = true;
-        Phase("Startup stopped", exception.Message + (resourceFree
-            ? "\nCheck configuration and free storage, then restart the client."
-            : "\nCheck resources, free storage and mobile-dispatch.txt, then restart."), 0);
-        Debug.LogError("Mobile startup stopped: " + exception);
+        failed = terminalFailure = true;
+        conciseError = "启动失败，请检查日志后手动重启";
+        configurationOpen = false;
+        ready = false;
+        Phase("启动未完成", exception.Message + "\n请检查启动配置、资源和可用空间，然后手动重新启动客户端。", 0);
+        Debug.LogError("Client startup stopped: " + exception);
     }
 
     private void OnGUI()
@@ -288,67 +397,176 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         int oldDepth = GUI.depth;
         Color oldColor = GUI.color;
         Matrix4x4 oldMatrix = GUI.matrix;
+        bool savedEnabled = GUI.enabled;
         try
         {
             GUI.depth = -10000;
             GUI.matrix = Matrix4x4.identity;
             GUI.color = Color.white;
             EmbeddedClientBackground.Draw(new Rect(0, 0, Screen.width, Screen.height));
-            // safeArea is bottom-left based; IMGUI is top-left based.
             Rect safe = Screen.safeArea;
-            float scale = Mathf.Clamp(Mathf.Min(safe.width / 960f, safe.height / 540f), .6f, 3f);
-            float width = Mathf.Min(safe.width - 48 * scale, 720 * scale);
-            float x = safe.x + (safe.width - width) * .5f;
-            float y = Screen.height - safe.yMax + safe.height * (resourceFree ? .28f : .53f);
-            // Keep progress, errors and setup controls readable over the bright cloud art.
-            float panelHeight = resourceFree ? 426 * scale : 184 * scale + safe.height * .3f;
-            Paint(new Rect(x - 24 * scale, y - 126 * scale, width + 48 * scale, panelHeight),
-                new Color(.025f, .045f, .06f, .82f));
-            if (titleStyle == null)
-            {
-                titleStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-                statusStyle = new GUIStyle(titleStyle) { wordWrap = true };
-                detailStyle = new GUIStyle(statusStyle);
-                fieldStyle = new GUIStyle(GUI.skin.textField);
-                buttonStyle = new GUIStyle(GUI.skin.button);
-            }
-            titleStyle.fontSize = Mathf.RoundToInt(30 * scale);
-            statusStyle.fontSize = Mathf.RoundToInt(20 * scale);
-            detailStyle.fontSize = Mathf.RoundToInt(14 * scale);
-            fieldStyle.fontSize = buttonStyle.fontSize = Mathf.RoundToInt(16 * scale);
+            float panelHeight = configurationOpen ? ClientUpdateLayout.ConfigHeight : ClientUpdateLayout.Height;
+            float scale = Mathf.Min(1f, Mathf.Min((safe.width - 32) / ClientUpdateLayout.Width,
+                (safe.height - ClientUpdateLayout.Bottom - 16) / panelHeight));
+            scale = Mathf.Max(.1f, scale);
+            float x = safe.x + (safe.width - ClientUpdateLayout.Width * scale) * .5f;
+            float y = Screen.height - safe.yMax + safe.height - (panelHeight + ClientUpdateLayout.Bottom) * scale;
+            GUI.matrix = Matrix4x4.TRS(new Vector3(x, y, 0), Quaternion.identity, new Vector3(scale, scale, 1));
+            float width = ClientUpdateLayout.Width, pad = ClientUpdateLayout.Padding, inner = width - pad * 2;
+            Paint(new Rect(0, 0, width, panelHeight), new Color(.025f, .045f, .055f, .88f));
+            Color edge = new Color(.65f, .52f, .29f, .85f);
+            Paint(new Rect(0, 0, width, 1), edge); Paint(new Rect(0, panelHeight - 1, width, 1), edge);
+            Paint(new Rect(0, 0, 1, panelHeight), edge); Paint(new Rect(width - 1, 0, 1, panelHeight), edge);
+            EnsureStyles();
             titleStyle.normal.textColor = new Color(.96f, .86f, .63f);
-            statusStyle.normal.textColor = Color.white;
             detailStyle.normal.textColor = new Color(.76f, .84f, .87f);
-            GUI.Label(new Rect(x, y - 110 * scale, width, 50 * scale), "FAKE FANTASY ONLINE", titleStyle);
-            GUI.Label(new Rect(x, y - 50 * scale, width, 40 * scale), status, statusStyle);
-            Paint(new Rect(x, y, width, 8 * scale), new Color(.025f, .05f, .075f, 1));
+            GUI.Label(new Rect(pad, ClientUpdateLayout.TitleY, 350, 32), configurationOpen ? "配置更新地址" : "游戏更新", titleStyle);
+            var right = new GUIStyle(detailStyle) { alignment = TextAnchor.MiddleRight };
+            GUI.Label(new Rect(width - pad - 190, ClientUpdateLayout.TitleY, 190, 32), "客户端 v" + UnityEngine.Application.version, right);
+            bool oldEnabled = GUI.enabled;
+            if (configurationOpen)
+            {
+                GUI.Label(new Rect(pad, ClientUpdateLayout.AddressLabelY, inner, 23), "dispatch.json 地址", detailStyle);
+                GUI.enabled = oldEnabled && resourceFree && awaitingChoice;
+                draftDispatchUrl = GUI.TextField(new Rect(pad, ClientUpdateLayout.AddressY, inner, ClientUpdateLayout.AddressHeight), draftDispatchUrl, 4096, fieldStyle);
+                var hint = new GUIStyle(detailStyle);
+                hint.normal.textColor = string.IsNullOrEmpty(configurationError) ? detailStyle.normal.textColor : new Color(1, .39f, .32f);
+                GUI.Label(new Rect(pad, ClientUpdateLayout.ConfigHintY, inner, 38), string.IsNullOrEmpty(configurationError) ?
+                    "填写分发地址后确认，即可检查版本并准备游戏资源。" : configurationError, hint);
+                if (GUI.Button(new Rect((width - 244) * .5f, ClientUpdateLayout.ConfirmY, 244, ClientUpdateLayout.ButtonHeight), "确认配置", buttonStyle)) ConfirmConfiguration();
+                if (!configurationRequired && GUI.Button(new Rect(pad, ClientUpdateLayout.ConfirmY, 100, ClientUpdateLayout.ButtonHeight), "返回", detailStyle))
+                    configurationOpen = false;
+                GUI.enabled = oldEnabled && awaitingChoice && allowBundled && (updatePlan == null || !updatePlan.Required);
+                if (allowBundled && GUI.Button(new Rect(width - pad - 132, ClientUpdateLayout.ConfirmY, 132, ClientUpdateLayout.ButtonHeight), "开发：本地资源", detailStyle)) bundledRequested = true;
+                GUI.enabled = oldEnabled;
+                return;
+            }
+            statusStyle.normal.textColor = failed ? new Color(1, .39f, .32f) : Color.white;
+            GUI.Label(new Rect(pad, ClientUpdateLayout.StatusY, inner, 36), failed ? conciseError : status, statusStyle);
+            Paint(new Rect(pad, ClientUpdateLayout.ProgressY, ClientUpdateLayout.ProgressWidth, 5), new Color(.025f, .05f, .075f, 1));
+            string metrics = terminalFailure ? "已有资源已保留 · 详细原因见日志" : remoteCancellation != null ? "正在处理，请稍候…" :
+                ready ? "资源已就绪，旅程即将开始" : failed ? "已有资源会保留，可重试或修改配置" :
+                updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 请手动安装后重启" :
+                "检查版本和资源，准备进入游戏";
             if (measurable)
             {
                 long bytes = Interlocked.Read(ref completedBytes);
                 float fraction = Mathf.Clamp01((float)((double)bytes / totalBytes));
-                Paint(new Rect(x, y, width * fraction, 8 * scale), new Color(.86f, .70f, .36f, 1));
-                GUI.Label(new Rect(x, y + 15 * scale, width, 28 * scale),
-                    Math.Floor(fraction * 100) + "%  ·  " + (bytes / 1048576d).ToString("F1") +
-                    " / " + (totalBytes / 1048576d).ToString("F1") + " MiB", detailStyle);
+                Paint(new Rect(pad, ClientUpdateLayout.ProgressY, ClientUpdateLayout.ProgressWidth * fraction, 5), new Color(.86f, .70f, .36f, 1));
+                metrics = Math.Floor(fraction * 100) + "%  ·  " + (bytes / 1048576d).ToString("F1") + " / " + (totalBytes / 1048576d).ToString("F1") + " MiB";
             }
-            GUI.Label(new Rect(x, y + 42 * scale, width, (resourceFree ? 56 * scale : safe.height * .3f)), detail, detailStyle);
-            if (resourceFree)
+            GUI.Label(new Rect(width - pad - ClientUpdateLayout.SpeedWidth, ClientUpdateLayout.ProgressY - 12, ClientUpdateLayout.SpeedWidth, 28), SpeedText(downloadBytesPerSecond), right);
+            GUI.Label(new Rect(pad, ClientUpdateLayout.MetricsY, inner, 30), metrics, detailStyle);
+            bool requiresClient = updatePlan != null && updatePlan.Required;
+            string primary = terminalFailure ? "退出后手动重启" : remoteCancellation != null ? "暂停更新" : requiresClient ? "下载客户端 ↗" : ready ? "进入游戏" : failed ? "重试更新" : "检查更新";
+            GUI.enabled = oldEnabled && (terminalFailure || (resourceFree && (awaitingChoice || (remoteCancellation != null && !remoteCancellation.IsCancellationRequested))));
+            if (GUI.Button(new Rect((width - 244) * .5f, ClientUpdateLayout.PrimaryY, 244, ClientUpdateLayout.ButtonHeight), primary, buttonStyle))
             {
-                bool oldEnabled = GUI.enabled;
-                GUI.enabled = awaitingChoice;
-                GUI.Label(new Rect(x, y + 102 * scale, width, 24 * scale), "Resource manifest URL (mobile-resources.tsv)", detailStyle);
-                manifestUrl = GUI.TextField(new Rect(x, y + 128 * scale, width, 34 * scale), manifestUrl, 4096, fieldStyle);
-                GUI.Label(new Rect(x, y + 167 * scale, width, 24 * scale), "Game dispatch URL (separate game server endpoint)", detailStyle);
-                dispatchUrl = GUI.TextField(new Rect(x, y + 193 * scale, width, 34 * scale), dispatchUrl, 4096, fieldStyle);
-                float buttonWidth = (width - 12 * scale) * .5f;
-                if (GUI.Button(new Rect(x, y + 240 * scale, buttonWidth, 40 * scale), failed ? "Retry download" : "Download resources", buttonStyle))
-                { downloadRequested = true; awaitingChoice = false; }
-                if (GUI.Button(new Rect(x + buttonWidth + 12 * scale, y + 240 * scale, buttonWidth, 40 * scale), "Use installed resources", buttonStyle))
-                { installedRequested = true; awaitingChoice = false; }
-                GUI.enabled = oldEnabled;
+                if (terminalFailure) UnityEngine.Application.Quit();
+                else if (remoteCancellation != null)
+                { remoteCancellation.Cancel(); downloadBytesPerSecond = null; lock (remoteProgressLock) downloadRate.Reset(); }
+                else if (requiresClient) OpenClientDownload();
+                else if (ready) enterRequested = true;
+                else downloadRequested = true;
             }
+            GUI.enabled = oldEnabled && resourceFree && awaitingChoice && !terminalFailure;
+            if (IconButton(new Rect(ClientUpdateLayout.RepairX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), repairIcon, "修复资源")) repairRequested = true;
+            if (IconButton(new Rect(ClientUpdateLayout.ConfigureX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), configureIcon, "配置更新地址"))
+            { draftDispatchUrl = dispatchUrl; configurationError = ""; configurationOpen = true; }
+            if (updatePlan != null && updatePlan.Available && !requiresClient)
+            {
+                var link = new GUIStyle(detailStyle) { alignment = TextAnchor.MiddleCenter };
+                if (GUI.Button(new Rect((width - 244) * .5f, 199, 244, 24), "新客户端 v" + updatePlan.Artifact.Version + " ↗", link)) OpenClientDownload();
+            }
+            GUI.enabled = oldEnabled;
         }
-        finally { GUI.depth = oldDepth; GUI.color = oldColor; GUI.matrix = oldMatrix; }
+        finally { GUI.depth = oldDepth; GUI.color = oldColor; GUI.matrix = oldMatrix; GUI.enabled = savedEnabled; }
+    }
+
+    private void EnsureStyles()
+    {
+        if (titleStyle != null) return;
+        titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 22 };
+        statusStyle = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 17 };
+        detailStyle = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 13 };
+        fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 15, padding = new RectOffset(10, 10, 8, 8) };
+        buttonTexture = MakeButtonTexture(false); buttonHoverTexture = MakeButtonTexture(true);
+        repairIcon = ClientUpdateIcons.Create(false); configureIcon = ClientUpdateIcons.Create(true);
+        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 18, border = new RectOffset(1, 1, 1, 1) };
+        buttonStyle.normal.background = buttonTexture; buttonStyle.hover.background = buttonHoverTexture;
+        buttonStyle.active.background = buttonTexture;
+        buttonStyle.normal.textColor = buttonStyle.hover.textColor = buttonStyle.active.textColor = new Color(1, .89f, .65f);
+    }
+
+    private bool IconButton(Rect bounds, Texture2D icon, string tooltip)
+    {
+        bool pressed = GUI.Button(bounds, new GUIContent("", tooltip), buttonStyle);
+        Color old = GUI.color;
+        GUI.color = GUI.enabled ? Color.white : new Color(1, 1, 1, .35f);
+        GUI.DrawTexture(new Rect(bounds.x + 8, bounds.y + 8, 32, 32), icon);
+        GUI.color = old;
+        return pressed;
+    }
+
+    private void ConfirmConfiguration()
+    {
+        try
+        {
+            string selected = draftDispatchUrl.Trim();
+            ClientUpdateAddressStore.Save(UnityEngine.Application.persistentDataPath, selected, allowDevelopmentHttp);
+            dispatchUrl = selected;
+            configurationError = ""; configurationRequired = configurationOpen = false;
+            ready = failed = false; verifiedRoot = null; updatePlan = null;
+            downloadRequested = true;
+            downloadBytesPerSecond = null;
+            lock (remoteProgressLock) downloadRate.Reset();
+        }
+        catch (Exception exception)
+        {
+            configurationError = SafeFailureMessage(exception);
+            Debug.LogWarning("Update configuration rejected: " + exception);
+        }
+    }
+
+    private void OpenClientDownload()
+    {
+        // Navigation only: the publisher digest is not a verified installer signature.
+        UnityEngine.Application.OpenURL(updatePlan.Artifact.Url);
+        status = "已打开下载地址，请手动验证并安装后重启";
+        Debug.Log("Client download opened: " + updatePlan.Artifact.Url + "; publisher SHA-256=" + updatePlan.Artifact.Sha256 +
+            "; installer signature NOT verified; no automatic install or execution.");
+    }
+
+    private static string SafeFailureMessage(Exception exception)
+    {
+        if (exception is OperationCanceledException) return "更新已暂停，可继续重试";
+        if (exception is System.Net.WebException) return "网络连接失败，请检查网络后重试";
+        if (exception is UnauthorizedAccessException) return "无法写入资源目录，请检查权限";
+        string message = exception.Message.ToLowerInvariant();
+        if (message.Contains("space") || message.Contains("disk")) return "可用空间不足，请清理后重试";
+        if (message.Contains("client") && (message.Contains("version") || message.Contains("platform"))) return "资源与当前客户端不兼容";
+        if (message.Contains("sha") || message.Contains("hash") || message.Contains("corrupt")) return "资源校验失败，请重试或修复";
+        if (message.Contains("url") || message.Contains("https") || message.Contains("host") || message.Contains("endpoint")) return "更新地址无效，请检查配置";
+        if (exception is InvalidDataException || exception is FormatException) return "更新配置或资源清单无效，请检查后重试";
+        return "更新未完成，请重试；详细原因已记入日志";
+    }
+
+    private static double MonotonicSeconds() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+    private static string SpeedText(double? bytesPerSecond)
+    {
+        if (!bytesPerSecond.HasValue) return "—";
+        double speed = Math.Max(0, bytesPerSecond.Value);
+        return speed >= 1048576 ? (speed / 1048576).ToString("F1") + " MiB/s" : (speed / 1024).ToString("F0") + " KiB/s";
+    }
+
+    private static Texture2D MakeButtonTexture(bool hover)
+    {
+        var texture = new Texture2D(4, 32, TextureFormat.RGBA32, false);
+        for (int y = 0; y < 32; y++) for (int x = 0; x < 4; x++)
+            texture.SetPixel(x, y, x == 0 || x == 3 || y == 0 || y == 31 ? new Color(.72f, .58f, .31f) :
+                Color.Lerp(new Color(.15f, .17f, .15f), new Color(hover ? .34f : .26f, .27f, .19f), y / 31f));
+        texture.Apply(false, true);
+        return texture;
     }
 
     private static void Paint(Rect rect, Color color)
@@ -363,6 +581,10 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         // Abort an in-flight response when the bootstrap is destroyed; no partial set activates.
         remoteCancellation?.Cancel();
         if (clearCamera != null) Destroy(clearCamera.gameObject);
+        if (buttonTexture != null) Destroy(buttonTexture);
+        if (buttonHoverTexture != null) Destroy(buttonHoverTexture);
+        if (repairIcon != null) Destroy(repairIcon);
+        if (configureIcon != null) Destroy(configureIcon);
     }
 }
 }

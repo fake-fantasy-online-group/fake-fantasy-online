@@ -61,7 +61,6 @@ public static class MobileClientBuild
                     schemaVersion = 1,
                     mode = "resource-free",
                     appVersion = PlayerSettings.bundleVersion,
-                    resourceManifestUrl = Environment.GetEnvironmentVariable("FFO_RESOURCE_MANIFEST_URL") ?? "",
                     dispatchUrl = Environment.GetEnvironmentVariable("FFO_RESOURCE_DISPATCH_URL") ?? "",
                     developmentHttp = developmentHttp
                 };

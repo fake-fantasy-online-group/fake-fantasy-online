@@ -9,11 +9,14 @@ public static class ClientResourcePaths
 
     public static string Resolve(string streamingAssetsPath, bool mobile)
     {
+        if (!string.IsNullOrEmpty(InstalledRoot)) return InstalledRoot;
         if (!mobile) return streamingAssetsPath;
         if (string.IsNullOrEmpty(InstalledRoot))
-            throw new InvalidOperationException("Mobile resources have not finished installation.");
+            throw new InvalidOperationException("Client resources have not finished installation.");
         return InstalledRoot;
     }
+
+    public static void UseBundled() { InstalledRoot = null; }
 
     public static void Activate(string root)
     {

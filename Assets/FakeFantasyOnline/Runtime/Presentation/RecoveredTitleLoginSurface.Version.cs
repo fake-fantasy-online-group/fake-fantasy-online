@@ -1,18 +1,14 @@
-using FakeFantasyOnline.Presentation.ReferenceAssets;
+using FakeFantasyOnline.Foundation;
 using UnityEngine;
 
 namespace FakeFantasyOnline.Presentation
 {
 internal static partial class RecoveredTitleLoginSurface
 {
-    // Official TitleFlow.ClientVer. This is the local build literal, not a LatestVer seed.
-    internal const string ClientVer = "1.6.0";
-
-    // Official 06000ee7; keep the editor and empty-publication short circuits in order.
-    public static bool NeedUpdate =>
-        !UnityEngine.Application.isEditor &&
-        !string.IsNullOrEmpty(NetClient.LatestVer) &&
-        NetClient.LatestVer != ClientVer;
-
+    // Application display/update version is independent of Protocol.NetClient's authentication marker.
+    internal static string ClientVer => UnityEngine.Application.version;
+    // Only a validated dispatch minimum may block login. Legacy LatestVer is informational:
+    // its publication did not define a minimum and must not compare app 0.1.0 against wire 1.6.0.
+    public static bool NeedUpdate => ClientUpdateSession.Plan != null && ClientUpdateSession.Plan.Required;
 }
 }

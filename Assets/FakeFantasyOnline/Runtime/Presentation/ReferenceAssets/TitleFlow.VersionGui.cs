@@ -34,11 +34,11 @@ internal sealed partial class TitleFlow
         };
         detail.normal.textColor = Color.white;
         GUI.Label(new Rect(210f, 260f, 380f, 70f),
-            "你的版本 v1.6.0,最新版本 v" + NetClient.LatestVer + "。", detail);
+            "当前客户端 v" + RecoveredTitleLoginSurface.ClientVer + "。请重启游戏，返回统一更新页完成更新。", detail);
 
         // Share the original four-argument RegBtn and its null-style fallback.
         // Evaluate both buttons independently, even if the first requests application quit.
-        if (RegBtn(238f, 352f, 152f, "打开更新器"))
+        if (RegBtn(238f, 352f, 152f, "退出后手动重启"))
             LaunchUpdaterAndQuit();
         if (RegBtn(410f, 352f, 152f, "退出游戏"))
             GameBootstrap.QuitGame();

@@ -1,156 +1,298 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Text;
 using System.Threading;
 
 namespace FakeFantasyOnline.Foundation
 {
-/// <summary>Remote Android data-only install. Content-addressed staging is never a loader root.</summary>
+/// <summary>Remote data-only install. Content-addressed staging is never a loader root.</summary>
 public sealed class MobileRemoteResourceInstall
 {
     public const long MaxTotalBytes = 64L * 1024 * 1024 * 1024;
     private const string StoredManifest = ".resource-manifest.tsv", Receipt = ".resource-verified";
     private const string ActiveMarker = "active-resource-set.txt";
-    private readonly string storage, appVersion;
+    private readonly string storage, appVersion, platform;
+    private readonly Func<string, long> availableBytes;
     private readonly bool developmentHttp;
     private readonly IMobileResourceTransport transport;
     private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
 
-    public MobileRemoteResourceInstall(string storage, string appVersion, bool developmentHttp, IMobileResourceTransport transport)
+    public MobileRemoteResourceInstall(string storage, string appVersion, bool developmentHttp, IMobileResourceTransport transport,
+        string platform = "android", Func<string, long> availableBytes = null)
     {
         this.storage = Path.GetFullPath(storage);
         this.appVersion = appVersion;
+        ValidatePlatform(platform);
+        this.platform = platform;
+        this.availableBytes = availableBytes ?? (path => new DriveInfo(path).AvailableFreeSpace);
         this.developmentHttp = developmentHttp;
         this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
     }
 
-    public string Install(string manifestUrl, CancellationToken cancellation, Action<string, string, long, long> progress)
+    public string Install(string manifestUrl, CancellationToken cancellation, Action<string, string, long, long> progress,
+        long manifestBytes = 0, string manifestSha256 = null, bool fullVerification = false)
     {
         Uri uri = MobileResourceBootstrapConfig.ValidateEndpoint(manifestUrl, developmentHttp);
+        if ((manifestBytes == 0) != string.IsNullOrEmpty(manifestSha256) || manifestBytes < 0 ||
+            manifestBytes > MobileResourceManifest.MaxManifestBytes ||
+            (!string.IsNullOrEmpty(manifestSha256) && (manifestSha256.Length != 64 || !IsHex(manifestSha256))))
+            throw new InvalidDataException("Resource manifest size and SHA-256 must form a valid paired identity.");
+        cancellation.ThrowIfCancellationRequested();
+        RejectPathLinks(storage);
         Directory.CreateDirectory(storage);
-        RejectLink(storage);
         string lockPath = Path.Combine(storage, ".install.lock");
         RejectLink(lockPath);
         using (var installLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            return InstallLocked(uri, cancellation, progress);
+            return InstallLocked(uri, cancellation, progress, manifestBytes, manifestSha256, fullVerification);
     }
 
-    private string InstallLocked(Uri uri, CancellationToken cancellation, Action<string, string, long, long> progress)
+    private string InstallLocked(Uri uri, CancellationToken cancellation, Action<string, string, long, long> progress,
+        long manifestBytes, string manifestSha256, bool fullVerification)
     {
-        // A unique metadata temporary prevents an interrupted attempt being mistaken for a manifest.
         string temporaryManifest = Path.Combine(storage, "manifest-" + Guid.NewGuid().ToString("N") + ".part");
         string text;
         try
         {
-            Report(progress, "Downloading resource manifest", "Reading the configured resource endpoint...", 0, 0);
-            transport.Download(uri, temporaryManifest, MobileResourceManifest.MaxManifestBytes, cancellation, null);
+            Report(progress, "Downloading resource manifest", "Reading the configured resource endpoint...", 0, manifestBytes);
+            transport.Download(uri, temporaryManifest, manifestBytes > 0 ? manifestBytes : MobileResourceManifest.MaxManifestBytes,
+                cancellation, bytes => Report(progress, "Downloading resource manifest", "Checking the resource manifest identity...", bytes, manifestBytes));
+            if (manifestBytes > 0 && (new FileInfo(temporaryManifest).Length != manifestBytes ||
+                MobileResourceManifest.HashFile(temporaryManifest, bytes => cancellation.ThrowIfCancellationRequested()) != manifestSha256))
+                throw new InvalidDataException("Resource manifest does not match the dispatch size or SHA-256.");
             text = ReadManifest(temporaryManifest);
         }
         finally { if (File.Exists(temporaryManifest)) File.Delete(temporaryManifest); }
         var manifest = MobileResourceManifest.Parse(text);
-        ValidateManifest(manifest, appVersion);
+        ValidateManifest(manifest, appVersion, platform);
         cancellation.ThrowIfCancellationRequested();
-        // Repeated Download clicks for an unchanged manifest do not redownload the entire set.
-        // Full verification still runs. An invalid old set is retained while a replacement stages.
+        // Normal starts use the private metadata receipt; explicit repair bypasses it.
+        // Failure never edits the active payload. Repair builds a separate generation.
         string activeRoot = null;
         try
         {
             string candidate = ReadActiveRoot();
             if (Path.GetFileName(candidate).StartsWith(manifest.Version + "-", StringComparison.Ordinal))
-                activeRoot = UseInstalled(cancellation, progress);
+                activeRoot = UseInstalled(cancellation, progress, fullVerification);
         }
         catch (InvalidDataException) { }
         catch (IOException) { }
         if (activeRoot != null) return activeRoot;
         string staging = Path.Combine(storage, manifest.Version + ".staging");
+        RejectLink(staging);
         Directory.CreateDirectory(staging);
         ValidateTree(staging, manifest, true);
-        var verification = new MobileResourceVerification(manifest, staging, Path.Combine(staging, Receipt));
-        long total = 0, completed = 0;
+        var verification = new MobileResourceVerification(manifest, staging, Path.Combine(staging, Receipt), false);
+        var reusable = FindReusableFiles();
+        long total = 0, completed = 0, additional = 0;
         foreach (var entry in manifest.Entries) total = checked(total + entry.Length);
+        for (int i = 0; i < manifest.Entries.Count; i++)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var entry = manifest.Entries[i];
+            // Hash retained completed staging files once before estimating extra space.
+            // Otherwise retry could wrongly require room for bytes already on disk.
+            SafePath(staging, entry.Destination);
+            if (verification.Verify(i, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress,
+                "Checking staged resources", entry.Destination, bytes, entry.Length); })) continue;
+            string part = SafePath(staging, entry.Destination) + ".part";
+            long retained = PartialLength(part, ResumeIdentity(ResourceUri(uri, entry.Source), entry));
+            if (retained > entry.Length) retained = 0;
+            additional = checked(additional + entry.Length - retained);
+        }
+        long required = RequiredFreeBytes(additional, StrictUtf8.GetByteCount(text), manifest.Entries.Count);
+        long available = availableBytes(storage);
+        if (available < required)
+            throw new IOException("Insufficient free storage: need " + required.ToString(CultureInfo.InvariantCulture) +
+                " additional bytes while retaining installed resources; available " + available.ToString(CultureInfo.InvariantCulture) + ".");
+        Report(progress, "Preparing resource update", "Storage checked; existing resource sets are retained.", 0, total);
         for (int i = 0; i < manifest.Entries.Count; i++)
         {
             cancellation.ThrowIfCancellationRequested();
             var entry = manifest.Entries[i];
             string label = (i + 1) + "/" + manifest.Entries.Count + "  " + entry.Destination;
-            string target = SafePath(staging, entry.Destination);
-            string part = target + ".part";
-            RejectLink(part);
-            // Also remove a stale part left by a process kill when its final file is valid.
-            if (File.Exists(part)) File.Delete(part);
+            string target = SafePath(staging, entry.Destination), part = target + ".part";
+            RejectLink(part); RejectLink(part + ".resume"); RejectLink(part + ".resume.part");
             long previous = completed;
             Report(progress, "Checking resources", label, completed, total);
             if (!verification.Verify(i, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Checking resources", label, previous + bytes, total); }))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
-                // First version deliberately restarts the CURRENT file. Completed verified files
-                // in this manifest-specific staging directory are reused; no Range claim is made.
-                if (File.Exists(part)) File.Delete(part);
                 Uri source = ResourceUri(uri, entry.Source);
-                try
+                long offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length);
+                bool ready = false;
+                // A process may stop after its last received byte but before verification.
+                if (offset == entry.Length && File.Exists(part))
                 {
-                    transport.Download(source, part, entry.Length, cancellation,
-                        bytes => Report(progress, "Downloading resources", label + " (current file restarts on retry)", previous + bytes, total));
-                    cancellation.ThrowIfCancellationRequested();
-                    verification.CommitFile(i, part,
-                        bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying downloaded resource", label, bytes, entry.Length); });
+                    try { verification.CommitFile(i, part, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying retained download", label, bytes, entry.Length); }); ready = true; }
+                    catch (InvalidDataException) { DeletePartial(part); offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length); }
                 }
-                finally { if (File.Exists(part)) File.Delete(part); }
+                string reusablePath;
+                if (!ready && offset == 0 && reusable.TryGetValue(ContentKey(entry), out reusablePath))
+                    ready = TryReuse(verification, i, reusablePath, part, entry, cancellation, progress, label);
+                if (!ready)
+                {
+                    var resumable = transport as IMobileResourceResumableTransport;
+                    if (resumable != null)
+                        resumable.DownloadResumable(source, part, entry.Length, offset, cancellation,
+                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total));
+                    else
+                        transport.Download(source, part, entry.Length, cancellation,
+                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total));
+                    cancellation.ThrowIfCancellationRequested();
+                    try
+                    {
+                        verification.CommitFile(i, part,
+                            bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying downloaded resource", label, bytes, entry.Length); });
+                    }
+                    catch (InvalidDataException) { DeletePartial(part); throw; }
+                    // Interrupted/rejected responses retain the same identity-bound partial.
+                    // A complete payload that fails its final hash is discarded.
+                }
             }
+            DeletePartial(part); // No payload fragments or resume metadata enter the loader root.
             completed += entry.Length;
         }
         cancellation.ThrowIfCancellationRequested();
         Report(progress, "Finishing resource check", "Activating only the complete verified resource set...", 0, 0);
         ValidateTree(staging, manifest, false);
-        verification.CommitReceipt(); // Rechecks every verified file's length and timestamp.
+        verification.CommitReceipt();
         WriteDurable(Path.Combine(staging, StoredManifest), text);
         cancellation.ThrowIfCancellationRequested();
-        // A fresh final name preserves every previous valid installation, even if a previous
-        // generation with this manifest was damaged. Rename stays on the same filesystem.
         string generation = manifest.Version + "-" + Guid.NewGuid().ToString("N");
         string installed = Path.Combine(storage, generation);
         Directory.Move(staging, installed);
-        // Atomic marker replacement is the persistent activation boundary. Failure here leaves
-        // the old marker and old directory intact; the new directory is merely an orphan.
-        CommitMarker(generation);
+        // Same-filesystem atomic marker replacement preserves the old marker on failure.
+        CommitMarker(generation, cancellation);
         return installed;
     }
 
-    public string UseInstalled(CancellationToken cancellation, Action<string, string, long, long> progress)
+    // Receipt checks detect ordinary file changes, not malicious same-size/same-timestamp
+    // edits. Explicit repair bypasses the receipt and reads every payload byte.
+    public string UseInstalled(CancellationToken cancellation, Action<string, string, long, long> progress, bool fullVerification = false)
     {
         string root = ReadActiveRoot();
-        string generation = Path.GetFileName(root);
-        string manifestPath = Path.Combine(root, StoredManifest);
-        RejectLink(manifestPath);
-        var manifest = MobileResourceManifest.Parse(ReadManifest(manifestPath));
-        ValidateManifest(manifest, appVersion);
-        if (!generation.StartsWith(manifest.Version + "-", StringComparison.Ordinal))
-            throw new InvalidDataException("Installed resource manifest identity changed.");
+        var manifest = ReadInstalledManifest(root);
+        ValidateManifest(manifest, appVersion, platform);
         ValidateTree(root, manifest, false);
-        long total = 0, completed = 0;
-        foreach (var entry in manifest.Entries) total = checked(total + entry.Length);
-        // A cached set may be used offline, but never trust a directory or marker alone.
-        var verification = new MobileResourceVerification(manifest, root, Path.Combine(root, Receipt), false);
+        var verification = new MobileResourceVerification(manifest, root, Path.Combine(root, Receipt), !fullVerification);
+        long total = verification.BytesToHash, completed = 0;
+        Report(progress, fullVerification ? "Repairing resource verification" : "Checking installed resource metadata",
+            fullVerification ? "Reading every installed resource for a complete SHA-256 check..." : "Checking the saved verification receipt...", 0, total);
         for (int i = 0; i < manifest.Entries.Count; i++)
         {
             cancellation.ThrowIfCancellationRequested();
             var entry = manifest.Entries[i];
             long before = completed;
+            bool needsHash = verification.NeedsHash(i);
             SafePath(root, entry.Destination);
             if (!verification.Verify(i,
                 bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Checking installed resources", entry.Destination, before + bytes, total); }))
                 throw new InvalidDataException("Installed resource is missing or corrupt: " + entry.Destination + ". Download again to repair it.");
-            completed += entry.Length;
+            if (needsHash) completed += entry.Length;
         }
         cancellation.ThrowIfCancellationRequested();
-        verification.CommitReceipt(); // Also rejects changes to an earlier file while later files hash.
+        verification.CommitReceipt();
         return root;
+    }
+
+    private MobileResourceManifest ReadInstalledManifest(string root)
+    {
+        string path = Path.Combine(root, StoredManifest);
+        RejectLink(path);
+        var manifest = MobileResourceManifest.Parse(ReadManifest(path));
+        if (!Path.GetFileName(root).StartsWith(manifest.Version + "-", StringComparison.Ordinal))
+            throw new InvalidDataException("Installed resource manifest identity changed.");
+        return manifest;
+    }
+
+    private Dictionary<string, string> FindReusableFiles()
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            string root = ReadActiveRoot();
+            var previous = ReadInstalledManifest(root);
+            // Old app-compatible content can be reused solely as bytes. The new manifest
+            // remains the authority and the copied bytes are always fully SHA-256 checked.
+            ValidateManifest(previous, previous.ClientVersion, platform);
+            ValidateTree(root, previous, false);
+            foreach (var entry in previous.Entries)
+            {
+                string path = SafePath(root, entry.Destination);
+                if (File.Exists(path) && new FileInfo(path).Length == entry.Length)
+                    result[ContentKey(entry)] = path;
+            }
+        }
+        catch (InvalidDataException) { }
+        catch (IOException) { }
+        return result;
+    }
+
+    private static bool TryReuse(MobileResourceVerification verification, int index, string source, string part,
+        MobileResourceManifest.Entry entry, CancellationToken cancellation, Action<string, string, long, long> progress, string label)
+    {
+        try
+        {
+            RejectPathLinks(source);
+            using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var output = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                MobileResourceHttpTransport.CopyBounded(input, output, entry.Length, cancellation,
+                    bytes => Report(progress, "Reusing installed resources", label, bytes, entry.Length));
+                output.Flush(true);
+            }
+            verification.CommitFile(index, part, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying reused resource", label, bytes, entry.Length); });
+            return true;
+        }
+        catch (InvalidDataException) { if (File.Exists(part)) File.Delete(part); return false; }
+        // Real I/O failures (e.g. no space) stop safely rather than hiding them with a download.
+    }
+
+    private static string ContentKey(MobileResourceManifest.Entry entry)
+    { return entry.Sha256 + ":" + entry.Length.ToString(CultureInfo.InvariantCulture); }
+
+    private static string ResumeIdentity(Uri source, MobileResourceManifest.Entry entry)
+    { return "FFO-RESOURCE-PART-1\n" + source.AbsoluteUri + "\n" + ContentKey(entry) + "\n"; }
+
+    private static long PartialLength(string part, string identity)
+    {
+        string receipt = part + ".resume";
+        RejectLink(part); RejectLink(receipt); RejectLink(receipt + ".part");
+        if (!File.Exists(part) || !File.Exists(receipt) || new FileInfo(receipt).Length != StrictUtf8.GetByteCount(identity)) return 0;
+        try { if (File.ReadAllText(receipt, StrictUtf8) != identity) return 0; }
+        catch (DecoderFallbackException) { return 0; } // Damaged local metadata restarts safely.
+        return new FileInfo(part).Length;
+    }
+
+    private static long PreparePartial(string part, string identity, long expectedBytes)
+    {
+        long offset = PartialLength(part, identity);
+        if (offset > 0 && offset <= expectedBytes) return offset;
+        DeletePartial(part);
+        string receipt = part + ".resume", temporary = receipt + ".part";
+        WriteDurable(temporary, identity);
+        File.Move(temporary, receipt);
+        return 0;
+    }
+
+    private static void DeletePartial(string part)
+    {
+        foreach (string path in new[] { part, part + ".resume", part + ".resume.part" })
+        { RejectLink(path); if (File.Exists(path)) File.Delete(path); }
+    }
+
+    public static long RequiredFreeBytes(long additionalPayloadBytes, long manifestBytes, int entryCount)
+    {
+        if (additionalPayloadBytes < 0 || manifestBytes < 0 || entryCount < 0) throw new ArgumentOutOfRangeException();
+        // Includes manifest, receipt/resume metadata, per-file allocation overhead and a small margin.
+        return checked(additionalPayloadBytes + manifestBytes + (long)entryCount * 4096 + 1024 * 1024);
     }
 
     private string ReadActiveRoot()
     {
-        RejectLink(storage);
+        RejectPathLinks(storage);
         string marker = Path.Combine(storage, ActiveMarker);
         RejectLink(marker);
         if (!File.Exists(marker) || new FileInfo(marker).Length > 128)
@@ -163,10 +305,11 @@ public sealed class MobileRemoteResourceInstall
         return root;
     }
 
-    public static void ValidateManifest(MobileResourceManifest manifest, string appVersion)
+    public static void ValidateManifest(MobileResourceManifest manifest, string appVersion, string platform = "android")
     {
-        if (manifest.Offline || manifest.ClientPlatform != "android" || manifest.ClientVersion != appVersion)
-            throw new InvalidDataException("The resource manifest must declare @client, android, and this exact application version.");
+        ValidatePlatform(platform);
+        if (manifest.Offline || manifest.ClientPlatform != platform || manifest.ClientVersion != appVersion)
+            throw new InvalidDataException("The resource manifest must declare @client, " + platform + ", and this exact application version.");
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var canonicalSegments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
@@ -196,6 +339,12 @@ public sealed class MobileRemoteResourceInstall
                 slash = path.IndexOf('/', slash + 1);
             }
         }
+    }
+
+    private static void ValidatePlatform(string platform)
+    {
+        if (platform != "android" && platform != "windows" && platform != "macos" && platform != "linux")
+            throw new InvalidDataException("Unsupported resource client platform.");
     }
 
     private static void ValidateResourcePath(string path, bool destination)
@@ -260,6 +409,13 @@ public sealed class MobileRemoteResourceInstall
         return path;
     }
 
+    private static void RejectPathLinks(string path)
+    {
+        string current = Path.GetFullPath(path);
+        while (!string.IsNullOrEmpty(current))
+        { RejectLink(current); current = Path.GetDirectoryName(current); }
+    }
+
     private static void RejectLink(string path)
     {
         // File.GetAttributes also detects dangling links on supported runtimes.
@@ -277,7 +433,11 @@ public sealed class MobileRemoteResourceInstall
         var expected = new HashSet<string>(StringComparer.Ordinal);
         expected.Add(StoredManifest); expected.Add(Receipt); expected.Add(Receipt + ".part");
         foreach (var entry in manifest.Entries)
-        { expected.Add(entry.Destination); if (staging) expected.Add(entry.Destination + ".part"); }
+        {
+            expected.Add(entry.Destination);
+            if (staging)
+            { expected.Add(entry.Destination + ".part"); expected.Add(entry.Destination + ".part.resume"); expected.Add(entry.Destination + ".part.resume.part"); }
+        }
         var pending = new Stack<string>(); pending.Push(root);
         while (pending.Count > 0)
         {
@@ -292,11 +452,13 @@ public sealed class MobileRemoteResourceInstall
         }
     }
 
-    private void CommitMarker(string generation)
+    private void CommitMarker(string generation, CancellationToken cancellation)
     {
         string marker = Path.Combine(storage, ActiveMarker), temporary = marker + ".part";
         RejectLink(marker); RejectLink(temporary);
+        cancellation.ThrowIfCancellationRequested();
         WriteDurable(temporary, generation + "\n");
+        cancellation.ThrowIfCancellationRequested();
         if (File.Exists(marker)) File.Replace(temporary, marker, null);
         else File.Move(temporary, marker);
     }

@@ -14,7 +14,7 @@ internal static class RemoteResourceContract
 {
     private static int checks;
     private const string ManifestUrl = "https://cdn.example.com/releases/1/mobile-resources.tsv";
-    private static readonly byte[] A = Encoding.UTF8.GetBytes("small package fixture"), B = Encoding.UTF8.GetBytes("{\"fixture\":true}");
+    private static readonly byte[] A = Encoding.UTF8.GetBytes("small package fixture"), B = Encoding.UTF8.GetBytes("{\"fixture\":true}"), B2 = Encoding.UTF8.GetBytes("{\"fixture\":false}");
     private static void Assert(bool value, string name) { if (!value) throw new Exception(name); checks++; }
     private static void Reject(Action action, string name)
     {
@@ -141,19 +141,19 @@ internal static class RemoteResourceContract
         var unchanged = new FakeHttp();
         Assert(Installer(storage, unchanged).Install(ManifestUrl, CancellationToken.None, null) == active && unchanged.Requests.Count == 1, "same manifest reuses verified active resources without redownloading");
         string marker = File.ReadAllText(Path.Combine(storage, "active-resource-set.txt"));
-        string update = Manifest().Replace("tables/a.json\tgameassets", "tables/a2.json\tgameassets");
+        string update = Manifest().Replace(Row("tables/a.json", "gameassets/tables/a.json", B), Row("tables/a2.json", "gameassets/tables/a.json", B2));
         var interrupted = new FakeHttp(update);
-        interrupted.Bodies["https://cdn.example.com/releases/1/tables/a2.json"] = B;
+        interrupted.Bodies["https://cdn.example.com/releases/1/tables/a2.json"] = B2;
         interrupted.FailUrl = "https://cdn.example.com/releases/1/tables/a2.json";
         Reject(() => Installer(storage, interrupted).Install(ManifestUrl, CancellationToken.None, null), "interrupted update rejected");
         Assert(File.ReadAllText(Path.Combine(storage, "active-resource-set.txt")) == marker && Directory.Exists(active), "old activation and bytes preserved on failure");
         string staging = Path.Combine(storage, MobileResourceManifest.Parse(update).Version + ".staging");
         Assert(File.Exists(Path.Combine(staging, "data/a.pkg")), "completed staged file retained");
-        Assert(!File.Exists(Path.Combine(staging, "gameassets/tables/a.json.part")), "interrupted current file discarded");
+        Assert(File.Exists(Path.Combine(staging, "gameassets/tables/a.json.part")), "interrupted current file retained with identity for retry");
         // A killed older attempt can leave a part beside an already valid final file.
         File.WriteAllText(Path.Combine(staging, "data/a.pkg.part"), "stale");
         var retry = new FakeHttp(update);
-        retry.Bodies["https://cdn.example.com/releases/1/tables/a2.json"] = B;
+        retry.Bodies["https://cdn.example.com/releases/1/tables/a2.json"] = B2;
         string next = Installer(storage, retry).Install(ManifestUrl, CancellationToken.None, null);
         Assert(retry.Requests.Count == 2 && !retry.Requests.Contains("https://cdn.example.com/releases/1/packages/a.pkg"), "retry reuses verified completed files and restarts failed file");
         Assert(next != active && Directory.Exists(active), "successful update keeps previous valid generation");

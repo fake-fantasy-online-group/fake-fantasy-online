@@ -10,8 +10,11 @@ public sealed class MobileResourceBootstrapConfig
 {
     public const string FileName = "resource-bootstrap.json";
     public const int MaxConfigBytes = 16384;
+    public const int MaxEndpointBytes = 4096;
     public int schemaVersion;
-    public string mode, appVersion, resourceManifestUrl, dispatchUrl;
+    public string mode, appVersion, dispatchUrl;
+    // Legacy serialized field, ignored by the unified gate. Only dispatchUrl selects remote metadata.
+    public string resourceManifestUrl;
     public bool developmentHttp;
 
     public void Validate(bool isDevelopmentBuild)
@@ -21,7 +24,6 @@ public sealed class MobileResourceBootstrapConfig
             throw new InvalidDataException("Unsupported resource bootstrap configuration.");
         if (developmentHttp && !isDevelopmentBuild)
             throw new InvalidDataException("Development HTTP requires an explicit development build.");
-        if (!string.IsNullOrWhiteSpace(resourceManifestUrl)) ValidateEndpoint(resourceManifestUrl, developmentHttp && isDevelopmentBuild);
         if (!string.IsNullOrWhiteSpace(dispatchUrl)) ValidateEndpoint(dispatchUrl, developmentHttp && isDevelopmentBuild);
     }
 
@@ -29,13 +31,27 @@ public sealed class MobileResourceBootstrapConfig
     {
         Uri uri;
         if (value != null) foreach (char c in value) if (char.IsControl(c)) throw new InvalidDataException("Control characters are not allowed in URLs.");
-        if (string.IsNullOrWhiteSpace(value) || value != value.Trim() || value.Length > 4096 ||
+        if (string.IsNullOrWhiteSpace(value) || value != value.Trim() || System.Text.Encoding.UTF8.GetByteCount(value) > MaxEndpointBytes ||
             !Uri.TryCreate(value, UriKind.Absolute, out uri) || string.IsNullOrEmpty(uri.Host) ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
-            uri.IsLoopback || uri.Host == "0.0.0.0" || (uri.Host == "::" || uri.Host == "[::]") || value.IndexOf('\\') >= 0 ||
+            uri.IsLoopback || IsLocalhost(uri.Host) || uri.Port < 1 || uri.Port > 65535 || uri.Host == "0.0.0.0" || (uri.Host == "::" || uri.Host == "[::]") || value.IndexOf('\\') >= 0 ||
             (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && allowDevelopmentLanHttp && IsPrivateLan(uri.Host))))
             throw new InvalidDataException("Use a credential-free HTTPS URL. HTTP is allowed only for explicitly enabled development LAN IPs.");
+        // Reject scoped IPv6 and legacy numeric IPv4 spellings rather than normalizing them into a different host.
+        int authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
+        string authority = value.Substring(authorityStart).Split('/')[0];
+        if (authority.IndexOf('%') >= 0) throw new InvalidDataException("Scoped or escaped URL hosts are not supported.");
+        string originalHost = authority.StartsWith("[", StringComparison.Ordinal) ? authority : authority.Split(':')[0];
+        if (uri.HostNameType == UriHostNameType.IPv4 && originalHost != uri.Host)
+            throw new InvalidDataException("Use canonical dotted-decimal IPv4 addresses.");
         return uri;
+    }
+
+    private static bool IsLocalhost(string host)
+    {
+        string normalized = host.TrimEnd('.');
+        return normalized.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPrivateLan(string host)

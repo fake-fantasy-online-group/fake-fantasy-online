@@ -8,7 +8,7 @@ namespace FakeFantasyOnline.Foundation
 {
 /// <summary>
 /// Private, best-effort verification receipt. It detects ordinary file changes, not
-/// malicious edits that preserve timestamps or forge receipts. The APK manifest is
+/// malicious edits that preserve timestamps or forge receipts. The validated resource manifest is
 /// always the sole authority for paths, lengths and hashes.
 /// </summary>
 public sealed class MobileResourceVerification

@@ -872,15 +872,15 @@ internal sealed partial class TitleFlow
     private void DrawVersionBadge()
     {
         // Official 06000ee8 snapshots the publication once, before choosing either row value.
-        string serverVersion = NetClient.LatestVer;
+        string serverVersion = FakeFantasyOnline.Foundation.ClientUpdateSession.Plan?.Artifact?.Version;
         Color serverColor = string.IsNullOrEmpty(serverVersion)
             ? new Color(0.7f, 0.7f, 0.7f, 1f)
             : serverVersion == RecoveredTitleLoginSurface.ClientVer
                 ? new Color(0.55f, 0.9f, 0.55f, 1f)
                 : new Color(1f, 0.55f, 0.45f, 1f);
         string serverText = string.IsNullOrEmpty(serverVersion)
-            ? "服务端 未知"
-            : "服务端 v" + serverVersion;
+            ? "更新版本 未发布"
+            : "更新版本 v" + serverVersion;
 
         GUIStyle style = new GUIStyle(_loginLabel)
         {
@@ -890,7 +890,7 @@ internal sealed partial class TitleFlow
         style.normal.textColor = serverColor;
         GUI.Label(new Rect(586f, 566f, 210f, 16f), serverText, style);
         style.normal.textColor = new Color(0.82f, 0.82f, 0.82f, 1f);
-        GUI.Label(new Rect(586f, 581f, 210f, 16f), "客户端 v1.6.0", style);
+        GUI.Label(new Rect(586f, 581f, 210f, 16f), "客户端 v" + RecoveredTitleLoginSurface.ClientVer, style);
     }
 
     private void EnsureStyles()

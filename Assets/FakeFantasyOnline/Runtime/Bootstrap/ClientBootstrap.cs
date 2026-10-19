@@ -48,13 +48,13 @@ public sealed class ClientBootstrap : MonoBehaviour
             Screen.autorotateToLandscapeLeft = true;
             Screen.autorotateToLandscapeRight = true;
             Screen.orientation = ScreenOrientation.AutoRotation;
-            StartCoroutine(InitializeMobile());
-            return;
         }
-        InitializeClient(PrivateServerOptions.LocalDefault());
+        ClientResourcePaths.UseBundled();
+        ClientUpdateSession.Reset();
+        StartCoroutine(InitializeWithUpdateGate());
     }
 
-    private IEnumerator InitializeMobile()
+    private IEnumerator InitializeWithUpdateGate()
     {
         var installer = gameObject.AddComponent<MobileResourceInstaller>();
         IEnumerator installation = installer.Install();
@@ -73,9 +73,13 @@ public sealed class ClientBootstrap : MonoBehaviour
         yield return null;
         try
         {
-            string dispatch = installer.ResourceFree ? installer.DispatchUrl :
-                File.ReadAllText(Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim();
-            InitializeClient(PrivateServerOptions.MobileConfigured(dispatch), installer);
+            PrivateServerOptions options;
+            if (installer.ResourceFree) options = PrivateServerOptions.MobileConfigured(installer.DispatchUrl);
+            else if (UnityEngine.Application.isMobilePlatform)
+                options = PrivateServerOptions.MobileConfigured(File.ReadAllText(
+                    Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim());
+            else options = PrivateServerOptions.LocalDefault();
+            InitializeClient(options, installer);
         }
         catch (Exception exception) { installer.Fail(exception); }
     }
