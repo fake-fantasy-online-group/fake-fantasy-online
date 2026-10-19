@@ -118,10 +118,13 @@ internal sealed partial class TitleFlow
         client.RequestTitleEntryForIndependentRuntime(characters[slot].DisplayName);
     }
 
-    // Official 1.5.8 06000ef7, full paired body. No art admission, double-click entry, or
-    // shared host busy gate. The only enabled override surrounds the ordinary Enter button.
+    // Recovered 1.5.8 06000ef7 control flow with the approved selection-page presentation.
+    // Existing avatar/selection/create/delete/entry routes stay in place; empty-roster
+    // enter/delete controls are now visibly disabled rather than hidden.
     internal void DrawCharSelect()
     {
+        EnsureSelectionPresentation();
+        // The approved selection page has no smalllogo; the original three-slot stage remains.
         if (actorbk) TexScale.Draw(10f, 70f, actorbk);
         int count = serverChars.Count;
         int gender = CharData.gender; // Native read is before any row click/mirror this draw.
@@ -165,10 +168,10 @@ internal sealed partial class TitleFlow
                     DrawSprite(fallback[row.Gender > 0 ? 1 : 0, head, hair],
                         new Rect(x + 12f, 121f, 172f, 120f));
                 }
-                GUI.Label(new Rect(x + 19f, 95f, 160f, 22f),
-                    "<color=#F3DC40><b>" + row.DisplayName + "</b> (LV " + row.Level + ")</color>", center);
-                GUI.Label(new Rect(x + 14f, 264f, 172f, 22f),
-                    "<color=#F3DC40>" + (string.IsNullOrEmpty(row.LastLogin) ? "从未登陆" : row.LastLogin) + "</color>", center);
+                DrawSelectionLabel(new Rect(x + 19f, 95f, 160f, 22f),
+                    row.DisplayName + " (LV " + row.Level + ")", new Color32(243, 220, 64, 255));
+                DrawSelectionLabel(new Rect(x + 14f, 264f, 172f, 22f),
+                    string.IsNullOrEmpty(row.LastLogin) ? "从未登陆" : row.LastLogin, new Color32(243, 220, 64, 255));
                 if (!pendingDelete &&
                     GUI.Button(new Rect(x, 121f, 195f, 167f), GUIContent.none, GUIStyle.none) && i != selSlot)
                 {
@@ -178,9 +181,8 @@ internal sealed partial class TitleFlow
             }
             else
             {
-                RecoveredTitleCharacterSurface.DrawBorder(new Rect(x, 121f, width, height), 1f, Color.white);
-                GUI.Label(new Rect(x, height * 0.5f + 121f - 10f, 195f, 20f),
-                    "<color=#B4B4B4>＋ 创建角色</color>", center);
+                // Empty slots stay visually empty, as in the supplied original reference.
+                // Keep the existing click-to-create target and its pending-delete guard.
                 if (!pendingDelete && GUI.Button(new Rect(x, 121f, 195f, 167f), GUIContent.none, GUIStyle.none))
                 {
                     prepareCreation(SelectedCharacterForIndependentRuntime);
@@ -193,7 +195,7 @@ internal sealed partial class TitleFlow
 
         if (!pendingDelete)
         {
-            if (serverChars.Count < 3 && ImgBtn(644f, 425f, btnCreate))
+            if (serverChars.Count < 3 && DrawSelectionButton(644f, 419f, SelectionButton.Create, "创建角色"))
             {
                 prepareCreation(SelectedCharacterForIndependentRuntime);
                 setMessage(string.Empty);
@@ -206,29 +208,30 @@ internal sealed partial class TitleFlow
                 PublishPluginTitleResult("enter_timeout");
                 setMessage("进入游戏超时, 请重试");
             }
-            GUI.enabled = !entering;
-            if (count != 0)
-            {
-                if (selSlot >= 0 && ImgBtn(322f, 487f, btnEnter)) EnterGame();
-                GUI.enabled = true;
-                if (selSlot >= 0 && ImgBtn(644f, 455f, btnDelete ?? btnReturn)) pendingDelete = true;
-            }
-            else GUI.enabled = true;
-            if (ImgBtn(644f, 498f, btnReturn))
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && !entering && count != 0 && selSlot >= 0;
+            if (DrawSelectionButton(322f, 487f, SelectionButton.Enter, "进入游戏")) EnterGame();
+            // Preserve the existing deletion admission independently of the entry latch.
+            // Empty-roster controls remain visible but cannot submit a character action.
+            GUI.enabled = previousEnabled && count != 0 && selSlot >= 0;
+            if (DrawSelectionButton(644f, 455f, SelectionButton.Delete, "删除角色")) pendingDelete = true;
+            GUI.enabled = previousEnabled;
+            if (DrawSelectionButton(644f, 498f, SelectionButton.Return, "返回上层"))
             {
                 _page = TitlePage.ServerSelection;
                 action(TitleCharacterAction.ReturnToServerSelection);
             }
         }
 
+        // Keep the original property panel visible with blank values for an empty roster.
+        Texture2D panel = selProp ?? proppanel;
+        if (panel) TexScale.Draw(202f, 361f, panel);
         if (count != 0 && selSlot >= 0)
         {
             int race = Mathf.Clamp(CharData.race, 0, 4);
-            Texture2D panel = selProp ?? proppanel;
-            if (panel) TexScale.Draw(202f, 361f, panel);
-            GUI.Label(new Rect(268f, 366f, 110f, 16f), "<b>" + CharData.name + "</b>", numStyle);
-            GUI.Label(new Rect(412f, 366f, 110f, 16f), CLASS[race] + "·" + (gender > 0 ? "男" : "女"), numStyle);
-            GUI.Label(new Rect(554f, 366f, 40f, 16f), CharData.level.ToString(), numStyle);
+            DrawSelectionLabel(new Rect(268f, 366f, 110f, 16f), CharData.name, numStyle.normal.textColor, true);
+            DrawSelectionLabel(new Rect(412f, 366f, 110f, 16f), CLASS[race] + "·" + (gender > 0 ? "男" : "女"), numStyle.normal.textColor, true);
+            DrawSelectionLabel(new Rect(554f, 366f, 40f, 16f), CharData.level.ToString(), numStyle.normal.textColor, true);
             int[] attributes = null;
             long honor = 0;
             if (selSlot >= 0 && selSlot < serverChars.Count)
@@ -238,36 +241,39 @@ internal sealed partial class TitleFlow
                 honor = selected.Honor;
             }
             int[] defaults = INIT[race];
-            LabelValue(266f, 410f, AttributeAt(attributes, 4, defaults[7]));
-            LabelValue(412f, 410f, AttributeAt(attributes, 6, defaults[8]));
-            LabelValue(554f, 410f, (int)Math.Min(Math.Max(honor, 0L), int.MaxValue));
-            LabelValue(266f, 427f, AttributeAt(attributes, 10, defaults[0]));
-            LabelValue(412f, 427f, AttributeAt(attributes, 11, defaults[2]));
-            LabelValue(554f, 427f, AttributeAt(attributes, 13, defaults[4]));
-            LabelValue(266f, 443f, AttributeAt(attributes, 12, defaults[3]));
-            LabelValue(412f, 443f, AttributeAt(attributes, 21, defaults[1]));
-            LabelValue(554f, 443f, AttributeAt(attributes, 14, defaults[6]));
+            SelectionValue(266f, 410f, AttributeAt(attributes, 4, defaults[7]));
+            SelectionValue(412f, 410f, AttributeAt(attributes, 6, defaults[8]));
+            SelectionValue(554f, 410f, (int)Math.Min(Math.Max(honor, 0L), int.MaxValue));
+            SelectionValue(266f, 427f, AttributeAt(attributes, 10, defaults[0]));
+            SelectionValue(412f, 427f, AttributeAt(attributes, 11, defaults[2]));
+            SelectionValue(554f, 427f, AttributeAt(attributes, 13, defaults[4]));
+            SelectionValue(266f, 443f, AttributeAt(attributes, 12, defaults[3]));
+            SelectionValue(412f, 443f, AttributeAt(attributes, 21, defaults[1]));
+            SelectionValue(554f, 443f, AttributeAt(attributes, 14, defaults[6]));
         }
+
+        if (infoBar) GUI.DrawTexture(new Rect(114f, 523f, 529f, 21f), infoBar);
+        DrawSelectionLabel(new Rect(114f, 523f, 529f, 21f),
+            string.IsNullOrEmpty(netMsg) ? (count == 0 ? "请先创建角色" : "请选择当前登录角色!") : netMsg,
+            new Color32(232, 224, 198, 255));
 
         if (pendingDelete && selSlot >= 0 && selSlot < serverChars.Count)
         {
             GUI.color = new Color(0f, 0f, 0f, 0.6f);
             GUI.DrawTexture(new Rect(0f, 0f, 800f, 600f), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            GUI.color = new Color(0.1f, 0.1f, 0.12f, 0.98f);
-            GUI.DrawTexture(new Rect(210f, 225f, 380f, 150f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            RecoveredTitleCharacterSurface.DrawBorder(new Rect(210f, 225f, 380f, 150f), 2f, Color.white);
-            GUI.Label(new Rect(210f, 243f, 380f, 24f), "<color=#FF6666><b>删除角色</b></color>", center);
-            GUI.Label(new Rect(222f, 277f, 356f, 40f),
-                "确定删除【" + serverChars[selSlot].DisplayName + "】?\n删除后不可恢复!", centerWrap ?? center);
-            if (GUI.Button(new Rect(254f, 333f, 110f, 30f), "确定删除"))
+            ArtworkSkin.Panel(new Rect(210f, 225f, 380f, 150f));
+            DrawSelectionLabel(new Rect(210f, 243f, 380f, 24f), "删除角色", new Color(1f, .4f, .4f, 1f));
+            DrawSelectionLabel(new Rect(222f, 277f, 356f, 20f),
+                "确定删除【" + serverChars[selSlot].DisplayName + "】?", Color.white);
+            DrawSelectionLabel(new Rect(222f, 297f, 356f, 20f), "删除后不可恢复!", Color.white);
+            if (ArtworkSkin.Button(new Rect(254f, 333f, 110f, 30f), "确定删除"))
             {
                 action(TitleCharacterAction.Delete);
                 pendingDelete = false;
                 setMessage("删除中...");
             }
-            if (GUI.Button(new Rect(436f, 333f, 110f, 30f), "取消")) pendingDelete = false;
+            if (ArtworkSkin.Button(new Rect(436f, 333f, 110f, 30f), "取消")) pendingDelete = false;
         }
     }
 }

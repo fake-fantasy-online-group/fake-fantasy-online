@@ -160,6 +160,7 @@ internal sealed partial class TitleFlow : MonoBehaviour
             receiver.clearAccountResultsReceipt?.Invoke();
         }
         ReleaseSlotDolls();
+        ReleaseSelectionPresentation();
     }
 
     internal void EnsureStylesForIndependentRuntime()

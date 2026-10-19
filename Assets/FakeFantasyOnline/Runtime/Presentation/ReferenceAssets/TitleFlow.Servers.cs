@@ -119,10 +119,12 @@ internal sealed partial class TitleFlow
         }
     }
 
-    // Official 1.5.8 06000ef4. Called once by the existing server-page viewport. Native actions
-    // execute where the control calls them; no end-of-draw intent collector or status busy gate.
+    // Recovered 1.5.8 06000ef4 with approved native button states and a safe empty-directory
+    // presentation. Actions still execute at their original controls; no request collector
+    // or new status busy gate is introduced.
     internal void DrawServer()
     {
+        EnsureSelectionPresentation();
         if (zonepanel) TexScale.Draw(0f, 18f, zonepanel);
         if (srvWorlds == null || srvBuiltFor != serverSession.TitleServerCountForIndependentRuntime) BuildSrvTree();
         if (srvItem == null)
@@ -156,7 +158,7 @@ internal sealed partial class TitleFlow
             else RecoveredTitleCharacterSurface.DrawBorder(rect, 1f,
                 new Color(0.72f, 0.58f, 0.3f, i == selWorld ? 1f : 0.5f));
             srvItem.normal.textColor = WORLD_TXT;
-            GUI.Label(new Rect(x + 14f, y + 6f, 82f, 20f), srvWorlds[i], srvItem);
+            DrawSelectionLabel(new Rect(x + 14f, y + 6f, 82f, 20f), srvWorlds[i], WORLD_TXT);
             int level = WorldLevel(i);
             if (level != 3 && busyWorld[WORLD_BAR_FRAME[level]])
                 GUI.DrawTexture(new Rect(x + 14f, y + 24f, 82f, 2f), busyWorld[WORLD_BAR_FRAME[level]]);
@@ -168,7 +170,10 @@ internal sealed partial class TitleFlow
             }
         }
 
-        List<SrvLine> lines = srvLines[selWorld];
+        // A nonempty directory may contain only null rows. Keep its UI empty rather
+        // than indexing an absent world; the protocol/source and auto-pick policy stay intact.
+        IReadOnlyList<SrvLine> lines = selWorld < srvLines.Count
+            ? (IReadOnlyList<SrvLine>)srvLines[selWorld] : Array.Empty<SrvLine>();
         selZone = Mathf.Clamp(selZone, 0, Mathf.Max(0, lines.Count - 1));
         for (int i = 0, x = 64; i < lines.Count; i++, x += 90)
         {
@@ -181,7 +186,7 @@ internal sealed partial class TitleFlow
                 new Color(0.72f, 0.58f, 0.3f, i == selZone ? 1f : 0.5f));
             int level = LevelOf(line);
             srvItem.normal.textColor = BUSY_COL[level];
-            GUI.Label(new Rect(x + 4f, 428f, 76f, 20f), line.name, srvItem);
+            DrawSelectionLabel(new Rect(x + 4f, 428f, 76f, 20f), line.name, BUSY_COL[level]);
             Texture2D bar = busyBar[level];
             if (bar) GUI.DrawTexture(new Rect(x + 7f, 449f, 74f, 2f), bar);
             if (rect.Contains(current.mousePosition)) hint = "选择要登录的服务器!";
@@ -193,29 +198,33 @@ internal sealed partial class TitleFlow
                 if (doubleClick) ConfirmServer();
             }
         }
+        bool previousEnabled = GUI.enabled;
+        GUI.enabled = previousEnabled && lines.Count != 0;
         if (new Rect(644f, 371f, 152f, 33f).Contains(current.mousePosition)) hint = "Enter登录游戏!";
-        if (ImgBtn(644f, 371f, btnAffirm ?? serverLoginFallback)) ConfirmServer();
+        if (DrawSelectionButton(644f, 371f, SelectionButton.Confirm, "确认选择")) ConfirmServer();
         if (new Rect(644f, 413f, 152f, 33f).Contains(current.mousePosition)) hint = "自动选择服务器区!";
-        if (btnAuto != null && ImgBtn(644f, 413f, btnAuto)) AutoPickServer();
+        if (DrawSelectionButton(644f, 413f, SelectionButton.Auto, "自动选择")) AutoPickServer();
+        GUI.enabled = previousEnabled;
         if (new Rect(644f, 456f, 152f, 33f).Contains(current.mousePosition)) hint = "返回登录界面!";
-        if (ImgBtn(644f, 456f, btnReturn))
+        if (DrawSelectionButton(644f, 456f, SelectionButton.Return, "返回上层"))
         {
             _page = TitlePage.Login;
             returnFromServerPage();
             setMessage(string.Empty);
         }
         if (new Rect(644f, 498f, 152f, 33f).Contains(current.mousePosition)) hint = "退出游戏并关闭客户端!";
-        if (ImgBtn(644f, 498f, btnQuit)) GameBootstrap.QuitGame();
+        if (DrawSelectionButton(644f, 498f, SelectionButton.Quit, "退出游戏")) GameBootstrap.QuitGame();
         Rect statusRect = new Rect(79f, 477f, 530f, 24f);
         if (statusRect.Contains(current.mousePosition)) hint = "当前选择服务器状态显示!";
         srvItem.normal.textColor = new Color(243f / 255f, 220f / 255f, 64f / 255f, 1f);
         int latencyMs = NetClient.RttMs;
         string latency = latencyMs >= 0 ? string.Format("延迟 {0} ms", latencyMs) :
             NetClient.I != null && NetClient.I.ConnectedForIndependentRuntime ? "延迟 测量中…" : "延迟 --";
-        GUI.Label(statusRect, latency, srvItem);
+        DrawSelectionLabel(statusRect, latency, srvItem.normal.textColor);
         if (infoBar) GUI.DrawTexture(new Rect(84f, 523f, 529f, 21f), infoBar);
-        string info = hint ?? (string.IsNullOrEmpty(readServerMessage()) ? "请选择服务器区!" : readServerMessage());
-        GUI.Label(new Rect(84f, 523f, 529f, 21f), info, infoTxt);
+        string info = hint ?? (string.IsNullOrEmpty(readServerMessage())
+            ? (srvWorlds.Count == 0 ? "暂无可用服务器" : "请选择服务器区!") : readServerMessage());
+        DrawSelectionLabel(new Rect(84f, 523f, 529f, 21f), info, infoTxt.normal.textColor);
     }
 
     // Official 1.5.8 06000ef5. Ordinary List bounds and original empty/null distinctions stay

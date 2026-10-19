@@ -44,16 +44,23 @@ class BundledBackgroundContract(unittest.TestCase):
         for forbidden in ['ClientResourcePaths', 'PackageReader', 'UnityWebRequest', 'File.ReadAllBytes', 'LoadImage(', 'new Texture2D']:
             self.assertNotIn(forbidden, renderer)
 
-    def test_startup_and_title_share_background_without_changing_character_art(self):
+    def test_startup_and_selection_share_background_preserving_creation_art(self):
         installer = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/MobileResourceInstaller.cs').read_text()
         self.assertIn('EmbeddedClientBackground.Preload()', installer)
         self.assertIn('EmbeddedClientBackground.Draw(', installer)
         self.assertNotIn('Resources.Load<Texture2D>("MobileStartupBackground")', installer)
         title = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TitleFlow.GuiContext.cs').read_text()
-        self.assertIn('if (!characterPage)', title)
+        self.assertIn('if (!creationPage)', title)
         self.assertIn('EmbeddedClientBackground.Draw(', title)
         self.assertIn('selBg ?? cbg ?? bg', title)
         self.assertNotIn('loginBg ?? bg', title)
+        dispatch = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TitleFlow.NativeGui.cs').read_text()
+        selection = dispatch.split('if (page == TitlePage.CharacterSelection)', 1)[1].split('if (page == TitlePage.ServerSelection)', 1)[0]
+        creation = dispatch.split('if (page == TitlePage.CharacterCreation)', 1)[1].split('if (page == TitlePage.CharacterSelection)', 1)[0]
+        self.assertIn('BeginGuiFrameForIndependentRuntime(false)', selection)
+        self.assertIn('BeginGuiFrameForIndependentRuntime(true)', creation)
+        adapter = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Presentation/RecoveredTitleCharacterSurface.cs').read_text()
+        self.assertIn('BeginGuiFrameForIndependentRuntime(false)', adapter)
 
 
 if __name__ == '__main__':

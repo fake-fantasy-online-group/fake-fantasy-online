@@ -1,5 +1,65 @@
 # UI artwork harmony
 
+
+## Approved server and character selection presentation (2026-10-19)
+
+Server selection and character selection now use the existing bundled startup
+background. Character creation retains its original background and source.
+The real `PlayerAvatar.Still`/fallback avatar path, roster fields and action routes
+are unchanged. The selection page draws no QQ logo; empty slots have no extra
+white border or plus label, but retain their original click-to-create targets.
+The original property panel stays visible with blank values for an empty roster;
+entry and deletion remain visible and disabled. Moving the create button from
+y425 to y419 leaves a 3px gap before delete at y455.
+
+Seven main buttons use complete external 152x33 baked-label normal/hover/pressed
+frames through `LoadGsaFrameA`. No lettering is overpainted. The per-title cache
+tracks loader plus all three package identities and never destroys borrowed art.
+Missing/incompatible button art uses an explicitly labelled existing ArtworkSkin
+fallback. The delete confirmation uses that same original blank panel/button skin
+and keeps its existing warning, cancellation and command path.
+
+Dynamic server/character names, levels, dates, attributes and status messages use
+the existing external `BitmapFont` gbk12 atlas at native logical 12px, width-fitted
+and clipped to their original label rectangles. Readiness alone is insufficient:
+all characters are checked before drawing; a missing character or absent atlas
+uses the complete original string with the existing GUI font at 12px. There is no
+new bundled font and no expansion of the registration-only licensed glyph subset.
+Original semantic colors (load, gold character name, property values, warning)
+are retained. The unavailable external gbk12 files were not recovered in the cloud,
+so this is not a claim of whole-screen pixel equivalence to the earlier v5 mockup.
+
+Run the production-source contract and background routing checks:
+
+```sh
+source Documentation/tools/activate-dotnet-test-toolchain.sh
+python3 Tests/UiArtwork/run-selection-presentation-contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Tests/ClientBuild -p 'test_*.py'
+```
+
+Recorded: 122 selection assertions plus source guards, 75 existing login
+assertions, 41 ArtworkSkin assertions, 32 plugin native-bridge checks and source
+invariants, 200 unrelated inventory/source geometry assertions, and 14 build
+boundary tests passed. All 1205 current Presentation sources compiled against
+verified real Unity references. The historical exact visual-restoration test
+below is superseded for the explicitly approved login/selection presentation;
+it is not deleted or falsely counted as passing.
+
+The selection contract executes the actual production page/helper methods with
+deterministic API substitutes. It covers native state textures/cache ownership,
+press/release, same-event deduplication, drag cancellation, disabled controls,
+empty and real rosters, actual appearance/attributes, slot selection, empty-slot
+creation, delete cancel/confirm, entry latch/timeout, all-null server rows, mobile
+single-tap selection and explicit endpoint confirmation. The independent review
+adds offline/cadence/maintenance/switch/reauthentication/fallback-avatar cases.
+No Unity import, PlayMode, Player, local Mac or production server operation ran.
+
+An all-null directory now renders a safe empty UI. The historical no-directory
+fallback and network policy are unchanged. Deletion has no new cross-request busy
+latch: repeated separately confirmed requests still follow the existing session
+queue. This task prevents a single GUI event from activating a new image button
+twice; it does not claim to redesign asynchronous deletion admission.
+
 ## Approved native login presentation (2026-10-19)
 
 The newly approved login UI supersedes the historical pregame visual-equivalence

@@ -55,7 +55,7 @@ internal sealed partial class TitleFlow
             guiHost._characters = guiHost._session.Characters;
             BindRosterForIndependentRuntime(guiHost._characters);
             EnsureStylesForIndependentRuntime();
-            Matrix4x4 previous = BeginGuiFrameForIndependentRuntime(true);
+            Matrix4x4 previous = BeginGuiFrameForIndependentRuntime(false);
             DrawCharSelect();
             GUI.matrix = previous;
             return;

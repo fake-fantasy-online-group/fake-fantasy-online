@@ -61,7 +61,7 @@ internal sealed partial class RecoveredTitleCharacterSurface
         if (native == null || !native.isActiveAndEnabled) return;
         native.BindRosterForIndependentRuntime(characters);
         native.EnsureStylesForIndependentRuntime();
-        Matrix4x4 previousMatrix = native.BeginGuiFrameForIndependentRuntime(true);
+        Matrix4x4 previousMatrix = native.BeginGuiFrameForIndependentRuntime(false);
         native.DrawCharSelect();
         GUI.matrix = previousMatrix;
     }
