@@ -46,6 +46,9 @@ public sealed class ClientUpdatePlan
     public string ResourceManifestUrl { get; private set; }
     public string ResourceManifestSha256 { get; private set; }
     public long ResourceManifestSizeBytes { get; private set; }
+    // False still permits a mandatory package upgrade; the resource gate must
+    // check Required first and must not download or enter without a match.
+    public bool HasCompatibleResources { get { return ResourceManifestUrl != null; } }
     public string HotupdateManifestUrl { get; private set; }
     public ClientArtifact Artifact { get; private set; }
     public bool Required { get; private set; }
@@ -76,12 +79,46 @@ public sealed class ClientUpdatePlan
         var update = Object(raw, "update");
         if (Integer(update, "schemaVersion", false) != 1) throw new InvalidDataException("Unsupported dispatch update schema.");
         var plan = new ClientUpdatePlan { CurrentVersion = currentVersion };
-        plan.ResourceManifestUrl = Endpoint(update, "resourceManifestUrl", developmentHttp, false);
+        bool hasResourceMap = update.ContainsKey("resourceManifests");
+        // Validate legacy fields when supplied, but never use them as a fallback
+        // when the exact-platform/version map is present (even an empty map).
+        plan.ResourceManifestUrl = Endpoint(update, "resourceManifestUrl", developmentHttp, hasResourceMap);
         plan.ResourceManifestSha256 = Digest(update, "resourceManifestSha256", true);
         plan.ResourceManifestSizeBytes = Integer(update, "resourceManifestSizeBytes", true);
         if ((plan.ResourceManifestSha256 != null) != (plan.ResourceManifestSizeBytes > 0) ||
-            plan.ResourceManifestSizeBytes > MobileResourceManifest.MaxManifestBytes)
-            throw new InvalidDataException("Resource manifest hash and bounded positive size must be supplied together.");
+            plan.ResourceManifestSizeBytes > MobileResourceManifest.MaxManifestBytes ||
+            (plan.ResourceManifestUrl == null && plan.ResourceManifestSha256 != null))
+            throw new InvalidDataException("Resource manifest URL, hash and bounded positive size must be supplied together.");
+        if (hasResourceMap)
+        {
+            plan.ResourceManifestUrl = plan.ResourceManifestSha256 = null;
+            plan.ResourceManifestSizeBytes = 0;
+            var platforms = Object(update["resourceManifests"], "resourceManifests");
+            foreach (var platformEntry in platforms)
+            {
+                if (!SupportedPlatform(platformEntry.Key)) throw new InvalidDataException("Unsupported resource manifest platform.");
+                var versions = Object(platformEntry.Value, "resourceManifests." + platformEntry.Key);
+                foreach (var versionEntry in versions)
+                {
+                    if (!ClientProductVersion.IsValid(versionEntry.Key)) throw new InvalidDataException("Invalid resource manifest application version.");
+                    var entry = Object(versionEntry.Value, "resource manifest");
+                    foreach (string field in entry.Keys)
+                        if (field != "manifestUrl" && field != "sha256" && field != "sizeBytes")
+                            throw new InvalidDataException("Unknown resource manifest field: " + field);
+                    string url = Endpoint(entry, "manifestUrl", developmentHttp, false);
+                    string hash = Digest(entry, "sha256", false);
+                    long size = Integer(entry, "sizeBytes", false);
+                    if (size > MobileResourceManifest.MaxManifestBytes)
+                        throw new InvalidDataException("Resource manifest exceeds its size limit.");
+                    if (platformEntry.Key == platform && versionEntry.Key == currentVersion)
+                    {
+                        plan.ResourceManifestUrl = url;
+                        plan.ResourceManifestSha256 = hash;
+                        plan.ResourceManifestSizeBytes = size;
+                    }
+                }
+            }
+        }
         plan.HotupdateManifestUrl = Endpoint(update, "hotupdateManifestUrl", developmentHttp, true);
         if (update.TryGetValue("clients", out raw))
         {

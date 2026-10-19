@@ -11,8 +11,76 @@ internal static class ClientUpdatePlanContract
     { return "{\"servers\":[{\"host\":\"192.168.1.3\",\"port\":8080}],\"update\":{\"schemaVersion\":1,\"resourceManifestUrl\":\"https://updates.example.test/mobile-resources.tsv\",\"clients\":{\"linux\":{\"version\":\""+version+"\",\"minVersion\":\""+min+"\",\"artifactUrl\":\"https://updates.example.test/client.zip\",\"sha256\":\""+new string('a',64)+"\",\"sizeBytes\":1024}}"+extra+"}}"; }
     private static ClientUpdatePlan Read(string text, string current="0.1.0", bool http=false)
     { return ClientUpdatePlan.Parse(text,"linux",current,http); }
+
+    private static string ResourceEntry(string url="https://updates.example.test/android/1.0.0/manifest.tsv", string hash=null, long size=123)
+    { return "{\"manifestUrl\":\""+url+"\",\"sha256\":\""+(hash ?? new string('B',64))+"\",\"sizeBytes\":"+size+"}"; }
+    private static string MappedPlan(string map, bool legacy=true, string minimum="1.0.0", string platform="android")
+    {
+        string source=Plan("2.0.0",minimum).Replace("\"linux\":", "\""+platform+"\":");
+        if (!legacy) source=source.Replace("\"resourceManifestUrl\":\"https://updates.example.test/mobile-resources.tsv\",", "");
+        return source.Replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"resourceManifests\":"+map);
+    }
+    private static void ResourceManifestMaps()
+    {
+        string entry=ResourceEntry();
+        string single="{\"android\":{\"1.0.0\":"+entry+"}}";
+        var all = new System.Text.StringBuilder("{");
+        foreach (string platform in new[]{"android","macos","windows","linux"})
+        {
+            if (all.Length>1) all.Append(',');
+            all.Append("\"").Append(platform).Append("\":{\"1.0.0\":")
+                .Append(ResourceEntry("https://updates.example.test/"+platform+"/1.0.0/manifest.tsv"))
+                .Append(",\"1.1.0\":")
+                .Append(ResourceEntry("https://updates.example.test/"+platform+"/1.1.0/manifest.tsv",new string('c',64),456)).Append('}');
+        }
+        all.Append('}');
+        foreach (string platform in new[]{"android","macos","windows","linux"})
+        {
+            foreach (string version in new[]{"1.0.0","1.1.0"})
+            {
+                var plan=ClientUpdatePlan.Parse(MappedPlan(all.ToString(),platform:platform),platform,version,false);
+                Check(plan.HasCompatibleResources,"exact map has resources "+platform+" "+version);
+                Check(plan.ResourceManifestUrl=="https://updates.example.test/"+platform+"/"+version+"/manifest.tsv","exact map URL "+platform+" "+version);
+                Check(plan.ResourceManifestSha256==new string(version=="1.0.0"?'b':'c',64),"mapped hash normalized");
+                Check(plan.ResourceManifestSizeBytes==(version=="1.0.0"?123:456),"mapped size selected");
+            }
+            // Missing resources must preserve the mandatory package upgrade gate.
+            var required=ClientUpdatePlan.Parse(MappedPlan(single,minimum:"2.0.0",platform:platform),platform,"0.1.0",false);
+            Check(required.Required && required.Available && required.Artifact.Version=="2.0.0","missing resource retains mandatory package "+platform);
+            Check(!required.HasCompatibleResources && required.ResourceManifestUrl==null && required.ResourceManifestSha256==null && required.ResourceManifestSizeBytes==0,"no legacy/other platform/version fallback "+platform);
+        }
+        Check(ClientUpdatePlan.Parse(MappedPlan(single,false),"android","1.0.0",false).HasCompatibleResources,"map-only publication");
+        Check(ClientUpdatePlan.Parse(MappedPlan(single).Replace("\"resourceManifestUrl\":\"https://updates.example.test/mobile-resources.tsv\"", "\"resourceManifestUrl\":\"https://updates.example.test/mobile-resources.tsv\",\"resourceManifestSha256\":\""+new string('d',64)+"\",\"resourceManifestSizeBytes\":456"),"android","1.0.0",false).ResourceManifestSha256==new string('b',64),"map pins override valid legacy pins");
+        foreach (string map in new[]{"{}","{\"android\":{}}",single})
+        {
+            var plan=ClientUpdatePlan.Parse(MappedPlan(map),"android","1.2.0",false);
+            Check(!plan.HasCompatibleResources && plan.ResourceManifestUrl==null,"empty or missing exact version never falls back");
+            Check(plan.Available && !plan.Required,"optional artifact preserved without resources");
+        }
+        Check(!ClientUpdatePlan.Parse(MappedPlan(single),"macos","1.0.0",false).HasCompatibleResources,"same version on wrong platform cannot match");
+        Check(!ClientUpdatePlan.Parse(MappedPlan(single),"android","2.0.1",false).Available,"unpublished newer app never downgrades");
+        Check(Read(Plan()).HasCompatibleResources,"legacy unpinned resource regression");
+        Reject(()=>Read(Plan().Replace("\"resourceManifestUrl\":\"https://updates.example.test/mobile-resources.tsv\",","")),"missing legacy URL without map");
+        foreach (string map in new[]{"null","[]","true","{\"android\":null}","{\"android\":[]}","{\"Android\":{}}","{\"any\":{}}","{\"android\":{\"1.0.0\":null}}","{\"android\":{\"1.0.0\":[]}}","{\"android\":{},\"android\":{}}","{\"android\":{\"1.0.0\":"+entry+",\"1.0.0\":"+entry+"}}"})
+            Reject(()=>ClientUpdatePlan.Parse(MappedPlan(map),"android","1.0.0",false),"invalid map shape/key "+map);
+        foreach (string version in new[]{"*","latest","v1.0.0","1.0","01.0.0","1.0.0-beta","1.0.0+meta","4294967296.0.0"})
+            Reject(()=>ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\""+version+"\":"+entry+"}}"),"android","1.0.0",false),"invalid exact version "+version);
+        foreach (string bad in new[]{"{}",entry.Replace("\"manifestUrl\":", "\"ManifestUrl\":"),entry.Replace("\"sha256\":", "\"SHA256\":"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123,\"sizeBytes\":123"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":0"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":-1"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123.0"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":1e2"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":null"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":8388609"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":9223372036854775808"),entry.Replace(",\"sizeBytes\":123", ""),entry.Replace("\"sha256\":\""+new string('B',64)+"\",", ""),entry.Replace(new string('B',64),new string('z',64)),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123,\"execute\":true")})
+            Reject(()=>ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\"1.0.0\":"+bad+"}}"),"android","1.0.0",false),"invalid mapped entry");
+        foreach (string endpoint in new[]{"http://example.test/a","https://localhost/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
+            Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single.Replace("https://updates.example.test/android/1.0.0/manifest.tsv",endpoint)),"android","1.0.0",true),"unsafe mapped URL");
+        string lan=MappedPlan(single.Replace("https://updates.example.test/android/1.0.0/manifest.tsv","http://192.168.1.3/a"));
+        Reject(()=>ClientUpdatePlan.Parse(lan,"android","1.0.0",false),"mapped LAN HTTP requires opt-in");
+        Check(ClientUpdatePlan.Parse(lan,"android","1.0.0",true).HasCompatibleResources,"mapped LAN HTTP opt-in");
+        Check(ClientUpdatePlan.Parse(MappedPlan(single.Replace("\"sizeBytes\":123","\"sizeBytes\":8388608")),"android","1.0.0",false).ResourceManifestSizeBytes==8388608,"map 8 MiB bound inclusive");
+        Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single.Replace(new string('B',64),new string('z',64))),"windows","1.0.0",false),"invalid nonselected platform still rejected");
+        Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single).Replace("https://updates.example.test/mobile-resources.tsv","https://localhost/a"),"android","1.0.0",false),"unused legacy URL still validated");
+        Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single)+new string(' ',ClientUpdatePlan.MaxDispatchBytes),"android","1.0.0",false),"mapped dispatch remains bounded");
+    }
+
     public static int Main()
     {
+        ResourceManifestMaps();
         var p=Read(Plan()); Check(p.Available&&!p.Required,"optional upgrade");
         Check(Read(Plan("1.0.0","1.0.0")).Required,"minimum blocks");
         Check(!Read(Plan(),"1.0.0").Available,"same version");
