@@ -96,6 +96,43 @@ class BuildContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 manifest.generate(root, '1.0.0')
 
+    def test_manifest_narrow_runtime_overlays_and_canonical_music(self):
+        accepted = ['gameassets/respatch/effect/龙霸.eff',
+                    'gameassets/respatch/magic/magic/magic9990.gso',
+                    'gameassets/tables/mapmusic.json']
+        rejected = ['gameassets/rawmap/world.gsm', 'gameassets/rawmap/world.gso',
+                    'ReferenceClient/rawmap/world.gso', 'gameassets/respatch/other.gso',
+                    'gameassets/respatch/effect/a.gso', 'gameassets/respatch/magic/magic/a.eff',
+                    'gameassets/respatch/effect/sub/a.eff', 'gameassets/respatch/magic/magic/sub/a.gso',
+                    'gameassets/respatch/effect/a.dll', 'gameassets/respatch/effect/a.lua',
+                    'AddOns/a.eff', 'Music/mapmusic.json', 'Music/credentials.json',
+                    'gameassets/Respatch/effect/a.eff', 'ReferenceClient/respatch/effect/a.eff']
+        for path in accepted:
+            self.assertTrue(manifest.allowed(path), path)
+        for path in rejected:
+            self.assertFalse(manifest.allowed(path), path)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for path in accepted:
+                file = root / path
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(b'synthetic passive fixture')
+            rows = []
+            for platform in ('android', 'windows', 'macos'):
+                text = manifest.generate(root, '1.0.0', platform)
+                rows.append(text.splitlines()[2:])
+                for path in accepted:
+                    self.assertIn(path + '\t' + path + '\t25\t', text)
+            self.assertEqual(rows[0], rows[1])
+            self.assertEqual(rows[1], rows[2])
+            # Legacy music metadata is not silently remapped onto the canonical
+            # table or published as playable music; staging must exclude it.
+            legacy = root / 'ReferenceClient/music/mapmusic.json'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'Unexpected or executable resource'):
+                manifest.generate(root, '1.0.0')
+
     def test_manifest_targets_and_stable_versions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / 'resources'

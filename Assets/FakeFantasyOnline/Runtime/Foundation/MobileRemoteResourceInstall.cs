@@ -347,6 +347,16 @@ public sealed class MobileRemoteResourceInstall
             throw new InvalidDataException("Unsupported resource client platform.");
     }
 
+    private static bool IsPassiveOverlayPath(string path)
+    {
+        // Data-only overrides consumed ahead of PKGs. Match the publisher's narrow
+        // directory rules; this is not a generic respatch or extension exemption.
+        string[] pieces = path.Split('/');
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        return (pieces.Length == 4 && path.StartsWith("gameassets/respatch/effect/", StringComparison.Ordinal) && ext == ".eff") ||
+            (pieces.Length == 5 && path.StartsWith("gameassets/respatch/magic/magic/", StringComparison.Ordinal) && ext == ".gso");
+    }
+
     private static void ValidateResourcePath(string path, bool destination)
     {
         MobileResourceManifest.ValidateRelativePath(path);
@@ -367,14 +377,14 @@ public sealed class MobileRemoteResourceInstall
         if (!destination)
         {
             // A source may be in a publisher's data folder, but must still be passive data.
-            if (ext != ".pkg" && ext != ".ogg" && ext != ".wav" && ext != ".json" && ext != ".png" &&
+            if (!IsPassiveOverlayPath(path) && ext != ".pkg" && ext != ".ogg" && ext != ".wav" && ext != ".json" && ext != ".png" &&
                 ext != ".jpg" && ext != ".jpeg" && ext != ".bytes" && ext != ".txt" && ext != ".bin" && ext != ".idx" && ext != ".wid")
                 throw new InvalidDataException("Only passive resource files can be downloaded.");
             return;
         }
         bool fontMetadata = (path.StartsWith("ReferenceClient/font/", StringComparison.Ordinal) || path.StartsWith("gameassets/font/", StringComparison.Ordinal)) &&
             (ext == ".idx" || ext == ".wid");
-        bool allowed = fontMetadata || (path.StartsWith("data/", StringComparison.Ordinal) && path.Substring(5).IndexOf('/') < 0 && ext == ".pkg") ||
+        bool allowed = IsPassiveOverlayPath(path) || fontMetadata || (path.StartsWith("data/", StringComparison.Ordinal) && path.Substring(5).IndexOf('/') < 0 && ext == ".pkg") ||
             (path.StartsWith("Music/", StringComparison.Ordinal) && ext == ".ogg") ||
             ((path.StartsWith("sndeffect/", StringComparison.Ordinal) || path.StartsWith("sndeffect24_pcm/", StringComparison.Ordinal)) && (ext == ".wav" || ext == ".ogg")) ||
             ((path.StartsWith("gameassets/", StringComparison.Ordinal) || path.StartsWith("ReferenceClient/", StringComparison.Ordinal)) && (ext == ".json" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||

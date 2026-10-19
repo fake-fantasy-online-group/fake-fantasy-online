@@ -62,6 +62,7 @@ internal static class RemoteResourceContract
         try
         {
             TestConfiguration(); TestManifests(); TestBoundedStreams();
+            TestPassiveOverlays(Path.Combine(temp, "overlays"));
             TestInstallation(Path.Combine(temp, "installation"));
             TestFailures(Path.Combine(temp, "failures"));
             TestActivationFailure(Path.Combine(temp, "activation"));
@@ -111,6 +112,35 @@ internal static class RemoteResourceContract
         string huge = "FFO-MOBILE-1\n@client\tandroid\t1.0.0\na.pkg\tdata/a.pkg\t68719476737\t" + Hash(A) + "\n";
         Reject(() => MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(huge), "1.0.0"), "64GiB total limit");
         Assert(MobileRemoteResourceInstall.ResourceUri(new Uri(ManifestUrl), "packages/a b.pkg").AbsoluteUri == "https://cdn.example.com/releases/1/packages/a%20b.pkg", "URL remains under manifest directory and encodes path");
+    }
+
+    private static void TestPassiveOverlays(string storage)
+    {
+        string[] accepted = { "gameassets/respatch/effect/龙霸.eff", "gameassets/respatch/magic/magic/magic9990.gso", "gameassets/tables/mapmusic.json" };
+        string text = Manifest();
+        foreach (string path in accepted) text += Row(path, path, A);
+        foreach (string platform in new[] { "android", "windows", "macos" })
+        {
+            MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(text.Replace("@client\tandroid", "@client\t" + platform)), "1.0.0", platform);
+            checks++;
+        }
+        foreach (string path in new[] { "gameassets/rawmap/world.gsm", "gameassets/rawmap/world.gso", "ReferenceClient/rawmap/world.gso",
+            "gameassets/respatch/other.gso", "gameassets/respatch/effect/a.gso", "gameassets/respatch/magic/magic/a.eff",
+            "gameassets/respatch/effect/sub/a.eff", "gameassets/respatch/magic/magic/sub/a.gso",
+            "gameassets/respatch/effect/a.dll", "gameassets/respatch/effect/a.lua", "AddOns/a.eff", "Music/mapmusic.json",
+            "Music/credentials.json", "gameassets/Respatch/effect/a.eff", "ReferenceClient/respatch/effect/a.eff" })
+            Reject(() => MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(Manifest() + Row("a.png", path, A)), "1.0.0"), "overlay destination boundary: " + path);
+        foreach (string path in new[] { "other/a.eff", "gameassets/rawmap/a.gso", "AddOns/a.eff", "gameassets/respatch/effect/sub/a.eff" })
+            Reject(() => MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(Manifest() + Row(path, accepted[0], A)), "1.0.0"), "overlay source boundary: " + path);
+        var http = new FakeHttp(text);
+        foreach (string path in accepted)
+            http.Bodies[MobileRemoteResourceInstall.ResourceUri(new Uri(ManifestUrl), path).AbsoluteUri] = A;
+        string active = Installer(storage, http).Install(ManifestUrl, CancellationToken.None, null);
+        foreach (string path in accepted)
+            Assert(Hash(File.ReadAllBytes(Path.Combine(active, path))) == Hash(A), "passive overlay installed at exact runtime path: " + path);
+        Assert(Installer(storage, http).UseInstalled(CancellationToken.None, null) == active, "overlay set passes offline revalidation");
+        File.WriteAllText(Path.Combine(active, accepted[0]), "corrupted overlay");
+        Reject(() => Installer(storage, http).UseInstalled(CancellationToken.None, null), "overlay corruption blocks activation");
     }
 
     private static void TestBoundedStreams()

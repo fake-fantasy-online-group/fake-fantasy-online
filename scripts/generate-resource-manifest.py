@@ -19,12 +19,22 @@ def destination(source):
     return source
 
 
+def passive_overlay(path):
+    # These are data-only overrides read by ResLoader/EffectPlayer ahead of PKGs.
+    # Keep the reviewed runtime directories explicit; never admit raw world trees
+    # or executable/plugin extensions through a generic respatch exception.
+    pieces = path.split('/')
+    extension = PurePosixPath(path).suffix.lower()
+    return ((len(pieces) == 4 and pieces[:3] == ['gameassets', 'respatch', 'effect'] and extension == '.eff') or
+            (len(pieces) == 5 and pieces[:4] == ['gameassets', 'respatch', 'magic', 'magic'] and extension == '.gso'))
+
+
 def allowed(path):
     pieces = PurePosixPath(path).parts
     if len(pieces) < 2 or any(p in ('', '.', '..') for p in pieces):
         return False
     extension = PurePosixPath(path).suffix.lower()
-    return ((pieces[0] == 'data' and len(pieces) == 2 and extension == '.pkg') or
+    return (passive_overlay(path) or (pieces[0] == 'data' and len(pieces) == 2 and extension == '.pkg') or
             (pieces[0] == 'Music' and len(pieces) == 2 and extension == '.ogg') or
             (pieces[0] in ('gameassets', 'ReferenceClient') and extension in PASSIVE_GAME_EXTENSIONS) or
             (len(pieces) >= 3 and pieces[0] in ('gameassets', 'ReferenceClient') and pieces[1] == 'font' and extension in ('.idx', '.wid')) or
