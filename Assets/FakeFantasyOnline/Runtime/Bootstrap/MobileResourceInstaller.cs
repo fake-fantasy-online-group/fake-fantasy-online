@@ -11,7 +11,7 @@ using UnityEngine.Networking;
 namespace FakeFantasyOnline.Bootstrap
 {
 /// <summary>Cross-platform, asset-independent update gate. Keeps the title behind verified resources.</summary>
-public sealed class MobileResourceInstaller : MonoBehaviour
+public sealed partial class MobileResourceInstaller : MonoBehaviour
 {
     private string status = "准备更新";
     private string detail = "读取启动配置…";
@@ -200,12 +200,18 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         while (true)
         {
             awaitingChoice = true;
-            while (!downloadRequested && !repairRequested && !enterRequested && !bundledRequested) yield return null;
+            while (!downloadRequested && !repairRequested && !enterRequested && !bundledRequested && !clientPackageRequested && !clientPackageHandoffRequested) yield return null;
             awaitingChoice = false;
             if (bundledRequested)
             {
                 if (allowBundled && (updatePlan == null || !updatePlan.Required)) yield break;
                 bundledRequested = false;
+                continue;
+            }
+            if (clientPackageRequested || clientPackageHandoffRequested)
+            {
+                IEnumerator package = ProcessClientPackage(config, transport);
+                while (package.MoveNext()) yield return package.Current;
                 continue;
             }
             if (enterRequested)
@@ -222,6 +228,7 @@ public sealed class MobileResourceInstaller : MonoBehaviour
                 }
                 continue;
             }
+            ClearClientPackageSelection();
             bool repair = repairRequested;
             downloadRequested = repairRequested = false;
             failed = ready = false;
@@ -253,7 +260,7 @@ public sealed class MobileResourceInstaller : MonoBehaviour
                 catch (Exception exception) { failure = exception; }
                 if (plan.Required)
                     Phase("需要更新客户端", "当前 v" + config.appVersion + "，最低要求 v" + plan.Artifact.MinVersion +
-                        "。请通过下方地址下载并手动安装，再重新启动。", 0);
+                        "。请下载并校验安装包，再按提示安装和重新启动。", 0);
                 else if (failure == null)
                 {
                     Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
@@ -307,7 +314,7 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         lock (remoteProgressLock)
         {
             remoteStatus = phase; remoteDetail = description; remoteDone = done; remoteTotal = total;
-            downloadRate.Observe(phase + "|" + description, done, MonotonicSeconds(), phase == "Downloading resources");
+            downloadRate.Observe(phase + "|" + description, done, MonotonicSeconds(), phase == "Downloading resources" || phase == "Downloading client package");
         }
     }
 
@@ -335,6 +342,10 @@ public sealed class MobileResourceInstaller : MonoBehaviour
     {
         switch (value)
         {
+            case "Downloading client package": return "正在下载客户端";
+            case "Checking client package": return "检查客户端安装包";
+            case "Verifying client package": return "验证客户端安装包";
+            case "Client package ready": return "客户端安装包已校验";
             case "Downloading resource manifest": return "读取资源清单";
             case "Checking resources": case "Checking installed resources": return "校验本地资源";
             case "Downloading resources": return "正在下载资源";
@@ -445,6 +456,7 @@ public sealed class MobileResourceInstaller : MonoBehaviour
             GUI.Label(new Rect(pad, ClientUpdateLayout.StatusY, inner, 36), failed ? conciseError : status, statusStyle);
             Paint(new Rect(pad, ClientUpdateLayout.ProgressY, ClientUpdateLayout.ProgressWidth, 5), new Color(.025f, .05f, .075f, 1));
             string metrics = terminalFailure ? "已有资源已保留 · 详细原因见日志" : remoteCancellation != null ? "正在处理，请稍候…" :
+                clientPackageMode && !string.IsNullOrEmpty(clientPackageNotice) ? clientPackageNotice :
                 ready ? "资源已就绪，旅程即将开始" : failed ? "已有资源会保留，可重试或修改配置" :
                 updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 请手动安装后重启" :
                 "检查版本和资源，准备进入游戏";
@@ -453,30 +465,33 @@ public sealed class MobileResourceInstaller : MonoBehaviour
                 long bytes = Interlocked.Read(ref completedBytes);
                 float fraction = Mathf.Clamp01((float)((double)bytes / totalBytes));
                 Paint(new Rect(pad, ClientUpdateLayout.ProgressY, ClientUpdateLayout.ProgressWidth * fraction, 5), new Color(.86f, .70f, .36f, 1));
-                metrics = Math.Floor(fraction * 100) + "%  ·  " + (bytes / 1048576d).ToString("F1") + " / " + (totalBytes / 1048576d).ToString("F1") + " MiB";
+                metrics = androidPackageActive && AndroidInstallBusy ? Math.Floor(fraction * 100) + "%  ·  本地安装准备" :
+                    Math.Floor(fraction * 100) + "%  ·  " + (bytes / 1048576d).ToString("F1") + " / " + (totalBytes / 1048576d).ToString("F1") + " MiB";
             }
             GUI.Label(new Rect(width - pad - ClientUpdateLayout.SpeedWidth, ClientUpdateLayout.ProgressY - 12, ClientUpdateLayout.SpeedWidth, 28), SpeedText(downloadBytesPerSecond), right);
             GUI.Label(new Rect(pad, ClientUpdateLayout.MetricsY, inner, 30), metrics, detailStyle);
             bool requiresClient = updatePlan != null && updatePlan.Required;
-            string primary = terminalFailure ? "退出后手动重启" : remoteCancellation != null ? "暂停更新" : requiresClient ? "下载客户端 ↗" : ready ? "进入游戏" : failed ? "重试更新" : "检查更新";
-            GUI.enabled = oldEnabled && (terminalFailure || (resourceFree && (awaitingChoice || (remoteCancellation != null && !remoteCancellation.IsCancellationRequested))));
+            string primary = terminalFailure ? "退出后手动重启" : remoteCancellation != null ? "暂停更新" : (requiresClient || clientPackageMode) ? ClientPackageButtonLabel() : ready ? "进入游戏" : failed ? "重试更新" : "检查更新";
+            GUI.enabled = oldEnabled && (terminalFailure || (resourceFree && ClientPackageActionEnabled && (awaitingChoice || (remoteCancellation != null && !remoteCancellation.IsCancellationRequested))));
             if (GUI.Button(new Rect((width - 244) * .5f, ClientUpdateLayout.PrimaryY, 244, ClientUpdateLayout.ButtonHeight), primary, buttonStyle))
             {
                 if (terminalFailure) UnityEngine.Application.Quit();
                 else if (remoteCancellation != null)
                 { remoteCancellation.Cancel(); downloadBytesPerSecond = null; lock (remoteProgressLock) downloadRate.Reset(); }
-                else if (requiresClient) OpenClientDownload();
+                else if (requiresClient || clientPackageMode) RequestClientPackageAction();
                 else if (ready) enterRequested = true;
                 else downloadRequested = true;
             }
-            GUI.enabled = oldEnabled && resourceFree && awaitingChoice && !terminalFailure;
+            GUI.enabled = oldEnabled && resourceFree && awaitingChoice && !terminalFailure && !AndroidInstallBusy;
             if (IconButton(new Rect(ClientUpdateLayout.RepairX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), repairIcon, "修复资源")) repairRequested = true;
             if (IconButton(new Rect(ClientUpdateLayout.ConfigureX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), configureIcon, "配置更新地址"))
             { draftDispatchUrl = dispatchUrl; configurationError = ""; configurationOpen = true; }
             if (updatePlan != null && updatePlan.Available && !requiresClient)
             {
                 var link = new GUIStyle(detailStyle) { alignment = TextAnchor.MiddleCenter };
-                if (GUI.Button(new Rect((width - 244) * .5f, 199, 244, 24), "新客户端 v" + updatePlan.Artifact.Version + " ↗", link)) OpenClientDownload();
+                string caption = clientPackageMode ? "返回当前版本" : "下载新客户端 v" + updatePlan.Artifact.Version;
+                if (GUI.Button(new Rect((width - 244) * .5f, 199, 244, 24), caption, link))
+                { if (clientPackageMode) ReturnFromOptionalClientPackage(); else RequestClientPackageAction(); }
             }
             GUI.enabled = oldEnabled;
         }
@@ -516,6 +531,7 @@ public sealed class MobileResourceInstaller : MonoBehaviour
             ClientUpdateAddressStore.Save(UnityEngine.Application.persistentDataPath, selected, allowDevelopmentHttp);
             dispatchUrl = selected;
             configurationError = ""; configurationRequired = configurationOpen = false;
+            ClearClientPackageSelection();
             ready = failed = false; verifiedRoot = null; updatePlan = null;
             downloadRequested = true;
             downloadBytesPerSecond = null;
@@ -528,22 +544,14 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         }
     }
 
-    private void OpenClientDownload()
-    {
-        // Navigation only: the publisher digest is not a verified installer signature.
-        UnityEngine.Application.OpenURL(updatePlan.Artifact.Url);
-        status = "已打开下载地址，请手动验证并安装后重启";
-        Debug.Log("Client download opened: " + updatePlan.Artifact.Url + "; publisher SHA-256=" + updatePlan.Artifact.Sha256 +
-            "; installer signature NOT verified; no automatic install or execution.");
-    }
-
     private static string SafeFailureMessage(Exception exception)
     {
         if (exception is OperationCanceledException) return "更新已暂停，可继续重试";
         if (exception is System.Net.WebException) return "网络连接失败，请检查网络后重试";
-        if (exception is UnauthorizedAccessException) return "无法写入资源目录，请检查权限";
+        if (exception is UnauthorizedAccessException) return "无法写入更新目录，请检查权限";
         string message = exception.Message.ToLowerInvariant();
         if (message.Contains("space") || message.Contains("disk")) return "可用空间不足，请清理后重试";
+        if (message.Contains("client package") && (message.Contains("sha") || message.Contains("hash") || message.Contains("corrupt"))) return "客户端安装包校验失败，请重新下载";
         if (message.Contains("client") && (message.Contains("version") || message.Contains("platform"))) return "资源与当前客户端不兼容";
         if (message.Contains("sha") || message.Contains("hash") || message.Contains("corrupt")) return "资源校验失败，请重试或修复";
         if (message.Contains("url") || message.Contains("https") || message.Contains("host") || message.Contains("endpoint")) return "更新地址无效，请检查配置";
@@ -576,10 +584,21 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         GUI.color = Color.white;
     }
 
+    private void OnApplicationPause(bool paused)
+    {
+        // Leaving the app pauses network/disk transfer. Do not cancel Android installer
+        // sessions here: the required system permission/confirmation screens also pause Unity.
+        if (!paused || remoteCancellation == null) return;
+        remoteCancellation.Cancel();
+        downloadBytesPerSecond = null;
+        lock (remoteProgressLock) downloadRate.Reset();
+    }
+
     private void OnDestroy()
     {
         // Abort an in-flight response when the bootstrap is destroyed; no partial set activates.
         remoteCancellation?.Cancel();
+        if (androidPackageActive) AndroidClientPackageInstaller.Cancel();
         if (clearCamera != null) Destroy(clearCamera.gameObject);
         if (buttonTexture != null) Destroy(buttonTexture);
         if (buttonHoverTexture != null) Destroy(buttonHoverTexture);

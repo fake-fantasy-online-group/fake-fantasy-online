@@ -38,7 +38,9 @@ class BuildContract(unittest.TestCase):
         free_branch = mobile.split('if (resourceFree)', 1)[1].split('\n            else\n', 1)[0]
         self.assertNotIn('GenerateManifest(', free_branch)
         self.assertNotIn('Directory.GetFiles(', free_branch)
-        self.assertEqual(apkcheck.setting('AndroidBundleVersionCode'), '1')
+        self.assertEqual(apkcheck.setting('AndroidBundleVersionCode'), '2')
+        for entry in (ROOT / 'Assets/FakeFantasyOnline/Editor').glob('*.cs'):
+            self.assertNotRegex(entry.read_text(), r'Android\.bundleVersionCode\s*=')
 
     def test_manual_only_credential_boundary(self):
         workflow = (ROOT / '.github/workflows/android-resource-free.yml').read_text()
