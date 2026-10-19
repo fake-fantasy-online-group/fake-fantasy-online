@@ -14,6 +14,13 @@ public static partial class MobileClientPresentation
     internal static Rect HealthPotionRect => ResolveControlRect(MobileControlId.HealthPotion);
     internal static Rect ManaPotionRect => ResolveControlRect(MobileControlId.ManaPotion);
     internal static Rect SitRect => ResolveControlRect(MobileControlId.Sit);
+    // Keep the established right-thumb arc around attack. Only align the three
+    // left-hand skill centers; do not regroup the six slots into a grid.
+    private static readonly Vector2[] DefaultSkillOffsets =
+    {
+        new Vector2(-116f, 32f), new Vector2(-116f, -40f), new Vector2(-116f, -116f),
+        new Vector2(-40f, -156f), new Vector2(36f, -156f), new Vector2(64f, -80f)
+    };
 
     private static MobileControlLayout CurrentControlLayout
     {
@@ -37,11 +44,10 @@ public static partial class MobileClientPresentation
         if (control >= MobileControlId.Skill0 && control <= MobileControlId.Skill5)
         {
             int index = (int)control - (int)MobileControlId.Skill0;
-            return Centered(attack + new Vector2(-156f + index % 3 * 72f,
-                -156f + index / 3 * 72f) * scale, 64f * scale);
+            return Centered(attack + DefaultSkillOffsets[index] * scale, 64f * scale);
         }
         if (control == MobileControlId.GroupWheel)
-            return Centered(attack + new Vector2(72f, -156f) * scale, 48f * scale);
+            return Centered(attack + new Vector2(-184f, -146f) * scale, 48f * scale);
         if (control == MobileControlId.HealthPotion || control == MobileControlId.ManaPotion)
         {
             int column = control == MobileControlId.HealthPotion ? 0 : 1;

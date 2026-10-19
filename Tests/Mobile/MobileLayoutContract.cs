@@ -23,6 +23,10 @@ Check(MobileClientPresentation.AvatarRect.x==safe.x && MobileClientPresentation.
 Check(MobileClientPresentation.IsPointerOverUi(new Vector2(MobileClientPresentation.PickupRect.center.x,Screen.height-MobileClientPresentation.PickupRect.center.y)),"Pickup excludes world pointer");
 Check(MobileClientPresentation.PageRect.width==MobileClientPresentation.PageRect.height,"Page control is square");
 float ms=MobileClientPresentation.Scale, right=safe.x+MobileClientPresentation.MinimapViewportWidth;
+// Preserve the pre-editor thumb arc and skill ordering, with only the left lane aligned.
+var arc=new[]{new Vector2(-116,32),new Vector2(-116,-40),new Vector2(-116,-116),new Vector2(-40,-156),new Vector2(36,-156),new Vector2(64,-80)};
+for(int i=0;i<arc.Length;i++)Check((MobileClientPresentation.SkillRect(i).center-MobileClientPresentation.AttackRect.center-arc[i]*ms).sqrMagnitude<.0001f,"Established thumb arc slot "+i);
+Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-184,-146)*ms).sqrMagnitude<.0001f,"Group wheel keeps established upper-left location");
 var nativeFaces=new[]{new Rect(right-29*ms,safe.y+57*ms,26*ms,26*ms),new Rect(right-24*ms,safe.y+83*ms,26*ms,26*ms),new Rect(right-39*ms,safe.y+30*ms,26*ms,26*ms),new Rect(right-20*ms,safe.y,20*ms,19*ms)};
 for(int i=0;i<4;i++){
  Rect hit=MobileClientPresentation.MapActionRect(i);

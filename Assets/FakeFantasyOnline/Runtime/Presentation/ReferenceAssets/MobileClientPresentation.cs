@@ -42,7 +42,7 @@ public static partial class MobileClientPresentation
     public static Rect JoystickRect => ResolveControlRect(MobileControlId.Joystick);
     public static Rect AttackRect => ResolveControlRect(MobileControlId.Attack);
     public static Rect PickupRect => ResolveControlRect(MobileControlId.Pickup);
-    // Six equally spaced cells stay aligned in two rows. Their positions are independent
+    // Six skills retain the established thumb arc. Their positions are independent
     // of a customized attack button, so editing one control cannot silently move another.
     public static Rect SkillRect(int index) => ResolveControlRect((MobileControlId)((int)MobileControlId.Skill0+Mathf.Clamp(index,0,5)));
     // The avatar has no extra horizontal gutter beyond the device's real safe area.

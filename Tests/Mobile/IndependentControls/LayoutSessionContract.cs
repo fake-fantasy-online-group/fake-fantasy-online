@@ -36,6 +36,24 @@ class LayoutSessionContract {
  Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();MobileClientPresentation.ResetLayoutEdit();Check(Same(original,MobileClientPresentation.JoystickRect)&&File.ReadAllText(path)==saved,"reset remains draft");MobileClientPresentation.CancelLayoutEdit();Check(Same(savedRect,MobileClientPresentation.JoystickRect)&&File.ReadAllText(path)==saved,"cancel reset restores prior save");
  Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();MobileClientPresentation.SetControlCenter(MobileControlId.Joystick,new Vector2(250,250));string bad=Path.Combine(dir,"file");File.WriteAllText(bad,"keep");Application.persistentDataPath=bad;Check(!MobileClientPresentation.SaveLayoutEdit(out e)&&MobileClientPresentation.LayoutEditing&&e.Length>0,"save failure stays editing");Application.persistentDataPath=dir;MobileClientPresentation.CancelLayoutEdit();Check(Same(savedRect,MobileClientPresentation.JoystickRect)&&File.ReadAllText(path)==saved,"failed save preserves saved layout");
 
+ // Updated defaults affect unmodified controls and explicit Reset only. A saved
+ // skill or group-wheel placement must survive unchanged, even at former grid positions.
+ Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();
+ MobileClientPresentation.SetControlCenter(MobileControlId.Skill0,new Vector2(704,274));MobileClientPresentation.SetControlScale(MobileControlId.Skill0,1.25f);
+ MobileClientPresentation.SetControlCenter(MobileControlId.GroupWheel,new Vector2(932,274));
+ Check(MobileClientPresentation.SaveLayoutEdit(out e),"save custom skill and wheel fixture");
+ Rect customSkill=MobileClientPresentation.SkillRect(0),customWheel=MobileClientPresentation.PageRect;string customFile=File.ReadAllText(path);
+ var reloaded=MobileControlLayoutStore.Load(dir);
+ Check(Same(customSkill,reloaded.ResolveRect(MobileControlId.Skill0,MobileClientPresentation.DefaultControlRect(MobileControlId.Skill0),MobileClientPresentation.SafeAreaGui,MobileClientPresentation.Scale)),"saved skill overrides restored arc after reload");
+ Check(Same(customWheel,reloaded.ResolveRect(MobileControlId.GroupWheel,MobileClientPresentation.DefaultControlRect(MobileControlId.GroupWheel),MobileClientPresentation.SafeAreaGui,MobileClientPresentation.Scale)),"saved wheel overrides restored default after reload");
+ Check(File.ReadAllText(path)==customFile,"resolving updated defaults never rewrites saved file");
+ Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();MobileClientPresentation.ResetLayoutEdit();
+ var expectedArc=new[]{new Vector2(-116,32),new Vector2(-116,-40),new Vector2(-116,-116),new Vector2(-40,-156),new Vector2(36,-156),new Vector2(64,-80)};
+ for(int k=0;k<6;k++)Check((MobileClientPresentation.SkillRect(k).center-MobileClientPresentation.AttackRect.center-expectedArc[k]).sqrMagnitude<.0001f,"explicit Reset restores thumb arc slot "+k);
+ Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-184,-146)).sqrMagnitude<.0001f,"Reset restores original wheel location");
+ Check(File.ReadAllText(path)==customFile,"Reset does not write until Save");MobileClientPresentation.CancelLayoutEdit();
+ Check(Same(customSkill,MobileClientPresentation.SkillRect(0))&&Same(customWheel,MobileClientPresentation.PageRect)&&File.ReadAllText(path)==customFile,"cancel Reset preserves custom skill and wheel");
+
  for(int i=1;i<14;i++){Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();MobileClientPresentation.ResetLayoutEdit();var center=MobileClientPresentation.JoystickRect.center;MobileClientPresentation.SetControlCenter((MobileControlId)i,center);Check(MobileClientPresentation.SaveLayoutEdit(out e),"save overlapping fixture");Time.frameCount++;Check(!MobileClientPresentation.IsJoystickRegion(new Vector2(center.x,Screen.height-center.y)),"one pointer cannot steer and dispatch overlapping control "+i);}
  }finally{Directory.Delete(dir,true);}Check(geometryFailures==0,"geometry failures "+geometryFailures);Console.WriteLine("PASS independent actual presentation layout session "+checks+" assertions; no Unity/device.");
  }
