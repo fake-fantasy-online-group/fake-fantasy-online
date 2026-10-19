@@ -14,7 +14,11 @@ internal static partial class GameSettings
         EnsureLoaded();
         float hz = (float)Screen.currentResolution.refreshRateRatio.value;
 
-        // Official 1.5.8 GameSettings.ApplyFrameRate (06000e12) tests NaN, not Infinity.
+        // Reject invalid device refresh reports before converting them to a divisor.
+        if (float.IsInfinity(hz)) hz = 60f;
+
+        // Historical baseline below tests NaN, not Infinity; the guard above intentionally
+        // hardens that baseline for local display configuration. Official 1.5.8 token 06000e12:
         // arm64 06000e12.c:43-50 sets bVar1 = true (the 60f default) and only overwrites it with
         // `hz < 30f` when `(uint)ABS(hz) < 0x7f800001` (pcode op 81, constant 0x7f800001) holds:
         // that bit test is false for NaN only, so NaN keeps the 60f default while +Infinity takes
@@ -28,6 +32,9 @@ internal static partial class GameSettings
         else divisor = 1;
         QualitySettings.vSyncCount = divisor;
         UnityEngine.Application.targetFrameRate = FrameRateMode == 0 ? 60 : FrameRateMode == 1 ? 120 : -1;
+        // Android ignores vSyncCount; -1 means 30 fps there, not display refresh.
+        if (UnityEngine.Application.isMobilePlatform && FrameRateMode == 2)
+            UnityEngine.Application.targetFrameRate = Mathf.RoundToInt(hz);
         // Official write order is `fVar = 30f; if (30f <= hz / divisor) fVar = hz / divisor;`
         // (arm64 06000e12.c:164-168, x86_64 06000e12.c:174-178). The comparison is written
         // against the quotient first, so the argument order is Mathf.Max(hz / divisor, 30f):

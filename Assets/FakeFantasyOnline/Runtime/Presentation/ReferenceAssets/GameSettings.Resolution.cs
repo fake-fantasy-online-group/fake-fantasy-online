@@ -14,28 +14,35 @@ internal static partial class GameSettings
 
     public static int ResIndex()
     {
-        int sw = PlayerPrefs.GetInt("res_w", 1024);
-        int sh = PlayerPrefs.GetInt("res_h", 768);
+        EnsureLoaded();
+        int sw = displayConfig.Width;
+        int sh = displayConfig.Height;
         int index = Array.FindIndex(ResOpts, option => option.Item1 == sw && option.Item2 == sh);
         return index < 0 ? 1 : index;
     }
 
     public static void ApplyRes(int index)
     {
+        EnsureLoaded();
+        if (index < 0 || index >= ResOpts.Length) return;
         var option = ResOpts[index];
-        PlayerPrefs.SetInt("res_w", option.Item1);
-        PlayerPrefs.SetInt("res_h", option.Item2);
-        PlayerPrefs.Save();
+        SaveLocalDisplayResolution(option.Item1, option.Item2);
         ApplyResolution(option.Item1, option.Item2);
     }
 
     public static void ApplyResolution(int w, int h)
     {
+        if (w <= 0 || h <= 0) return;
         int displayWidth = Display.main.systemWidth;
         int displayHeight = Display.main.systemHeight;
         if (displayWidth > 0 && displayHeight > 0 && (w >= displayWidth || h >= displayHeight))
         {
             Screen.SetResolution(displayWidth, displayHeight, FullScreenMode.FullScreenWindow, 0);
+            return;
+        }
+        if (UnityEngine.Application.isMobilePlatform)
+        {
+            Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow, 0);
             return;
         }
         if (WindowCenter.TryGetMaxClient(out int maxWidth, out int maxHeight))

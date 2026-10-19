@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -10,6 +11,29 @@ namespace FakeFantasyOnline.Editor
 /// </summary>
 public sealed class ResourceFreeBuildStage : IDisposable
 {
+    // Unity includes nested Resources in every Player. Keep this reviewed source asset
+    // outside the private root Assets/Resources that staging moves out of the import tree.
+    public const string EmbeddedResourcesRelativePath = "FakeFantasyOnline/Runtime/Presentation/Resources";
+    public const string EmbeddedBackgroundRelativePath =
+        EmbeddedResourcesRelativePath + "/FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png";
+    public const long MaxEmbeddedBackgroundBytes = 4 * 1024 * 1024;
+    private static readonly HashSet<string> EmbeddedResourceDirectories = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration"
+    };
+    private static readonly HashSet<string> EmbeddedResourceFiles = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "FakeFantasyOnline.meta",
+        "FakeFantasyOnline/ReferenceEffectGL.shader", "FakeFantasyOnline/ReferenceEffectGL.shader.meta",
+        "FakeFantasyOnline/ReferenceIsoDepthY.shader", "FakeFantasyOnline/ReferenceIsoDepthY.shader.meta",
+        "FakeFantasyOnline/ReferenceNameTag.shader", "FakeFantasyOnline/ReferenceNameTag.shader.meta",
+        "FakeFantasyOnline/Bootstrap.meta",
+        "FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png", "FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png.meta",
+        "FakeFantasyOnline/Registration.meta",
+        "FakeFantasyOnline/Registration/WqyRegistrationSubset.txt", "FakeFantasyOnline/Registration/WqyRegistrationSubset.txt.meta",
+        "FakeFantasyOnline/Registration/WqyRegistrationLicense.txt", "FakeFantasyOnline/Registration/WqyRegistrationLicense.txt.meta",
+        "FakeFantasyOnline/Registration/WqyRegistrationNotice.txt", "FakeFantasyOnline/Registration/WqyRegistrationNotice.txt.meta"
+    };
     private readonly DirectoryStage streamingAssets;
     private readonly DirectoryStage resources;
 
@@ -23,6 +47,7 @@ public sealed class ResourceFreeBuildStage : IDisposable
         backupRoot = Path.GetFullPath(backupRoot);
         if (backupRoot == assetsRoot || backupRoot.StartsWith(assetsRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             throw new IOException("Resource backup must be outside Assets.");
+        ValidateEmbeddedBootstrapAssets(assetsRoot);
         // Check every destination before moving anything, including interrupted builds.
         DirectoryStage.Validate(Path.Combine(assetsRoot, "StreamingAssets"), Path.Combine(backupRoot, "StreamingAssets"));
         DirectoryStage.Validate(Path.Combine(assetsRoot, "Resources"), Path.Combine(backupRoot, "Resources"));
@@ -33,6 +58,55 @@ public sealed class ResourceFreeBuildStage : IDisposable
             File.WriteAllText(Path.Combine(assetsRoot, "StreamingAssets", configName), configJson, new UTF8Encoding(false));
         }
         catch { Dispose(); throw; }
+    }
+
+    public static void ValidateEmbeddedBootstrapAssets(string assetsRoot)
+    {
+        assetsRoot = Path.GetFullPath(assetsRoot);
+        string source = assetsRoot;
+        // Inspect only the exact, source-owned path. Never enumerate private resource trees.
+        foreach (string segment in EmbeddedResourcesRelativePath.Split('/'))
+        {
+            source = Path.Combine(source, segment);
+            if ((!File.Exists(source) && !Directory.Exists(source)) ||
+                (File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Missing or linked source-owned Resources directory: " + source);
+        }
+        ValidateSourceResourceDirectory(source, "");
+        foreach (string relative in EmbeddedResourceFiles)
+        {
+            long limit = relative.EndsWith(".png", StringComparison.Ordinal) ? MaxEmbeddedBackgroundBytes :
+                relative.EndsWith(".meta", StringComparison.Ordinal) ? 16 * 1024 : 64 * 1024;
+            RequireSmallRegularFile(Path.Combine(source, relative), limit);
+        }
+    }
+
+    private static void ValidateSourceResourceDirectory(string root, string relative)
+    {
+        string directory = relative.Length == 0 ? root : Path.Combine(root, relative);
+        foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
+        {
+            string name = relative.Length == 0 ? Path.GetFileName(entry) : relative + "/" + Path.GetFileName(entry);
+            if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Linked source-owned resource is not allowed: " + entry);
+            if (Directory.Exists(entry))
+            {
+                if (!EmbeddedResourceDirectories.Contains(name))
+                    throw new IOException("Unreviewed source-owned Resources directory: " + entry);
+                ValidateSourceResourceDirectory(root, name);
+            }
+            else if (!EmbeddedResourceFiles.Contains(name))
+                throw new IOException("Unreviewed source-owned Resources file: " + entry);
+        }
+    }
+
+    private static void RequireSmallRegularFile(string path, long limit)
+    {
+        if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Missing or linked embedded startup file: " + path);
+        long length = new FileInfo(path).Length;
+        if (length <= 0 || length > limit)
+            throw new IOException("Embedded startup file exceeds its reviewed size boundary: " + path);
     }
 
     public void Dispose()

@@ -176,6 +176,15 @@ class MobileTitleInputContract
         Check(Near(GUI.matrix.x,160) && Near(GUI.matrix.sy,1.2f), "Title transform restored after background");
     }
 }
+// This input/layout contract substitutes the background renderer only. The real cached
+// renderer, missing-asset fallback and drawing state have their own ClientBuild contract.
+namespace FakeFantasyOnline.Presentation
+{
+    public static class EmbeddedClientBackground
+    {
+        public static void Draw(Rect viewport) { GUI.DrawTexture(viewport, new Texture2D(), ScaleMode.ScaleAndCrop); }
+    }
+}
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     internal sealed partial class TitleFlow

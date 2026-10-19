@@ -31,10 +31,10 @@ internal static partial class GameSettings
         HeadHpBarOn = PlayerPrefs.GetInt("opt_hpbar", 0) != 0;
         HotbarBottom = PlayerPrefs.GetInt("opt_hotbar_bottom", 0) != 0;
         ColorWeak = PlayerPrefs.GetInt("opt_colorweak", 0) != 0;
-        FrameRateMode = Mathf.Clamp(PlayerPrefs.GetInt("opt_fps", 1), 0, 2);
         HideOtherPets = PlayerPrefs.GetInt("opt_hideotherpet", 0) != 0;
         HideMyPetGlow = PlayerPrefs.GetInt("opt_hidemyglow", 0) != 0;
         HideOtherPetGlow = PlayerPrefs.GetInt("opt_hideotherglow", 0) != 0;
+        LoadLocalDisplaySettings();
     }
 
     public static void Save()
@@ -48,7 +48,6 @@ internal static partial class GameSettings
         PlayerPrefs.SetInt("opt_hpbar", HeadHpBarOn ? 1 : 0);
         PlayerPrefs.SetInt("opt_hotbar_bottom", HotbarBottom ? 1 : 0);
         PlayerPrefs.SetInt("opt_colorweak", ColorWeak ? 1 : 0);
-        PlayerPrefs.SetInt("opt_fps", FrameRateMode);
         PlayerPrefs.SetInt("opt_hideotherpet", HideOtherPets ? 1 : 0);
         PlayerPrefs.SetInt("opt_hidemyglow", HideMyPetGlow ? 1 : 0);
         PlayerPrefs.SetInt("opt_hideotherglow", HideOtherPetGlow ? 1 : 0);

@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FakeFantasyOnline.Foundation;
+using FakeFantasyOnline.Presentation;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -17,7 +18,6 @@ public sealed class MobileResourceInstaller : MonoBehaviour
     private long completedBytes, totalBytes;
     private bool measurable, failed;
     private Camera clearCamera;
-    private Texture2D background;
     private GUIStyle titleStyle, statusStyle, detailStyle, fieldStyle, buttonStyle;
     private bool resourceFree, awaitingChoice, downloadRequested, installedRequested;
     private string manifestUrl = "", dispatchUrl = "";
@@ -40,8 +40,9 @@ public sealed class MobileResourceInstaller : MonoBehaviour
         clearCamera.cullingMask = 0;
         clearCamera.depth = -1000;
         clearCamera.useOcclusionCulling = false;
-        // Optional small, locally supplied build asset; never depend on unverified packages.
-        background = Resources.Load<Texture2D>("MobileStartupBackground");
+        // Source-owned Player asset, also retained by resource-free builds. It is available
+        // before any manifest, download, installed resource or game package is trusted.
+        EmbeddedClientBackground.Preload();
     }
 
     private void Phase(string label, string description, long bytes)
@@ -292,20 +293,17 @@ public sealed class MobileResourceInstaller : MonoBehaviour
             GUI.depth = -10000;
             GUI.matrix = Matrix4x4.identity;
             GUI.color = Color.white;
-            // Asset-independent opaque fallback: no package, font download or shader required.
-            Paint(new Rect(0, 0, Screen.width, Screen.height), new Color(.035f, .07f, .11f, 1));
-            if (background != null)
-                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), background, ScaleMode.ScaleAndCrop);
-            else
-                for (int band = 0; band < 24; band++)
-                    Paint(new Rect(0, Screen.height * band / 24f, Screen.width, Screen.height / 24f + 1),
-                        Color.Lerp(new Color(.04f, .09f, .15f, 1), new Color(.10f, .22f, .25f, 1), band / 23f));
+            EmbeddedClientBackground.Draw(new Rect(0, 0, Screen.width, Screen.height));
             // safeArea is bottom-left based; IMGUI is top-left based.
             Rect safe = Screen.safeArea;
             float scale = Mathf.Clamp(Mathf.Min(safe.width / 960f, safe.height / 540f), .6f, 3f);
             float width = Mathf.Min(safe.width - 48 * scale, 720 * scale);
             float x = safe.x + (safe.width - width) * .5f;
             float y = Screen.height - safe.yMax + safe.height * (resourceFree ? .28f : .53f);
+            // Keep progress, errors and setup controls readable over the bright cloud art.
+            float panelHeight = resourceFree ? 426 * scale : 184 * scale + safe.height * .3f;
+            Paint(new Rect(x - 24 * scale, y - 126 * scale, width + 48 * scale, panelHeight),
+                new Color(.025f, .045f, .06f, .82f));
             if (titleStyle == null)
             {
                 titleStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };

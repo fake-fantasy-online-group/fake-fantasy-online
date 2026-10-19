@@ -67,6 +67,8 @@ SavedVariables/
 *.png
 *.jpg
 *.jpeg
+# Explicit source-owned bootstrap artwork; private game art remains ignored.
+!/Assets/FakeFantasyOnline/Runtime/Presentation/Resources/FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png
 *.bmp
 *.tga
 *.psd

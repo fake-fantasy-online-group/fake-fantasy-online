@@ -25,6 +25,9 @@ public static class ClientBuild
     // Resource-free Android builds use the source scene and Unity defaults, with no local icon.
     internal static void PrepareClientScene(bool resourceFree)
     {
+        // Shared by desktop and mobile: all Players must contain the reviewed startup
+        // artwork and minimum title text assets, independent of downloaded game resources.
+        ResourceFreeBuildStage.ValidateEmbeddedBootstrapAssets(UnityEngine.Application.dataPath);
         if (!File.Exists(ScenePath))
         {
             throw new FileNotFoundException("The source-owned client scene is missing.", ScenePath);

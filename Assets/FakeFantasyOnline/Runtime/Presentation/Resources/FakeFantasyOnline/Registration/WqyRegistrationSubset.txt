@@ -1,0 +1,15 @@
+# WQY registration candidate: seven editable 12x12 bitmap glyphs.
+# GPL-2.0 with upstream font embedding exception; see WqyRegistrationLicense.txt.
+# Copyright 2004-2010 The WenQuanYi Project Board of Trustees and Qianqian Fang.
+# Based on Firefly; TTF conversion by AmusementClub. See WqyRegistrationNotice.txt.
+# Modified 2026-10-19: seven-glyph subset; native bitmap shifted +1,+1 in a 12px cell.
+# This is a candidate font, not an identification of the original game typeface.
+# Preferred editable source: codepoint:12 comma-separated hexadecimal bitmap rows.
+# Each row is 12 bits, most significant bit on the left. No antialiasing/resampling.
+786E:000,010,79E,124,27F,7A9,2BF,2A9,2BF,3A9,229,043
+8BA4:000,208,108,008,008,708,108,114,154,1A2,142,081
+5B89:000,020,3FF,201,442,040,7FF,088,188,070,04C,383
+5168:000,020,050,088,104,6FB,020,020,0F8,020,020,3FE
+6CE8:000,210,108,47F,288,088,108,13E,608,208,208,27F
+518C:000,3DE,252,252,252,7FF,252,252,252,252,252,4E6
+65B0:000,083,7EC,228,148,7EF,08A,7EA,08A,2AA,492,1A2

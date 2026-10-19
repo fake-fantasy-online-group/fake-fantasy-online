@@ -291,28 +291,19 @@ internal sealed partial class TitleFlow
         RecoveredTitleLoginSurface.DestroyTexture(_buttonBackground);
         RecoveredTitleLoginSurface.DestroyTexture(_panelBackground);
         RecoveredTitleLoginSurface.DestroyTexture(_inputBackground);
+        ReleaseNativeLoginPresentation();
+        ReleaseRegistrationPresentation();
     }
 
     private void DrawLogin()
     {
-        if (_loginPanel)
-        {
-            GUI.DrawTexture(
-                new Rect(
-                    237f,
-                    348f,
-                    GsaTextureScale.Width(_loginPanel),
-                    GsaTextureScale.Height(_loginPanel)),
-                _loginPanel);
-        }
-
-        Rect accountBox = new Rect(319f, 392f, 150f, 22f);
-        Rect passwordBox = new Rect(319f, 429f, 150f, 22f);
-        GUI.Box(accountBox, GUIContent.none, _inputStyle);
-        GUI.Box(passwordBox, GUIContent.none, _inputStyle);
+        EnsureNativeLoginPresentation();
+        DrawNativeLoginPanel();
 
         Rect accountField = new Rect(327f, 392f, 134f, 22f);
-        Rect passwordField = new Rect(327f, 429f, 134f, 22f);
+        // MobileField expands its input target by 4px. End at y446 so the expanded
+        // target stops at y450, before the visible memory checkbox row starts.
+        Rect passwordField = new Rect(327f, 429f, 134f, 17f);
         string editedAccount = MobileClientPresentation.Enabled
             ? MobileField("login-account", accountField, account, 20, false, _fieldStyle)
             : GUI.TextField(accountField, account ?? string.Empty, 20, _fieldStyle);
@@ -324,16 +315,6 @@ internal sealed partial class TitleFlow
         if (!string.Equals(password, editedPassword, StringComparison.Ordinal)) pluginTitleRevision++;
         password = editedPassword;
 
-        if (string.IsNullOrEmpty(account))
-        {
-            GUI.Label(accountField, " 账号", _placeholderStyle);
-        }
-
-        if (string.IsNullOrEmpty(password))
-        {
-            GUI.Label(passwordField, " 密码", _placeholderStyle);
-        }
-
         // Official DrawLogin (06000ee6, arm64 :181-228): the account box is offered first and the
         // password box second, both results are captured before anything is written, and the
         // static flags are only touched when the pair actually changed -
@@ -343,8 +324,8 @@ internal sealed partial class TitleFlow
         // either arm (:216 and :225) - never twice, and never outside the gate.
         bool previousRememberAccount = _rememberAccount;
         bool previousRememberPassword = _rememberPassword;
-        bool nextRememberAccount = LoginCheck(accountBox, _rememberAccount, "记住账号");
-        bool nextRememberPassword = LoginCheck(passwordBox, _rememberPassword, "记住密码");
+        bool nextRememberAccount = NativeLoginCheck(new Rect(321f, 450f, 64f, 14f), _rememberAccount);
+        bool nextRememberPassword = NativeLoginCheck(new Rect(403f, 450f, 64f, 14f), _rememberPassword);
         if (previousRememberAccount != nextRememberAccount ||
             previousRememberPassword != nextRememberPassword)
         {
@@ -359,8 +340,7 @@ internal sealed partial class TitleFlow
         }
 
         GUI.enabled = !loggingIn && !RecoveredTitleLoginSurface.NeedUpdate;
-        string loginLabel = RecoveredTitleLoginSurface.NeedUpdate ? "请先更新" : loggingIn ? "登录中…" : "登录游戏";
-        if (GUI.Button(new Rect(316f, 482f, ButtonWidth, ButtonHeight), loginLabel, _regButtonStyle))
+        if (NativeLoginButton(new Rect(316f, 482f, ButtonWidth, ButtonHeight), 0, "登入游戏"))
         {
             // Official DrawLogin (06000ee6) evaluates account.Trim() exactly once per click and
             // keeps the result in the closure only — TitleFlow.account (+0x1d8) never receives
@@ -386,44 +366,21 @@ internal sealed partial class TitleFlow
         }
 
         GUI.enabled = true;
-        if (GUI.Button(new Rect(644f, 498f, ButtonWidth, ButtonHeight), "退出游戏", _regButtonStyle))
+        if (NativeLoginButton(new Rect(644f, 498f, ButtonWidth, ButtonHeight), 2, "退出游戏"))
         {
             GameBootstrap.QuitGame();
         }
 
-        if (GUI.Button(new Rect(644f, 459f, ButtonWidth, ButtonHeight), "申请账号", _regButtonStyle))
+        if (NativeLoginButton(new Rect(644f, 459f, ButtonWidth, ButtonHeight), 1, "申请帐号"))
         {
             OpenRegisterForm();
         }
 
-        if (GUI.Button(new Rect(644f, 420f, ButtonWidth, ButtonHeight), "找回密码", _regButtonStyle))
-        {
-            OpenRecoverForm();
-        }
+        // Keep actionable connection/error feedback, but leave the approved idle screen clear.
+        string hint = loggingIn ? "登录中…" : netMsg;
+        if (!string.IsNullOrEmpty(hint)) DrawHintBox(400f, 520f, hint, 560f);
 
-        // Official DrawLogin (0x06000ee6): the fifth and last title button, RegBtn(644, 381, 152,
-        // usage 17985 "被盗申诉") on x86_64 and the inlined GUI.Button(0x44210000 = 644,
-        // 0x43be8000 = 381, 0x43180000 = 152, 0x42040000 = 33) on arm64. Drawn last in the
-        // native body, after 退出游戏 (498), 申请账号 (459) and 找回密码 (420), and the click arm
-        // writes state (+0x28) = 3, netMsg (+0x250) = "" and then apAcc = account.Trim(),
-        // apWhen = "", apReason = "" at this exact button site.
-        if (GUI.Button(new Rect(644f, 381f, ButtonWidth, ButtonHeight), "被盗申诉", _regButtonStyle))
-        {
-            OpenAppealForm(account);
-        }
-
-        string hint = string.IsNullOrEmpty(netMsg) ? "请输入账号和密码!" : netMsg;
-        DrawHintBox(400f, 520f, hint, 560f);
-        DrawResSelector();
-        DrawFpsSelector();
-        DrawVersionBadge();
-
-        GUI.Label(
-            new Rect(150f, 580f, 500f, 16f),
-            "本软件仅用于个人学习使用，请下载后24H内删除",
-            _disclaimerStyle);
-
-        // Original DrawLogin ends with this gate; OnGUI then draws the notice button.
+        // The update gate is a compatibility requirement, independent of removed notice UI.
         if (RecoveredTitleLoginSurface.NeedUpdate)
             DrawUpdateGate();
 
@@ -448,47 +405,14 @@ internal sealed partial class TitleFlow
 
     }
 
-    /// <summary>
-    /// Official 1.5.8 TitleFlow.DrawRegister (0x06000eef, arm64 0x3867b0 / x86_64 0x3996e0).
-    /// </summary>
-    /// <remarks>
-    /// The body is, in order: one panel Box, the title Label, five FormRow (0x06000eda) calls,
-    /// FormButtons (0x06000edb) with an <c>Action</c> bound to DoRegister (0x06000ef0), and
-    /// HintBox (0x06000ed7). Every constant below was read on both frozen architectures: the
-    /// arm64 body carries the immediates (0x433e0000 = 190, 0x43d20000 = 420, 0x43830000 = 262,
-    /// 0x43760000 = 246, 0x43880000 = 272, rows 0x439a0000 = 308 / 0x43aa0000 = 340 /
-    /// 0x43ba0000 = 372 / 0x43ca0000 = 404 / 0x43da0000 = 436, buttons 0x43ec0000 = 472, hint
-    /// 0x43c80000 = 400 / 0x44020000 = 520 / 0x440c0000 = 560) and the x86_64 constant pool
-    /// (__TEXT,__const file offset 17923072, va 0x1117c00) holds the same values.
-    /// The component field netMsg (+0x250): DrawRegister shows it, falling back to
-    /// usage 18081 when it is null or empty, and DoRegister writes into it.
-    /// </remarks>
+    // Approved four-field presentation. Validation and the registration wire contract
+    // remain in DoRegister/BeginRegisterAccount; artwork is composed at runtime.
     private void DrawRegister()
     {
         EnsureStyles();
         Matrix4x4 previousMatrix = BeginGuiFrameForIndependentRuntime(false);
-        // GUI.Box(190, 262, 420, 246, GUIContent.none, style +0x2b0): the panel style is the
-        // 14px black 0.78 panel with the gold two-pixel border, i.e. this surface's
-        // _panelStyle (OnGUI 0x06000ec7, MakeRoundTex(0,0,0,0.78 / 0.72,0.58,0.3,1, 14, 2)).
-        GUI.Box(new Rect(190f, 262f, 420f, 246f), GUIContent.none, _panelStyle);
-
-        // GUI.Label(190, 272, 420, 24, usage 17744 "注 册 新 账 号", style +0x288): skin
-        // label, MiddleCenter, richText, clipping Clip - the same construction as _center.
-        GUI.Label(new Rect(190f, 272f, 420f, 24f), "注 册 新 账 号", _center);
-
-        // FormRow(190, 420, y, this, label, ref field, pwd) in this order.
-        FormRow(190f, 420f, 308f, "账号", ref _registerAccount, false);
-        FormRow(190f, 420f, 340f, "密码", ref _registerPassword, true);
-        FormRow(190f, 420f, 372f, "确认密码", ref _registerPasswordConfirm, true);
-        FormRow(190f, 420f, 404f, "安全码", ref _registerSecurityCode, false);
-        FormRow(190f, 420f, 436f, "邀请码", ref _registerInviteCode, false);
-
-        FormButtons(472f, DoRegister);
-        string hint = string.IsNullOrEmpty(netMsg)
-            ? "账号+密码+确认密码+安全码 必填; 没有邀请码? 关注官方频道 @qqdiaoxiang 每天抽取"
-            : netMsg;
-        DrawHintBox(400f, 520f, hint, 560f);
-        GUI.matrix = previousMatrix;
+        try { DrawRegistrationPresentation(); }
+        finally { GUI.matrix = previousMatrix; }
     }
 
     /// <summary>

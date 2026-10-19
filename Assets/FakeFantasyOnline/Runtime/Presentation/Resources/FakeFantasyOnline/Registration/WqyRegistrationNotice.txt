@@ -1,0 +1,36 @@
+WenQuanYi registration candidate glyph subset
+
+This independent font resource contains only 确 认 安 全 注 册 新 in 12x12 cells.
+It is not an identification or reproduction of the original game font family.
+No original game pixel masks are included in this resource or the source code.
+Original 帐 号 密 码 are sampled from the user's external game resource at runtime.
+
+Copyright 2004-2010 The WenQuanYi Project Board of Trustees and Qianqian Fang.
+The upstream font is based on earlier work by Firefly. Contributors: WenQuanYi Contributors.
+TTF conversion: AmusementClub (entertainment club).
+Original font: WenQuanYi Bitmap Song 1.0 (Hero) RC1 (0.9.9.8), Release 8.
+Converted font: WenQuanYi Bitmap Song 12px, v1.0.0-RC1-Build1.
+Reviewed TTF SHA-256: ce94c20796987a169ea08d24207c7a00ff457fe3b5dae5db21c7b51eab60eb3c
+
+Official converter source and release:
+https://github.com/AmusementClub/WenQuanYi-Bitmap-Song-TTF
+https://github.com/AmusementClub/WenQuanYi-Bitmap-Song-TTF/releases/tag/v1.0.0-RC1-Build1
+https://github.com/AmusementClub/WenQuanYi-Bitmap-Song-TTF/blob/master/Original%20Fonts/README
+https://github.com/AmusementClub/WenQuanYi-Bitmap-Song-TTF/blob/master/Original%20Fonts/AUTHORS
+
+License: GNU GPL version 2 with the upstream font embedding exception.
+The complete license and exception accompany this file in WqyRegistrationLicense.txt.
+The document embedding exception is retained for this modified subset. We do not
+assume that the word "document" grants an exemption for an entire game application.
+The font is distributed separately as GPL data, not compiled into application code.
+The application renderer reads this independent font resource at runtime.
+
+Modification (2026-10-19): retain seven glyphs, preserve the 11-pixel bitmap strokes,
+and place them at offset (1,1) in a 12x12 cell. No smoothing or rescaling of glyphs.
+WqyRegistrationSubset.txt is the complete, preferred editable source of this subset
+and is shipped beside this notice and license. Edit its 12-bit hexadecimal rows
+with any text editor; the runtime reads that same text, with no opaque font binary.
+The reproducible extraction script is Documentation/tools/generate-registration-font-subset.py
+in the client source tree. It accepts the reviewed TTF above and writes this source.
+Recipients may copy, modify and redistribute this font resource under its GPL terms.
+No warranty; see the license. The full upstream TTF is not bundled.

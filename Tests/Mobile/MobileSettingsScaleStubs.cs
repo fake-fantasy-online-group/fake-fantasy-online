@@ -25,6 +25,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class BitmapFont {public static bool Ready=>false;public static void Draw(float x,float y,string text,Color color,float s){}}
  public static class WinZ {public static (int,bool) Frame(object o,Rect r,int i)=>(i,false);}
  public static class SysMsgBox {public static bool Visible;}
+ public static class SysOptionDlg {public static void Hide(){}}
  public static class ArtworkSkin {public static void Panel(Rect r,float s){}public static void Row(Rect r,float s,bool hi){}}
  public class MusicManager {public static MusicManager I;public void SetVolume(float f){}}
  public static class SoundManager {public static void Volume(float f){}}

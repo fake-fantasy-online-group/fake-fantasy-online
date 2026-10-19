@@ -84,12 +84,7 @@ internal sealed partial class TitleFlow
         LoadLoginPrefs();
         EnsureStyles();
         Matrix4x4 previousMatrix = BeginGuiFrameForIndependentRuntime(false);
-        if (_noticeOpen) DrawUpdateNotice();
-        else
-        {
-            DrawLogin();
-            DrawNoticeButton();
-        }
+        DrawLogin();
         GUI.matrix = previousMatrix;
     }
     private void PrepareServerPageForPluginAndGui()

@@ -9,8 +9,8 @@ if [[ -n "${FFO_CSC:-}" ]]; then
     : "${FFO_FRAMEWORK_DIR:?Set FFO_FRAMEWORK_DIR when using FFO_CSC}"
     find "$FFO_FRAMEWORK_DIR" -maxdepth 1 -name '*.dll' | sort | sed 's/^/-r:/' > "$OUT/framework.rsp"
     "$FFO_MONO_ROOT/bin/mono" "$FFO_CSC" -nologo -noconfig -nostdlib+ @"$OUT/framework.rsp" -target:exe -out:"$OUT/contract.exe" "${SOURCES[@]}"
-    "$FFO_MONO_ROOT/bin/mono" "$OUT/contract.exe"
+    "$FFO_MONO_ROOT/bin/mono" "$OUT/contract.exe" "$ROOT/Assets"
 else
     mcs -out:"$OUT/contract.exe" "${SOURCES[@]}"
-    mono "$OUT/contract.exe"
+    mono "$OUT/contract.exe" "$ROOT/Assets"
 fi

@@ -1,5 +1,44 @@
 # UI artwork harmony
 
+## Approved native login presentation (2026-10-19)
+
+The newly approved login UI supersedes the historical pregame visual-equivalence
+target below. It uses only the original baked-label `loginbtn`, `candidatebtn`
+and `quitbtn` state frames from external resources, at the approved 800x600
+coordinates. `LoadGsaFrameA` assembles tiled records rather than accidentally
+using a single 32x32 tile. Unity's normal `GUI.Button` owns press/release,
+cancellation, keyboard and disabled handling; no substitute lettering is drawn
+on top of the image buttons.
+
+The 317x131 native login panel is copied in memory, with the obsolete invisible
+login label replaced by `记忆密码`. Every glyph comes from pixels already in the
+external panel, preserving native 12px advance, gray gradient and one-pixel
+black edge. The source texture is never mutated or bundled. Both checkboxes
+use original `titleui/check.gsa` frames and retain the existing preference
+behavior: remembering the password implies remembering the account, with one
+save after a changed pair. No tests read or save real credentials.
+
+Announcement, recovery/appeal, display-settings and version controls are absent
+from the login page. Actionable connection/errors and the compatibility update
+gate remain. The password editing target ends at y446 so its mobile 4px
+expansion cannot overlap the checkboxes at y450. The approved panel artwork
+and checkbox positions stay unchanged. Missing/incompatible external art uses
+a usable plain fallback rather than showing a wrong baked label.
+
+Reproduce the deterministic source/presentation contract with the configured
+cloud managed-test toolchain:
+
+```sh
+source Documentation/tools/activate-dotnet-test-toolchain.sh
+python3 Tests/UiArtwork/run-login-presentation-contract.py
+```
+
+Recorded result: 75 production-source C# assertions plus source/click-geometry
+guards passed. An additional outside-repository real-artwork test executed the
+production panel compositor and exactly matched the approved preview panel
+(zero differing pixels). This is not a Unity event-loop, PlayMode or Player
+test. Original artwork, raw fixtures and preview PNGs remain outside Git.
+
 This feature restores artwork-backed styling to the 26 UI groups below. It reuses external resource packages through ResLoader; no image, audio or package data is included in this change. Existing UI actions and current wording are preserved, including cases where an older image contains outdated text.
 
 ## Scope
