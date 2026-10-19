@@ -1,0 +1,57 @@
+name: Android resource-free candidate
+
+# Trusted maintainers deliberately run this on the default branch only. PRs never
+# run Unity with credentials, even if they modify this file or build scripts.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-resource-free-candidate
+  cancel-in-progress: false
+
+jobs:
+  android:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      # Verified Docker Hub tag: ubuntu-6000.4.9f1-android-3. Pin its immutable manifest.
+      UNITY_IMAGE: unityci/editor@sha256:0ef7c5f0a026609ca8c0faaa75d677736a3edb02aaaf333a0862b6b2bd7d0d7c
+      UNITY_CI_LICENSE_MODE: ${{ vars.UNITY_CI_LICENSE_MODE || 'personal-pending' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Fail safely before downloading Unity when licensing is unconfigured
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: ./scripts/ci/license-preflight.sh
+      - name: Check source contracts
+        run: python3 -m unittest discover -s Tests/ClientBuild -p 'test_*.py' -v
+      - name: Pull exact Unity and Android toolchain
+        run: docker pull "$UNITY_IMAGE"
+      - name: Build development ARM64 IL2CPP candidate
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --env UNITY_LICENSE --env UNITY_CI_LICENSE_MODE --env GITHUB_SHA \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace/project" \
+            --workdir /workspace/project --entrypoint bash \
+            "$UNITY_IMAGE" ./scripts/ci/run-unity-container.sh
+      - name: Upload verified candidate only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-resource-free-candidate-${{ github.sha }}
+          path: |
+            Build/Android/resource-free-candidate.apk
+            Build/Android/resource-free-candidate.apk.build.json
+            Build/Android/resource-free-candidate.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+      - name: Record limited acceptance scope
+        run: |
+          echo 'Built and structurally checked a development candidate only. Device launch, downloads, interruptions, server compatibility and release signing are not established by this job.' >> "$GITHUB_STEP_SUMMARY"

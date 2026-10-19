@@ -31,3 +31,7 @@ build-android:
 		-projectPath "$(CURDIR)" \
 		-executeMethod FakeFantasyOnline.Editor.MobileClientBuild.BuildAndroid \
 		-logFile -
+
+.PHONY: build-android-resource-free
+build-android-resource-free:
+	@UNITY_EDITOR_BIN="$(UNITY_EDITOR_BIN)" ./scripts/ci/build-android-resource-free.sh

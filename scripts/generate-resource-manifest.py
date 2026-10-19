@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Explicit resource-host operation. Never invoked by the resource-free player build."""
+import argparse
+import hashlib
+from pathlib import Path, PurePosixPath
+import re
+
+PASSIVE_GAME_EXTENSIONS = {'.json', '.png', '.jpg', '.jpeg', '.bytes', '.txt', '.bin', '.ogg', '.wav'}
+
+
+def destination(source):
+    if source.startswith('ReferenceClient/packages/'):
+        return 'data/' + source[len('ReferenceClient/packages/'):]
+    if source.startswith('ReferenceClient/music/'):
+        return 'Music/' + source[len('ReferenceClient/music/'):]
+    return source
+
+
+def allowed(path):
+    pieces = PurePosixPath(path).parts
+    if len(pieces) < 2 or any(p in ('', '.', '..') for p in pieces):
+        return False
+    extension = PurePosixPath(path).suffix.lower()
+    return ((pieces[0] == 'data' and len(pieces) == 2 and extension == '.pkg') or
+            (pieces[0] == 'Music' and len(pieces) == 2 and extension == '.ogg') or
+            (pieces[0] in ('gameassets', 'ReferenceClient') and extension in PASSIVE_GAME_EXTENSIONS) or
+            (len(pieces) >= 3 and pieces[0] in ('gameassets', 'ReferenceClient') and pieces[1] == 'font' and extension in ('.idx', '.wid')) or
+            (pieces[0] in ('sndeffect', 'sndeffect24_pcm') and extension in ('.wav', '.ogg')))
+
+
+def generate(root, version):
+    root = Path(root).resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError('Resource root must be a directory')
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
+        raise ValueError('Client version must be an explicit application SemVer')
+    entries = []
+    sources = set()
+    destinations = set()
+    source_spellings = {}
+    destination_spellings = {}
+    total_size = 0
+    for file in sorted(root.rglob('*')):
+        relative = file.relative_to(root).as_posix()
+        # Plugins, endpoint configuration and Unity metadata are never remote game resources.
+        if relative == 'mobile-dispatch.txt' or relative == 'mobile-resources.tsv' or relative.startswith('AddOns/') or relative == 'AddOns' or relative.lower().endswith('.meta'):
+            continue
+        if file.is_symlink():
+            raise ValueError('Materialize symlinks before publishing resources: ' + relative)
+        if file.is_dir():
+            continue
+        if len(relative) > 1024 or len(relative.split('/')) > 64:
+            raise ValueError('Resource path exceeds runtime length/depth limits: ' + relative)
+        if any(c in relative for c in '\t\r\n\\?#%:') or any(ord(c) < 32 for c in relative) or any(part.endswith(('.', ' ')) or part.lower().endswith('.part') for part in relative.split('/')):
+            raise ValueError('Unsafe source path: ' + relative)
+        target = destination(relative)
+        if not allowed(target):
+            raise ValueError('Unexpected or executable resource; review outside this passive-resource channel: ' + relative)
+        for value, seen, spellings in [(relative, sources, source_spellings), (target, destinations, destination_spellings)]:
+            key = value.lower()
+            if key in seen or any(key.startswith(old + '/') or old.startswith(key + '/') for old in seen):
+                raise ValueError('Case-insensitive path collision: ' + value)
+            seen.add(key)
+            pieces = value.split('/')
+            for index in range(1, len(pieces) + 1):
+                prefix = '/'.join(pieces[:index])
+                previous = spellings.get(prefix.lower())
+                if previous is not None and previous != prefix:
+                    raise ValueError('Directory casing collision: ' + prefix)
+                spellings[prefix.lower()] = prefix
+        hasher = hashlib.sha256()
+        size = 0
+        with file.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                size += len(chunk)
+                hasher.update(chunk)
+        if size == 0:
+            raise ValueError('Empty resource is not supported: ' + relative)
+        total_size += size
+        if total_size > 64 * 1024 * 1024 * 1024 or len(entries) >= 100000:
+            raise ValueError('Resource set exceeds runtime installation limits')
+        entries.append(f'{relative}\t{target}\t{size}\t{hasher.hexdigest()}')
+    if not entries:
+        raise ValueError('Refusing to generate an empty resource manifest')
+    text = 'FFO-MOBILE-1\n@client\tandroid\t' + version + '\n' + '\n'.join(entries) + '\n'
+    if len(text.encode('utf-8')) > 8 * 1024 * 1024:
+        raise ValueError('Manifest exceeds runtime 8 MiB limit')
+    return text
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('resource_root', type=Path, help='Materialized passive-resource directory to serve over HTTPS')
+    parser.add_argument('--client-version', required=True, help='Exact supported application version (PlayerSettings bundleVersion)')
+    parser.add_argument('--output', type=Path, required=True, help='New manifest path; existing files are never overwritten')
+    args = parser.parse_args()
+    text = generate(args.resource_root, args.client_version)
+    with args.output.open('x', encoding='utf-8', newline='\n') as stream:
+        stream.write(text)
+    print('Created manifest; serve it at the resource root so relative source URLs resolve correctly. No upload or publishing was performed.')
+
+
+if __name__ == '__main__':
+    main()

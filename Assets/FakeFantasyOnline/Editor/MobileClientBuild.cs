@@ -15,35 +15,78 @@ public static class MobileClientBuild
 {
     public static void BuildAndroid()
     {
+        BuildAndroid(Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE") ?? "offline");
+    }
+
+    public static void BuildAndroidResourceFree()
+    {
+        BuildAndroid("resource-free");
+    }
+
+    private static void BuildAndroid(string mode)
+    {
         if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Android, BuildTarget.Android))
             throw new InvalidOperationException("Install Android Build Support for this Unity Editor before building.");
         string output = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH");
         output = Path.GetFullPath(string.IsNullOrWhiteSpace(output) ? "Build/Android/fake-fantasy-online.apk" : output);
         if (!output.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Android build output must end in .apk.");
-        string mode = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_RESOURCE_MODE") ?? "offline";
-        if (mode != "offline" && mode != "bundled") throw new ArgumentException("Resource mode must be offline or bundled.");
+        if (mode != "offline" && mode != "bundled" && mode != "resource-free")
+            throw new ArgumentException("Resource mode must be offline, bundled, or resource-free.");
         bool offline = mode == "offline";
+        bool resourceFree = mode == "resource-free";
+        bool development = offline || resourceFree;
         bool developmentHttp = Environment.GetEnvironmentVariable("FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP") == "1";
-        if (developmentHttp && !offline) throw new InvalidOperationException("HTTP opt-in is restricted to offline development builds.");
+        if (developmentHttp && !development) throw new InvalidOperationException("HTTP opt-in is restricted to development builds.");
         string root = UnityEngine.Application.streamingAssetsPath;
         string backup = Path.GetFullPath("LocalMobileBuild/OriginalStreamingAssets");
         if (Directory.Exists(backup)) throw new IOException("Interrupted mobile staging: restore " + backup + " to StreamingAssets before retrying.");
-        MobileStreamingAssetsStage stage = null;
+        IDisposable stage = null;
         string manifestPath = Path.Combine(root, MobileResourceManifest.FileName);
-        byte[] previousManifest = File.Exists(manifestPath) ? File.ReadAllBytes(manifestPath) : null;
+        byte[] previousManifest = !resourceFree && File.Exists(manifestPath) ? File.ReadAllBytes(manifestPath) : null;
         var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android);
         var architectures = PlayerSettings.Android.targetArchitectures;
         bool appBundle = EditorUserBuildSettings.buildAppBundle;
+        bool customKeystore = PlayerSettings.Android.useCustomKeystore;
+        string applicationId = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android);
         var previousHttpPolicy = PlayerSettings.insecureHttpOption;
+        Texture2D[] defaultIcons = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, IconKind.Any);
+        Texture2D[] androidIcons = PlayerSettings.GetIcons(UnityEditor.Build.NamedBuildTarget.Android, IconKind.Any);
         try
         {
-            // Explicit local-test opt-in only; production builds retain their existing policy.
-            if (developmentHttp) PlayerSettings.insecureHttpOption = InsecureHttpOption.DevelopmentOnly;
-            GenerateManifest(root, offline);
-            if (!offline && Directory.GetFiles(root, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) > 1024L * 1024 * 1024)
-                throw new InvalidDataException("Bundled resources exceed conservative 1 GiB limit; use offline development mode.");
-            ClientBuild.PrepareClientScene();
+            if (resourceFree)
+            {
+                var config = new MobileResourceBootstrapConfig
+                {
+                    schemaVersion = 1,
+                    mode = "resource-free",
+                    appVersion = PlayerSettings.bundleVersion,
+                    resourceManifestUrl = Environment.GetEnvironmentVariable("FFO_RESOURCE_MANIFEST_URL") ?? "",
+                    dispatchUrl = Environment.GetEnvironmentVariable("FFO_RESOURCE_DISPATCH_URL") ?? "",
+                    developmentHttp = developmentHttp
+                };
+                config.Validate(development);
+                // Never generate or hash a game-resource manifest for this build mode.
+                stage = new ResourceFreeBuildStage(UnityEngine.Application.dataPath,
+                    Path.GetFullPath("LocalMobileBuild/ResourceFree"),
+                    MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(config, true));
+                GbkBuildTable.WriteTo(Path.Combine(UnityEngine.Application.dataPath, "Resources"));
+                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
+                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, new Texture2D[0], IconKind.Any);
+                PlayerSettings.Android.useCustomKeystore = false;
+                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "org.fakefantasyonline.resourcefreecandidate");
+                PlayerSettings.insecureHttpOption = developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
+                AssetDatabase.Refresh();
+            }
+            else
+            {
+                // Preserve the existing locally supplied offline/bundled resource workflow.
+                if (developmentHttp) PlayerSettings.insecureHttpOption = InsecureHttpOption.DevelopmentOnly;
+                GenerateManifest(root, offline);
+                if (!offline && Directory.GetFiles(root, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) > 1024L * 1024 * 1024)
+                    throw new InvalidDataException("Bundled resources exceed conservative 1 GiB limit; use offline development mode.");
+            }
+            ClientBuild.PrepareClientScene(resourceFree);
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             EditorUserBuildSettings.buildAppBundle = false;
@@ -60,22 +103,32 @@ public static class MobileClientBuild
                 scenes = new[] { "Assets/FakeFantasyOnline/Scenes/Client.unity" },
                 locationPathName = output,
                 target = BuildTarget.Android,
-                options = offline ? BuildOptions.Development : BuildOptions.None
+                options = development ? BuildOptions.Development : BuildOptions.None
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Android build failed: " + report.summary.result);
-            Debug.Log("Android foundation APK built at " + output + ". Device/resource/IL2CPP acceptance is still required.");
+            Debug.Log("Android " + mode + " APK built at " + output + ". Device/resource/IL2CPP acceptance is still required.");
         }
         finally
         {
-            PlayerSettings.insecureHttpOption = previousHttpPolicy;
-            stage?.Dispose();
-            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, backend);
-            PlayerSettings.Android.targetArchitectures = architectures;
-            EditorUserBuildSettings.buildAppBundle = appBundle;
-            if (previousManifest == null) File.Delete(manifestPath);
-            else File.WriteAllBytes(manifestPath, previousManifest);
-            AssetDatabase.Refresh();
+            try { stage?.Dispose(); }
+            finally
+            {
+                PlayerSettings.insecureHttpOption = previousHttpPolicy;
+                PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, backend);
+                PlayerSettings.Android.targetArchitectures = architectures;
+                PlayerSettings.Android.useCustomKeystore = customKeystore;
+                EditorUserBuildSettings.buildAppBundle = appBundle;
+                if (resourceFree)
+                {
+                    PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, applicationId);
+                    PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, defaultIcons, IconKind.Any);
+                    PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, androidIcons, IconKind.Any);
+                }
+                else if (previousManifest == null) File.Delete(manifestPath);
+                else File.WriteAllBytes(manifestPath, previousManifest);
+                AssetDatabase.Refresh();
+            }
         }
     }
 

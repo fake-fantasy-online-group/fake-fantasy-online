@@ -19,6 +19,12 @@ public static class ClientBuild
     [MenuItem("fake-fantasy-online/Prepare client scene")]
     public static void PrepareClientScene()
     {
+        PrepareClientScene(false);
+    }
+
+    // Resource-free Android builds use the source scene and Unity defaults, with no local icon.
+    internal static void PrepareClientScene(bool resourceFree)
+    {
         if (!File.Exists(ScenePath))
         {
             throw new FileNotFoundException("The source-owned client scene is missing.", ScenePath);
@@ -31,7 +37,7 @@ public static class ClientBuild
         {
             new EditorBuildSettingsScene(ScenePath, true)
         };
-        ConfigureBranding();
+        if (!resourceFree) ConfigureBranding();
         AssetDatabase.SaveAssets();
     }
 
@@ -78,7 +84,6 @@ public static class ClientBuild
             PlayerSettings.SetScriptingBackend(targetGroup, ScriptingImplementation.Mono2x);
             PlayerSettings.productName = "fake-fantasy-online";
             PlayerSettings.companyName = "fake-fantasy-online";
-            PlayerSettings.bundleVersion = "0.1.0";
             PlayerSettings.defaultScreenWidth = 800;
             PlayerSettings.defaultScreenHeight = 600;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
@@ -160,7 +165,6 @@ public static class ClientBuild
         PrepareClientScene();
         PlayerSettings.productName = "fake-fantasy-online";
         PlayerSettings.companyName = "fake-fantasy-online";
-        PlayerSettings.bundleVersion = "0.1.0";
         PlayerSettings.defaultScreenWidth = 800;
         PlayerSettings.defaultScreenHeight = 600;
         PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
