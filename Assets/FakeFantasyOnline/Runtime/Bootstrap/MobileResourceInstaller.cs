@@ -218,7 +218,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             {
                 enterRequested = false;
                 if (ready && verifiedRoot != null && verifiedDispatchUrl == dispatchUrl.Trim() &&
-                    updatePlan != null && !updatePlan.Required)
+                    updatePlan != null && !updatePlan.Required && updatePlan.HasCompatibleResources)
                 {
                     DispatchUrl = verifiedDispatchUrl;
                     ClientUpdateSession.Publish(updatePlan);
@@ -261,6 +261,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
                 if (plan.Required)
                     Phase("需要更新客户端", "当前 v" + config.appVersion + "，最低要求 v" + plan.Artifact.MinVersion +
                         "。请下载并校验安装包，再按提示安装和重新启动。", 0);
+                else if (failure == null && !plan.HasCompatibleResources)
+                    failure = new InvalidDataException("No compatible resource manifest for " + PlatformKey() + " client v" + config.appVersion + ". Download a compatible client package or correct the dispatch mapping.");
                 else if (failure == null)
                 {
                     Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
@@ -279,6 +281,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             ready = true;
             Phase("准备就绪", plan.Available ? "资源已验证。另有客户端 v" + plan.Artifact.Version + " 可下载，当前版本仍可进入。" :
                 "资源已验证并安全保存，可以进入游戏。", 0);
+            // Reuse the same verified entry guard. This only opens the title/login page; it never submits credentials.
+            if (!repair && !configurationOpen && !plan.Available) enterRequested = true;
         }
     }
 
@@ -458,7 +462,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             string metrics = terminalFailure ? "已有资源已保留 · 详细原因见日志" : remoteCancellation != null ? "正在处理，请稍候…" :
                 clientPackageMode && !string.IsNullOrEmpty(clientPackageNotice) ? clientPackageNotice :
                 ready ? "资源已就绪，旅程即将开始" : failed ? "已有资源会保留，可重试或修改配置" :
-                updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 请手动安装后重启" :
+                updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 请按更新步骤安装并重启" :
                 "检查版本和资源，准备进入游戏";
             if (measurable)
             {
@@ -482,7 +486,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
                 else if (ready) enterRequested = true;
                 else downloadRequested = true;
             }
-            GUI.enabled = oldEnabled && resourceFree && awaitingChoice && !terminalFailure && !AndroidInstallBusy;
+            GUI.enabled = oldEnabled && resourceFree && awaitingChoice && !terminalFailure && !AndroidInstallBusy && !DesktopInstallBusy;
             if (IconButton(new Rect(ClientUpdateLayout.RepairX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), repairIcon, "修复资源")) repairRequested = true;
             if (IconButton(new Rect(ClientUpdateLayout.ConfigureX, ClientUpdateLayout.PrimaryY - 2, ClientUpdateLayout.IconSize, ClientUpdateLayout.IconSize), configureIcon, "配置更新地址"))
             { draftDispatchUrl = dispatchUrl; configurationError = ""; configurationOpen = true; }
@@ -598,6 +602,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
     {
         // Abort an in-flight response when the bootstrap is destroyed; no partial set activates.
         remoteCancellation?.Cancel();
+        CancelDesktopUpdate();
         if (androidPackageActive) AndroidClientPackageInstaller.Cancel();
         if (clearCamera != null) Destroy(clearCamera.gameObject);
         if (buttonTexture != null) Destroy(buttonTexture);

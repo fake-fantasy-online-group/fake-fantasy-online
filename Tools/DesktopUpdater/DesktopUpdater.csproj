@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>DesktopUpdater</AssemblyName>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>none</DebugType>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/DesktopUpdateContract.cs" Link="Shared/DesktopUpdateContract.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/BoundedJson.cs" Link="Shared/BoundedJson.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" Link="Shared/JsonData.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/ClientUpdatePlan.cs" Link="Shared/ClientUpdatePlan.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" Link="Shared/MobileResourceBootstrapConfig.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceManifest.cs" Link="Shared/MobileResourceManifest.cs" />
+  </ItemGroup>
+</Project>

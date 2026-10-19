@@ -22,16 +22,22 @@ internal static class ClientPackageUiContract
         get {
 #if UNITY_ANDROID
             return "android";
+#elif UNITY_STANDALONE_WIN
+            return "windows";
+#elif UNITY_STANDALONE_OSX
+            return "macos";
 #else
             return "linux";
 #endif
         }
     }
+    private static bool Desktop => Platform == "windows" || Platform == "macos";
+    private static string HandoffLabel => Platform == "android" ? "验证并准备安装" : Desktop ? "验证并准备桌面更新" : "打开安装包目录";
     private static ClientUpdatePlan Plan(bool required = true, string version = "2.0.0")
     {
         string hash;
         using (var sha=System.Security.Cryptography.SHA256.Create()) hash=BitConverter.ToString(sha.ComputeHash(Bytes)).Replace("-", "").ToLowerInvariant();
-        string extension=Platform=="android"?"apk":"AppImage";
+        string extension=Platform=="android"?"apk":Desktop?"zip":"AppImage";
         string json="{\"servers\":[{}],\"update\":{\"schemaVersion\":1,\"resourceManifestUrl\":\"https://example.test/res.tsv\",\"clients\":{\""+Platform+"\":{\"version\":\""+version+"\",\"minVersion\":\""+(required?"2.0.0":"1.0.0")+"\",\"artifactUrl\":\"https://example.test/client."+extension+"\",\"sha256\":\""+hash+"\",\"sizeBytes\":"+Bytes.Length+"}}}}";
         return ClientUpdatePlan.Parse(json,Platform,"1.0.0",false);
     }
@@ -75,13 +81,17 @@ internal static class ClientPackageUiContract
         Set(page,"verifiedDispatchUrl",Get<string>(page,"dispatchUrl").Trim());Set(page, "enterRequested", true);
         Check(loop.MoveNext() && !Get<bool>(page, "enterRequested") && ClientResourcePaths.InstalledRoot==null,
             "required minVersion blocks entry even with an otherwise ready matching resource root");
-        Set(page,"ready",false);
-        string caption = Platform == "android" ? "验证并准备安装" : "打开安装包目录";
+        var missingResources = ClientUpdatePlan.Parse("{\"servers\":[{}],\"update\":{\"schemaVersion\":1,\"resourceManifests\":{}}}", Platform, "1.0.0", false);
+        Set(page,"updatePlan",missingResources); Set(page,"enterRequested",true);
+        Check(loop.MoveNext() && !Get<bool>(page,"enterRequested") && ClientResourcePaths.InstalledRoot == null,
+            "unmatched exact resource map blocks entry even with a stale ready resource root");
+        Set(page,"updatePlan",plan); Set(page,"ready",false);
+        string caption = HandoffLabel;
         int prepares = AndroidClientPackageInstaller.Prepares, opens = Application.Opened.Count;
         Draw(page, caption); iterations = 0;
         do { if (!loop.MoveNext() || ++iterations > 10000) throw new Exception("real dispatcher handoff did not return to choice"); Thread.Sleep(1); }
         while (Get<bool>(page, "clientPackageHandoffRequested") || Get<CancellationTokenSource>(page, "remoteCancellation") != null || !Get<bool>(page, "awaitingChoice"));
-        Check(Platform == "android" ? AndroidClientPackageInstaller.Prepares == prepares + 1 : Application.Opened.Count == opens + 1, "real dispatcher routes explicit cached handoff exactly once");
+        Check(Platform == "android" ? AndroidClientPackageInstaller.Prepares == prepares + 1 : Desktop ? Get<string>(page,"desktopState") == "manual" && Application.Opened.Count == opens : Application.Opened.Count == opens + 1, "real dispatcher routes explicit cached handoff exactly once; absent desktop helper fails safely");
         (loop as IDisposable)?.Dispose();
     }
     public static void Main()
@@ -95,7 +105,7 @@ internal static class ClientPackageUiContract
             Check(path!=null&&File.Exists(path),"download produces verified file");
             Check(!Get<bool>(page,"ready")&&!Get<bool>(page,"enterRequested"),"download completion never bypasses required upgrade");
             Check(AndroidClientPackageInstaller.Prepares==0&&AndroidClientPackageInstaller.Begins==0,"download completion waits for explicit install click");
-            string caption=Platform=="android"?"验证并准备安装":"打开安装包目录";
+            string caption=HandoffLabel;
             Draw(page,caption);Check(Get<bool>(page,"clientPackageHandoffRequested"),"handoff click queues reverify");Run(page);
             if(Platform=="android")
             {
@@ -121,6 +131,13 @@ internal static class ClientPackageUiContract
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Succeeded;Invoke(page,"PollAndroidPackage",true);
                 int quits=Application.Quits;Draw(page,"退出后手动重启");
                 Check(Application.Quits==quits+1&&!Get<bool>(page,"ready")&&!Get<bool>(page,"enterRequested"),"reported system success still requires restart, not entry in old process");
+            }
+            else if (Desktop)
+            {
+                Check(Get<string>(page,"desktopState") == "manual" && Get<bool>(page,"failed"), "missing marked install/helper offers explicit manual fallback");
+                Check(Application.Opened.Count == 0 && Application.Quits == 0, "desktop prepare failure neither opens package nor exits game");
+                Draw(page,"打开安装包目录");
+                Check(Application.Opened.Count == 1 && Application.Opened[0].StartsWith("file:") && !Application.Opened[0].EndsWith(".zip"), "desktop fallback opens only directory on explicit click");
             }
             else
             {

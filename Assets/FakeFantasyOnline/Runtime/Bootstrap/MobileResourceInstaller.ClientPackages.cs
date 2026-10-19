@@ -13,6 +13,10 @@ public sealed partial class MobileResourceInstaller
     private bool clientPackageRequested, clientPackageHandoffRequested, clientPackageMode;
     private string verifiedClientPackage, verifiedClientIdentity;
     private bool androidPackageActive;
+    private DesktopClientPackageInstaller desktopInstaller;
+    private string desktopState;
+    private double nextDesktopPoll;
+    private bool DesktopInstallBusy => desktopInstaller != null && (desktopState == "preparing" || desktopState == "ready");
     private double nextAndroidPoll;
     private AndroidClientPackageInstallState androidPackageState = AndroidClientPackageInstallState.Idle;
     private string clientPackageNotice = "";
@@ -26,12 +30,13 @@ public sealed partial class MobileResourceInstaller
     private bool AndroidInstallBusy => androidPackageActive &&
         (androidPackageState == AndroidClientPackageInstallState.Preparing || androidPackageState == AndroidClientPackageInstallState.Staging ||
          androidPackageState == AndroidClientPackageInstallState.AwaitingConfirmation || androidPackageState == AndroidClientPackageInstallState.AwaitingResult);
-    private bool ClientPackageActionEnabled => !androidPackageActive ||
+    private bool ClientPackageActionEnabled => desktopInstaller != null || !androidPackageActive ||
         (androidPackageState != AndroidClientPackageInstallState.AwaitingResult && androidPackageState != AndroidClientPackageInstallState.Unsupported);
 
     private void ClearClientPackageSelection()
     {
         if (androidPackageActive) AndroidClientPackageInstaller.Cancel();
+        CancelDesktopUpdate();
         androidPackageActive = clientPackageMode = clientPackageRequested = clientPackageHandoffRequested = false;
         verifiedClientPackage = verifiedClientIdentity = null;
         clientPackageNotice = "";
@@ -40,6 +45,13 @@ public sealed partial class MobileResourceInstaller
 
     private string ClientPackageButtonLabel()
     {
+        if (desktopState == "manual") return "打开安装包目录";
+        if (desktopInstaller != null)
+        {
+            if (desktopState == "ready") return "退出并安装更新";
+            if (desktopState == "preparing") return "取消安装准备";
+            return "打开安装包目录";
+        }
         if (androidPackageActive)
         {
             switch (androidPackageState)
@@ -55,7 +67,8 @@ public sealed partial class MobileResourceInstaller
                 default: return "重新验证安装包";
             }
         }
-        if (HasVerifiedClientPackage) return PlatformKey() == "android" ? "验证并准备安装" : "打开安装包目录";
+        if (HasVerifiedClientPackage) return PlatformKey() == "android" ? "验证并准备安装" :
+            IsDesktopUpdatePlatform ? "验证并准备桌面更新" : "打开安装包目录";
         return failed && clientPackageMode ? "重试客户端下载" : "下载客户端";
     }
 
@@ -63,6 +76,17 @@ public sealed partial class MobileResourceInstaller
     {
         if (updatePlan?.Artifact == null || !updatePlan.Available || remoteCancellation != null) return;
         clientPackageMode = true;
+        if (desktopState == "manual") { OpenClientPackageDirectory(); return; }
+        if (desktopInstaller != null)
+        {
+            try
+            {
+                if (desktopState == "ready") { desktopInstaller.Commit(); UnityEngine.Application.Quit(); return; }
+                if (desktopState == "preparing") { CancelDesktopUpdate(); Phase("安装准备已取消", "原有客户端和资源已保留。", 0); return; }
+                OpenClientPackageDirectory(); return;
+            }
+            catch (Exception exception) { RemoteFailure(exception); return; }
+        }
         if (androidPackageActive)
         {
             switch (androidPackageState)
@@ -125,6 +149,28 @@ public sealed partial class MobileResourceInstaller
             AndroidClientPackageInstaller.Prepare(path, artifact.Version, artifact.Sha256, artifact.SizeBytes);
             PollAndroidPackage(true);
         }
+        else if (IsDesktopUpdatePlatform)
+        {
+            try
+            {
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                {
+                    string executableDirectory = Path.GetDirectoryName(process.MainModule.FileName);
+                    string installRoot = PlatformKey() == "macos" ? Directory.GetParent(Directory.GetParent(executableDirectory).FullName).FullName : executableDirectory;
+                    desktopInstaller = DesktopClientPackageInstaller.Prepare(installRoot, UnityEngine.Application.streamingAssetsPath,
+                        UnityEngine.Application.persistentDataPath, path, PlatformKey(), config.appVersion, artifact);
+                }
+                desktopState = "preparing";
+                Phase("准备桌面更新", "独立更新器正在检查 ZIP、应用身份和系统签名。游戏尚未退出。", 0);
+                clientPackageNotice = "验证通过后需点击退出并安装 · 用户数据和旧版本保留";
+            }
+            catch (Exception exception)
+            {
+                RemoteFailure(exception);
+                clientPackageNotice = "自动安装不可用 · 再次点击可打开安装包目录，退出后手动安装";
+                desktopState = "manual";
+            }
+        }
         else
         {
             // Open only the containing directory. Never execute the downloaded file or overwrite this process.
@@ -138,6 +184,51 @@ public sealed partial class MobileResourceInstaller
     private void Update()
     {
         if (androidPackageActive && MonotonicSeconds() >= nextAndroidPoll) PollAndroidPackage(false);
+        if (desktopInstaller != null && MonotonicSeconds() >= nextDesktopPoll) PollDesktopUpdate();
+    }
+
+    private static bool IsDesktopUpdatePlatform => PlatformKey() == "windows" || PlatformKey() == "macos";
+
+    private void OpenClientPackageDirectory()
+    {
+        if (!HasVerifiedClientPackage) return;
+        UnityEngine.Application.OpenURL(new Uri(Path.GetDirectoryName(verifiedClientPackage) + Path.DirectorySeparatorChar).AbsoluteUri);
+        clientPackageNotice = "请退出游戏后手动安装 · 不要绕过系统签名或安全提示";
+    }
+
+    private void CancelDesktopUpdate()
+    {
+        if (desktopInstaller != null)
+        {
+            try { desktopInstaller.Cancel(); } catch (Exception exception) { Debug.LogWarning(exception); }
+            desktopInstaller.Dispose(); desktopInstaller = null;
+        }
+        desktopState = null;
+    }
+
+    private void PollDesktopUpdate()
+    {
+        nextDesktopPoll = MonotonicSeconds() + .3;
+        try
+        {
+            string snapshot = desktopInstaller.Poll();
+            if (snapshot == desktopState) return;
+            desktopState = snapshot;
+            if (snapshot == "ready")
+            {
+                failed = false;
+                Phase("更新包已通过系统验证", "点击后游戏退出，独立更新器会替换应用并重新打开。", 0);
+                clientPackageNotice = "退出后安装 · 用户设置和资源保留 · 旧应用保留用于恢复";
+            }
+            else if (snapshot.StartsWith("failed\n", StringComparison.Ordinal))
+            {
+                Debug.LogWarning(snapshot);
+                failed = true; conciseError = "桌面更新准备失败，请检查日志或手动安装";
+                clientPackageNotice = "旧应用与资源保留 · 可打开安装包目录 · 不要绕过系统安全提示";
+            }
+            else if (snapshot == "cancelled") { CancelDesktopUpdate(); Phase("安装准备已取消", "原有客户端和资源已保留。", 0); }
+        }
+        catch (Exception exception) { RemoteFailure(exception); desktopState = "manual"; }
     }
 
     private void PollAndroidPackage(bool force)
@@ -194,6 +285,7 @@ public sealed partial class MobileResourceInstaller
     private void ReturnFromOptionalClientPackage()
     {
         if (updatePlan == null || updatePlan.Required || AndroidInstallBusy) return;
+        CancelDesktopUpdate();
         if (androidPackageActive) AndroidClientPackageInstaller.Cancel();
         androidPackageActive = clientPackageMode = clientPackageRequested = clientPackageHandoffRequested = false;
         failed = false;
