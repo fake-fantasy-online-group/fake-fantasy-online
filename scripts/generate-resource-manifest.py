@@ -4,7 +4,9 @@ import argparse
 import hashlib
 from pathlib import Path, PurePosixPath
 import re
+import unicodedata
 
+RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL'} | {prefix + str(index) for prefix in ('COM', 'LPT') for index in range(1, 10)}
 PASSIVE_GAME_EXTENSIONS = {'.json', '.png', '.jpg', '.jpeg', '.bytes', '.txt', '.bin', '.ogg', '.wav'}
 
 
@@ -28,6 +30,21 @@ def allowed(path):
             (pieces[0] in ('sndeffect', 'sndeffect24_pcm') and extension in ('.wav', '.ogg')))
 
 
+def validate_path(path):
+    # Match MobileResourceManifest.ValidateRelativePath and the remote installer's
+    # cross-platform checks, including C1 controls and UTF-16 path length.
+    pieces = path.split('/')
+    if not path or path.startswith('/') or any(c in path for c in '\\:?#%<>"|*') or any(unicodedata.category(c) == 'Cc' for c in path):
+        raise ValueError('Unsafe resource path: ' + path)
+    if len(path.encode('utf-16-le')) // 2 > 1024 or len(pieces) > 64:
+        raise ValueError('Resource path exceeds runtime length/depth limits: ' + path)
+    for part in pieces:
+        if part in ('', '.', '..') or part.endswith(('.', ' ')) or part.lower().endswith('.part'):
+            raise ValueError('Unsafe resource path segment: ' + path)
+        if part.split('.', 1)[0].upper() in RESERVED_NAMES:
+            raise ValueError('Reserved resource filename: ' + path)
+
+
 def generate(root, version):
     root = Path(root).resolve(strict=True)
     if not root.is_dir():
@@ -49,11 +66,9 @@ def generate(root, version):
             raise ValueError('Materialize symlinks before publishing resources: ' + relative)
         if file.is_dir():
             continue
-        if len(relative) > 1024 or len(relative.split('/')) > 64:
-            raise ValueError('Resource path exceeds runtime length/depth limits: ' + relative)
-        if any(c in relative for c in '\t\r\n\\?#%:') or any(ord(c) < 32 for c in relative) or any(part.endswith(('.', ' ')) or part.lower().endswith('.part') for part in relative.split('/')):
-            raise ValueError('Unsafe source path: ' + relative)
+        validate_path(relative)
         target = destination(relative)
+        validate_path(target)
         if not allowed(target):
             raise ValueError('Unexpected or executable resource; review outside this passive-resource channel: ' + relative)
         for value, seen, spellings in [(relative, sources, source_spellings), (target, destinations, destination_spellings)]:

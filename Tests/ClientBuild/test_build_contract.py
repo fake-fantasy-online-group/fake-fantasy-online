@@ -116,6 +116,30 @@ class BuildContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 manifest.generate(root, '1.0.0')
 
+    def test_manifest_rejects_runtime_reserved_names_and_controls(self):
+        paths = ['data/CON.pkg', 'gameassets/nul.json', 'gameassets/AUX/file.json',
+                 'gameassets/PrN.bin', 'data/COM1.pkg', 'gameassets/LPT9.txt']
+        paths += ['gameassets/bad' + char + '.json' for char in '<>"|*\x7f\x85\x9f']
+        for path in paths:
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                manifest.validate_path(path)
+        for path in ['data/console.pkg', 'gameassets/COM0.json', 'gameassets/lpt10.txt',
+                     'ReferenceClient/font/gbk12.idx', 'gameassets/中文.json']:
+            with self.subTest(path=path):
+                manifest.validate_path(path)
+        # C# counts UTF-16 code units rather than Python's Unicode code points.
+        with self.assertRaises(ValueError):
+            manifest.validate_path('gameassets/' + '😀' * 510 + '.json')
+
+    def test_manifest_generation_enforces_reserved_directory_segments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            file = root / 'gameassets/CON/data.json'
+            file.parent.mkdir(parents=True)
+            file.write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'Reserved resource filename'):
+                manifest.generate(root, '1.0.0')
+
     def make_apk(self, path, extra=None, version='1.0.0'):
         with zipfile.ZipFile(path, 'w') as z:
             # Deliberately synthetic fixtures; no assertion of valid Android packaging.
