@@ -2,6 +2,9 @@
 """Static security/lifecycle contract. These assertions do not simulate an Android device."""
 from pathlib import Path
 import re
+import copy
+import importlib.util
+import json
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -10,6 +13,9 @@ PLUGIN = ROOT / 'Assets/Plugins/Android/ClientPackageInstaller.androidlib'
 JAVA = (PLUGIN / 'src/main/java/org/fakefantasyonline/updates/ClientPackageInstaller.java').read_text()
 POLICY = (PLUGIN / 'src/main/java/org/fakefantasyonline/updates/PackagePolicy.java').read_text()
 CS = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/AndroidClientPackageInstaller.cs').read_text()
+_spec = importlib.util.spec_from_file_location('unity_dependencies', ROOT / 'Tests/Mobile/AndroidPackageInstaller/validate_unity_dependencies.py')
+UNITY_DEPS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(UNITY_DEPS)
 
 def body(name):
     match = re.search(r'(?m)^    (?:public |private )?static [\w\[\]]+ ' + name + r'\(', JAVA)
@@ -24,6 +30,24 @@ def body(name):
     raise AssertionError(name)
 
 class AndroidPackageSourceContract(unittest.TestCase):
+    def test_actual_project_enables_jni_module(self):
+        UNITY_DEPS.validate_project(ROOT)
+
+    def test_missing_or_invalid_jni_project_wiring_fails_closed(self):
+        manifest = json.loads((ROOT / 'Packages/manifest.json').read_text())
+        lock = json.loads((ROOT / 'Packages/packages-lock.json').read_text())
+        assembly = json.loads((ROOT / 'Assets/FakeFantasyOnline/Runtime/Bootstrap/FakeFantasyOnline.Bootstrap.asmdef').read_text())
+        for failure in ('manifest_missing', 'lock_missing', 'lock_registry', 'lock_version', 'engine_disabled', 'android_excluded'):
+            m, l, a = copy.deepcopy((manifest, lock, assembly))
+            if failure == 'manifest_missing': del m['dependencies'][UNITY_DEPS.JNI_PACKAGE]
+            if failure == 'lock_missing': del l['dependencies'][UNITY_DEPS.JNI_PACKAGE]
+            if failure == 'lock_registry': l['dependencies'][UNITY_DEPS.JNI_PACKAGE]['source'] = 'registry'
+            if failure == 'lock_version': l['dependencies'][UNITY_DEPS.JNI_PACKAGE]['version'] = '2.0.0'
+            if failure == 'engine_disabled': a['noEngineReferences'] = True
+            if failure == 'android_excluded': a['excludePlatforms'] = ['Android']
+            with self.subTest(failure=failure), self.assertRaises(ValueError):
+                UNITY_DEPS.validate(m, l, a)
+
     def test_no_provider_or_exported_component(self):
         manifest = ET.parse(PLUGIN / 'src/main/AndroidManifest.xml').getroot()
         android = '{http://schemas.android.com/apk/res/android}'

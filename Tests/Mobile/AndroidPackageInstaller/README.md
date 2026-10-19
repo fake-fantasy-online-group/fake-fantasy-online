@@ -67,6 +67,10 @@ incompatible system outcomes stay distinct. Native exceptions go to `FFO.Package
   reuse the same capability. Action, random data token and actual session ID are checked.
 - No FileProvider, exported activity/receiver, file URI, broad storage permission, command
   shell installation or third-party binary dependency is introduced.
+- The project explicitly enables the built-in `com.unity.modules.androidjni` package in
+  `Packages/manifest.json` and locks it as a built-in dependency. This makes
+  `UnityEngine.AndroidJNIModule` available to the Bootstrap assembly during actual Unity
+  compilation; an asmdef with engine references enabled does not enable an omitted module.
 - The `.androidlib` imports only on Android and supplies Java/manifest/consumer keep rules.
   Its Gradle module inherits the Unity compile/target/min SDK settings. Referenced APIs
   require compileSdk 33+; runtime guards cover project minSdk 25. This change does not pin
@@ -90,7 +94,9 @@ Tests/Mobile/AndroidPackageInstaller/compile-unity-bridge.sh
 The Java runner uses a JDK's compiler module (`java -m jdk.compiler/...`) and writes all
 classes/test doubles into a disposable temporary directory. It never downloads dependencies.
 `ANDROID_JAR` is optional; omission explicitly skips API-reference compilation rather than
-claiming a pass. The C# runner uses the existing verified toolchain and Unity API references.
+claiming a pass. The C# runner first validates the actual project manifest, lock and Bootstrap asmdef, then
+uses the existing verified toolchain and Unity API references. Android receives the JNI
+reference only after that check; Windows and Editor compile without any JNI module reference.
 
 Verified on 2026-10-19:
 
@@ -105,7 +111,7 @@ Verified on 2026-10-19:
   durable success observation and stale-verifier/terminal-outcome ordering. Tests reconstruct
   a persisted pre-write checkpoint to exercise interrupted-session recovery; they also
   verify orphan-session reclamation and that cache cleanup preserves symlinks/unrelated files.
-- Eight source-contract tests check manifest, strict signer policy, session readback,
+- Ten source-contract tests (including six missing/invalid project-dependency negative cases) check manifest, strict signer policy, session readback,
   permission/foreground boundaries, persistence, cancellation and JNI platform guards.
 - All plug-in Java compiles with official Google Android SDK Platform 35 revision 2 API
   references. SDK source: https://dl.google.com/android/repository/platform-35_r02.zip
@@ -140,3 +146,18 @@ login/version compatibility requirements remain unchanged by this installer.
 - [Legacy unknown-source setting](https://developer.android.com/reference/android/provider/Settings.Secure#INSTALL_NON_MARKET_APPS)
 - [AOSP Android 15 archive signature flags](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/core/java/android/content/pm/PackageManager.java)
 - [AOSP Android 15 verified APK signing details](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/core/java/com/android/internal/pm/pkg/parsing/ParsingPackageUtils.java)
+
+## Dependency regression found by actual Unity build
+
+The first actual Android build of the initial implementation reported CS1069: missing
+`UnityEngine.AndroidJNIModule`. The standalone bridge test had explicitly supplied that
+DLL and therefore masked the project's missing `com.unity.modules.androidjni` dependency.
+The fix declares and locks the built-in module; it does not add a copied DLL, change
+`overrideReferences`, or rely on a manual reference unavailable to Unity. The current
+preflight rejects omission from the manifest/lock, an inconsistent registry/version
+resolution, disabled engine references, or an excluded Android target. Non-Android bridge
+compiles intentionally omit JNI references to exercise their platform guards.
+
+These regression checks address the known module omission. A subsequent real Unity
+Android build and device test are still required; a source-only compiler pass does not
+certify the entire Unity package resolution, Gradle or IL2CPP pipeline.

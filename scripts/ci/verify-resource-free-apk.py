@@ -62,14 +62,17 @@ def verify(apk):
         'verifiedNativeAbi': 'arm64-v8a',
         'verifiedIl2CppLibrary': True,
         'configuredAndroidVersionCode': int(setting('AndroidBundleVersionCode')),
-        'configuredApplicationId': 'org.fakefantasyonline.resourcefreecandidate',
+        # This structural checker does not resolve Unity's default identifier or parse
+        # the APK's binary AndroidManifest.xml. Never substitute a fixed candidate ID.
+        'configuredApplicationId': None,
+        'applicationIdSource': 'Unity project settings preserved; verify actual APK manifest separately',
         'signing': 'Unity development default; certificate not verified by this script',
         'loginProtocolMarker': protocol,
         'serverCompatibility': 'not verified; application version does not migrate login protocol',
         'resourceMode': 'resource-free',
         'bytes': apk.stat().st_size,
         'sha256': digest.hexdigest(),
-        'acceptance': {'apkStructure': True, 'deviceLaunch': False, 'resourceDownload': False, 'productionReady': False},
+        'acceptance': {'apkStructure': True, 'packageIdentity': False, 'signingCertificate': False, 'deviceLaunch': False, 'resourceDownload': False, 'productionReady': False},
     }
     Path(str(apk) + '.build.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + '\n')
     Path(str(apk) + '.sha256').write_text(digest.hexdigest() + '  ' + apk.name + '\n')

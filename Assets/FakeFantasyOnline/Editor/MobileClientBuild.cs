@@ -73,7 +73,8 @@ public static class MobileClientBuild
                 PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
                 PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, new Texture2D[0], IconKind.Any);
                 PlayerSettings.Android.useCustomKeystore = false;
-                PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "org.fakefantasyonline.resourcefreecandidate");
+                // Resource delivery mode must not change the application identity.
+                // Preserve the project identifier (including Unity's resolved default).
                 PlayerSettings.insecureHttpOption = developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
                 AssetDatabase.Refresh();
             }
@@ -106,7 +107,9 @@ public static class MobileClientBuild
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Android build failed: " + report.summary.result);
-            Debug.Log("Android " + mode + " APK built at " + output + ". Device/resource/IL2CPP acceptance is still required.");
+            Debug.Log("Android " + mode + " APK built at " + output + "; applicationId=" + applicationId +
+                "; version=" + PlayerSettings.bundleVersion + "; versionCode=" + PlayerSettings.Android.bundleVersionCode +
+                ". Actual APK identity/signature and device/resource/IL2CPP acceptance are still required.");
         }
         finally
         {
@@ -120,7 +123,6 @@ public static class MobileClientBuild
                 EditorUserBuildSettings.buildAppBundle = appBundle;
                 if (resourceFree)
                 {
-                    PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, applicationId);
                     PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, defaultIcons, IconKind.Any);
                     PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, androidIcons, IconKind.Any);
                 }
