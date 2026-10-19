@@ -7,11 +7,14 @@ using FakeFantasyOnline.Foundation;
 
 namespace UnityEngine
 {
+    public enum FocusType { Keyboard }
+    public struct Matrix4x4 { public float m11; }
+    public static class GUIUtility { public static int hotControl,keyboardControl; public static int GetControlID(int hint,FocusType focus,Rect rect)=>hint; }
     public enum TextAnchor { MiddleCenter, MiddleLeft }
     public enum TextClipping { Overflow, Clip }
     public enum ImagePosition { ImageOnly }
-    public enum EventType { MouseDown, MouseUp, KeyDown, Repaint, Used }
-    public enum KeyCode { None, Space }
+    public enum EventType { MouseDown, MouseUp, MouseDrag, KeyDown, KeyUp, ScrollWheel, Repaint, Used }
+    public enum KeyCode { None, Space, Return, KeypadEnter, Escape }
     public struct Vector2 { public float x,y; public Vector2(float x,float y) { this.x=x; this.y=y; } }
     public struct Color
     {
@@ -35,6 +38,7 @@ namespace UnityEngine
     }
     public static class Mathf
     {
+        public static float Abs(float x)=>Math.Abs(x); public static int FloorToInt(float x)=>(int)Math.Floor(x);
         public static int Clamp(int x,int a,int b)=>Math.Max(a,Math.Min(b,x));
         public static int Max(int a,int b)=>Math.Max(a,b);
         public static float Max(float a,float b)=>Math.Max(a,b);
@@ -49,11 +53,12 @@ namespace UnityEngine
     }
     public class Sprite { public Texture2D texture; }
     public class RectOffset { }
-    public class GUIContent { public static GUIContent none=new GUIContent(); }
+    public class GUIContent { public string text; public GUIContent(){} public GUIContent(string text){this.text=text;} public static GUIContent none=new GUIContent(); }
     public class GUIStyleState { public Texture2D background; public Color textColor; }
     public class GUIStyle
     {
         public GUIStyle() { } public GUIStyle(GUIStyle source) { }
+        public Vector2 CalcSize(GUIContent content)=>new Vector2((content.text??"").Length*(fontSize==0?12:fontSize),fontSize);
         public static GUIStyle none=new GUIStyle();
         public int fontSize; public bool wordWrap,richText; public TextClipping clipping;
         public TextAnchor alignment; public ImagePosition imagePosition;
@@ -66,11 +71,13 @@ namespace UnityEngine
         public static Event current=new Event(); public EventType type; public KeyCode keyCode;
         public int button,clickCount; public Vector2 mousePosition;
         public void Use() { type=EventType.Used; }
+        public bool isMouse=>type==EventType.MouseDown||type==EventType.MouseUp||type==EventType.MouseDrag;
+        public EventType GetTypeForControl(int id)=>type;
     }
     public static class Time { public static float realtimeSinceStartup; }
     public static class GUI
     {
-        public static bool enabled=true; public static Color color=Color.white;
+        public static bool enabled=true; public static Color color=Color.white; public static Matrix4x4 matrix=new Matrix4x4 {m11=1};
         public static GUISkin skin=new GUISkin(); public static GUIStyle lastStyle; public static GUIContent lastContent;
         public static List<string> labels=new List<string>();
         public static List<(Rect rect,Texture2D texture)> drawings=new List<(Rect,Texture2D)>();
@@ -82,7 +89,7 @@ namespace UnityEngine
         public static void Label(Rect r,string s,GUIStyle style) { labels.Add(s); }
         public static void DrawTexture(Rect r,Texture2D t) { drawings.Add((r,t)); }
         public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv) { drawings.Add((r,t)); }
-        public static void BeginGroup(Rect r) { } public static void EndGroup() { }
+        public static int groupDepth; public static void BeginGroup(Rect r) { groupDepth++; } public static void EndGroup() { groupDepth--; }
         public static bool Button(Rect r,GUIContent c,GUIStyle style)
         {
             lastContent=c;lastStyle=style;buttons.Add((r,enabled));
@@ -135,20 +142,22 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class TexScale { public static void Draw(float x,float y,Texture2D t)=>GUI.DrawTexture(new Rect(x,y,t.width,t.height),t); }
     internal static class RecoveredTitleCharacterSurface
     { public static int borders;public static void DrawBorder(Rect r,float t,Color c) { borders++; } }
+    internal static class MobileClientPresentation { public static bool Enabled; }
     internal static class BitmapFont
     {
         public static bool Ready;public static int ensures,draws;public static char missing;
-        public static float lastScale;public static string lastText;
+        public static float lastScale;public static string lastText;public static List<(float x,float y,string text,float scale)> textDraws=new List<(float,float,string,float)>();
         public static void EnsureForIndependentRuntime() { ensures++; }
         public static int CellOfForIndependentRuntime(char c)=>c==missing?-1:1;
         public static float Measure(string s,float scale)=>s.Length*12*scale;
         public static void DrawOutline(float x,float y,string text,Color color,float scale)
-        { draws++;lastText=text;lastScale=scale;GUI.labels.Add(text); }
+        { draws++;lastText=text;lastScale=scale;GUI.labels.Add(text);textDraws.Add((x,y,text,scale)); }
     }
     internal static class ArtworkSkin
     {
         public static int panels;public static List<string> buttonLabels=new List<string>();
         public static void Panel(Rect r) { panels++; }
+        public static void ButtonFace(Rect r,string s,float scale=1,bool enabled=true,bool selected=false,float fontScale=1,bool pressed=false) {buttonLabels.Add(s);}
         public static bool Button(Rect r,string s) { buttonLabels.Add(s);return GUI.Button(r,GUIContent.none,GUIStyle.none); }
     }
     internal static class GameBootstrap { public static int quits;public static void QuitGame() { quits++; } }
@@ -274,10 +283,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             Check(GUI.drawings.Exists(x=>ReferenceEquals(x.texture,flow.slotDoll[0].sprite.texture)),"real avatar Still texture is drawn");
             for(int i=0;i<3;i++){Tap(flow.DrawCharSelect,80+i*237,150);Check(flow.selSlot==i,"slot click selects correct row");Check(NetClient.I.entryRequests==0,"slot tap never enters world");}
             int deleted=0;flow.action=a=>{if(a==TitleCharacterAction.Delete)deleted++;};Tap(flow.DrawCharSelect,700,465);Check(flow.pendingDelete,"delete opens confirmation");
-            Tap(flow.DrawCharSelect,450,340);Check(!flow.pendingDelete&&deleted==0,"cancel does not issue delete");
-            Tap(flow.DrawCharSelect,700,465);Tap(flow.DrawCharSelect,270,340);Check(!flow.pendingDelete&&deleted==1,"one confirm issues one delete");
+            Tap(flow.DrawCharSelect,480,340);Check(!flow.pendingDelete&&deleted==0,"cancel does not issue delete");
+            Tap(flow.DrawCharSelect,700,465);Tap(flow.DrawCharSelect,300,340);Check(!flow.pendingDelete&&deleted==1,"one confirm issues one delete");
             flow.DrawCharSelect();Check(deleted==1,"consumed release cannot issue second delete");
-            flow.pendingDelete=true;created=0;Tap(flow.DrawCharSelect,80,150);Check(deleted==1&&flow.pendingDelete,"modal prevents background selection action");flow.pendingDelete=false;
+            flow.OpenDeleteConfirmation();created=0;Tap(flow.DrawCharSelect,80,150);Check(deleted==1&&flow.pendingDelete,"modal prevents background selection action");flow.CloseDeleteConfirmation();
             Tap(flow.DrawCharSelect,350,500);Check(NetClient.I.entryRequests==1&&NetClient.I.enteredName==rows[2].DisplayName,"enter selected real name once");
             Tap(flow.DrawCharSelect,350,500);Check(NetClient.I.entryRequests==1,"entry latch prevents repeat");
             Time.realtimeSinceStartup=16;EventAt(EventType.Repaint);flow.DrawCharSelect();Check(!flow.entering&&flow.netMsg.Contains("超时"),"existing entry timeout preserved");
@@ -295,4 +304,4 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
 }
 internal static class SelectionPresentationContract
-{ public static void Main() { FakeFantasyOnline.Presentation.ReferenceAssets.TitleFlow.Contract(); } }
+{ public static void Main() { FakeFantasyOnline.Presentation.ReferenceAssets.TitleFlow.Contract(); FakeFantasyOnline.Presentation.ReferenceAssets.TitleFlow.DeleteContract(); } }

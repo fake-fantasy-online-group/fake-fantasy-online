@@ -108,6 +108,7 @@ internal sealed partial class TitleFlow
 
     private void ReleaseSelectionPresentation()
     {
+        ReleaseDeletePresentation();
         Array.Clear(selectionButtons, 0, selectionButtons.Length);
         selectionLoader = null;
         selectionPackage = selectionPackage24 = selectionPackage21 = null;

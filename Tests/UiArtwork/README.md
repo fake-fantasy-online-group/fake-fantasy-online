@@ -16,8 +16,8 @@ Seven main buttons use complete external 152x33 baked-label normal/hover/pressed
 frames through `LoadGsaFrameA`. No lettering is overpainted. The per-title cache
 tracks loader plus all three package identities and never destroys borrowed art.
 Missing/incompatible button art uses an explicitly labelled existing ArtworkSkin
-fallback. The delete confirmation uses that same original blank panel/button skin
-and keeps its existing warning, cancellation and command path.
+fallback. The delete confirmation now uses the approved complete external
+346x128 common/msgboxbk and 70x22 common confirm/cancel frames; see below.
 
 Dynamic server/character names, levels, dates, attributes and status messages use
 the existing external `BitmapFont` gbk12 atlas at native logical 12px, width-fitted
@@ -59,6 +59,38 @@ fallback and network policy are unchanged. Deletion has no new cross-request bus
 latch: repeated separately confirmed requests still follow the existing session
 queue. This task prevents a single GUI event from activating a new image button
 twice; it does not claim to redesign asynchronous deletion admission.
+
+## Approved small delete confirmation (2026-10-19)
+
+The rejected enlarged dark-window proposal is not implemented. The existing
+single-confirmation flow now uses the complete external `common/msgboxbk.gsa`
+at (227,236,346,128), with original 70x22 confirm/cancel faces at (278,334) and
+(460,334). All source texture alpha and baked button glyphs are retained. No
+opaque fill, added title, full-screen dark overlay, second confirmation, password
+field, bundled asset, or delete-protocol change was introduced. Missing/wrong-size
+external frames use the existing labelled fallback rather than stretching them.
+
+The original 300x72 content area includes the complete selected name and explicit
+irreversible loss warning. A 24-character Chinese name fits at native 12px in at
+most four lines, with clipping and whole-message fallback for missing bitmap
+glyphs. The initial keyboard focus is Cancel; Escape cancels. Modal pointer/key/
+scroll events, including wide-screen margins, are consumed. A changed slot,
+roster reference, character ID or displayed name closes the stale confirmation;
+interrupted capture is cleared before the background page handles input.
+
+On mobile, the original artwork stays small while separate non-overlapping hit
+areas extend downward outside the panel. They never cover its text. Tested title
+scales .6, .9, 1 and 2 preserve at least 44 screen-pixel target height; this is not
+a claim of device-dp sizing, touch cancellation, density, or real Unity validation.
+
+`run-selection-presentation-contract.py` also compiles and runs
+`DeletePresentationContract.cs` against the actual production methods. Its delete
+actions only increment local counters. Checks include cancellation, repeated or
+interrupted releases, identity changes, keyboard safety, wide-margin event
+blocking, unmodified empty/entry-latch conditions, original frame geometry,
+cache ownership, 24-character names and mobile padding taps. No real character is
+deleted. The known lack of a cross-request deletion busy latch remains unchanged;
+separately confirmed requests still use the existing session behavior.
 
 ## Approved native login presentation (2026-10-19)
 

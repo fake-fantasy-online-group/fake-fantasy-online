@@ -124,6 +124,7 @@ internal sealed partial class TitleFlow
     internal void DrawCharSelect()
     {
         EnsureSelectionPresentation();
+        PrepareDeleteConfirmation();
         // The approved selection page has no smalllogo; the original three-slot stage remains.
         if (actorbk) TexScale.Draw(10f, 70f, actorbk);
         int count = serverChars.Count;
@@ -214,7 +215,7 @@ internal sealed partial class TitleFlow
             // Preserve the existing deletion admission independently of the entry latch.
             // Empty-roster controls remain visible but cannot submit a character action.
             GUI.enabled = previousEnabled && count != 0 && selSlot >= 0;
-            if (DrawSelectionButton(644f, 455f, SelectionButton.Delete, "删除角色")) pendingDelete = true;
+            if (DrawSelectionButton(644f, 455f, SelectionButton.Delete, "删除角色")) OpenDeleteConfirmation();
             GUI.enabled = previousEnabled;
             if (DrawSelectionButton(644f, 498f, SelectionButton.Return, "返回上层"))
             {
@@ -257,23 +258,11 @@ internal sealed partial class TitleFlow
             string.IsNullOrEmpty(netMsg) ? (count == 0 ? "请先创建角色" : "请选择当前登录角色!") : netMsg,
             new Color32(232, 224, 198, 255));
 
-        if (pendingDelete && selSlot >= 0 && selSlot < serverChars.Count)
+        if (DrawDeleteConfirmation())
         {
-            GUI.color = new Color(0f, 0f, 0f, 0.6f);
-            GUI.DrawTexture(new Rect(0f, 0f, 800f, 600f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            ArtworkSkin.Panel(new Rect(210f, 225f, 380f, 150f));
-            DrawSelectionLabel(new Rect(210f, 243f, 380f, 24f), "删除角色", new Color(1f, .4f, .4f, 1f));
-            DrawSelectionLabel(new Rect(222f, 277f, 356f, 20f),
-                "确定删除【" + serverChars[selSlot].DisplayName + "】?", Color.white);
-            DrawSelectionLabel(new Rect(222f, 297f, 356f, 20f), "删除后不可恢复!", Color.white);
-            if (ArtworkSkin.Button(new Rect(254f, 333f, 110f, 30f), "确定删除"))
-            {
-                action(TitleCharacterAction.Delete);
-                pendingDelete = false;
-                setMessage("删除中...");
-            }
-            if (ArtworkSkin.Button(new Rect(436f, 333f, 110f, 30f), "取消")) pendingDelete = false;
+            action(TitleCharacterAction.Delete);
+            CloseDeleteConfirmation();
+            setMessage("删除中...");
         }
     }
 }
