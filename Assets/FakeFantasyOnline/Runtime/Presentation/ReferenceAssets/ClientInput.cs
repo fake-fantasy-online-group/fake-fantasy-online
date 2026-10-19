@@ -42,7 +42,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 viewport = MobileClientPresentation.SafeAreaGui;
                 router.CancelAll(); SkillTargeting.CancelMobileHotSlot();
             }
-            if (MobileClientPresentation.ModalOpen)
+            if (MobileClientPresentation.ModalOpen || MobileClientPresentation.GameplayInputBlocked)
             {
                 router.CancelAll(); pointer = router.Pointer;
                 SkillTargeting.CancelMobileHotSlot();

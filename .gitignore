@@ -69,6 +69,8 @@ SavedVariables/
 *.jpeg
 # Explicit source-owned bootstrap artwork; private game art remains ignored.
 !/Assets/FakeFantasyOnline/Runtime/Presentation/Resources/FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png
+# Explicit user-approved source-owned sitting control icon, not downloaded game art.
+!/Assets/FakeFantasyOnline/Runtime/Presentation/Resources/FakeFantasyOnline/MobileControls/Sit.png
 *.bmp
 *.tga
 *.psd

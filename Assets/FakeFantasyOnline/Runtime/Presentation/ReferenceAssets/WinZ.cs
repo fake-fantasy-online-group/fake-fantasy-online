@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 
-internal static class WinZ
+internal static partial class WinZ
 {
     private sealed class Entry
     {

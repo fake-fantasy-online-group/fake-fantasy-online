@@ -334,6 +334,7 @@ public sealed partial class ClientRootView : MonoBehaviour, IWorldReceiveContext
             _inventoryEquipmentManualCheckRequested;
         bool driveOfficialUiShortcuts =
             _firstWorldWindow != null && _firstWorldWindow.Built &&
+            !MobileClientPresentation.GameplayInputBlocked &&
             (!_backgroundSessionCheckRequested || manualForegroundInput);
 
         // UIManager.Update (0x06000fa8) evaluates the TypingNow-only Alt+B branch before the
@@ -421,7 +422,8 @@ public sealed partial class ClientRootView : MonoBehaviour, IWorldReceiveContext
                 Time.deltaTime,
                 Time.time,
                 false,
-                !_backgroundSessionCheckRequested || manualForegroundInput);
+                (!_backgroundSessionCheckRequested || manualForegroundInput) &&
+                    !MobileClientPresentation.GameplayInputBlocked);
         }
 
         if (_firstWorldWindow != null && worldTickAccepted &&

@@ -26,13 +26,13 @@ public static class ResourceFreeBuildStageContract
         File.WriteAllText(image, "source-owned-artwork-fixture");
         File.WriteAllText(image + ".meta", "source-owned-import-settings");
         string root = Path.Combine(assets, ResourceFreeBuildStage.EmbeddedResourcesRelativePath);
-        foreach (string folder in new[] { "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration" })
+        foreach (string folder in new[] { "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration", "FakeFantasyOnline/MobileControls" })
         {
             Directory.CreateDirectory(Path.Combine(root, folder));
             File.WriteAllText(Path.Combine(root, folder + ".meta"), "source-owned-folder-settings");
         }
         foreach (string relative in new[] { "ReferenceEffectGL.shader", "ReferenceIsoDepthY.shader", "ReferenceNameTag.shader",
-            "Registration/WqyRegistrationSubset.txt", "Registration/WqyRegistrationLicense.txt", "Registration/WqyRegistrationNotice.txt" })
+            "Registration/WqyRegistrationSubset.txt", "Registration/WqyRegistrationLicense.txt", "Registration/WqyRegistrationNotice.txt", "MobileControls/Sit.png" })
         {
             File.WriteAllText(Path.Combine(root, "FakeFantasyOnline/" + relative), "source-owned-text-fixture");
             File.WriteAllText(Path.Combine(root, "FakeFantasyOnline/" + relative + ".meta"), "source-owned-import-settings");
@@ -109,6 +109,17 @@ public static class ResourceFreeBuildStageContract
             Directory.Delete(siblingDirectory, true);
             string glyphs = Path.Combine(assets, ResourceFreeBuildStage.EmbeddedResourcesRelativePath, "FakeFantasyOnline/Registration/WqyRegistrationSubset.txt");
             Check(File.ReadAllText(glyphs) == "source-owned-text-fixture", "Minimal registration glyph source and license stay in the Player import tree");
+            string sitIcon = Path.Combine(assets, ResourceFreeBuildStage.EmbeddedResourcesRelativePath, "FakeFantasyOnline/MobileControls/Sit.png");
+            Check(File.Exists(sitIcon), "Approved sit icon stays in the Player import tree");
+            File.Delete(sitIcon);
+            ExpectFailure(() => ResourceFreeBuildStage.ValidateEmbeddedBootstrapAssets(assets), "Missing sit icon must fail closed");
+            File.WriteAllBytes(sitIcon, new byte[ResourceFreeBuildStage.MaxEmbeddedControlIconBytes + 1]);
+            ExpectFailure(() => ResourceFreeBuildStage.ValidateEmbeddedBootstrapAssets(assets), "Control icon must respect its smaller size limit");
+            File.WriteAllText(sitIcon, "source-owned-text-fixture");
+            string otherIcon = Path.Combine(Path.GetDirectoryName(sitIcon), "unreviewed.png");
+            File.WriteAllText(otherIcon, "not-approved");
+            ExpectFailure(() => ResourceFreeBuildStage.ValidateEmbeddedBootstrapAssets(assets), "Adding sit icon must not permit other control artwork");
+            File.Delete(otherIcon);
             File.Delete(embedded + ".meta");
             ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Missing import settings must fail before staging");
             CreateEmbeddedBackground(assets);

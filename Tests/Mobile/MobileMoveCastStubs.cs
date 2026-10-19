@@ -38,15 +38,27 @@ namespace UnityEngine {
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  using UnityEngine;
  public static class MobileClientPresentation {
-  public static bool Enabled=true,ModalOpen,DiagramOpen,GroupWheelOpen;
+  public static bool Enabled=true,ModalOpen,DiagramOpen,GroupWheelOpen,GameplayInputBlocked,LayoutEditing,MenuExpanded;
   public static float GroupWheelDeadZone=>24f*Scale;
   public static Vector2 GroupWheelCenter=>PageRect.center;
   public static bool GroupWheelContains(Vector2 p)=>(GroupWheelOpen||GameHud.MobileGroupWheelOpening||GameHud.MobileGroupWheelClosing)&&(p-GroupWheelCenter).sqrMagnitude<=96*96;public static int ActiveSkillButton=-1;public static float Scale=1;public static Rect SafeAreaGui=new Rect(0,0,1000,1000);
+  public static Rect MenuToggleRect=>new Rect(600,0,50,50);public static Rect MenuRect=>new Rect(400,0,200,50);
   public static Rect JoystickRect=>new Rect(0,800,200,200);public static Rect SkillRect(int k)=>new Rect(700+k*60,800,50,50);public static Rect PickupRect=>new Rect(950,960,44,40);public static Rect AttackRect=>new Rect(900,900,60,60);public static Rect PageRect=>new Rect(700,900,60,60);public static Rect MinimapRect=>new Rect(800,0,200,200);public static Rect MapActionRect(int k)=>new Rect(800+k*40,0,40,40);
   public static Vector2 GuiPoint(Vector2 p)=>new Vector2(p.x,Screen.height-p.y);public static bool PanelPointer;public static bool IsPanelPointer(Vector2 p)=>PanelPointer || (DiagramOpen && new Rect(650,750,200,250).Contains(GuiPoint(p)));public static bool CancelContains(Vector2 p)=>new Rect(400,400,100,100).Contains(p);
   public static bool IsJoystickRegion(Vector2 p)=>JoystickRect.Contains(GuiPoint(p));public static bool IsPointerOverUi(Vector2 p){p=GuiPoint(p);if(GroupWheelContains(p)||JoystickRect.Contains(p)||AttackRect.Contains(p)||PickupRect.Contains(p)||PageRect.Contains(p)||MinimapRect.Contains(p))return true;for(int k=0;k<6;k++)if(SkillRect(k).Contains(p))return true;return false;}
  }
  public partial class GameHud {
+  // These legacy move/cast tests isolate the unchanged combat path. Actual fixed
+  // keys and the editor are compiled by the separate layout-input integration suite.
+  private readonly Dictionary<int,object> mobileLayoutPointers=new Dictionary<int,object>();
+  private bool mobileLayoutAwaitRelease;
+  private static bool MobileShortcutStarting=>false;
+  private bool HandleMobileFixedPointer(int f,Vector2 p,TouchPhase phase,bool panel)=>false;
+  private bool TryMobileLayoutUnlockBeforeActions()=>false;
+  private void ResetMobileFixedPointers(){}
+  private void RefreshMobileFixedPointers(){}
+  private void UpdateMobileLayoutEditor(){}
+  private void SuspendMobileLayoutEditor(){}
   public static GameHud I;public static int[] hotSkill=new int[30],hotKind=new int[30];public bool showHotbar=true,showMinimap=true,diagramOpen;public static bool HotSlotUsable(int s)=>true;public static float SkillCdFrac(int s)=>0;public static void UseHotSlot(int s){}
   private Map guiMinimap;private Host guiHost;public class Map {public void ToggleDiagram(){}public void ZoomMinimap(bool b){}public void CloseDiagram(){}}public class Host {public void ObserveNativeWorldMapRequestForIndependentRuntime(){}}
   public void Tick()=>Update();public void LoseFocus()=>OnApplicationFocus(false);public void Pause()=>OnApplicationPause(true);public void Disable()=>OnDisable();public int Owner=>mobileFinger;public int Page=>mobilePage;public int WheelHover=>mobileGroupWheel.Hovered;

@@ -51,6 +51,7 @@ namespace UnityEngine
     }
     public static class GUI
     {
+        public static bool enabled=true;
         public static readonly List<Rect> Buttons=new List<Rect>(), Textures=new List<Rect>();
         public static readonly List<string> Trace=new List<string>();
         public static string Focus; public static int Click=-1; public static GUIStyle LastLabelStyle;
@@ -58,7 +59,7 @@ namespace UnityEngine
         {
             if (!ReferenceEquals(content,GUIContent.none)||!ReferenceEquals(style,GUIStyle.none))
                 throw new Exception("Mobile chat must never use default skin buttons");
-            int index=Buttons.Count; Buttons.Add(r); return index==Click;
+            int index=Buttons.Count; Buttons.Add(r); return enabled && index==Click;
         }
         public static void DrawTexture(Rect r,Texture2D t) { Textures.Add(r); }
         public static void Label(Rect r,string text,GUIStyle style) { LastLabelStyle=style; }
@@ -73,7 +74,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class MobileClientPresentation
     {
         internal static float TextSizeMultiplier=4f/3f;
-        public static float Scale=1; public static Rect ChatRect; public static bool ChatExpanded, MenuExpanded, ModalOpen;
+        public static float Scale=1; public static Rect ChatRect; public static bool ChatExpanded, MenuExpanded, ModalOpen, GameplayInputBlocked;
         public static void RegisterPanel(object owner,Rect panel) {} public static void RemovePanel(object owner) {}
     }
     internal static class Win05
@@ -145,7 +146,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             HornDialog.Typing=DuelDlg.Typing=false; _pendingFocus=TypingNow=false;
             Event.current=new Event { type=EventType.Repaint };
             MobileClientPresentation.Scale=scale; MobileClientPresentation.ChatExpanded=false;
-            MobileClientPresentation.MenuExpanded=false; MobileClientPresentation.ModalOpen=false;
+            MobileClientPresentation.MenuExpanded=false; MobileClientPresentation.ModalOpen=false; MobileClientPresentation.GameplayInputBlocked=false; GUI.enabled=true;
             Win05.LastOpened=null; Win05.Opens=0;
             MobileClientPresentation.ChatRect=new Rect(300*scale,400*scale,360*scale,130*scale);
             chatLines.Clear(); filters=0;
@@ -261,6 +262,15 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             GameHud.MobileShortcutPointerOwned=true; GUI.Reset(); Event.current.type=EventType.MouseUp; c.DrawMobileChat();
             Input.touchCount=0; Input.Phase=TouchPhase.Canceled; GameHud.MobileShortcutPointerOwned=false; GUI.Reset(); c.DrawMobileChat();
             Check(Win05.Opens==0,"Shortcut ownership cancels any pending chat tap, including its release frame");
+            c=Fresh(); c.inputText="unsent draft"; GUI.Focus="chatinput"; _pendingFocus=true;
+            MobileClientPresentation.GameplayInputBlocked=true; GUI.Click=1;
+            Event.current.type=EventType.KeyDown; Event.current.keyCode=KeyCode.Return;
+            c.DrawMobileChat();
+            Check(c.sends==0&&c.inputText=="unsent draft"&&GUI.Focus==null&&!_pendingFocus,"Layout editing cannot submit typed draft or acquire input focus");
+            Check(!GUI.Trace.Contains("field")&&GUI.enabled,"Layout editing bypasses raw input/context-menu events and restores GUI enabled state");
+            GUI.Reset(); Event.current.type=EventType.MouseDown;Event.current.button=1;
+            c.DrawMobileChat(); Check(!GUI.Trace.Contains("field")&&c.sends==0,"Synthetic long press cannot open chat input context menu");
+            MobileClientPresentation.GameplayInputBlocked=false;
             c=Fresh(); c.chanOpen=true; Event.current.type=EventType.MouseDown; Event.current.mousePosition=new Vector2(50,50); c.DrawMobileChat();
             Check(!c.chanOpen&&c.channel=="附近","Outside tap closes picker without changing channel");
 

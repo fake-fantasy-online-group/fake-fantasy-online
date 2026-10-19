@@ -3,7 +3,7 @@
 from pathlib import Path
 import os,re,subprocess,tempfile
 root=Path(__file__).resolve().parents[2]
-base=Path(os.environ.get('FFO_TEST_BASE', '/tmp/mobile-combined-fix'))
+base=Path(os.environ.get('FFO_TEST_BASE', root))
 p=root/'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets';bp=base/'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets'
 def source(f): return (p/f if (p/f).exists() else bp/f).read_text()
 def body(f,signature):
@@ -58,5 +58,5 @@ Console.WriteLine("PASS additional ordinary panel routing: "+checks+" checks");}
 '''
 with tempfile.TemporaryDirectory() as temp:
  t=Path(temp);(t/'Stubs.cs').write_text(stubs);(t/'Contract.cs').write_text(program);(t/'framework.rsp').write_text('\n'.join('-r:'+str(f) for f in Path(os.environ['FFO_FRAMEWORK_DIR']).glob('*.dll')))
- cmd=[os.environ['FFO_MONO_ROOT']+'/bin/mono',os.environ['FFO_CSC'],'-noconfig','-nostdlib+','@'+str(t/'framework.rsp'),'-nologo','-langversion:9.0','-out:'+str(t/'Contract.exe'),str(p/'MobileClientPresentation.cs'),str(bp/'MobileGroupWheel.cs'),str(t/'Stubs.cs'),str(t/'Contract.cs')]
+ cmd=[os.environ['FFO_MONO_ROOT']+'/bin/mono',os.environ['FFO_CSC'],'-noconfig','-nostdlib+','@'+str(t/'framework.rsp'),'-nologo','-langversion:9.0','-out:'+str(t/'Contract.exe'),str(p/'MobileClientPresentation.cs'),str(p/'MobileClientPresentation.Layout.cs'),str(p/'MobileControlLayout.cs'),str(p/'MobileControlLayoutStore.cs'),str(p/'MobileFixedAction.cs'),str(bp/'MobileGroupWheel.cs'),str(t/'Stubs.cs'),str(t/'Contract.cs')]
  subprocess.run(cmd,check=True);subprocess.run([os.environ['FFO_MONO_ROOT']+'/bin/mono',str(t/'Contract.exe')],check=True)

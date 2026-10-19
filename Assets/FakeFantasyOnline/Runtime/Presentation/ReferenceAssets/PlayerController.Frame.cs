@@ -12,7 +12,8 @@ public partial class PlayerController
         if (_apVersion != CharData.apVersion) LoadFrames();
         UpdateFrameTintForIndependentRuntime();
 
-        if (Input.GetKeyDown(KeyCode.F11) && !ChatUI.TypingNow &&
+        bool gameplayInputBlocked = MobileClientPresentation.GameplayInputBlocked;
+        if (!gameplayInputBlocked && Input.GetKeyDown(KeyCode.F11) && !ChatUI.TypingNow &&
             !Win05.GmTyping && GUIUtility.keyboardControl == 0)
         {
             int nextMode = unchecked(CharData.nameMode + 1) % CharData.NAMEMODE_COUNT;
@@ -49,7 +50,7 @@ public partial class PlayerController
         {
             CancelMobileInput();
             UpdateWork();
-            if (Input.GetMouseButtonDown(1) && !SysMsgBox.Visible && !OverAnyUI())
+            if (!gameplayInputBlocked && Input.GetMouseButtonDown(1) && !SysMsgBox.Visible && !OverAnyUI())
                 SysMsgBox.Show("是否要结束打工？", CancelWork, null);
             UpdateAnim(0f, 0f, false);
             return;
@@ -68,15 +69,18 @@ public partial class PlayerController
             return;
         }
 
-        HandleSitKey();
+        if (!gameplayInputBlocked) HandleSitKey();
         UpdateLocalStallForIndependentRuntime();
-        HandleGlowToggleKeyForIndependentRuntime();
-        HandleTitleToggleKey();
-        HandlePickupKey();
+        if (!gameplayInputBlocked)
+        {
+            HandleGlowToggleKeyForIndependentRuntime();
+            HandleTitleToggleKey();
+            HandlePickupKey();
+        }
         if (CharData.riding) sitting = false;
         UpdateSittingForIndependentRuntime();
 
-        UpdatePointerFrame();
+        if (!gameplayInputBlocked) UpdatePointerFrame();
         UpdateMobileMovement();
         ApplyChantMovementForIndependentRuntime();
         ApplyApproachForIndependentRuntime();

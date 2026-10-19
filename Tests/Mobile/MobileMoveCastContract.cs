@@ -20,7 +20,7 @@ public static class MobileMoveCastContract {
    float x=drag?780:720;Frame(Stick(TouchPhase.Stationary),Skill(TouchPhase.Moved,x));
    Frame(Skill(TouchPhase.Ended,x),Stick(TouchPhase.Stationary));
    Check(NetClient.I.Uses==(smart||drag?1:0),"smart tap/manual drag policy");Moving("move survives release");Check(!SkillTargeting.MobileHotSlotActive&&GameHud.I.Owner==-1,"skill release clears owner");Check(GameHud.MobileShortcutPointerOwned,"release frame still blocks chat");Check(GameHud.I.Page==0,"movement and skills never switch page");
-   Frame(Stick(TouchPhase.Stationary));Check(!GameHud.MobileShortcutPointerOwned,"chat guard clears after release");Check(!ClientInput.Pointer.Down&&!ClientInput.Pointer.Up&&!ClientInput.Pointer.Held,"skill does not leak into world");
+   Frame(Stick(TouchPhase.Stationary));Check(GameHud.MobileShortcutPointerOwned,"held joystick retains synthetic chat ownership");Check(!ClientInput.Pointer.Down&&!ClientInput.Pointer.Up&&!ClientInput.Pointer.Held,"skill does not leak into world");
    Frame(Stick(TouchPhase.Ended));Check(!ClientInput.JoystickHeld&&ClientInput.MovementAxis.x==0,"stick release stops only stick");
   }
   Reset();Frame(Stick(TouchPhase.Began),Skill(TouchPhase.Began));Frame(Stick(TouchPhase.Ended),Skill(TouchPhase.Moved,780));Check(SkillTargeting.MobileHotSlotActive&&!ClientInput.JoystickHeld,"stick release preserves skill");Frame(Skill(TouchPhase.Ended,780));Check(NetClient.I.Uses==1,"skill releases after stick lifted");

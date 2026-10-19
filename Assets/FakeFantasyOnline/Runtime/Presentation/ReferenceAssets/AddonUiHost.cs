@@ -185,7 +185,7 @@ public sealed partial class AddonUiHost : MonoBehaviour, IPluginWidgetUi, IDispo
 
     private void OnGUI()
     {
-        if (disposed) return;
+        if (disposed || MobileClientPresentation.GameplayInputBlocked) return;
         int previousDepth = GUI.depth;
         Color previousColor = GUI.color;
         try

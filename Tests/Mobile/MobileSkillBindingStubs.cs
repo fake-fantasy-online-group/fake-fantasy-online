@@ -3,9 +3,10 @@ using System.Collections.Generic;
 namespace UnityEngine
 {
  public class Texture2D {}
+ public static class Resources { public static int loads; public static string lastPath; public static T Load<T>(string path) where T:class {loads++;lastPath=path;return new Texture2D() as T;} }
  public struct Vector2 { public float x,y; public Vector2(float x,float y){this.x=x;this.y=y;} }
  public struct Rect { public float x,y,width,height; public Rect(float x,float y,float w,float h){this.x=x;this.y=y;width=w;height=h;} public Vector2 center=>new Vector2(x+width/2,y+height/2); public float xMax=>x+width; public float yMax=>y+height; public bool Contains(Vector2 p)=>p.x>=x&&p.x<x+width&&p.y>=y&&p.y<y+height; public static bool operator ==(Rect a,Rect b)=>a.x==b.x&&a.y==b.y&&a.width==b.width&&a.height==b.height; public static bool operator !=(Rect a,Rect b)=>!(a==b); public override bool Equals(object o)=>o is Rect r&&this==r; public override int GetHashCode()=>0; }
- public struct Color { public Color(float a,float b,float c){} }
+ public struct Color { public Color(float a,float b,float c){} public Color(float a,float b,float c,float d){} }
  public enum EventModifiers {Shift,Control}
  public enum EventType { MouseDown,MouseDrag,MouseUp,Repaint,Layout,Used }
  public class Event { public static Event current=new Event {type=EventType.Repaint}; public EventType type; public int button,clickCount; public EventModifiers modifiers; public Vector2 mousePosition; public void Use(){type=EventType.Used;} }
@@ -23,14 +24,16 @@ namespace UnityEngine
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
  using UnityEngine;
- public partial class GameHud { internal static int[] hotSkill=new int[30],hotKind=new int[30],hotServerIcon=new int[30]; internal static Texture2D[] hotIcon=new Texture2D[30]; private static bool hotbarExpanded; private static int hotbarRow; }
- public class NetClient { public static NetClient I=new NetClient(); public int writes,upgrades; public int[] savedIds,savedKinds; public void SetHotbarForIndependentRuntime(int[] a,int[] b,bool c){writes++;savedIds=(int[])a.Clone();savedKinds=(int[])b.Clone();} public void UpgradeSkillForIndependentRuntime(int id){upgrades++;} public static Texture2D LoadItemIcon(int id)=>null; }
- public static class CharData { public struct PetSkill { public int id,icon,level,max; public bool active; public string name,desc; } public static PetSkill[] petSkills; public static Dictionary<int,int> petSkillIcons; public static Dictionary<int,int> skills=new Dictionary<int,int>(); }
- public class ResLoader { public static ResLoader I; public byte[] ReadRes(string s)=>null; }
+ public partial class GameHud { internal static int[] hotSkill=new int[30],hotKind=new int[30],hotServerIcon=new int[30]; internal static Texture2D[] hotIcon=new Texture2D[30]; private static bool hotbarExpanded; private static int hotbarRow; internal static float fixedCooldown; internal static int fixedCooldownStarts; public static float CdFrac(int id)=>fixedCooldown; public static void StartItemCd(int id){fixedCooldownStarts++;} }
+ public class NetClient { public static NetClient I=new NetClient(); public bool ConnectedForIndependentRuntime=true; public int writes,upgrades,itemUses,mountUses,petShows,rideLeaves,lastItem,lastSlot,lastSkill; public byte lastTab; public int[] savedIds,savedKinds; public void SetHotbarForIndependentRuntime(int[] a,int[] b,bool c){writes++;savedIds=(int[])a.Clone();savedKinds=(int[])b.Clone();} public void UpgradeSkillForIndependentRuntime(int id){upgrades++;} public static Texture2D LoadItemIcon(int id)=>null; public void UseItem(int id,byte tab,int slot){itemUses++;lastItem=id;lastTab=tab;lastSlot=slot;} public void PetUseSkillForIndependentRuntime(int id){mountUses++;lastSkill=id;} public void PetShowForIndependentRuntime(bool value){if(!value)throw new Exception("dismount must show pet");petShows++;} public void RideTogetherForIndependentRuntime(int id){if(id!=0)throw new Exception("must leave ride");rideLeaves++;} }
+ public static class CharData { public struct PetSkill { public int id,icon,level,max; public bool active; public string name,desc; } public static bool riding,petRidable; public static int rideAnchorId,petModel,mountModel; public static string PrefSuffix="fixture"; public static Dictionary<string,int> prefs=new Dictionary<string,int>(); public static int GetPref(string key,int fallback)=>prefs.TryGetValue(key+PrefSuffix,out int value)?value:fallback; public static void SetPref(string key,int value){prefs[key+PrefSuffix]=value;} public static PetSkill[] petSkills; public static Dictionary<int,int> petSkillIcons; public static Dictionary<int,int> skills=new Dictionary<int,int>(); }
+ public class ResLoader { public static ResLoader I; public byte[] ReadRes(string s)=>null; public Texture2D LoadGsa(string s)=>new Texture2D(); public Texture2D LoadTex(string s,int f)=>new Texture2D(); }
  public static class DimgDecoder { public struct Result { public bool ok; public Texture2D tex; public float scale; } public static Result Decode(byte[] b,int i)=>default; }
  public static class TexScale { public static void Register(Texture2D t,float s){} }
- public static class MobileClientPresentation { public static bool Enabled=true; public static Rect SafeAreaGui; public static float Scale=1; public static void RemovePanel(object o){} public static void RegisterPanel(object o,Rect r){} }
- public static class PlayerController { public static void SuppressWorldClick(){} }
+ public static class MobileClientPresentation { public static bool Enabled=true,GameplayInputBlocked; public static Rect SafeAreaGui; public static float Scale=1; public static void RemovePanel(object o){} public static void RegisterPanel(object o,Rect r){} }
+ public class PlayerController { public static PlayerController I=new PlayerController(); public bool IsDead; internal bool SittingForIndependentRuntime; internal string MobileSittingUnavailableReason=>""; internal bool TryToggleMobileSitting(){SittingForIndependentRuntime=!SittingForIndependentRuntime;return true;} public static void SuppressWorldClick(){} }
+ internal static class ItemActions { internal static bool handled; internal static int calls; internal static bool Handle(int id,byte tab,int slot,bool bound,bool cosmetic,string name,Action equip){calls++;return handled;} }
+ internal static class SocialClient { internal static bool TradeActive; }
  public static class ArtworkSkin { public static void ButtonFace(Rect r,string text,float s,bool enabled,bool hover,bool pressed){GUI.faceLabel=text;} }
  public class Rank { public bool CanCast; }
  public class Growth { public Rank SkillRank(int i)=>new Rank(); }

@@ -65,7 +65,7 @@ internal partial class InventoryDlg
             if (item.id > 0)
             {
                 mobileSlot = slot; mobileId = item.id; mobileTab = tab; mobileActions = held;
-                mobileActionsRect = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : 6, out _);
+                mobileActionsRect = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : MobileFixedPotionActionRows(item), out _);
                 PlayerController.SuppressWorldClick();
             }
         }
@@ -85,7 +85,7 @@ internal partial class InventoryDlg
             ev.mousePosition = previous;
             return;
         }
-        Rect box = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : 6, out float scale);
+        Rect box = MobilePanelLayout.Actions(mobileTouch.Anchor, mobileBinding ? 9 : MobileFixedPotionActionRows(item), out float scale);
         mobileActionsRect = box;
         int depth = GUI.depth; GUI.depth = 0;
         bool offered = DealDlg.IsOffered((byte)tab, item.bagIdx);
@@ -114,7 +114,8 @@ internal partial class InventoryDlg
         if (MobilePanelLayout.Action(box, 3, "分享", scale, available)) ExecuteMobileAction(item, 3);
         if (MobilePanelLayout.Action(box, 4, "放入快捷栏", scale, bindable))
         { mobileBinding = true; mobileBindingPage = 0; }
-        if (MobilePanelLayout.Action(box, 5, "取消", scale)) ClearMobileSelection();
+        int cancelRow = DrawMobileFixedPotionBindings(box, scale, item, bindingAllowed);
+        if (MobilePanelLayout.Action(box, cancelRow, "取消", scale)) ClearMobileSelection();
         }
         if (box.Contains(ev.mousePosition) && (ev.type == EventType.MouseDown || ev.type == EventType.MouseUp || ev.type == EventType.MouseDrag)) ev.Use();
         GUI.depth = depth;

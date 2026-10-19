@@ -11,7 +11,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private void UpdateMobileMovement()
         {
             if (!MobileClientPresentation.Enabled) return;
-            if (MobileClientPresentation.ModalOpen) { CancelMobileInput(); return; }
+            if (MobileClientPresentation.ModalOpen || MobileClientPresentation.GameplayInputBlocked) { CancelMobileInput(); return; }
             Vector2 axis = ClientInput.MovementAxis;
             bool steering = ClientInput.JoystickHeld && axis.sqrMagnitude > .04f;
             if (!steering)
@@ -41,6 +41,20 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             mobileSteering = false; mobileNextPathTime = 0f;
             path.Clear(); pathIdx = pendHops = 0;
             moveToTarget = false; followMode = false;
+        }
+
+        internal void StopForMobileLayoutEdit()
+        {
+            ResetMobilePlayerGesture();
+            ClientInput.CancelAll();
+            CombatWorld.StopAttack();
+            CancelPickup();
+            ClearFollow();
+            followMode = false;
+            mobileSteering = false;
+            mobileNextPathTime = 0f;
+            mobileLastAxis = Vector2.zero;
+            StopMove();
         }
 
         private void CancelMobileInput()

@@ -2,12 +2,15 @@ using System;
 namespace UnityEngine {
 public struct Vector2 { public float sqrMagnitude=>x*x+y*y; public static Vector2 operator -(Vector2 a,Vector2 b)=>new Vector2(a.x-b.x,a.y-b.y); public float x,y; public Vector2(float x,float y){this.x=x;this.y=y;} public static Vector2 operator +(Vector2 a,Vector2 b)=>new Vector2(a.x+b.x,a.y+b.y); public static Vector2 operator *(Vector2 a,float b)=>new Vector2(a.x*b,a.y*b); }
 public struct Rect {public bool Overlaps(Rect r)=>x<r.xMax&&xMax>r.x&&y<r.yMax&&yMax>r.y;public float x,y,width,height; public Rect(float x,float y,float w,float h){this.x=x;this.y=y;width=w;height=h;} public float xMax=>x+width;public float yMax=>y+height;public Vector2 center=>new Vector2(x+width/2,y+height/2);public bool Contains(Vector2 p)=>p.x>=x&&p.x<xMax&&p.y>=y&&p.y<yMax;}
-public static class Mathf {public const float Deg2Rad=(float)(Math.PI/180); public static float Cos(float v)=>(float)Math.Cos(v); public static float Sin(float v)=>(float)Math.Sin(v);public static float Min(float a,float b)=>Math.Min(a,b); public static float Max(float a,float b)=>Math.Max(a,b);}
-public static class Application {public static bool isMobilePlatform;}
+public static class Mathf {public static int Clamp(int v,int min,int max)=>Math.Max(min,Math.Min(max,v));public const float Deg2Rad=(float)(Math.PI/180); public static float Cos(float v)=>(float)Math.Cos(v); public static float Sin(float v)=>(float)Math.Sin(v);public static float Min(float a,float b)=>Math.Min(a,b); public static float Max(float a,float b)=>Math.Max(a,b);}
+public static class Application {public static bool isMobilePlatform;public static string persistentDataPath=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"ffo-layout-contract-"+Guid.NewGuid().ToString("N"));}
+public static class Time {public static int frameCount;}
+public class Texture2D { }
 public static class Screen {public static int width,height;public static Rect safeArea;}
 public static class TouchScreenKeyboard {public static bool visible;public static Rect area;}
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
+public static class ClientInput {public static void CancelAll() { }}
 public static class UIScale { public static float User=1f; }
 public static class AddonUiHost {public static bool PointerOver(UnityEngine.Vector2 point)=>false;}
 public class GameHud {internal static UnityEngine.Rect MobileDiagramRect=>new UnityEngine.Rect(250,100,300,200);internal static bool MobileGroupWheelOpening,MobileGroupWheelClosing;public static GameHud I;public bool showChat=true,showAvatar=true,showMinimap=true,diagramOpen;internal static int ControlButtonCountForIndependentRuntime=>9;}

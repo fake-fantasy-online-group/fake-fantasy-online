@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 /// <summary>One mobile presentation switch and layout, independent of desktop HUD geometry.</summary>
-public static class MobileClientPresentation
+public static partial class MobileClientPresentation
 {
     // Explicit opt-in simulation; a desktop installation stays unchanged by default.
     public static bool Simulate { get; set; }
@@ -29,7 +29,7 @@ public static class MobileClientPresentation
     {
         float automatic = Mathf.Min(height / 540f, width / 960f);
         float preference = Mathf.Max(.6f, Mathf.Min(2f, user));
-        float fit = Mathf.Min(height / 520f, width / 940f);
+        float fit = Mathf.Min(height / 540f, width / 940f);
         return Mathf.Max(.001f, Mathf.Min(automatic * preference, fit));
     }
     // Past the fit limit, increase content within the existing touch targets.
@@ -39,12 +39,12 @@ public static class MobileClientPresentation
     internal static float SkillIconPadding => 6f - 4f * Readability;
     internal static float ChatPreviewHeight => 44f + 10f * TextSizeMultiplier + 54f * TextSizeMultiplier + 1f;
     private static Rect Centered(Vector2 c, float size) => new Rect(c.x-size*.5f,c.y-size*.5f,size,size);
-    public static Rect JoystickRect => Centered(new Vector2(SafeAreaGui.x+100f*Scale,SafeAreaGui.yMax-110f*Scale),160f*Scale);
-    public static Rect AttackRect => Centered(new Vector2(SafeAreaGui.xMax-100f*Scale,SafeAreaGui.yMax-110f*Scale),96f*Scale);
-    // Fits beside the lower attack edge with a 2px gap; attack/joystick centers remain symmetric.
-    public static Rect PickupRect => Centered(AttackRect.center+new Vector2(74f,64f)*Scale,48f*Scale);
-    private static readonly Vector2[] SkillOffsets = { new Vector2(-108,32), new Vector2(-116,-40), new Vector2(-116,-116), new Vector2(-40,-156), new Vector2(36,-156), new Vector2(64,-80) };
-    public static Rect SkillRect(int index) => Centered(AttackRect.center+SkillOffsets[index]*Scale,64f*Scale);
+    public static Rect JoystickRect => ResolveControlRect(MobileControlId.Joystick);
+    public static Rect AttackRect => ResolveControlRect(MobileControlId.Attack);
+    public static Rect PickupRect => ResolveControlRect(MobileControlId.Pickup);
+    // Six equally spaced cells stay aligned in two rows. Their positions are independent
+    // of a customized attack button, so editing one control cannot silently move another.
+    public static Rect SkillRect(int index) => ResolveControlRect((MobileControlId)((int)MobileControlId.Skill0+Mathf.Clamp(index,0,5)));
     // The avatar has no extra horizontal gutter beyond the device's real safe area.
     public static Rect AvatarRect => new Rect(SafeAreaGui.x,SafeAreaGui.y,171f*Scale,155f*Scale);
     public static int MinimapViewportWidth => (int)(SafeAreaGui.width-5f*Scale);
@@ -94,23 +94,24 @@ public static class MobileClientPresentation
         return new Rect(menu.x+(index%columns)*64f*Scale,menu.y+(index/columns)*64f*Scale,
             56f*Scale,56f*Scale);
     }
-    public static Rect PageRect => new Rect(SafeAreaGui.xMax-308f*Scale,SafeAreaGui.yMax-280f*Scale,48f*Scale,48f*Scale);
+    public static Rect PageRect => ResolveControlRect(MobileControlId.GroupWheel);
     internal static bool GroupWheelOpen;
-    internal static float GroupWheelRadius => 72f*Scale;
-    internal static float GroupWheelDeadZone => 24f*Scale;
+    internal static float GroupWheelRadius => 72f*Scale*ControlScale(MobileControlId.GroupWheel);
+    internal static float GroupWheelDeadZone => 24f*Scale*ControlScale(MobileControlId.GroupWheel);
+    internal static float GroupWheelOuterRadius => 96f*Scale*ControlScale(MobileControlId.GroupWheel);
     internal static Vector2 GroupWheelCenter
     {
         get
         {
             Rect safe=SafeAreaGui;
-            float padding=GroupWheelRadius+24f*Scale;
+            float padding=GroupWheelOuterRadius;
             return new Vector2(
                 MobileGroupWheel.ClampCenter(PageRect.center.x,safe.x,safe.width,padding),
                 MobileGroupWheel.ClampCenter(PageRect.center.y,safe.y,safe.height,padding));
         }
     }
     internal static bool GroupWheelContains(Vector2 point) => (GroupWheelOpen || GameHud.MobileGroupWheelOpening || GameHud.MobileGroupWheelClosing) &&
-        (point-GroupWheelCenter).sqrMagnitude <= (GroupWheelRadius+24f*Scale)*(GroupWheelRadius+24f*Scale);
+        (point-GroupWheelCenter).sqrMagnitude <= GroupWheelOuterRadius*GroupWheelOuterRadius;
     internal static int ActiveSkillButton = -1;
     public static Rect CancelRect
     {
@@ -138,6 +139,7 @@ public static class MobileClientPresentation
         // Include a small gap, so a cancel release cannot also hit an adjacent button.
         Rect padded=new Rect(rect.x-6f*Scale,rect.y-6f*Scale,rect.width+12f*Scale,rect.height+12f*Scale);
         if (padded.Overlaps(AttackRect) || padded.Overlaps(PickupRect) || padded.Overlaps(PageRect) || padded.Overlaps(JoystickRect) ||
+            padded.Overlaps(SitRect) || padded.Overlaps(MountRect) || padded.Overlaps(HealthPotionRect) || padded.Overlaps(ManaPotionRect) ||
             padded.Overlaps(ChatRect) || padded.Overlaps(MinimapRect) || padded.Overlaps(AvatarRect) ||
             padded.Overlaps(MenuToggleRect) || (MenuExpanded && padded.Overlaps(MenuRect))) return true;
         for (int k=0;k<6;k++) if (padded.Overlaps(SkillRect(k))) return true;
@@ -227,7 +229,22 @@ public static class MobileClientPresentation
         TransportUI.VisibleS ||
         VoiceSetDlg.Visible ||
         WorldMapDlg.Visible;
-    public static bool IsJoystickRegion(Vector2 screenPoint) => !ModalOpen && !IsPanelPointer(screenPoint) && JoystickRect.Contains(GuiPoint(screenPoint));
+    public static bool IsJoystickRegion(Vector2 screenPoint)
+    {
+        if (ModalOpen || GameplayInputBlocked || IsPanelPointer(screenPoint)) return false;
+        Vector2 point=GuiPoint(screenPoint);
+        if (!JoystickRect.Contains(point)) return false;
+        // A customized layout may overlap controls. The HUD's fixed keys and
+        // action buttons have priority over the larger joystick, so a single
+        // physical pointer can never both steer and cast/use an item.
+        if (MountRect.Contains(point) || HealthPotionRect.Contains(point) || ManaPotionRect.Contains(point) ||
+            SitRect.Contains(point) || AttackRect.Contains(point) || PickupRect.Contains(point) ||
+            PageRect.Contains(point) || GroupWheelContains(point)) return false;
+        if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return false;
+        if (MenuToggleRect.Contains(point) || (MenuExpanded && MenuRect.Contains(point))) return false;
+        for (int index=0;index<6;index++) if (SkillRect(index).Contains(point)) return false;
+        return true;
+    }
     public static void RegisterPanel(object owner, Rect guiRect) { if (owner != null) panels[owner] = guiRect; }
     public static void RemovePanel(object owner) { if (owner != null) panels.Remove(owner); }
     public static bool IsPanelPointer(Vector2 screenPoint)
@@ -262,12 +279,13 @@ public static class MobileClientPresentation
     public static bool IsPointerOverUi(Vector2 screenPoint)
     {
         if (!Enabled) return false;
-        if (ModalOpen) return true;
+        if (ModalOpen || GameplayInputBlocked) return true;
         Vector2 point = GuiPoint(screenPoint);
         if (GameHud.I!=null && GameHud.I.showAvatar && AvatarRect.Contains(point)) return true;
         if (GameHud.I!=null && GameHud.I.showMinimap && MinimapRect.Contains(point)) return true;
         // Includes reserved thumb areas even before the first OnGUI event.
-        if (GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || PickupRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
+        if (SitRect.Contains(point) || MountRect.Contains(point) || HealthPotionRect.Contains(point) || ManaPotionRect.Contains(point) ||
+            GroupWheelContains(point) || JoystickRect.Contains(point) || AttackRect.Contains(point) || PickupRect.Contains(point) || MenuToggleRect.Contains(point) || PageRect.Contains(point) || (ActiveSkillButton>=0 && CancelContains(point))) return true;
         if (GameHud.I != null && GameHud.I.showChat && ChatRect.Contains(point)) return true;
         if (MenuExpanded && MenuRect.Contains(point)) return true;
         for (int i=0;i<6;i++) if (SkillRect(i).Contains(point)) return true;

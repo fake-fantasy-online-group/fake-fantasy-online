@@ -16,7 +16,7 @@ namespace UnityEngine
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
-    public static class MobileClientPresentation { public static bool Enabled=true,ModalOpen,DiagramOpen;public static float Scale=1; }
+    public static class MobileClientPresentation { public static bool Enabled=true,ModalOpen,DiagramOpen,GameplayInputBlocked;public static float Scale=1; }
     public static class ClientInput
     {
         public static bool JoystickHeld,MobileSkillGestureActive,Confirmed;
@@ -52,6 +52,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         float MoveStepPx()=>400;
         void SetPathTo(float x,float y) { Requested=new Vector2(x,y);Requests++;moveToTarget=true; }
         void ResetMobilePlayerGesture() { }
+        public void CancelPickup(){}
+        public void ClearFollow(){followId=0;}
+        public void StopMove(){path.Clear();pathIdx=pendHops=0;moveToTarget=false;}
         public void Tick()=>UpdateMobileMovement();
         public bool Moving=>moveToTarget;
         public void Pause()=>OnApplicationPause(true);

@@ -31,19 +31,25 @@ public partial class PlayerController
         if (Input.GetKeyDown(KeyCode.R) && !ChatUI.TypingNow && !Win05.GmTyping &&
             Time.time >= chantUntil && GUIUtility.keyboardControl == 0)
         {
-            if (sitting)
-            {
-                sitting = false;
-            }
-            else if (InCombat)
-            {
-                ChatUI.Add("系统", "战斗中无法打坐",
-                    new Color(1f, 180f / 255f, 120f / 255f, 1f));
-            }
-            else
-            {
-                sitting = true;
-            }
+            ToggleSittingAction();
+        }
+    }
+
+    // Shared native R-key action. Mobile still applies the surrounding Frame gates before entry.
+    private void ToggleSittingAction()
+    {
+        if (sitting)
+        {
+            sitting = false;
+        }
+        else if (InCombat)
+        {
+            ChatUI.Add("系统", "战斗中无法打坐",
+                new Color(1f, 180f / 255f, 120f / 255f, 1f));
+        }
+        else
+        {
+            sitting = true;
         }
     }
 

@@ -118,3 +118,5 @@ public static class AddonUiTests
   Console.WriteLine("PASS "+checks+" addon UI state/lifetime assertions (Unity/artwork stubs; not visual/PlayMode)");
  }
 }
+
+namespace FakeFantasyOnline.Presentation.ReferenceAssets { internal static class MobileClientPresentation { internal static bool GameplayInputBlocked; } }

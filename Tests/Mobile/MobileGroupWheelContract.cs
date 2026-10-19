@@ -60,7 +60,7 @@ public static class MobileGroupWheelContract {
     Frame(T(30,TouchPhase.Ended,720,175),Stick(TouchPhase.Stationary),Wheel(TouchPhase.Ended,dx,dy));
     Check(GameHud.I.Page==order[sector]&&!MobileClientPresentation.GroupWheelOpen&&GameHud.I.Owner==-1,"release commits and closes");
     Check(ClientInput.JoystickHeld&&GameHud.MobileShortcutPointerOwned,"joystick survives release and chat remains guarded");
-    Frame(Stick(TouchPhase.Stationary));Check(!GameHud.MobileShortcutPointerOwned,"release guard clears next frame");
+    Frame(Stick(TouchPhase.Stationary));Check(GameHud.MobileShortcutPointerOwned,"held joystick keeps chat ownership after wheel release");
     Frame(Wheel(TouchPhase.Began),Stick(TouchPhase.Stationary));Frame(Wheel(TouchPhase.Moved,72,0),Stick(TouchPhase.Stationary));Frame(Wheel(TouchPhase.Ended),Stick(TouchPhase.Stationary));
     Check(GameHud.I.Page==order[sector],"return to center cancels without changing selected group");
    }

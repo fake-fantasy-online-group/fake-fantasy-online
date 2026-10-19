@@ -182,9 +182,8 @@ internal static class MobileHudArtwork
     internal static void PickupFace(Rect touchRect, float scale, bool pressed, Texture2D cursor)
     {
         Image(Inset(touchRect, 2f * scale), ResourceFrame(RoundControlPath), pressed, opacity: .92f);
-        Rect icon = new Rect(touchRect.x, touchRect.y, touchRect.width, touchRect.height - 20f * scale);
-        Image(Inset(icon, 2f * scale), cursor, pressed);
-        Label(new Rect(touchRect.x, touchRect.yMax - 20f * scale, touchRect.width, 20f * scale), "拾取", scale);
+        // The pickup shortcut is the native hand cursor only; no caption shrinks it.
+        Image(Inset(touchRect, 6f * scale), cursor, pressed);
     }
 
     internal static void SkillFace(Rect touchRect, float scale, bool occupied, bool pressed)

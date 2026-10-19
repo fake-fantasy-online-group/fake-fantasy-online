@@ -84,6 +84,7 @@ static class Contract
   view.Cover(false);Input.touchCount=0;
   BagBindingContract.Run();
   OriginalPanelContract.Run();
+  MobileFixedActionContract.Run();
   Console.WriteLine("PASS mobile skill selection and real binding call paths: "+checks+" checks");
  }
 }

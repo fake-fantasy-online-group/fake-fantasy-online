@@ -17,9 +17,10 @@ public sealed class ResourceFreeBuildStage : IDisposable
     public const string EmbeddedBackgroundRelativePath =
         EmbeddedResourcesRelativePath + "/FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png";
     public const long MaxEmbeddedBackgroundBytes = 4 * 1024 * 1024;
+    public const long MaxEmbeddedControlIconBytes = 512 * 1024;
     private static readonly HashSet<string> EmbeddedResourceDirectories = new HashSet<string>(StringComparer.Ordinal)
     {
-        "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration"
+        "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration", "FakeFantasyOnline/MobileControls"
     };
     private static readonly HashSet<string> EmbeddedResourceFiles = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -29,6 +30,8 @@ public sealed class ResourceFreeBuildStage : IDisposable
         "FakeFantasyOnline/ReferenceNameTag.shader", "FakeFantasyOnline/ReferenceNameTag.shader.meta",
         "FakeFantasyOnline/Bootstrap.meta",
         "FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png", "FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png.meta",
+        "FakeFantasyOnline/MobileControls.meta",
+        "FakeFantasyOnline/MobileControls/Sit.png", "FakeFantasyOnline/MobileControls/Sit.png.meta",
         "FakeFantasyOnline/Registration.meta",
         "FakeFantasyOnline/Registration/WqyRegistrationSubset.txt", "FakeFantasyOnline/Registration/WqyRegistrationSubset.txt.meta",
         "FakeFantasyOnline/Registration/WqyRegistrationLicense.txt", "FakeFantasyOnline/Registration/WqyRegistrationLicense.txt.meta",
@@ -75,7 +78,8 @@ public sealed class ResourceFreeBuildStage : IDisposable
         ValidateSourceResourceDirectory(source, "");
         foreach (string relative in EmbeddedResourceFiles)
         {
-            long limit = relative.EndsWith(".png", StringComparison.Ordinal) ? MaxEmbeddedBackgroundBytes :
+            long limit = relative == "FakeFantasyOnline/MobileControls/Sit.png" ? MaxEmbeddedControlIconBytes :
+                relative.EndsWith(".png", StringComparison.Ordinal) ? MaxEmbeddedBackgroundBytes :
                 relative.EndsWith(".meta", StringComparison.Ordinal) ? 16 * 1024 : 64 * 1024;
             RequireSmallRegularFile(Path.Combine(source, relative), limit);
         }

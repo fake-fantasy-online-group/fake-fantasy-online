@@ -17,7 +17,7 @@ public partial class GameHud
     private readonly MobileShortcutPointerOwnership mobileShortcutPointers = new MobileShortcutPointerOwnership();
     // Chat must not interpret synthetic mouse/right-click events from skill holds.
     internal static bool MobileShortcutPointerOwned => MobileClientPresentation.Enabled && I != null &&
-        I.mobileShortcutPointers.Owns(Time.frameCount);
+        (MobileClientPresentation.GameplayInputBlocked || I.mobileShortcutPointers.Owns(Time.frameCount) || MobileShortcutStarting);
 
     // Preflight the whole touch batch so world input sees the wheel's reserved
     // area even when it samples before the HUD on the opening frame.
@@ -26,7 +26,7 @@ public partial class GameHud
         get
         {
             if (I==null || I.mobileFinger!=-1 || !I.showHotbar ||
-                !MobileClientPresentation.Enabled || MobileClientPresentation.ModalOpen) return false;
+                !MobileClientPresentation.Enabled || MobileClientPresentation.ModalOpen || MobileClientPresentation.GameplayInputBlocked) return false;
             for (int i=0;i<Input.touchCount;i++)
             {
                 Touch touch=Input.GetTouch(i);
@@ -57,12 +57,23 @@ public partial class GameHud
     private void Update()
     {
         mobileShortcutPointers.Refresh(Time.frameCount,MobilePointerActive);
-        if (!MobileClientPresentation.Enabled) { CancelMobileGesture(); return; }
+        if (!MobileClientPresentation.Enabled) { CancelMobileGesture(); ResetMobileFixedPointers(); SuspendMobileLayoutEditor(); return; }
         Rect viewport = MobileClientPresentation.SafeAreaGui;
-        if (mobileViewport != viewport) { CancelMobileGesture(); mobileViewport = viewport; }
+        if (mobileViewport != viewport)
+        {
+            CancelMobileGesture(); ResetMobileFixedPointers(); mobileViewport = viewport;
+            mobileLayoutPointers.Clear(); mobileLayoutAwaitRelease=MobileClientPresentation.LayoutEditing;
+        }
+        if (MobileClientPresentation.LayoutEditing) { UpdateMobileLayoutEditor(); return; }
+        if (MobileClientPresentation.GameplayInputBlocked) { ClientInput.CancelAll(); return; }
         if (MobileClientPresentation.ModalOpen)
-        { CancelMobileGesture(); return; }
-        if (!showHotbar && mobileFinger != -1 && mobilePressed < 10) CancelMobileGesture();
+        { CancelMobileGesture(); ResetMobileFixedPointers(); return; }
+        if (!showHotbar)
+        {
+            if (mobileFinger != -1 && mobilePressed < 10) CancelMobileGesture();
+            ResetMobileFixedPointers();
+        }
+        if (TryMobileLayoutUnlockBeforeActions()) { UpdateMobileLayoutEditor(); return; }
         // Movement and HUD gestures own different finger IDs. A second (or third)
         // touch must not cancel the active skill; HandleMobilePointer ignores non-owners.
         // Give the group opener priority over another same-frame touch inside
@@ -90,16 +101,22 @@ public partial class GameHud
             if (mobileFinger==-2) found=true;
         }
         if (mobileFinger!=-1 && !found) CancelMobileGesture();
+        RefreshMobileFixedPointers();
     }
 
     private void HandleMobilePointer(int finger,Vector2 position,TouchPhase phase)
     {
+        if (MobileClientPresentation.LayoutEditing)
+        { mobileShortcutPointers.Claim(finger); return; }
         Vector2 point=MobileClientPresentation.GuiPoint(position);
-        bool panelPointer=MobileClientPresentation.IsPanelPointer(position);
+        bool panelPointer=MobileClientPresentation.IsPanelPointer(position) ||
+            MobileClientPresentation.MenuToggleRect.Contains(point) ||
+            (MobileClientPresentation.MenuExpanded && MobileClientPresentation.MenuRect.Contains(point));
+        if (HandleMobileFixedPointer(finger,position,phase,panelPointer)) return;
         if (phase==TouchPhase.Began && !panelPointer && showHotbar)
         {
             // Even an ignored second shortcut finger owns its synthesized events.
-            bool shortcut=MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PickupRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point) || MobileClientPresentation.GroupWheelContains(point);
+            bool shortcut=MobileClientPresentation.JoystickRect.Contains(point) || MobileClientPresentation.AttackRect.Contains(point) || MobileClientPresentation.PickupRect.Contains(point) || MobileClientPresentation.PageRect.Contains(point) || MobileClientPresentation.GroupWheelContains(point);
             for (int k=0;k<6;k++) shortcut |= MobileClientPresentation.SkillRect(k).Contains(point);
             if (shortcut) mobileShortcutPointers.Claim(finger);
         }
@@ -185,11 +202,11 @@ public partial class GameHud
         mobileSkillGesture.Reset(); mobileCancelHighlighted=false;
         MobileClientPresentation.ActiveSkillButton=-1;
     }
-    private void OnApplicationFocus(bool focused) { if (!focused) CancelMobileGesture(); }
-    private void OnApplicationPause(bool paused) { if (paused) CancelMobileGesture(); }
+    private void OnApplicationFocus(bool focused) { if (!focused) { CancelMobileGesture(); ResetMobileFixedPointers(); SuspendMobileLayoutEditor(); } }
+    private void OnApplicationPause(bool paused) { if (paused) { CancelMobileGesture(); ResetMobileFixedPointers(); SuspendMobileLayoutEditor(); } }
     private void OnDisable()
     {
-        CancelMobileGesture();
+        CancelMobileGesture(); ResetMobileFixedPointers(); SuspendMobileLayoutEditor();
         mobileShortcutPointers.Clear(Time.frameCount);
         MobileHudArtwork.ClearRoundTextures();
     }

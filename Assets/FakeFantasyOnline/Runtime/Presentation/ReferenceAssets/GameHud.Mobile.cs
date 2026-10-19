@@ -27,6 +27,8 @@ public partial class GameHud
         Matrix4x4 previous=GUI.matrix;
         float oldScale=s,oldUiScale=uiScale;
         bool ready=true;
+        bool previousEnabled=GUI.enabled;
+        GUI.enabled=previousEnabled && !MobileClientPresentation.GameplayInputBlocked;
         try
         {
             s=scale; uiScale=scale;
@@ -49,25 +51,26 @@ public partial class GameHud
             GUI.matrix=Matrix4x4.Translate(new Vector3(safe.center.x-band.width*.5f-band.x,safe.y+4*scale-band.y,0))*previous;
             DrawRaidTimer(scale); DrawZoneBar(scale);
         }
-        finally { GUI.matrix=previous; s=oldScale; uiScale=oldUiScale; }
+        finally { GUI.matrix=previous; s=oldScale; uiScale=oldUiScale; GUI.enabled=previousEnabled; }
         // Reuse original resources, icons, cooldown masks and dispatch; no replacement artwork.
         if (showHotbar)
         {
-            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale,mobilePressed==6,
+            MobileHudArtwork.AttackFace(MobileClientPresentation.AttackRect,scale*MobileClientPresentation.ControlScale(MobileControlId.Attack),mobilePressed==6,
                 CursorManager.I != null ? CursorManager.I.MobileAttackTexture(TargetSelect.CurrentSourceForIndependentRuntime) : null);
-            MobileHudArtwork.PickupFace(MobileClientPresentation.PickupRect,scale,mobilePressed==8,
+            MobileHudArtwork.PickupFace(MobileClientPresentation.PickupRect,scale*MobileClientPresentation.ControlScale(MobileControlId.Pickup),mobilePressed==8,
                 CursorManager.I != null ? CursorManager.I.MobilePickupTexture : null);
             for (int k=0;k<6;k++)
             {
                 int slot=MobileGroupWheel.HotbarSlot(mobilePage,k);
                 Rect rect=MobileClientPresentation.SkillRect(k);
-                DrawMobileRoundFace(rect,scale,(uint)slot<24 && hotSkill[slot]!=0,
+                float controlScale=scale*MobileClientPresentation.ControlScale((MobileControlId)((int)MobileControlId.Skill0+k));
+                DrawMobileRoundFace(rect,controlScale,(uint)slot<24 && hotSkill[slot]!=0,
                     mobileFinger!=-1 && mobilePressed==k);
                 if ((uint)slot<24)
                 {
                     Texture2D icon=HotIconForIndependentRuntime(slot);
                     // Both artwork and cooldown are alpha-masked circles, not squares inside a rim.
-                    Rect iconRect=MobileHudArtwork.Inset(rect,MobileClientPresentation.SkillIconPadding*scale);
+                    Rect iconRect=MobileHudArtwork.Inset(rect,MobileClientPresentation.SkillIconPadding*controlScale);
                     MobileHudArtwork.Image(iconRect,MobileHudArtwork.RoundTexture(icon),
                         mobileFinger!=-1 && mobilePressed==k);
                     DrawMobileRoundCooldown(iconRect,hotSkill[slot]);
@@ -75,12 +78,14 @@ public partial class GameHud
             }
             if (!MobileClientPresentation.GroupWheelOpen)
             {
-                DrawMobileRoundFace(MobileClientPresentation.PageRect,scale,true,mobilePressed==7);
-                MobileHudArtwork.Label(MobileClientPresentation.PageRect,(mobilePage+1)+"/4",scale);
+                DrawMobileRoundFace(MobileClientPresentation.PageRect,scale*MobileClientPresentation.ControlScale(MobileControlId.GroupWheel),true,mobilePressed==7);
+                MobileHudArtwork.Label(MobileClientPresentation.PageRect,(mobilePage+1)+"/4",scale*MobileClientPresentation.ControlScale(MobileControlId.GroupWheel));
             }
-            MobileHudArtwork.Joystick(MobileClientPresentation.JoystickRect,ClientInput.MovementAxis,scale);
+            MobileHudArtwork.Joystick(MobileClientPresentation.JoystickRect,ClientInput.MovementAxis,
+                scale*MobileClientPresentation.ControlScale(MobileControlId.Joystick));
+            DrawMobileFixedControls(scale);
         }
-        if (showMenu)
+        if (showMenu && !MobileClientPresentation.GameplayInputBlocked)
         {
             if (MobileHudArtwork.MenuButton(MobileClientPresentation.MenuToggleRect,
                 scale,MobileClientPresentation.MenuExpanded))
@@ -114,11 +119,13 @@ public partial class GameHud
         }
         if (MobileClientPresentation.GroupWheelOpen && showHotbar)
             DrawMobileGroupWheel(scale);
+        DrawMobileLayoutEditor(scale);
         LastGuiDrawSucceededForIndependentRuntime=ready;
     }
     private GUIStyle mobileGroupWheelStyle;
     private void DrawMobileGroupWheel(float scale)
     {
+        scale*=MobileClientPresentation.ControlScale(MobileControlId.GroupWheel);
         if (mobileGroupWheelStyle==null)
             mobileGroupWheelStyle=new GUIStyle(GUIStyle.none) {
                 font=NpcChatter.CnFont(), alignment=TextAnchor.MiddleCenter,

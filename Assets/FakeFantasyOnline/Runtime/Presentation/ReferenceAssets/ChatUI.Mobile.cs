@@ -59,6 +59,25 @@ internal partial class ChatUI
 
     private void DrawMobileChat()
     {
+        bool enabled = GUI.enabled;
+        bool blocked = MobileClientPresentation.GameplayInputBlocked || GameHud.MobileShortcutPointerOwned;
+        if (blocked)
+        {
+            mobileExpandPressed = false;
+            chanOpen = false;
+            _pendingFocus = false;
+            if (GUI.GetNameOfFocusedControl() == "chatinput") GUI.FocusControl(null);
+        }
+        try
+        {
+            GUI.enabled = enabled && !blocked;
+            DrawMobileChatContents();
+        }
+        finally { GUI.enabled = enabled; }
+    }
+
+    private void DrawMobileChatContents()
+    {
         s = MobileClientPresentation.Scale;
         // Details belong to the original tabbed history window, never a taller HUD.
         MobileClientPresentation.ChatExpanded = false;
@@ -143,11 +162,16 @@ internal partial class ChatUI
         bool inputFocused = GUI.GetNameOfFocusedControl() == "chatinput";
         // Capture before TextField can consume Return. Horn/duel typing is not
         // ownership of this input and must never send the pending chat text.
-        bool enterPressed = inputFocused && current != null && current.type == EventType.KeyDown &&
+        bool enterPressed = GUI.enabled && inputFocused && current != null && current.type == EventType.KeyDown &&
             (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter);
         string before = inputText;
-        inputText = GuardShareEdit(before,
-            UiInput.Field(inputRect, "chatinput", before, 120, editSt, s), pendingRefs);
+        if (GUI.enabled)
+            inputText = GuardShareEdit(before,
+                UiInput.Field(inputRect, "chatinput", before, 120, editSt, s), pendingRefs);
+        else if (!string.IsNullOrEmpty(before))
+            // UiInput owns a right-click context menu before its native TextField.
+            // Do not invoke that raw event handler during an editor/shortcut gesture.
+            DrawMobileChatLabel(inputRect,before);
         if (_pendingFocus)
         {
             GUI.FocusControl("chatinput");
