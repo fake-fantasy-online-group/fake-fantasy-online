@@ -6,7 +6,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
 internal static partial class GameSettings
 {
-    public static int FrameRateMode = 1;
+    // Mobile starts with a 60 fps budget; desktop retains its historical 120 mode.
+    // Read at load time as well, so Editor play sessions can reload platform defaults.
+    internal static int DefaultFrameRateMode => UnityEngine.Application.isMobilePlatform ? 0 : 1;
+    public static int FrameRateMode = DefaultFrameRateMode;
     public static float TargetFrameMs { get; private set; } = 16.666666f;
 
     public static void ApplyFrameRate()

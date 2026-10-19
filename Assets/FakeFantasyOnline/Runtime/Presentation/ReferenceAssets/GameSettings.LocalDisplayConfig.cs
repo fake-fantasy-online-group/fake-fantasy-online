@@ -14,7 +14,10 @@ internal static partial class GameSettings
 
     internal sealed class LocalDisplayConfig
     {
-        internal int FrameRateMode = 1;
+        internal int FrameRateMode = DefaultFrameRateMode;
+        // Persist "default" rather than a generated number so future defaults never
+        // have to guess whether a numeric value was selected by the user.
+        internal bool UseDefaultFrameRate = true;
         // Zero preserves the Player's startup window; -1 requests the native display size.
         internal int Width;
         internal int Height;
@@ -56,10 +59,14 @@ internal static partial class GameSettings
             }
             else
             {
-                // Import only existing display preferences. Fresh installs retain their
-                // existing 120 mode and Player startup window, including native Android size.
-                int legacyFps = PlayerPrefs.GetInt("opt_fps", 1);
-                if (legacyFps >= 0 && legacyFps <= 2) displayConfig.FrameRateMode = legacyFps;
+                // Existing numeric preferences may have been deliberately selected.
+                // Preserve them; only a missing/invalid preference uses platform defaults.
+                int legacyFps = PlayerPrefs.GetInt("opt_fps", -1);
+                if (legacyFps >= 0 && legacyFps <= 2)
+                {
+                    displayConfig.FrameRateMode = legacyFps;
+                    displayConfig.UseDefaultFrameRate = false;
+                }
                 if (PlayerPrefs.HasKey("res_w") && PlayerPrefs.HasKey("res_h"))
                 {
                     int width = PlayerPrefs.GetInt("res_w");
@@ -101,10 +108,12 @@ internal static partial class GameSettings
                 if (!seen.Add(key)) throw new InvalidDataException("Duplicate display setting.");
                 if (key == "fps")
                 {
+                    if (value == "default") continue;
                     if (value == "60") result.FrameRateMode = 0;
                     else if (value == "120") result.FrameRateMode = 1;
                     else if (value == "refresh") result.FrameRateMode = 2;
                     else throw new InvalidDataException("Unsupported frame rate.");
+                    result.UseDefaultFrameRate = false;
                 }
                 else if (key == "resolution")
                 {
@@ -147,10 +156,12 @@ internal static partial class GameSettings
 
     internal static void WriteDisplayConfig(string path, LocalDisplayConfig settings, bool replaceExisting)
     {
-        string fps = settings.FrameRateMode == 0 ? "60" : settings.FrameRateMode == 2 ? "refresh" : "120";
+        string fps = settings.UseDefaultFrameRate ? "default" :
+            settings.FrameRateMode == 0 ? "60" : settings.FrameRateMode == 2 ? "refresh" : "120";
         string resolution = settings.Width == -1 ? "native" : settings.Width == 0 ? "default" : settings.Width + "x" + settings.Height;
         string text = "# Local display settings. Edit while the game is closed; restart to apply.\n" +
-            "# fps: 60, 120, refresh (display-paced modes, subject to hardware).\n" +
+            "# fps: default, 60, 120, refresh (subject to hardware).\n" +
+            "# fps=default follows platform defaults: mobile 60, desktop 120.\n" +
             "# resolution: default, native, 800x600, 1024x768, 1280x800, 1600x900,\n" +
             "#             1920x1080, 2560x1440, 3840x2160.\n" +
             "# default keeps the Player startup window; native uses the display size.\n" +
@@ -182,7 +193,11 @@ internal static partial class GameSettings
         {
             string path = DisplayConfigPath;
             // Preserve the file's fps value, including an edit made since startup.
-            var next = File.Exists(path) ? ReadDisplayConfig(path) : new LocalDisplayConfig { FrameRateMode = FrameRateMode };
+            var next = File.Exists(path) ? ReadDisplayConfig(path) : new LocalDisplayConfig
+            {
+                FrameRateMode = FrameRateMode,
+                UseDefaultFrameRate = displayConfig.UseDefaultFrameRate && FrameRateMode == DefaultFrameRateMode
+            };
             next.Width = width;
             next.Height = height;
             WriteDisplayConfig(path, next, true);
