@@ -22,12 +22,12 @@ public sealed class MobileResourceVerification
     public long BytesToHash { get; private set; }
     public int CachedFiles { get; private set; }
 
-    public MobileResourceVerification(MobileResourceManifest manifest, string root, string receiptPath)
+    public MobileResourceVerification(MobileResourceManifest manifest, string root, string receiptPath, bool useCachedReceipt = true)
     {
         this.manifest = manifest; this.root = root; this.receiptPath = receiptPath;
         stamps = new long[manifest.Entries.Count];
         verified = new bool[stamps.Length];
-        long[] previous = ReadReceipt();
+        long[] previous = useCachedReceipt ? ReadReceipt() : null;
         for (int i = 0; i < stamps.Length; i++)
         {
             stamps[i] = Stamp(PathFor(i), manifest.Entries[i].Length);

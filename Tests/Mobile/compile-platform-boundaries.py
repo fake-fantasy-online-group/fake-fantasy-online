@@ -16,6 +16,16 @@ for line in (presentation / 'current-presentation.rsp').read_text().splitlines()
     if line.startswith(('-out:', '-refout:', '-analyzer:', '/additionalfile:', '-additionalfile:')) or line.strip('"').endswith('.cs'):
         continue
     settings.append(line)
+# The presentation profile does not use ScreenCapture, but MobileHudPreview does.
+# Resolve its sibling from the already verified Unity API set, not an arbitrary SDK.
+for setting in list(settings):
+    if setting.startswith('-r:') and setting.rstrip('"').endswith('/UnityEngine.CoreModule.dll'):
+        capture = Path(setting[3:].strip('"')).with_name('UnityEngine.ScreenCaptureModule.dll')
+        if not capture.is_file():
+            raise SystemExit('Missing recovered Unity ScreenCapture API reference: ' + str(capture))
+        reference = '-r:"' + str(capture) + '"'
+        if reference not in settings:
+            settings.append(reference)
 for path in deps.glob('*.dll'):
     entry = '-r:"' + str(path) + '"'
     if entry not in settings:

@@ -73,7 +73,8 @@ public sealed class ClientBootstrap : MonoBehaviour
         yield return null;
         try
         {
-            string dispatch = File.ReadAllText(Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim();
+            string dispatch = installer.ResourceFree ? installer.DispatchUrl :
+                File.ReadAllText(Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim();
             InitializeClient(PrivateServerOptions.MobileConfigured(dispatch), installer);
         }
         catch (Exception exception) { installer.Fail(exception); }

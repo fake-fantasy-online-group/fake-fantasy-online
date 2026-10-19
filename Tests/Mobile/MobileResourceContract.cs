@@ -130,6 +130,8 @@ internal static class MobileResourceContract
         var warm = new MobileResourceVerification(manifest, installed, receipt);
         actual = -1;
         Assert(warm.CachedFiles == 2 && warm.BytesToHash == 0 && !warm.NeedsHash(0), "warm startup has zero hash bytes");
+        Assert(new MobileResourceVerification(manifest, installed, receipt, false).CachedFiles == 0,
+            "explicit full verification bypasses metadata-only receipts");
         Assert(warm.Verify(0, bytes => actual = bytes) && actual == -1, "warm verification never reads payload");
         warm.CommitReceipt();
         Assert(File.ReadAllText(receipt) == goodReceipt, "atomic replacement preserves complete receipt");

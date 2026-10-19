@@ -7,7 +7,7 @@ using System.Text;
 
 namespace FakeFantasyOnline.Foundation
 {
-/// <summary>Versioned, local-package manifest. Not a remote updater or a trust/signature mechanism.</summary>
+/// <summary>Versioned resource content manifest. Hashes identify content; they are not signatures.</summary>
 public sealed class MobileResourceManifest
 {
     public const string FileName = "mobile-resources.tsv";
@@ -24,12 +24,15 @@ public sealed class MobileResourceManifest
     public IReadOnlyList<Entry> Entries { get; private set; }
     public string Version { get; private set; }
     public bool Offline { get; private set; }
+    public string ClientPlatform { get; private set; }
+    public string ClientVersion { get; private set; }
 
     public static MobileResourceManifest Parse(string text)
     {
         if (text == null || Encoding.UTF8.GetByteCount(text) > MaxManifestBytes)
             throw new InvalidDataException("Mobile resource manifest is missing or too large.");
         bool offline;
+        string platform = null, clientVersion = null;
         var entries = new List<Entry>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var reader = new StringReader(text))
@@ -41,6 +44,13 @@ public sealed class MobileResourceManifest
             while ((line = reader.ReadLine()) != null)
             {
                 var fields = line.Split('\t');
+                if (fields.Length == 3 && fields[0] == "@client")
+                {
+                    if (platform != null || entries.Count != 0 || string.IsNullOrWhiteSpace(fields[1]) || string.IsNullOrWhiteSpace(fields[2]))
+                        throw new InvalidDataException("Invalid client compatibility declaration.");
+                    platform = fields[1]; clientVersion = fields[2];
+                    continue;
+                }
                 long length;
                 if (fields.Length != 4 || !long.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out length) || length < 0)
                     throw new InvalidDataException("Invalid mobile resource entry.");
@@ -54,7 +64,7 @@ public sealed class MobileResourceManifest
         }
         if (entries.Count == 0) throw new InvalidDataException("Empty mobile resource manifest.");
         using (var sha = SHA256.Create())
-            return new MobileResourceManifest { Entries = entries.AsReadOnly(), Offline = offline, Version = Hex(sha.ComputeHash(Encoding.UTF8.GetBytes(text))) };
+            return new MobileResourceManifest { Entries = entries.AsReadOnly(), Offline = offline, ClientPlatform = platform, ClientVersion = clientVersion, Version = Hex(sha.ComputeHash(Encoding.UTF8.GetBytes(text))) };
     }
 
     public void VerifyDirectory(string root)
