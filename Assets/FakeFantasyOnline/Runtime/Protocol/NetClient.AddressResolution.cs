@@ -29,12 +29,25 @@ public sealed partial class NetClient
     private Func<float, object> addressRetryWait;
 
     // Resolver and Update both run on the host thread. Only the latest displayed retry
-    // is retained; queued entries carry their own local kind, without a growing history.
+    // or direct login-gate notice is retained; queued entries carry their own local kind,
+    // without a growing history.
     private string displayedAddressRetryNotice;
     private Action<string> clearAddressRetryNotice;
 
     public void BindAddressRetryNoticeClearForIndependentRuntime(Action<string> clearNotice) =>
         clearAddressRetryNotice = clearNotice;
+
+    private void ShowAddressNotReadyNotice()
+    {
+        Action<string> error = OnError;
+        if (error == null) return;
+        // The direct login gate is also an address-owned notice. Give it a distinct
+        // identity so success cannot dismiss a newer, unrelated identical string.
+        string notice = new string((string.IsNullOrEmpty(AddressError)
+            ? "正在获取服务器地址, 请稍候…" : AddressError).ToCharArray());
+        displayedAddressRetryNotice = notice;
+        error(notice);
+    }
 
     private void ClearResolvedAddressRetryNotice()
     {

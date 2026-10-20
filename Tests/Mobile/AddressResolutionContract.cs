@@ -202,6 +202,102 @@ internal static class AddressResolutionContract
         }
     }
 
+    private static void LoginWhileAddressPending(bool asynchronous, bool failFirst, string replacement)
+    {
+        var first = new Request { ResultValue = failFirst ? 2 : 1 };
+        var good = new Request();
+        int attempts = 0, callbacks = 0;
+        using (var fixture = new Fixture(() => ++attempts == 1 ? first : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext(), "initial address request is in flight before login");
+                if (asynchronous)
+                    fixture.Client.ConnectAsync(ok => { callbacks++; Check(!ok, "pending address rejects login without connecting"); });
+                else
+                    Check(!fixture.Client.Connect(), "synchronous login is gated while address is pending");
+                string pending = fixture.Title.netMsg;
+                Check(pending == "正在获取服务器地址, 请稍候…", "pending login shows the existing address hint");
+                Check(callbacks == (asynchronous ? 1 : 0), "pending login completes its callback exactly once");
+                if (failFirst)
+                {
+                    Check(resolve.MoveNext() && ReferenceEquals(resolve.Current, fixture.Wait), "real failure still schedules retry");
+                    fixture.Client.Update();
+                    Check(fixture.Title.netMsg.Contains("Connection timed out"), "real failure remains visible");
+                    Check(resolve.MoveNext(), "failed address request starts its next attempt");
+                }
+                string newer = replacement == null ? null : replacement == "identical" ?
+                    new string(fixture.Title.netMsg.ToCharArray()) : "new login or server result";
+                if (newer != null) fixture.Title.netMsg = newer;
+                Check(!resolve.MoveNext() && fixture.Client.AddressReady, "address discovery completes successfully");
+                fixture.Client.Update();
+                Check(newer == null ? fixture.Title.netMsg == string.Empty : ReferenceEquals(fixture.Title.netMsg, newer),
+                    "success clears only the owned address hint, preserving newer even identical messages");
+                Check(callbacks == (asynchronous ? 1 : 0), "address recovery never replays the login callback");
+                Check(!(bool)typeof(NetClient).GetField("_connecting", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(fixture.Client),
+                    "address recovery does not start a TCP login or resubmit credentials");
+                Check(attempts == (failFirst ? 2 : 1), "success starts no extra address request");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void DirectFailureNoticeRecoversBeforeQueueDrain()
+    {
+        var failed = new Request { ResultValue = 2 };
+        var good = new Request();
+        int attempts = 0, callbacks = 0;
+        using (var fixture = new Fixture(() => ++attempts == 1 ? failed : good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext() && resolve.MoveNext(), "failed request queues retry before login");
+                Check(!string.IsNullOrEmpty(fixture.Client.AddressError), "login sees the nonempty failure cause");
+                fixture.Client.ConnectAsync(ok => { callbacks++; Check(!ok, "failed address gates login"); });
+                string direct = fixture.Title.netMsg;
+                Check(direct == fixture.Client.AddressError && fixture.Errors.Count == 1,
+                    "direct failure is displayed without draining the queued retry");
+                Check(resolve.MoveNext() && !resolve.MoveNext(), "discovery recovers before error queue drain");
+                Check(fixture.Title.netMsg == string.Empty && fixture.ClearedNotices.Count == 1 &&
+                    ReferenceEquals(fixture.ClearedNotices[0], direct), "recovery clears the owned direct failure notice");
+                fixture.Client.Update();
+                Check(fixture.Errors.Count == 1 && fixture.Title.netMsg == string.Empty,
+                    "late queue drain suppresses stale retry rather than restoring it");
+                Check(callbacks == 1, "recovery never repeats the rejected login callback");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
+    private static void RepeatedPendingLoginClearsOnlyLatestNotice()
+    {
+        var good = new Request();
+        int callbacks = 0;
+        using (var fixture = new Fixture(() => good))
+        {
+            IEnumerator resolve = fixture.Client.ResolveServerAddress();
+            try
+            {
+                Check(resolve.MoveNext(), "request is pending during repeated clicks");
+                for (int i = 0; i < 3; i++)
+                    fixture.Client.ConnectAsync(ok => { callbacks++; Check(!ok, "each early click is rejected once"); });
+                Check(fixture.Errors.Count == 3 && callbacks == 3, "each click displays its own notice and finishes");
+                Check(!ReferenceEquals(fixture.Errors[0], fixture.Errors[1]) &&
+                    !ReferenceEquals(fixture.Errors[1], fixture.Errors[2]), "identical click notices have distinct ownership");
+                string latest = fixture.Title.netMsg;
+                Check(ReferenceEquals(latest, fixture.Errors[2]), "latest click owns the displayed hint");
+                Check(!resolve.MoveNext() && fixture.Client.AddressReady, "address succeeds after repeated clicks");
+                fixture.Client.Update();
+                Check(fixture.Title.netMsg == string.Empty && fixture.ClearedNotices.Count == 1 &&
+                    ReferenceEquals(fixture.ClearedNotices[0], latest), "only the last displayed notice is cleared once");
+                Check(callbacks == 3, "success never replays any of the earlier login attempts");
+            }
+            finally { ((IDisposable)resolve).Dispose(); }
+        }
+    }
+
     private static void NormalSuccessAndCancellation()
     {
         var good = new Request();
@@ -389,6 +485,12 @@ internal static class AddressResolutionContract
         RepeatedStartupFailure();
         foreach (string failure in new[] { "network", "parse", "invalid" }) CompletedFailure(failure);
         NormalSuccessAndCancellation();
+        DirectFailureNoticeRecoversBeforeQueueDrain();
+        RepeatedPendingLoginClearsOnlyLatestNotice();
+        foreach (bool asynchronous in new[] { false, true })
+            foreach (bool failFirst in new[] { false, true })
+                foreach (string replacement in new string[] { null, "other", "identical" })
+                    LoginWhileAddressPending(asynchronous, failFirst, replacement);
         foreach (string kind in new[] { "login", "server notice", "validation", "identical" })
             foreach (bool queued in new[] { false, true }) RecoveryPreservesNewerMessage(kind, queued);
         MultipleQueuedRetries();

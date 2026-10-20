@@ -103,8 +103,7 @@ public sealed partial class NetClient
             return EstablishConnection();
         }
 
-        OnError?.Invoke(
-            string.IsNullOrEmpty(AddressError) ? "正在获取服务器地址, 请稍候…" : AddressError);
+        ShowAddressNotReadyNotice();
         return false;
     }
 
@@ -129,8 +128,7 @@ public sealed partial class NetClient
 
         if (!AddressReady)
         {
-            OnError?.Invoke(
-                string.IsNullOrEmpty(AddressError) ? "正在获取服务器地址, 请稍候…" : AddressError);
+            ShowAddressNotReadyNotice();
             onDone?.Invoke(false);                                         // 0x2651c0, w1 = 0
             return;
         }
