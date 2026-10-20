@@ -46,6 +46,7 @@ public sealed class ClientUpdatePlan
     public string ResourceManifestUrl { get; private set; }
     public string ResourceManifestSha256 { get; private set; }
     public long ResourceManifestSizeBytes { get; private set; }
+    public MobileResourceArchive ResourceArchive { get; private set; }
     // False still permits a mandatory package upgrade; the resource gate must
     // check Required first and must not download or enter without a match.
     public bool HasCompatibleResources { get { return ResourceManifestUrl != null; } }
@@ -103,18 +104,24 @@ public sealed class ClientUpdatePlan
                     if (!ClientProductVersion.IsValid(versionEntry.Key)) throw new InvalidDataException("Invalid resource manifest application version.");
                     var entry = Object(versionEntry.Value, "resource manifest");
                     foreach (string field in entry.Keys)
-                        if (field != "manifestUrl" && field != "sha256" && field != "sizeBytes")
+                        if (field != "manifestUrl" && field != "sha256" && field != "sizeBytes" && field != "archive")
                             throw new InvalidDataException("Unknown resource manifest field: " + field);
                     string url = Endpoint(entry, "manifestUrl", developmentHttp, false);
                     string hash = Digest(entry, "sha256", false);
                     long size = Integer(entry, "sizeBytes", false);
                     if (size > MobileResourceManifest.MaxManifestBytes)
                         throw new InvalidDataException("Resource manifest exceeds its size limit.");
+                    // The optional transport belongs to this exact, pinned
+                    // manifest. It must never carry over from another version.
+                    object archiveValue;
+                    var archive = entry.TryGetValue("archive", out archiveValue)
+                        ? MobileResourceArchive.Parse(archiveValue, developmentHttp) : null;
                     if (platformEntry.Key == platform && versionEntry.Key == currentVersion)
                     {
                         plan.ResourceManifestUrl = url;
                         plan.ResourceManifestSha256 = hash;
                         plan.ResourceManifestSizeBytes = size;
+                        plan.ResourceArchive = archive;
                     }
                 }
             }

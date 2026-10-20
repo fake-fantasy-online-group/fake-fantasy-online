@@ -16,6 +16,8 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceHttpTransport.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileRemoteResourceInstall.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceArchive.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceTarReader.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/ClientUpdateAddressStore.cs" \
   "$ROOT/Tests/Mobile/ResourceVerificationPerformanceContract.cs"
 "${runtime[@]}" "$OUT/ResourceVerificationPerformanceContract.exe"
@@ -26,5 +28,7 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceHttpTransport.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileRemoteResourceInstall.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceArchive.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceTarReader.cs" \
   "$ROOT/Tests/Mobile/StreamingRangeResourceContract.cs"
 "${runtime[@]}" "$OUT/StreamingRangeResourceContract.exe"

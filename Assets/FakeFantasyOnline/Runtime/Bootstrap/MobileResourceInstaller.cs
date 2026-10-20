@@ -274,7 +274,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
                     lock (remoteProgressLock) { resourceTransferProgress = true; downloadRate.Reset(); }
                     Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
                         SetRemoteProgress, plan.ResourceManifestSizeBytes, plan.ResourceManifestSha256, repair,
-                        SetResourceNetworkProgress));
+                        SetResourceNetworkProgress, plan.ResourceArchive));
                     while (!operation.IsCompleted) { ReadRemoteProgress(); yield return null; }
                     ReadRemoteProgress();
                     lock (remoteProgressLock) resourceTransferProgress = false;
@@ -349,7 +349,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             status = FriendlyPhase(remoteStatus); detail = remoteDetail;
             totalBytes = remoteTotal; measurable = totalBytes > 0;
             Interlocked.Exchange(ref completedBytes, remoteDone);
-            downloadBytesPerSecond = remoteStatus == "Downloading resources" || remoteStatus == "Downloading client package"
+            downloadBytesPerSecond = remoteStatus == "Downloading resources" || remoteStatus == "Downloading first-install archive" || remoteStatus == "Downloading client package"
                 ? downloadRate.BytesPerSecond(MonotonicSeconds()) : null;
         }
     }
@@ -381,6 +381,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             case "Verifying reused resource": return "校验可复用资源";
             case "Reusing installed resources": return "复用已安装资源";
             case "Downloading resources": return "正在下载资源";
+            case "Downloading first-install archive": return "正在下载首次资源包";
+            case "Extracting first-install archive": return "正在解包并验证资源";
             case "Verifying downloaded resource": return "验证下载内容";
             case "Finishing resource check": return "启用完整资源";
             default: return value;

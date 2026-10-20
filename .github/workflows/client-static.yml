@@ -27,3 +27,5 @@ jobs:
           bash Tests/ClientBuild/run-profile-contract.sh
           bash Tests/Mobile/run-storage-space-contract.sh
           bash Tests/Mobile/run-resource-performance-contract.sh
+          bash Tests/Mobile/run-tar-resource-contract.sh
+          bash Tests/Mobile/run-archive-resource-install-contract.sh

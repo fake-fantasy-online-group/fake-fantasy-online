@@ -78,9 +78,97 @@ internal static class ClientUpdatePlanContract
         Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single)+new string(' ',ClientUpdatePlan.MaxDispatchBytes),"android","1.0.0",false),"mapped dispatch remains bounded");
     }
 
+    private static string Archive(string url="https://updates.example.test/first-install.tar", string hash=null, long size=4096)
+    { return "{\"url\":\""+url+"\",\"format\":\"tar\",\"sizeBytes\":"+size+",\"sha256\":\""+(hash ?? new string('D',64))+"\",\"rootPrefix\":\"Assets/StreamingAssets/\"}"; }
+    private static string WithArchive(string archive)
+    { return ResourceEntry().Replace("\"sizeBytes\":123", "\"sizeBytes\":123,\"archive\":"+archive); }
+    private static ClientUpdatePlan ReadArchive(string archive, string platform="android", string version="1.0.0", bool http=false)
+    { return ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\"1.0.0\":"+WithArchive(archive)+"}}"),platform,version,http); }
+    private static void ResourceArchives()
+    {
+        string archive=Archive();
+        Check(Read(Plan()).ResourceArchive==null,"legacy dispatch has no archive");
+        Check(ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\"1.0.0\":"+ResourceEntry()+"}}"),"android","1.0.0",false).ResourceArchive==null,"old mapped dispatch has no archive");
+        var plan=ReadArchive(archive);
+        Check(plan.ResourceArchive!=null,"new mapped entry selects optional archive");
+        Check(plan.ResourceArchive.Url=="https://updates.example.test/first-install.tar","archive URL");
+        Check(plan.ResourceArchive.Format=="tar","archive format");
+        Check(plan.ResourceArchive.SizeBytes==4096,"archive transfer size");
+        Check(plan.ResourceArchive.Sha256==new string('d',64),"archive hash normalized");
+        Check(plan.ResourceArchive.RootPrefix=="Assets/StreamingAssets/","fixed archive root");
+        Check(plan.ResourceManifestSha256==new string('b',64) && plan.ResourceManifestSizeBytes==123,"archive never replaces manifest pins");
+        Check(ReadArchive(archive,version:"1.1.0").ResourceArchive==null,"archive never falls back across app versions");
+        Check(ReadArchive(archive,platform:"windows").ResourceArchive==null,"archive never falls back across platforms");
+        var required=ReadArchive(archive,version:"0.1.0");
+        Check(required.Required && required.Available && required.ResourceArchive==null,"missing resources keeps package gate without archive");
+        Check(ReadArchive(Archive(size:MobileResourceArchive.MaxArchiveBytes)).ResourceArchive.SizeBytes==MobileResourceArchive.MaxArchiveBytes,"archive 64 GiB inclusive bound");
+        Check(ReadArchive(Archive(size:1)).ResourceArchive.SizeBytes==1,"positive archive metadata size; actual tar validated separately");
+
+        var map=new System.Text.StringBuilder("{");
+        foreach (string platform in new[]{"android","windows","macos","linux"})
+        {
+            if (map.Length>1) map.Append(',');
+            map.Append('"').Append(platform).Append("\":{\"1.0.0\":").Append(WithArchive(Archive("https://updates.example.test/"+platform+"/first.tar")))
+                .Append(",\"1.1.0\":").Append(WithArchive(Archive("https://updates.example.test/"+platform+"/next.tar",new string('e',64)))).Append('}');
+        }
+        map.Append('}');
+        foreach (string platform in new[]{"android","windows","macos","linux"})
+            foreach (string version in new[]{"1.0.0","1.1.0"})
+            {
+                var selected=ClientUpdatePlan.Parse(MappedPlan(map.ToString()),platform,version,false);
+                Check(selected.ResourceArchive.Url=="https://updates.example.test/"+platform+"/"+(version=="1.0.0"?"first":"next")+".tar","archive exact platform/version binding "+platform+" "+version);
+                Check(selected.ResourceArchive.Sha256==new string(version=="1.0.0"?'d':'e',64),"archive selected hash");
+            }
+        string sibling="{\"android\":{\"1.0.0\":"+WithArchive(archive)+",\"1.1.0\":"+ResourceEntry()+"}}";
+        Check(ClientUpdatePlan.Parse(MappedPlan(sibling),"android","1.1.0",false).ResourceArchive==null,"entry without archive never inherits sibling transport");
+
+        foreach (string bad in new[]{
+            "null","[]","true","\"tar\"","{}",
+            archive.Replace("\"url\":","\"Url\":"),
+            archive.Replace("\"format\":\"tar\",",""),
+            archive.Replace("\"rootPrefix\":\"Assets/StreamingAssets/\"","\"rootPrefix\":null"),
+            archive.Replace("\"sizeBytes\":4096,",""),
+            archive.Replace("\"sha256\":\""+new string('D',64)+"\",",""),
+            archive.Replace("\"url\":\"https://updates.example.test/first-install.tar\",",""),
+            archive.Replace(",\"rootPrefix\":\"Assets/StreamingAssets/\"",""),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":0"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":-1"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4096.0"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4e3"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":null"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":\"4096\""),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":true"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":68719476737"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":9223372036854775808"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4096,\"sizeBytes\":4096"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4096,\"execute\":true"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4096,\"entries\":[]"),
+            archive.Replace("\"sizeBytes\":4096","\"sizeBytes\":4096,\"manifestSha256\":\""+new string('b',64)+"\""),
+            archive.Replace(new string('D',64),new string('z',64)),
+            archive.Replace(new string('D',64),new string('a',63)),
+            archive.Replace("\"sha256\":\""+new string('D',64)+"\"","\"sha256\":null")
+        }) Reject(()=>ReadArchive(bad),"malformed archive descriptor");
+        foreach (string format in new[]{"zip","tar.gz","TAR",""," tar"})
+            Reject(()=>ReadArchive(archive.Replace("\"format\":\"tar\"","\"format\":\""+format+"\"")),"unsupported archive format "+format);
+        foreach (string prefix in new[]{"","Assets/StreamingAssets","assets/StreamingAssets/","/Assets/StreamingAssets/","../","Assets/StreamingAssets/../","Assets/StreamingAssets//","Assets/StreamingAssets/extra/","Assets/StreamingAssets/ "})
+            Reject(()=>ReadArchive(archive.Replace("Assets/StreamingAssets/",prefix)),"unsafe or unsupported archive prefix "+prefix);
+        foreach (string endpoint in new[]{"http://example.test/a","https://localhost/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
+            Reject(()=>ReadArchive(Archive(endpoint),http:true),"unsafe archive endpoint");
+        string lan=Archive("http://192.168.1.3/first-install.tar");
+        Reject(()=>ReadArchive(lan),"archive LAN HTTP requires explicit development opt-in");
+        Check(ReadArchive(lan,http:true).ResourceArchive.Url.StartsWith("http:"),"archive development LAN HTTP opt-in");
+        Reject(()=>ReadArchive(archive.Replace("\"format\":\"tar\"","\"format\":\"zip\""),platform:"windows"),"nonselected archive still validated");
+        Reject(()=>ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\"1.0.0\":"+WithArchive(archive).Replace("\"sha256\":\""+new string('B',64)+"\",","")+"}}"),"android","1.0.0",false),"archive cannot substitute for required manifest hash");
+        Reject(()=>ReadArchive(archive+new string(' ',ClientUpdatePlan.MaxDispatchBytes)),"archive dispatch remains byte bounded");
+        // New clients remain backward compatible with old dispatches. Publishing
+        // the nested archive field to old strict clients needs a rollout plan;
+        // it is not an unknown field those already shipped clients can ignore.
+    }
+
     public static int Main()
     {
         ResourceManifestMaps();
+        ResourceArchives();
         var p=Read(Plan()); Check(p.Available&&!p.Required,"optional upgrade");
         Check(Read(Plan("1.0.0","1.0.0")).Required,"minimum blocks");
         Check(!Read(Plan(),"1.0.0").Available,"same version");

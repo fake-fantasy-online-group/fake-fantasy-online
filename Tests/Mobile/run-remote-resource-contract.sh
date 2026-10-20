@@ -10,5 +10,7 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceHttpTransport.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileRemoteResourceInstall.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceArchive.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceTarReader.cs" \
   "$ROOT/Tests/Mobile/RemoteResourceContract.cs"
 "$FFO_MONO_ROOT/bin/mono" "$OUT/RemoteResourceContract.exe"

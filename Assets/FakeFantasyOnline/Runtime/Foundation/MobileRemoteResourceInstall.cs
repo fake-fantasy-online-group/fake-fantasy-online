@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.ExceptionServices;
+using System.Net;
+using System.Security.Cryptography;
 
 namespace FakeFantasyOnline.Foundation
 {
@@ -39,7 +41,7 @@ public sealed class MobileRemoteResourceInstall
     }
 
     public string Install(string manifestUrl, CancellationToken cancellation, Action<string, string, long, long> progress,
-        long manifestBytes = 0, string manifestSha256 = null, bool fullVerification = false, Action<long> networkProgress = null)
+        long manifestBytes = 0, string manifestSha256 = null, bool fullVerification = false, Action<long> networkProgress = null, MobileResourceArchive archive = null)
     {
         Uri uri = MobileResourceBootstrapConfig.ValidateEndpoint(manifestUrl, developmentHttp);
         if ((manifestBytes == 0) != string.IsNullOrEmpty(manifestSha256) || manifestBytes < 0 ||
@@ -52,11 +54,11 @@ public sealed class MobileRemoteResourceInstall
         string lockPath = Path.Combine(storage, ".install.lock");
         RejectLink(lockPath);
         using (var installLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            return InstallLocked(uri, cancellation, progress, manifestBytes, manifestSha256, fullVerification, networkProgress);
+            return InstallLocked(uri, cancellation, progress, manifestBytes, manifestSha256, fullVerification, networkProgress, archive);
     }
 
     private string InstallLocked(Uri uri, CancellationToken cancellation, Action<string, string, long, long> progress,
-        long manifestBytes, string manifestSha256, bool fullVerification, Action<long> networkProgress)
+        long manifestBytes, string manifestSha256, bool fullVerification, Action<long> networkProgress, MobileResourceArchive archive)
     {
         string temporaryManifest = Path.Combine(storage, "manifest-" + Guid.NewGuid().ToString("N") + ".part");
         string text;
@@ -112,11 +114,25 @@ public sealed class MobileRemoteResourceInstall
         }
         long required = RequiredFreeBytes(additional, StrictUtf8.GetByteCount(text), manifest.Entries.Count);
         long available = availableBytes(storage);
+        if (available < required && archive != null)
+        {
+            // An optional cache must not make the ordinary install impossible.
+            CleanupArchive(archive);
+            available = availableBytes(storage);
+        }
         if (available < required)
             throw new IOException("Insufficient free storage: need " + required.ToString(CultureInfo.InvariantCulture) +
                 " additional bytes while retaining installed resources; available " + available.ToString(CultureInfo.InvariantCulture) + ".");
         Report(progress, "Preparing resource update", "Storage checked; existing resource sets are retained.", 0, total);
-        var aggregate = new InstallProgress(manifest, total, progress, networkProgress);
+        // An archive is an optional first-install seed, never the authoritative resource set.
+        // Repairs, existing generations and mostly completed staging retain the per-file path.
+        long archiveNetworkBytes = 0;
+        if (!fullVerification && !File.Exists(Path.Combine(storage, ActiveMarker)) &&
+            reusable.Count == 0 && additional >= total - total / 5)
+            archiveNetworkBytes = TryArchive(archive, manifest, staging, verification, total, required, available,
+                cancellation, progress, networkProgress);
+        var aggregate = new InstallProgress(manifest, total, progress,
+            networkProgress == null ? (Action<long>)null : bytes => networkProgress(archiveNetworkBytes + bytes));
         RunWorkers(manifest.Entries.Count, cancellation, (i, token) =>
             InstallEntry(uri, staging, manifest, verification, reusable, i, token, aggregate));
         cancellation.ThrowIfCancellationRequested();
@@ -130,9 +146,147 @@ public sealed class MobileRemoteResourceInstall
         Directory.Move(staging, installed);
         // Same-filesystem atomic marker replacement preserves the old marker on failure.
         CommitMarker(generation, cancellation);
+        CleanupArchive(archive);
         return installed;
         }
         finally { verification.CheckpointReceipt(); }
+    }
+
+    private long TryArchive(MobileResourceArchive archive, MobileResourceManifest manifest, string staging,
+        MobileResourceVerification verification, long total, long required, long available,
+        CancellationToken cancellation, Action<string, string, long, long> progress, Action<long> networkProgress)
+    {
+        if (archive == null || total <= 0 || archive.SizeBytes < total - total / 5 ||
+            archive.SizeBytes > checked(total + Math.Max(total / 5, 1024 * 1024))) return 0;
+        // Size is only an efficiency gate. Every extracted file still needs the authoritative
+        // manifest's length/hash. Unknown archive files are never installed.
+        string cache = ArchiveCache(archive), verifiedCache = cache + ".verified";
+        long networkBytes = 0, lastNetwork = -1;
+        bool extractionStarted = false;
+        try
+        {
+            Uri source = MobileResourceBootstrapConfig.ValidateEndpoint(archive.Url, developmentHttp);
+            string identity = "FFO-RESOURCE-ARCHIVE-1\n" + source.AbsoluteUri + "\n" +
+                archive.SizeBytes.ToString(CultureInfo.InvariantCulture) + ":" + archive.Sha256 + "\n";
+            RejectLink(cache); RejectLink(verifiedCache); RejectLink(verifiedCache + ".part");
+            long retained = PartialLength(cache, identity);
+            if (retained > archive.SizeBytes) retained = 0;
+            if (available < checked(required + archive.SizeBytes - retained)) return 0;
+            long offset = PreparePartial(cache, identity, archive.SizeBytes);
+            MobileResourceVerifiedFile proof = null;
+            if (offset < archive.SizeBytes)
+            {
+                Action<long> transfer = bytes =>
+                {
+                    if (lastNetwork >= 0 && bytes > lastNetwork) networkBytes += bytes - lastNetwork;
+                    lastNetwork = bytes;
+                    networkProgress?.Invoke(networkBytes);
+                    Report(progress, "Downloading first-install archive", "Preparing the initial resource set...", bytes, archive.SizeBytes);
+                };
+                var streaming = transport as IMobileResourceVerifiedTransport;
+                var resumable = transport as IMobileResourceResumableTransport;
+                if (streaming != null)
+                    proof = streaming.DownloadVerifiedResumable(source, cache, archive.SizeBytes, offset, cancellation, transfer,
+                        bytes => cancellation.ThrowIfCancellationRequested());
+                else if (resumable != null)
+                    resumable.DownloadResumable(source, cache, archive.SizeBytes, offset, cancellation, transfer);
+                else transport.Download(source, cache, archive.SizeBytes, cancellation, transfer);
+            }
+            cancellation.ThrowIfCancellationRequested();
+            long stamp = File.GetLastWriteTimeUtc(cache).Ticks;
+            string cacheIdentity = identity + stamp.ToString(CultureInfo.InvariantCulture) + "\n";
+            bool cached = offset == archive.SizeBytes && File.Exists(verifiedCache) &&
+                new FileInfo(verifiedCache).Length == StrictUtf8.GetByteCount(cacheIdentity) &&
+                File.ReadAllText(verifiedCache, StrictUtf8) == cacheIdentity;
+            if (new FileInfo(cache).Length != archive.SizeBytes ||
+                (!cached && (proof == null ? MobileResourceManifest.HashFile(cache, bytes => cancellation.ThrowIfCancellationRequested()) != archive.Sha256 :
+                !proof.Matches(cache, archive.SizeBytes, archive.Sha256, stamp))) || stamp != File.GetLastWriteTimeUtc(cache).Ticks)
+                throw new InvalidDataException("Initial resource archive length/hash mismatch.");
+            if (!cached) WriteDurable(verifiedCache, cacheIdentity);
+            var sources = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int i = 0; i < manifest.Entries.Count; i++)
+            {
+                // Ambiguous sources cannot be mapped safely by this optimization.
+                if (sources.ContainsKey(manifest.Entries[i].Source)) return networkBytes;
+                sources.Add(manifest.Entries[i].Source, i);
+            }
+            extractionStarted = true;
+            long extracted = 0;
+            using (var input = new FileStream(cache, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (input.Length != archive.SizeBytes || stamp != File.GetLastWriteTimeUtc(cache).Ticks)
+                    throw new IOException("Initial resource archive changed before extraction.");
+                MobileResourceTarReader.Read(input, archive.SizeBytes, cancellation, (name, length, payload) =>
+                {
+                    if (!name.StartsWith(archive.RootPrefix, StringComparison.Ordinal)) return;
+                    int index;
+                    if (!sources.TryGetValue(name.Substring(archive.RootPrefix.Length), out index)) return;
+                    var entry = manifest.Entries[index];
+                    if (length != entry.Length) throw new InvalidDataException("Archive resource size mismatch: " + entry.Destination);
+                    if (verification.Verify(index, bytes => cancellation.ThrowIfCancellationRequested())) return;
+                    string target = SafePath(staging, entry.Destination), part = target + ".part";
+                    RejectLink(part); Directory.CreateDirectory(Path.GetDirectoryName(target));
+                    // Archive-derived partials must never be resumed as an HTTP per-file prefix.
+                    DeletePartial(part);
+                    try
+                    {
+                        string hash;
+                        using (var output = new FileStream(part, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        using (var digest = SHA256.Create())
+                        {
+                            var buffer = new byte[65536]; long written = 0; int count;
+                            while ((count = payload.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                cancellation.ThrowIfCancellationRequested();
+                                if (count > entry.Length - written) throw new InvalidDataException("Archive resource exceeds manifest size.");
+                                output.Write(buffer, 0, count); digest.TransformBlock(buffer, 0, count, buffer, 0); written += count;
+                                Report(progress, "Extracting first-install archive", entry.Destination, extracted + written, total);
+                            }
+                            if (written != entry.Length) throw new InvalidDataException("Archive resource is truncated.");
+                            digest.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                            hash = BitConverter.ToString(digest.Hash).Replace("-", "").ToLowerInvariant();
+                            output.Flush(true);
+                        }
+                        cancellation.ThrowIfCancellationRequested();
+                        var fileProof = new MobileResourceVerifiedFile(part, length, hash, File.GetLastWriteTimeUtc(part).Ticks);
+                        verification.CommitFile(index, part, fileProof);
+                        extracted += length;
+                    }
+                    finally { if (File.Exists(part)) File.Delete(part); }
+                });
+            }
+            if (stamp != File.GetLastWriteTimeUtc(cache).Ticks) throw new IOException("Initial resource archive changed while extracting.");
+            CleanupArchive(archive);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error) when (error is IOException || error is InvalidDataException || error is WebException || error is UnauthorizedAccessException || error is DecoderFallbackException)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            // Invalid completed archives are discarded; interrupted transfers retain their
+            // identity-bound bytes until the normal pipeline succeeds or the user retries.
+            if (extractionStarted || error is InvalidDataException || error is DecoderFallbackException) CleanupArchive(archive);
+            Report(progress, "Downloading resources", "Archive unavailable; continuing with individual verified files.", 0, total);
+        }
+        finally { verification.CheckpointReceipt(); }
+        return networkBytes;
+    }
+
+    private string ArchiveCache(MobileResourceArchive archive)
+    { return Path.Combine(storage, "archive-" + archive.Sha256 + ".part"); }
+
+    private void CleanupArchive(MobileResourceArchive archive)
+    {
+        if (archive == null) return;
+        try
+        {
+            string cache = ArchiveCache(archive);
+            DeletePartial(cache);
+            foreach (string path in new[] { cache + ".verified", cache + ".verified.part" })
+            { RejectLink(path); if (File.Exists(path)) File.Delete(path); }
+        }
+        catch (IOException) { } // Cache cleanup must never invalidate a committed installation.
+        catch (InvalidDataException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     // A fixed number of workers drain the existing per-file pipeline. There is no
