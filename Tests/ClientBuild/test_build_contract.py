@@ -97,6 +97,23 @@ class BuildContract(unittest.TestCase):
             self.assertLess(source.index(call), source.index('BuildPipeline.BuildPlayer('))
             self.assertLess(source.index('stage?.Dispose();'), source.index(snapshot + '.Restore();'))
 
+    def test_android_resource_free_retains_native_imgui_classes(self):
+        source = (ROOT / 'Assets/FakeFantasyOnline/Editor/MobileClientBuild.cs').read_text()
+        snapshot = 'bool stripEngineCode = PlayerSettings.stripEngineCode;'
+        disable = 'PlayerSettings.stripEngineCode = false;'
+        restore = 'PlayerSettings.stripEngineCode = stripEngineCode;'
+        self.assertIn(snapshot, source)
+        self.assertEqual(source.count(disable), 1)
+        free_branch = source.split('if (resourceFree)', 1)[1].split('\n            else\n', 1)[0]
+        self.assertIn(disable, free_branch)
+        self.assertLess(source.index(snapshot), source.index(disable))
+        self.assertLess(source.index(disable), source.index('BuildPipeline.BuildPlayer('))
+        cleanup = source.split('try { stage?.Dispose(); }', 1)[1]
+        self.assertTrue(cleanup.lstrip().startswith('finally'))
+        self.assertIn(restore, cleanup)
+        self.assertNotIn('PlayerSettings.stripEngineCode',
+                         (ROOT / 'Assets/FakeFantasyOnline/Editor/DesktopResourceFreeBuild.cs').read_text())
+
     def test_manifest_hash_layout_and_excluded_code(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
