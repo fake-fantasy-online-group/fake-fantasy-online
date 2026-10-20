@@ -32,7 +32,8 @@ checks = {
     'source-owned icon tooltips': 'repairIcon, "修复资源"' in installer and 'configureIcon, "配置更新地址"' in installer,
     'no details control': '查看详情' not in installer and 'showDetails' not in installer,
     'errors use safe summary and retain full log': 'failed ? conciseError : status' in installer and '"Remote resource setup stopped: " + exception' in installer,
-    'speed measures network only': 'phase == "Downloading resources"' in installer and 'SpeedText(downloadBytesPerSecond)' in installer,
+    'speed measures network only': 'SetResourceNetworkProgress' in installer and 'SpeedText(downloadBytesPerSecond)' in installer,
+    'resource rate key survives worker filename changes': 'downloadRate.Observe("resource-set", receivedBytes' in installer and 'if (!resourceTransferProgress)' in installer,
     'root activation requires user entry': installer.index('if (enterRequested)') < installer.index('ClientResourcePaths.Activate(verifiedRoot);'),
 }
 for name, ok in checks.items():

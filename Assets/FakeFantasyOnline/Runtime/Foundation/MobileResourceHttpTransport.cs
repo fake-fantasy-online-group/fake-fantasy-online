@@ -7,7 +7,9 @@ using System.Threading;
 
 namespace FakeFantasyOnline.Foundation
 {
-/// <summary>Injectable transfer boundary. Implementations must not follow redirects or send credentials.</summary>
+/// <summary>Injectable transfer boundary. Implementations may be called concurrently for distinct files;
+/// they must not follow redirects/send credentials. Progress reports the initial retained offset
+/// (zero for a fresh/200-restarted transfer) before reporting newly received bytes.</summary>
 public interface IMobileResourceTransport
 {
     void Download(Uri uri, string destination, long maximumBytes, CancellationToken cancellation, Action<long> progress);
@@ -39,6 +41,7 @@ public sealed class MobileResourceVerifiedFile
 
 public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTransport
 {
+    public const int ConcurrentConnectionLimit = 4;
     public void Download(Uri uri, string destination, long maximumBytes, CancellationToken cancellation, Action<long> progress)
     {
         if (maximumBytes < 0) throw new ArgumentOutOfRangeException(nameof(maximumBytes));
@@ -80,6 +83,13 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
         request.Credentials = null;
         request.CookieContainer = null;
         request.Proxy = null;
+        // Bound the installer to four workers, but do not let the legacy HTTP
+        // endpoint default of two connections silently serialize their transfers.
+        // This changes only this origin's pool, never TLS/authentication settings.
+        var endpoint = request.ServicePoint;
+        lock (endpoint)
+            if (endpoint.ConnectionLimit < ConcurrentConnectionLimit)
+                endpoint.ConnectionLimit = ConcurrentConnectionLimit;
         request.AutomaticDecompression = DecompressionMethods.None;
         request.Timeout = 30000;
         request.ReadWriteTimeout = 30000;

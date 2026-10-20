@@ -52,7 +52,7 @@ internal static class UpdateRecoveryContract
         }
     }
     private static MobileRemoteResourceInstall Installer(string root, FakeTransport http, Func<string, long> space = null, string platform = "android")
-    { return new MobileRemoteResourceInstall(root, "1.0.0", false, http, platform, space ?? (path => long.MaxValue)); }
+    { return new MobileRemoteResourceInstall(root, "1.0.0", false, http, platform, space ?? (path => long.MaxValue), maxConcurrentDownloads: 1); }
     private static string Stage(string root, string manifest = null) { return Path.Combine(root, MobileResourceManifest.Parse(manifest ?? Manifest()).Version + ".staging"); }
     private static string Marker(string root) { return File.ReadAllText(Path.Combine(root, "active-resource-set.txt")); }
 
@@ -213,8 +213,10 @@ internal static class UpdateRecoveryContract
         verification.Verify(0); verification.Verify(1); verification.CommitReceipt();
         string path = Path.Combine(stage, "data/a.pkg"); DateTime stamp = File.GetLastWriteTimeUtc(path);
         File.WriteAllBytes(path, new byte[A.Length]); File.SetLastWriteTimeUtc(path, stamp);
-        var http = new FakeTransport(); string active = Installer(root, http).Install(Url, CancellationToken.None, null);
-        Assert(http.Downloads.Count == 2 && http.Downloads[1].EndsWith("data/a.pkg"), "staging ignores forged/stale metadata-only receipt and fully hashes retained bytes");
+        // Normal starts intentionally trust unchanged size/mtime receipts. Only
+        // explicit repair bypasses that metadata cache and detects this fixture.
+        var http = new FakeTransport(); string active = Installer(root, http).Install(Url, CancellationToken.None, null, fullVerification: true);
+        Assert(http.Downloads.Count == 2 && http.Downloads[1].EndsWith("data/a.pkg"), "explicit repair ignores staging metadata-only receipt and hashes retained bytes");
         Assert(MobileResourceManifest.HashFile(Path.Combine(active, "data/a.pkg")) == Hash(A), "only complete verified staging activates");
     }
 

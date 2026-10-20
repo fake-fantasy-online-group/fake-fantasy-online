@@ -19,6 +19,7 @@ public sealed class MobileResourceVerification
     private const int MaxReceiptBytes = 24 * 1024 * 1024;
     private readonly MobileResourceManifest manifest;
     private readonly string root, receiptPath;
+    private readonly object metadataLock = new object();
     private readonly long[] stamps;
     private readonly bool[] verified;
     private readonly Stopwatch checkpointClock = Stopwatch.StartNew();
@@ -44,14 +45,19 @@ public sealed class MobileResourceVerification
         }
     }
 
-    public bool NeedsHash(int index) { return !verified[index]; }
+    public bool NeedsHash(int index) { lock (metadataLock) return !verified[index]; }
 
     public bool Verify(int index, Action<long> progress = null)
     {
         var entry = manifest.Entries[index]; string path = PathFor(index);
         long before = Stamp(path, entry.Length);
-        if (verified[index] && before >= 0 && before == stamps[index]) return true;
-        verified[index] = false;
+        lock (metadataLock)
+        {
+            if (verified[index] && before >= 0 && before == stamps[index]) return true;
+            // A failed or cancelled real check must revoke the old receipt row,
+            // including a repair which detected same-size/same-mtime corruption.
+            verified[index] = false; dirty = true;
+        }
         if (before < 0 || !MobileResourceManifest.Verify(path, entry, progress)) return false;
         long after = Stamp(path, entry.Length);
         if (before != after) return false;
@@ -65,7 +71,7 @@ public sealed class MobileResourceVerification
     public void CommitFile(int index, string temporary, MobileResourceVerifiedFile proof, Action<long> progress = null)
     {
         var entry = manifest.Entries[index]; long before = Stamp(temporary, entry.Length);
-        verified[index] = false;
+        lock (metadataLock) { verified[index] = false; dirty = true; }
         if (before < 0 || (proof == null ? !MobileResourceManifest.Verify(temporary, entry, progress) :
             !proof.Matches(temporary, entry.Length, entry.Sha256, before)) || before != Stamp(temporary, entry.Length))
             throw new InvalidDataException("Mobile resource length/hash mismatch or file changed: " + entry.Destination);
@@ -84,7 +90,8 @@ public sealed class MobileResourceVerification
         Action<long> progress)
     {
         if (!Verify(index, bytes => cancellation.ThrowIfCancellationRequested())) return null;
-        var entry = manifest.Entries[index]; string source = PathFor(index); long before = stamps[index];
+        var entry = manifest.Entries[index]; string source = PathFor(index); long before;
+        lock (metadataLock) before = stamps[index];
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
         using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
         {
@@ -100,35 +107,46 @@ public sealed class MobileResourceVerification
 
     private void Record(int index, long stamp)
     {
-        stamps[index] = stamp; verified[index] = true; dirty = true; pending++;
-        // Bound write amplification while retaining completed large files promptly.
-        if (pending >= 32 || checkpointClock.ElapsedMilliseconds >= 1000) CheckpointReceipt();
+        lock (metadataLock)
+        {
+            stamps[index] = stamp; verified[index] = true; dirty = true; pending++;
+            // Bound write amplification while retaining completed large files promptly.
+            if (pending >= 32 || checkpointClock.ElapsedMilliseconds >= 1000) CheckpointReceipt();
+        }
     }
 
     public void CheckpointReceipt()
     {
-        if (!dirty) return;
-        var body = new StringBuilder(Header).Append('\n');
-        for (int i = 0; i < stamps.Length; i++)
-            if (verified[i] && stamps[i] >= 0)
-                body.Append(Key(manifest.Entries[i])).Append('\t')
-                    .Append(stamps[i].ToString(CultureInfo.InvariantCulture)).Append('\n');
-        string content = body.ToString();
-        byte[] bytes = Encoding.UTF8.GetBytes(content + Digest(content) + "\n");
-        string temporary = receiptPath + ".part";
-        using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-        { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
-        if (File.Exists(receiptPath)) File.Replace(temporary, receiptPath, null);
-        else File.Move(temporary, receiptPath);
-        dirty = false; pending = 0; checkpointClock.Restart();
+        // Protect the snapshot, shared temporary receipt and dirty bookkeeping
+        // together. Payload hashing/copying stays outside this metadata lock.
+        lock (metadataLock)
+        {
+            if (!dirty) return;
+            var body = new StringBuilder(Header).Append('\n');
+            for (int i = 0; i < stamps.Length; i++)
+                if (verified[i] && stamps[i] >= 0)
+                    body.Append(Key(manifest.Entries[i])).Append('\t')
+                        .Append(stamps[i].ToString(CultureInfo.InvariantCulture)).Append('\n');
+            string content = body.ToString();
+            byte[] bytes = Encoding.UTF8.GetBytes(content + Digest(content) + "\n");
+            string temporary = receiptPath + ".part";
+            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+            { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
+            if (File.Exists(receiptPath)) File.Replace(temporary, receiptPath, null);
+            else File.Move(temporary, receiptPath);
+            dirty = false; pending = 0; checkpointClock.Restart();
+        }
     }
 
     public void CommitReceipt()
     {
-        for (int i = 0; i < stamps.Length; i++)
-            if (!verified[i] || stamps[i] < 0 || stamps[i] != Stamp(PathFor(i), manifest.Entries[i].Length))
-                throw new InvalidDataException("Resource changed before activation: " + manifest.Entries[i].Destination);
-        CheckpointReceipt(); // Unchanged warm starts do not rewrite/fsync a valid receipt.
+        lock (metadataLock)
+        {
+            for (int i = 0; i < stamps.Length; i++)
+                if (!verified[i] || stamps[i] < 0 || stamps[i] != Stamp(PathFor(i), manifest.Entries[i].Length))
+                    throw new InvalidDataException("Resource changed before activation: " + manifest.Entries[i].Destination);
+            CheckpointReceipt(); // Unchanged warm starts do not rewrite/fsync a valid receipt.
+        }
     }
 
     private static string Key(MobileResourceManifest.Entry entry)

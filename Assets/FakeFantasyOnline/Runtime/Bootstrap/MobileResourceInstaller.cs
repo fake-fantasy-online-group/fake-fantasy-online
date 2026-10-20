@@ -31,6 +31,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
     private readonly object remoteProgressLock = new object();
     private string remoteStatus, remoteDetail;
     private long remoteDone, remoteTotal;
+    private bool resourceTransferProgress;
     public bool ResourceFree { get { return resourceFree; } }
     public string DispatchUrl { get; private set; }
 
@@ -270,10 +271,13 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
                     failure = new InvalidDataException("No compatible resource manifest for " + PlatformKey() + " client v" + config.appVersion + ". Download a compatible client package or correct the dispatch mapping.");
                 else if (failure == null)
                 {
+                    lock (remoteProgressLock) { resourceTransferProgress = true; downloadRate.Reset(); }
                     Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
-                        SetRemoteProgress, plan.ResourceManifestSizeBytes, plan.ResourceManifestSha256, repair));
+                        SetRemoteProgress, plan.ResourceManifestSizeBytes, plan.ResourceManifestSha256, repair,
+                        SetResourceNetworkProgress));
                     while (!operation.IsCompleted) { ReadRemoteProgress(); yield return null; }
                     ReadRemoteProgress();
+                    lock (remoteProgressLock) resourceTransferProgress = false;
                     try { verifiedRoot = operation.GetAwaiter().GetResult(); cancellation.ThrowIfCancellationRequested(); }
                     catch (Exception exception) { failure = exception; }
                 }
@@ -323,8 +327,18 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         lock (remoteProgressLock)
         {
             remoteStatus = phase; remoteDetail = description; remoteDone = done; remoteTotal = total;
-            downloadRate.Observe(phase + "|" + description, done, MonotonicSeconds(), phase == "Downloading resources" || phase == "Downloading client package");
+            // Resource workers report actual newly received bytes separately. A
+            // changing filename or a concurrent local hash must not reset the rate
+            // or count retained/copy bytes as network traffic.
+            if (!resourceTransferProgress)
+                downloadRate.Observe(phase + "|" + description, done, MonotonicSeconds(), phase == "Downloading client package");
         }
+    }
+
+    private void SetResourceNetworkProgress(long receivedBytes)
+    {
+        lock (remoteProgressLock)
+            downloadRate.Observe("resource-set", receivedBytes, MonotonicSeconds(), true);
     }
 
     private void ReadRemoteProgress()
@@ -335,7 +349,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             status = FriendlyPhase(remoteStatus); detail = remoteDetail;
             totalBytes = remoteTotal; measurable = totalBytes > 0;
             Interlocked.Exchange(ref completedBytes, remoteDone);
-            downloadBytesPerSecond = downloadRate.BytesPerSecond(MonotonicSeconds());
+            downloadBytesPerSecond = remoteStatus == "Downloading resources" || remoteStatus == "Downloading client package"
+                ? downloadRate.BytesPerSecond(MonotonicSeconds()) : null;
         }
     }
 
@@ -356,7 +371,15 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             case "Verifying client package": return "验证客户端安装包";
             case "Client package ready": return "客户端安装包已校验";
             case "Downloading resource manifest": return "读取资源清单";
+            case "Checking installed resource metadata": return "检查本地资源记录";
+            case "Preparing resource update": return "准备资源更新";
+            case "Checking staged resources": return "检查已保存资源";
+            case "Repairing resource verification": return "完整校验资源";
             case "Checking resources": case "Checking installed resources": return "校验本地资源";
+            case "Verifying retained download": return "校验已保存下载";
+            case "Verifying resumed prefix": return "校验续传数据";
+            case "Verifying reused resource": return "校验可复用资源";
+            case "Reusing installed resources": return "复用已安装资源";
             case "Downloading resources": return "正在下载资源";
             case "Verifying downloaded resource": return "验证下载内容";
             case "Finishing resource check": return "启用完整资源";

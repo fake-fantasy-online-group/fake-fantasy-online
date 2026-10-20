@@ -53,7 +53,7 @@ internal static class RemoteResourceContract
         }
     }
     private static MobileRemoteResourceInstall Installer(string root, FakeHttp http)
-    { return new MobileRemoteResourceInstall(root, "1.0.0", false, http); }
+    { return new MobileRemoteResourceInstall(root, "1.0.0", false, http, maxConcurrentDownloads: 1); }
 
     public static void Main()
     {

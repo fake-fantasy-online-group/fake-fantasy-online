@@ -4,24 +4,31 @@ using System.IO;
 using System.Globalization;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Runtime.ExceptionServices;
 
 namespace FakeFantasyOnline.Foundation
 {
 /// <summary>Remote data-only install. Content-addressed staging is never a loader root.</summary>
 public sealed class MobileRemoteResourceInstall
 {
+    public const int DefaultConcurrentDownloads = MobileResourceHttpTransport.ConcurrentConnectionLimit;
     public const long MaxTotalBytes = 64L * 1024 * 1024 * 1024;
     private const string StoredManifest = ".resource-manifest.tsv", Receipt = ".resource-verified";
     private const string ActiveMarker = "active-resource-set.txt";
     private readonly string storage, appVersion, platform;
+    private readonly int maxConcurrentDownloads;
     private readonly Func<string, long> availableBytes;
     private readonly bool developmentHttp;
     private readonly IMobileResourceTransport transport;
     private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
 
     public MobileRemoteResourceInstall(string storage, string appVersion, bool developmentHttp, IMobileResourceTransport transport,
-        string platform = "android", Func<string, long> availableBytes = null)
+        string platform = "android", Func<string, long> availableBytes = null, int maxConcurrentDownloads = DefaultConcurrentDownloads)
     {
+        if (maxConcurrentDownloads < 1 || maxConcurrentDownloads > DefaultConcurrentDownloads)
+            throw new ArgumentOutOfRangeException(nameof(maxConcurrentDownloads));
+        this.maxConcurrentDownloads = maxConcurrentDownloads;
         this.storage = Path.GetFullPath(storage);
         this.appVersion = appVersion;
         ValidatePlatform(platform);
@@ -32,7 +39,7 @@ public sealed class MobileRemoteResourceInstall
     }
 
     public string Install(string manifestUrl, CancellationToken cancellation, Action<string, string, long, long> progress,
-        long manifestBytes = 0, string manifestSha256 = null, bool fullVerification = false)
+        long manifestBytes = 0, string manifestSha256 = null, bool fullVerification = false, Action<long> networkProgress = null)
     {
         Uri uri = MobileResourceBootstrapConfig.ValidateEndpoint(manifestUrl, developmentHttp);
         if ((manifestBytes == 0) != string.IsNullOrEmpty(manifestSha256) || manifestBytes < 0 ||
@@ -45,11 +52,11 @@ public sealed class MobileRemoteResourceInstall
         string lockPath = Path.Combine(storage, ".install.lock");
         RejectLink(lockPath);
         using (var installLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            return InstallLocked(uri, cancellation, progress, manifestBytes, manifestSha256, fullVerification);
+            return InstallLocked(uri, cancellation, progress, manifestBytes, manifestSha256, fullVerification, networkProgress);
     }
 
     private string InstallLocked(Uri uri, CancellationToken cancellation, Action<string, string, long, long> progress,
-        long manifestBytes, string manifestSha256, bool fullVerification)
+        long manifestBytes, string manifestSha256, bool fullVerification, Action<long> networkProgress)
     {
         string temporaryManifest = Path.Combine(storage, "manifest-" + Guid.NewGuid().ToString("N") + ".part");
         string text;
@@ -87,7 +94,7 @@ public sealed class MobileRemoteResourceInstall
         try
         {
         var reusable = FindReusableFiles(!fullVerification);
-        long total = 0, completed = 0, additional = 0;
+        long total = 0, additional = 0;
         foreach (var entry in manifest.Entries) total = checked(total + entry.Length);
         for (int i = 0; i < manifest.Entries.Count; i++)
         {
@@ -109,59 +116,9 @@ public sealed class MobileRemoteResourceInstall
             throw new IOException("Insufficient free storage: need " + required.ToString(CultureInfo.InvariantCulture) +
                 " additional bytes while retaining installed resources; available " + available.ToString(CultureInfo.InvariantCulture) + ".");
         Report(progress, "Preparing resource update", "Storage checked; existing resource sets are retained.", 0, total);
-        for (int i = 0; i < manifest.Entries.Count; i++)
-        {
-            cancellation.ThrowIfCancellationRequested();
-            var entry = manifest.Entries[i];
-            string label = (i + 1) + "/" + manifest.Entries.Count + "  " + entry.Destination;
-            string target = SafePath(staging, entry.Destination), part = target + ".part";
-            RejectLink(part); RejectLink(part + ".resume"); RejectLink(part + ".resume.part");
-            long previous = completed;
-            Report(progress, "Checking resources", label, completed, total);
-            if (!verification.Verify(i, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Checking resources", label, previous + bytes, total); }))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(target));
-                Uri source = ResourceUri(uri, entry.Source);
-                long offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length);
-                bool ready = false;
-                // A process may stop after its last received byte but before verification.
-                if (offset == entry.Length && File.Exists(part))
-                {
-                    try { verification.CommitFile(i, part, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying retained download", label, bytes, entry.Length); }); ready = true; }
-                    catch (InvalidDataException) { DeletePartial(part); offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length); }
-                }
-                ReusableResource reusableFile;
-                if (!ready && offset == 0 && reusable.TryGetValue(ContentKey(entry), out reusableFile))
-                    ready = TryReuse(verification, i, reusableFile, part, entry, cancellation, progress, label);
-                if (!ready)
-                {
-                    MobileResourceVerifiedFile proof = null;
-                    var streaming = transport as IMobileResourceVerifiedTransport;
-                    var resumable = transport as IMobileResourceResumableTransport;
-                    if (streaming != null)
-                        proof = streaming.DownloadVerifiedResumable(source, part, entry.Length, offset, cancellation,
-                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total),
-                            bytes => Report(progress, "Verifying resumed prefix", label, bytes, offset));
-                    else if (resumable != null)
-                        resumable.DownloadResumable(source, part, entry.Length, offset, cancellation,
-                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total));
-                    else
-                        transport.Download(source, part, entry.Length, cancellation,
-                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total));
-                    cancellation.ThrowIfCancellationRequested();
-                    try
-                    {
-                        verification.CommitFile(i, part, proof,
-                            bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying downloaded resource", label, bytes, entry.Length); });
-                    }
-                    catch (InvalidDataException) { DeletePartial(part); throw; }
-                    // Interrupted/rejected responses retain the same identity-bound partial.
-                    // A complete payload that fails its final hash is discarded.
-                }
-            }
-            DeletePartial(part); // No payload fragments or resume metadata enter the loader root.
-            completed += entry.Length;
-        }
+        var aggregate = new InstallProgress(manifest, total, progress, networkProgress);
+        RunWorkers(manifest.Entries.Count, cancellation, (i, token) =>
+            InstallEntry(uri, staging, manifest, verification, reusable, i, token, aggregate));
         cancellation.ThrowIfCancellationRequested();
         Report(progress, "Finishing resource check", "Activating only the complete verified resource set...", 0, 0);
         ValidateTree(staging, manifest, false);
@@ -176,6 +133,189 @@ public sealed class MobileRemoteResourceInstall
         return installed;
         }
         finally { verification.CheckpointReceipt(); }
+    }
+
+    // A fixed number of workers drain the existing per-file pipeline. There is no
+    // task/thread per file; failure cancels siblings and all writers join before
+    // final receipt checkpointing, activation or returning control to the UI.
+    private void RunWorkers(int count, CancellationToken cancellation, Action<int, CancellationToken> work)
+    {
+        if (count == 0) return;
+        using (var group = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
+        {
+            int next = -1;
+            ExceptionDispatchInfo failure = null;
+            var failureLock = new object();
+            var workers = new List<Task>();
+            Action cancelWorkers = () =>
+            {
+                try { group.Cancel(); }
+                catch (Exception error)
+                {
+                    lock (failureLock)
+                        if (failure == null) failure = ExceptionDispatchInfo.Capture(error);
+                }
+            };
+            try
+            {
+                for (int worker = 0; worker < Math.Min(maxConcurrentDownloads, count); worker++)
+                    workers.Add(Task.Factory.StartNew(() =>
+                    {
+                        try
+                        {
+                            while (true)
+                            {
+                                group.Token.ThrowIfCancellationRequested();
+                                int index = Interlocked.Increment(ref next);
+                                if (index >= count) return;
+                                work(index, group.Token);
+                            }
+                        }
+                        catch (Exception error)
+                        {
+                            lock (failureLock)
+                                if (failure == null) failure = ExceptionDispatchInfo.Capture(error);
+                            cancelWorkers();
+                        }
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
+                Task.WaitAll(workers.ToArray());
+                cancellation.ThrowIfCancellationRequested();
+                if (failure != null) failure.Throw();
+            }
+            finally
+            {
+                cancelWorkers();
+                Task.WaitAll(workers.ToArray());
+            }
+        }
+    }
+
+    private void InstallEntry(Uri uri, string staging, MobileResourceManifest manifest,
+        MobileResourceVerification verification, Dictionary<string, ReusableResource> reusable, int i,
+        CancellationToken cancellation, InstallProgress progress)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var entry = manifest.Entries[i];
+        string target = SafePath(staging, entry.Destination), part = target + ".part";
+        RejectLink(part); RejectLink(part + ".resume"); RejectLink(part + ".resume.part");
+        // Preflight already verified retained staging bytes. This call is metadata
+        // only unless the file changed in between, and does not flash a hash phase.
+        if (!verification.Verify(i, bytes => { cancellation.ThrowIfCancellationRequested();
+            progress.Local(i, "Checking staged resources", bytes); }))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target));
+            Uri source = ResourceUri(uri, entry.Source);
+            long offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length);
+            bool ready = false;
+            if (offset == entry.Length && File.Exists(part))
+            {
+                try { verification.CommitFile(i, part, bytes => { cancellation.ThrowIfCancellationRequested();
+                    progress.Local(i, "Verifying retained download", bytes); }); ready = true; }
+                catch (InvalidDataException) { DeletePartial(part); offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length); }
+            }
+            ReusableResource reusableFile;
+            if (!ready && offset == 0 && reusable.TryGetValue(ContentKey(entry), out reusableFile))
+                ready = TryReuse(verification, i, reusableFile, part, entry, cancellation,
+                    (phase, label, done, total) => progress.Local(i, phase, done), entry.Destination);
+            if (!ready)
+            {
+                MobileResourceVerifiedFile proof = null;
+                var streaming = transport as IMobileResourceVerifiedTransport;
+                var resumable = transport as IMobileResourceResumableTransport;
+                progress.StartDownload(i);
+                if (streaming != null)
+                    proof = streaming.DownloadVerifiedResumable(source, part, entry.Length, offset, cancellation,
+                        bytes => progress.Download(i, bytes), bytes => cancellation.ThrowIfCancellationRequested());
+                else if (resumable != null)
+                    resumable.DownloadResumable(source, part, entry.Length, offset, cancellation,
+                        bytes => progress.Download(i, bytes));
+                else
+                    transport.Download(source, part, entry.Length, cancellation, bytes => progress.Download(i, bytes));
+                cancellation.ThrowIfCancellationRequested();
+                progress.EndDownload(i);
+                try
+                {
+                    verification.CommitFile(i, part, proof, bytes => { cancellation.ThrowIfCancellationRequested();
+                        progress.Local(i, "Verifying downloaded resource", bytes); });
+                }
+                catch (InvalidDataException) { DeletePartial(part); throw; }
+                // Interrupted responses retain identity-bound partials. Only a
+                // completed payload which fails its full digest is discarded.
+            }
+        }
+        DeletePartial(part);
+        progress.Complete(i);
+    }
+
+    // Progress callbacks are serialized. Network bytes have a separate counter:
+    // retained prefixes, local copies and hashes must never inflate the speed.
+    private sealed class InstallProgress
+    {
+        private readonly object gate = new object();
+        private readonly MobileResourceManifest manifest;
+        private readonly Action<string, string, long, long> report;
+        private readonly Action<long> networkReport;
+        private readonly long total;
+        private readonly long[] bytes, lastNetwork;
+        private readonly bool[] downloading;
+        private long done, networkBytes;
+        private int activeDownloads, complete;
+
+        public InstallProgress(MobileResourceManifest manifest, long total,
+            Action<string, string, long, long> report, Action<long> networkReport)
+        {
+            this.manifest = manifest; this.total = total; this.report = report; this.networkReport = networkReport;
+            bytes = new long[manifest.Entries.Count]; lastNetwork = new long[bytes.Length]; downloading = new bool[bytes.Length];
+            networkReport?.Invoke(0);
+        }
+        public void StartDownload(int i)
+        {
+            lock (gate)
+            {
+                downloading[i] = true; activeDownloads++; lastNetwork[i] = -1;
+                Emit(i, "Downloading resources");
+            }
+        }
+        public void Download(int i, long value)
+        {
+            lock (gate)
+            {
+                value = Math.Max(0, Math.Min(value, manifest.Entries[i].Length));
+                // Transports report their initial offset before reading bytes. A
+                // server's 200 Range fallback reports zero, not the stale offset.
+                if (lastNetwork[i] >= 0 && value > lastNetwork[i]) networkBytes += value - lastNetwork[i];
+                lastNetwork[i] = value;
+                SetBytes(i, value);
+                networkReport?.Invoke(networkBytes);
+                Emit(i, "Downloading resources");
+            }
+        }
+        public void EndDownload(int i)
+        {
+            lock (gate) { if (downloading[i]) { downloading[i] = false; activeDownloads--; } }
+        }
+        public void Local(int i, string phase, long value)
+        {
+            lock (gate)
+            {
+                if (phase == "Reusing installed resources") SetBytes(i, value);
+                Emit(i, phase);
+            }
+        }
+        public void Complete(int i)
+        {
+            lock (gate) { SetBytes(i, manifest.Entries[i].Length); complete++; Emit(i, "Preparing resource update"); }
+        }
+        private void SetBytes(int i, long value)
+        {
+            value = Math.Max(0, Math.Min(value, manifest.Entries[i].Length));
+            done += value - bytes[i]; bytes[i] = value;
+        }
+        private void Emit(int i, string phase)
+        {
+            if (activeDownloads > 0) phase = "Downloading resources";
+            Report(report, phase, complete + "/" + bytes.Length + "  " + manifest.Entries[i].Destination, done, total);
+        }
     }
 
     // Receipt checks detect ordinary file changes, not malicious same-size/same-timestamp
@@ -223,6 +363,7 @@ public sealed class MobileRemoteResourceInstall
 
     private sealed class ReusableResource
     {
+        public readonly object Gate = new object();
         public string Path;
         public MobileResourceVerification Verification;
         public int Index;
@@ -256,8 +397,10 @@ public sealed class MobileRemoteResourceInstall
     private static bool TryReuse(MobileResourceVerification verification, int index, ReusableResource source, string part,
         MobileResourceManifest.Entry entry, CancellationToken cancellation, Action<string, string, long, long> progress, string label)
     {
+        lock (source.Gate)
         try
         {
+            cancellation.ThrowIfCancellationRequested();
             RejectPathLinks(source.Path);
             if (!source.Verification.Verify(source.Index, bytes => {
                 cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying reused resource", label, bytes, entry.Length);
@@ -266,10 +409,10 @@ public sealed class MobileRemoteResourceInstall
                 bytes => Report(progress, "Reusing installed resources", label, bytes, entry.Length));
             if (proof == null) return false;
             verification.CommitFile(index, part, proof);
-            source.Verification.CheckpointReceipt();
             return true;
         }
         catch (InvalidDataException) { if (File.Exists(part)) File.Delete(part); return false; }
+        finally { source.Verification.CheckpointReceipt(); }
         // I/O failures stop safely; never disguise full storage with a network retry.
     }
 

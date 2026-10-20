@@ -95,11 +95,38 @@ internal static class ClientPackageUiContract
         Check(Platform == "android" ? AndroidClientPackageInstaller.Prepares == prepares + 1 : Desktop ? Get<string>(page,"desktopState") == "manual" && Application.Opened.Count == opens : Application.Opened.Count == opens + 1, "real dispatcher routes explicit cached handoff exactly once; absent desktop helper fails safely");
         (loop as IDisposable)?.Dispose();
     }
+    private static void TestResourceProgress()
+    {
+        var page = new MobileResourceInstaller();
+        Set(page, "resourceTransferProgress", true);
+        Invoke(page, "SetResourceNetworkProgress", 0L);
+        var rate = Get<ClientDownloadRate>(page, "downloadRate");
+        string key = Get<string>(rate, "key");
+        Invoke(page, "SetRemoteProgress", "Downloading resources", "file A", 900L, 1000L);
+        Invoke(page, "SetRemoteProgress", "Verifying reused resource", "file B", 900L, 1000L);
+        Invoke(page, "SetRemoteProgress", "Downloading resources", "file C", 950L, 1000L);
+        Check(Get<string>(rate, "key") == key && Get<long>(rate, "previousBytes") == 0,
+            "resource filenames/local verification cannot reset rate or inflate network bytes");
+        Invoke(page, "SetResourceNetworkProgress", 25L);
+        Check(Get<long>(rate, "previousBytes") == 25, "only actual new network bytes reach resource rate");
+        Invoke(page, "ReadRemoteProgress");
+        Check(Get<string>(page, "status") == "正在下载资源" && Get<long>(page, "completedBytes") == 950,
+            "shared download display keeps aggregate progress separate from network speed");
+        var friendly = typeof(MobileResourceInstaller).GetMethod("FriendlyPhase", BindingFlags.Static | BindingFlags.NonPublic);
+        foreach (string phase in new[] { "Checking installed resource metadata", "Preparing resource update", "Checking staged resources",
+            "Repairing resource verification", "Verifying retained download", "Verifying resumed prefix", "Verifying reused resource", "Reusing installed resources" })
+            Check((string)friendly.Invoke(null, new object[] { phase }) != phase, "shared resource phase has localized label: " + phase);
+        Set(page, "resourceTransferProgress", false);
+        Invoke(page, "SetRemoteProgress", "Checking client package", "package", 0L, 1L);
+        Check(Get<string>(rate, "key") == null, "platform package flow still resets its own network rate");
+    }
+
     public static void Main()
     {
         string root=Path.Combine(Path.GetTempPath(),"client-package-ui-"+Guid.NewGuid().ToString("N"));Application.persistentDataPath=root;Application.version="1.0.0";
         try
         {
+            TestResourceProgress();
             var page=Page(); Draw(page,"下载客户端");Check(Get<bool>(page,"clientPackageRequested"),"mandatory upgrade queues download");
             Check(Application.Opened.Count==0 && AndroidClientPackageInstaller.Prepares==0,"download does not open URL or start installer");
             Run(page);string path=Get<string>(page,"verifiedClientPackage");
