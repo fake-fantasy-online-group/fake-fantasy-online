@@ -18,6 +18,7 @@
     <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/JsonData.cs" Link="Shared/JsonData.cs" />
     <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/ClientUpdatePlan.cs" Link="Shared/ClientUpdatePlan.cs" />
     <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" Link="Shared/MobileResourceBootstrapConfig.cs" />
+    <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceArchive.cs" Link="Shared/MobileResourceArchive.cs" />
     <Compile Include="../../Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceManifest.cs" Link="Shared/MobileResourceManifest.cs" />
   </ItemGroup>
 </Project>

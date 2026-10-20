@@ -20,7 +20,7 @@ jobs:
           python3 -m unittest discover -s Tests/ClientBuild -p 'test_*.py' -v
           bash -n scripts/ci/*.sh Tests/ClientBuild/*.sh
       - name: Install distribution C# compiler for engine-free staging test
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends mono-mcs libmono-i18n-cjk4.0-cil
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends mono-mcs libmono-i18n-cjk4.0-cil libmono-system-io-compression4.0-cil
       - name: Test resource staging and restoration
         run: |
           Tests/ClientBuild/run-stage-contract.sh
@@ -29,3 +29,4 @@ jobs:
           bash Tests/Mobile/run-resource-performance-contract.sh
           bash Tests/Mobile/run-tar-resource-contract.sh
           bash Tests/Mobile/run-archive-resource-install-contract.sh
+          bash Tests/DesktopUpdater/run-desktop-updater-contract.sh
