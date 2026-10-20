@@ -198,7 +198,11 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         bool allowHttp = allowDevelopmentHttp = config.developmentHttp && Debug.isDebugBuild;
         // A configured endpoint is an explicit remote mode. First-run mode makes no request until confirmed.
         if (!configurationRequired) downloadRequested = true;
-        string storage = Path.Combine(UnityEngine.Application.persistentDataPath, "MobileResources", "Remote");
+        bool windowsPlayer = false;
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        windowsPlayer = true;
+#endif
+        string storage = ClientResourceStorage.RemoteRoot(UnityEngine.Application.dataPath, addressDirectory, windowsPlayer);
         var transport = new MobileResourceHttpTransport();
         var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey(),
             availableBytes: ClientStorageSpace.CreateAvailableBytesQuery());

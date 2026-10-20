@@ -97,9 +97,18 @@ public partial class ResLoader : MonoBehaviour
         set2city = new Dictionary<int, string>();
     }
 
+    private static bool UseInstalledResourceRoot()
+    {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        // A verified Windows download must not be shadowed by older adjacent packages.
+        if (!string.IsNullOrEmpty(FakeFantasyOnline.Foundation.ClientResourcePaths.InstalledRoot)) return true;
+#endif
+        return UnityEngine.Application.isMobilePlatform;
+    }
+
     private static IEnumerable<string> GameRoots()
     {
-        if (UnityEngine.Application.isMobilePlatform)
+        if (UseInstalledResourceRoot())
         {
             yield return ResourceFileRoot.Path;
             yield break;
@@ -148,7 +157,7 @@ public partial class ResLoader : MonoBehaviour
 
     private static string FindReleasePkgDir()
     {
-        if (UnityEngine.Application.isMobilePlatform)
+        if (UseInstalledResourceRoot())
         {
             string installed = Path.Combine(ResourceFileRoot.Path, "data");
             return Directory.Exists(installed) ? installed : null;

@@ -13,13 +13,14 @@ using FakeFantasyOnline.DesktopUpdater;
 internal static class DesktopUpdaterContract
 {
     private static int checks;
+    private static readonly List<string> liveResourceFailures = new List<string>();
     private static void Check(bool value, string name) { if (!value) throw new Exception(name); checks++; }
     private static void Reject(Action action, string name) { try { action(); } catch (Exception) { checks++; return; } throw new Exception("Expected rejection: " + name); }
     private sealed class Platform : IDesktopPlatform
     {
-        public bool RejectTrust, RejectLaunch; public int Trusts, Launches;
+        public bool RejectTrust, RejectLaunch; public int Trusts, Launches, RejectTrustAt;
         public void SetPermissions(string path, bool executable) { }
-        public void ValidateTrust(string root, DesktopInstallIdentity id) { Trusts++; if (RejectTrust) throw new IOException("trust denied"); }
+        public void ValidateTrust(string root, DesktopInstallIdentity id) { Trusts++; if (RejectTrust || Trusts == RejectTrustAt) throw new IOException("trust denied"); }
         public void StartApplication(string root, DesktopInstallIdentity id) { Launches++; if (RejectLaunch) throw new IOException("launch denied"); }
     }
     private sealed class Fixture : IDisposable
@@ -68,6 +69,31 @@ internal static class DesktopUpdaterContract
     }
     private static void Add(ZipArchive zip, string path, string text, int attrs = 0)
     { var entry = zip.CreateEntry(path); entry.ExternalAttributes = attrs; using (var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false))) writer.Write(text); }
+    private static string Resources(string root) { return Path.Combine(root, "DownloadedResources"); }
+    private static void SeedResources(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(Resources(root), "Remote"));
+        File.WriteAllText(Path.Combine(Resources(root), "Remote", "asset.bundle"), "downloaded asset");
+        Directory.CreateDirectory(Path.Combine(Resources(root), "Remote.pending-download"));
+        File.WriteAllText(Path.Combine(Resources(root), "Remote.pending-download", "pending.bundle"), "pending asset");
+        File.WriteAllText(Path.Combine(Resources(root), "download-state.json"), "download state");
+        File.WriteAllText(Path.Combine(Resources(root), "user-note"), "keep resource neighbor");
+    }
+    private static void CheckResources(string root, string name)
+    {
+        Check(File.ReadAllText(Path.Combine(Resources(root), "Remote", "asset.bundle")) == "downloaded asset", name + " asset");
+        Check(File.ReadAllText(Path.Combine(Resources(root), "Remote.pending-download", "pending.bundle")) == "pending asset", name + " pending download");
+        Check(File.ReadAllText(Path.Combine(Resources(root), "download-state.json")) == "download state", name + " download state");
+        Check(File.ReadAllText(Path.Combine(Resources(root), "user-note")) == "keep resource neighbor", name + " unrelated resource neighbor");
+    }
+    private static void CheckLiveResources(Fixture fixture, string name)
+    {
+        if (!Directory.Exists(fixture.Install)) return;
+        // Record outside Reject's exception-based fault injection, so rollback cannot
+        // conceal a temporarily exposed executable whose resource tree is elsewhere.
+        try { CheckResources(fixture.Install, "launchable application keeps resources at " + name); }
+        catch (Exception exception) { liveResourceFailures.Add(name + ": " + exception.Message); }
+    }
     private static void InvalidArchive(Action<ZipArchive> edit, string name)
     {
         using (var f = new Fixture()) { f.Zip(edit); using (var engine = new UpdateEngine(f.Request, new Platform())) Reject(() => engine.Prepare(CancellationToken.None), name);
@@ -105,10 +131,11 @@ internal static class DesktopUpdaterContract
         foreach (string platform in new[] { "windows", "macos" })
         using (var f = new Fixture(platform))
         {
+            SeedResources(f.Install);
             f.Zip(); f.Request.Save(); var request = DesktopUpdateRequest.Read(f.Request.RequestPath);
             Check(request.Sha256 == f.Request.Sha256 && request.ParentStartTicks == f.Request.ParentStartTicks, "request round trip " + platform);
             var os = new Platform(); string backup;
-            using (var engine = new UpdateEngine(request, os))
+            using (var engine = new UpdateEngine(request, os, point => { if (platform == "windows") CheckLiveResources(f, point); }))
             {
                 engine.Prepare(CancellationToken.None);
                 Check(DesktopInstallIdentity.Read(f.Install, platform).Version == "1.0.0", "prepare never replaces live app");
@@ -117,17 +144,26 @@ internal static class DesktopUpdaterContract
                 Check(File.ReadAllText(Path.Combine(backup, "user-original-file")) == "original", "old application files retained");
                 Check(File.ReadAllText(Path.Combine(f.Data, "settings")) == "keep", "user settings retained");
                 Check(os.Trusts == 3 && os.Launches == 1, "trust rechecked at prepare/commit/installed, launch once");
+                CheckResources(platform == "windows" ? f.Install : backup, "commit resources " + platform);
+                Check(!Directory.Exists(Resources(platform == "windows" ? backup : f.Install)), "resources have one owner " + platform);
+                if (platform == "windows") File.WriteAllText(Path.Combine(Resources(f.Install), "post-update.bundle"), "new download");
             }
-            UpdateEngine.Recover(f.Request);
+            UpdateEngine.Recover(f.Request, point => { if (platform == "windows") CheckLiveResources(f, point); });
             Check(DesktopInstallIdentity.Read(f.Install, platform).Version == "1.0.0", "explicit journal rollback restores old app");
             Check(Directory.Exists(f.Install + ".update-failed-" + Path.GetFileName(f.Job)), "rollback retains newer app");
+            CheckResources(f.Install, "recovered resources " + platform);
+            if (platform == "windows")
+                Check(File.ReadAllText(Path.Combine(Resources(f.Install), "post-update.bundle")) == "new download", "recovery preserves post-update downloads");
         }
-        foreach (string point in new[] { "old-renamed", "new-renamed" })
+        foreach (string point in new[] { "old-renamed", "resources-staged", "new-renamed" })
         using (var f = new Fixture())
         {
-            f.Zip(); using (var engine = new UpdateEngine(f.Request, new Platform(), p => { if (p == point) throw new IOException("injected failure"); }))
+            SeedResources(f.Install);
+            f.Zip(); using (var engine = new UpdateEngine(f.Request, new Platform(), p =>
+            { CheckLiveResources(f, p); if (p == point) throw new IOException("injected failure"); }))
             { engine.Prepare(CancellationToken.None); Reject(engine.Commit, "rollback at " + point); }
             Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "old app restored after " + point);
+            CheckResources(f.Install, "rollback after " + point);
         }
         using (var f = new Fixture())
         {
@@ -136,18 +172,164 @@ internal static class DesktopUpdaterContract
         }
         using (var f = new Fixture())
         {
+            SeedResources(f.Install);
             f.Zip(); using (var engine = new UpdateEngine(f.Request, new Platform { RejectLaunch = true }))
             { engine.Prepare(CancellationToken.None); Reject(engine.Commit, "OS launch failure rolls back"); }
             Check(DesktopInstallIdentity.Read(f.Install,"windows").Version == "1.0.0", "launch failure old app restored");
+            CheckResources(f.Install, "launch failure preserves resources");
         }
         using (var f = new Fixture())
         {
+            SeedResources(f.Install);
+            f.Zip(); using (var engine = new UpdateEngine(f.Request, new Platform { RejectTrustAt = 3 }))
+            { engine.Prepare(CancellationToken.None); Reject(engine.Commit, "installed trust failure rolls back"); }
+            Check(DesktopInstallIdentity.Read(f.Install,"windows").Version == "1.0.0", "installed trust failure old app restored");
+            CheckResources(f.Install, "installed trust failure preserves resources");
+        }
+        foreach (string point in new[] { "old-renamed", "resources-staged", "new-renamed", "recovery-displaced", "recovery-resources-restored" })
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install);
             f.Zip(); string backup;
             using (var engine = new UpdateEngine(f.Request,new Platform())) { engine.Prepare(CancellationToken.None); backup=engine.BackupPath; }
-            Directory.Move(f.Install,backup); // Simulate power/process loss between the two directory renames.
-            Check(!Directory.Exists(f.Install),"crash fixture has missing application path");
+            // Simulate process/power loss at each rename boundary, without Commit's exception rollback.
+            Directory.Move(f.Install,backup);
+            CheckLiveResources(f, "crash old-renamed");
+            if (point != "old-renamed")
+            {
+                string staged = Path.Combine(f.Install + ".update-stage-" + Path.GetFileName(f.Job), "game");
+                Directory.Move(Resources(backup), Resources(staged));
+                CheckLiveResources(f, "crash resources-staged");
+                if (point != "resources-staged") Directory.Move(staged, f.Install);
+                CheckLiveResources(f, "crash new-renamed");
+            }
+            if (point == "recovery-displaced" || point == "recovery-resources-restored")
+            {
+                Directory.Move(f.Install, f.Install + ".update-failed-" + Path.GetFileName(f.Job));
+                CheckLiveResources(f, "crash recovery-displaced");
+            }
+            if (point == "recovery-resources-restored")
+                Directory.Move(Resources(f.Install + ".update-failed-" + Path.GetFileName(f.Job)), Resources(backup));
+            UpdateEngine.Recover(f.Request, p => CheckLiveResources(f, p));
+            Check(DesktopInstallIdentity.Read(f.Install,"windows").Version == "1.0.0","journal restores old application after " + point);
+            CheckResources(f.Install, "crash recovery after " + point);
+            Check(File.ReadAllText(Path.Combine(f.Install, "user-original-file")) == "original", "crash recovery retains unrelated old files");
+        }
+        foreach (string point in new[] { "rollback-displaced", "rollback-resources-restored", "rollback-restored" })
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install); f.Zip(); string backup;
+            using (var engine = new UpdateEngine(f.Request, new Platform { RejectLaunch = true }, p =>
+            {
+                CheckLiveResources(f, p);
+                if (p == point) throw new IOException("injected process loss during rollback");
+            }))
+            {
+                engine.Prepare(CancellationToken.None); backup = engine.BackupPath;
+                Reject(engine.Commit, "rollback interrupted after " + point);
+            }
+            if (Directory.Exists(backup)) UpdateEngine.Recover(f.Request, p => CheckLiveResources(f, p));
+            CheckResources(f.Install, "recover interrupted " + point);
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "old app restored after interrupted " + point);
+        }
+        foreach (string point in new[] { "recovery-displaced", "recovery-resources-restored", "recovery-restored" })
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install); f.Zip(); string backup;
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); backup = engine.BackupPath; engine.Commit(); }
+            Reject(() => UpdateEngine.Recover(f.Request, p =>
+            {
+                CheckLiveResources(f, p);
+                if (p == point) throw new IOException("injected process loss during recovery");
+            }), "recovery interrupted after " + point);
+            if (Directory.Exists(backup)) UpdateEngine.Recover(f.Request, p => CheckLiveResources(f, p));
+            CheckResources(f.Install, "repeat interrupted " + point);
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "old app restored after interrupted " + point);
+        }
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install); f.Zip();
+            // Allow rename but forbid a second managed read: resources must never be copied or hashed.
+            using (var resource = new FileStream(Path.Combine(Resources(f.Install), "Remote", "asset.bundle"),
+                FileMode.Open, FileAccess.Read, FileShare.Delete))
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); engine.Commit(); }
+            CheckResources(f.Install, "resources renamed without file reads");
+        }
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install); f.Zip(); string backup;
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); backup = engine.BackupPath; engine.Commit(); }
+            SeedResources(backup);
+            File.WriteAllText(Path.Combine(Resources(backup), "user-conflict"), "must not merge or delete");
+            Reject(() => UpdateEngine.Recover(f.Request), "conflicting resource trees rejected without merging");
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.1", "resource conflict leaves live app unchanged");
+            CheckResources(f.Install, "resource conflict preserves live tree");
+            CheckResources(backup, "resource conflict preserves backup tree");
+            Check(File.ReadAllText(Path.Combine(Resources(backup), "user-conflict")) == "must not merge or delete", "resource conflict preserves unrelated file");
+        }
+        using (var f = new Fixture())
+        {
+            SeedResources(f.Install); f.Zip();
+            string displaced = f.Install + ".update-failed-" + Path.GetFileName(f.Job), backup;
+            using (var engine = new UpdateEngine(f.Request, new Platform(), point =>
+            {
+                CheckLiveResources(f, point);
+                if (point != "new-renamed") return;
+                Directory.CreateDirectory(displaced);
+                File.WriteAllText(Path.Combine(displaced, "user-conflict"), "keep");
+                throw new IOException("injected failure with blocked rollback");
+            }))
+            {
+                engine.Prepare(CancellationToken.None); backup = engine.BackupPath;
+                Reject(engine.Commit, "blocked rollback retains recoverable transaction");
+            }
+            CheckResources(f.Install, "failed displacement leaves resources in live application");
+            Check(!Directory.Exists(Resources(backup)), "failed displacement never extracts live resources");
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.1", "failed rollback retains new application");
+            Reject(() => UpdateEngine.Recover(f.Request), "recovery refuses unrelated displaced directory");
+            Check(File.ReadAllText(Path.Combine(displaced, "user-conflict")) == "keep", "failed rollback never removes conflict");
+            Directory.Move(displaced, Path.Combine(f.Root, "user-retained-conflict"));
             UpdateEngine.Recover(f.Request);
-            Check(DesktopInstallIdentity.Read(f.Install,"windows").Version == "1.0.0","journal restores missing application after interrupted rename");
+            CheckResources(f.Install, "recovery completes after rollback conflict moved aside");
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "recovery completes failed rollback");
+        }
+        using (var f = new Fixture())
+        {
+            f.Zip();
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); engine.Commit(); }
+            SeedResources(f.Install); // First resource download may happen only after this update.
+            UpdateEngine.Recover(f.Request);
+            CheckResources(f.Install, "recovery retains downloads first created by updated application");
+        }
+        using (var f = new Fixture())
+        {
+            f.Zip();
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            {
+                engine.Prepare(CancellationToken.None);
+                Directory.CreateDirectory(Path.Combine(f.Install + ".update-stage-" + Path.GetFileName(f.Job), "game", "DownloadedResources"));
+                Reject(engine.Commit, "empty reserved directory injected after prepare");
+            }
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "reserved stage collision leaves old app");
+        }
+        using (var f = new Fixture())
+        {
+            File.WriteAllText(Resources(f.Install), "unrelated file");
+            f.Zip();
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); Reject(engine.Commit, "resource path file collision"); }
+            Check(File.ReadAllText(Resources(f.Install)) == "unrelated file", "resource path file collision never deletes user file");
+        }
+        using (var f = new Fixture("macos"))
+        {
+            f.Zip(z => Add(z, "game.app/DownloadedResources/package-file", "ordinary macOS package file"));
+            using (var engine = new UpdateEngine(f.Request, new Platform()))
+            { engine.Prepare(CancellationToken.None); engine.Commit(); }
+            Check(File.ReadAllText(Path.Combine(Resources(f.Install), "package-file")) == "ordinary macOS package file", "macOS package behavior unchanged");
         }
         using (var f = new Fixture())
         {
@@ -228,7 +410,12 @@ internal static class DesktopUpdaterContract
         InvalidArchive(z => Add(z,"game/link", "runtime/data", unchecked((int)0xa1ff0000)),"archive symlink");
         InvalidArchive(z => Add(z,"game/fifo", "", unchecked((int)0x11ff0000)),"archive special file");
         InvalidArchive(z => Add(z,"game/.DS_Store", "bad"),"packaging metadata");
+        InvalidArchive(z => Add(z,"game/DownloadedResources", "bad"),"reserved resource file");
+        InvalidArchive(z => Add(z,"game/DownloadedResources/", ""),"reserved resource directory");
+        InvalidArchive(z => Add(z,"game/DownloadedResources/Remote/asset.bundle", "bad"),"reserved resource descendants");
+        InvalidArchive(z => Add(z,"game/dOwNlOaDeDrEsOuRcEs/Remote/asset.bundle", "bad"),"case-insensitive reserved resources");
         foreach (string package in args) PackagerFixture(package);
+        Check(liveResourceFailures.Count == 0, "Every launchable application must retain its resource tree: " + string.Join("; ", liveResourceFailures));
         Console.WriteLine("PASS desktop updater: " + checks + " checks (real ZIP/filesystem/hash/transaction code; OS trust and launching substituted). No Unity/macOS/Windows execution claimed.");
         return 0;
     }

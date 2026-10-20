@@ -20,6 +20,7 @@ public sealed class UpdateEngine : IDisposable
 {
     public const int MaxEntries = 65534;
     public const long MaxExpandedBytes = 16L * 1024 * 1024 * 1024;
+    private const string WindowsResourcesDirectory = "DownloadedResources";
     private readonly DesktopUpdateRequest request;
     private readonly IDesktopPlatform platform;
     private readonly Action<string> checkpoint;
@@ -118,11 +119,21 @@ public sealed class UpdateEngine : IDisposable
         if (live.Version != current.Version || live.InstallId != current.InstallId) throw new InvalidDataException("Installed application changed before commit.");
         var next = DesktopInstallIdentity.Read(candidate, request.Platform); current.RequireUpdate(next, request.Version);
         VerifyStagedTree();
+        if (request.Platform == "windows")
+        {
+            HasWindowsResources(request.InstallRoot);
+            if (HasWindowsResources(candidate)) throw new InvalidDataException("Prepared package occupies the reserved resource directory.");
+        }
         platform.ValidateTrust(candidate, next); // Recheck prepared files immediately before committing.
         bool movedOld = false, movedNew = false;
         try
         {
             Directory.Move(request.InstallRoot, backup); movedOld = true; checkpoint("old-renamed");
+            if (request.Platform == "windows")
+            {
+                MoveWindowsResources(backup, candidate);
+                checkpoint("resources-staged");
+            }
             Directory.Move(candidate, request.InstallRoot); movedNew = true; checkpoint("new-renamed");
             platform.ValidateTrust(request.InstallRoot, next);
             DesktopUpdateFiles.WriteNew(Path.Combine(request.JobDirectory, "installed"), "installed\n");
@@ -131,10 +142,38 @@ public sealed class UpdateEngine : IDisposable
         }
         catch
         {
-            if (movedNew && Directory.Exists(request.InstallRoot)) Directory.Move(request.InstallRoot, displaced);
+            if (movedNew && Directory.Exists(request.InstallRoot))
+            {
+                Directory.Move(request.InstallRoot, displaced);
+                if (request.Platform == "windows")
+                {
+                    checkpoint("rollback-displaced");
+                    MoveWindowsResources(displaced, backup);
+                }
+            }
+            else if (movedOld && request.Platform == "windows") MoveWindowsResources(candidate, backup);
+            if (movedOld && request.Platform == "windows") checkpoint("rollback-resources-restored");
             if (movedOld && !Directory.Exists(request.InstallRoot) && Directory.Exists(backup)) Directory.Move(backup, request.InstallRoot);
+            if (movedOld && request.Platform == "windows") checkpoint("rollback-restored");
             throw;
         }
+    }
+    private static bool HasWindowsResources(string root)
+    {
+        string path = Path.Combine(root, WindowsResourcesDirectory);
+        DesktopUpdateFiles.NoLinks(path);
+        if (File.Exists(path)) throw new IOException("The reserved resource path is not a directory: " + path);
+        return Directory.Exists(path);
+    }
+    private static void MoveWindowsResources(string sourceRoot, string destinationRoot)
+    {
+        bool sourceExists = HasWindowsResources(sourceRoot), destinationExists = HasWindowsResources(destinationRoot);
+        if (!sourceExists) return;
+        if (destinationExists) throw new IOException("Both applications contain downloaded resources; resolve the conflict before recovery.");
+        // Rename the complete resource tree, never copy, hash, merge or delete it.
+        // Move resources only while their application is outside the live path, so a
+        // crash never exposes a launchable application without its resource tree.
+        Directory.Move(Path.Combine(sourceRoot, WindowsResourcesDirectory), Path.Combine(destinationRoot, WindowsResourcesDirectory));
     }
     private void VerifyStagedTree()
     {
@@ -206,6 +245,10 @@ public sealed class UpdateEngine : IDisposable
             DesktopUpdateFiles.Relative(path);
             if (path.Contains("/__MACOSX/") || path.EndsWith("/.DS_Store", StringComparison.Ordinal)) throw new InvalidDataException("Archive contains packaging metadata.");
             if (path != root && !path.StartsWith(root + "/", StringComparison.Ordinal)) throw new InvalidDataException("Archive has an unexpected application root.");
+            string resources = root + "/" + WindowsResourcesDirectory;
+            if (request.Platform == "windows" && (path.Equals(resources, StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(resources + "/", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("Update archives must not contain the reserved resource directory.");
             int type = (entry.ExternalAttributes >> 16) & 0xf000;
             if ((type != 0 && type != 0x8000 && type != 0x4000) || (entry.ExternalAttributes & 1024) != 0 ||
                 (type == 0x4000 && !directory) || (type == 0x8000 && directory))
@@ -236,12 +279,15 @@ public sealed class UpdateEngine : IDisposable
         }
         return entries;
     }
-    public static void Recover(DesktopUpdateRequest request)
+    public static void Recover(DesktopUpdateRequest request, Action<string> checkpoint = null)
     {
+        checkpoint = checkpoint ?? (_ => { });
         request.Validate(); string id = Path.GetFileName(request.JobDirectory); Guid parsed;
         if (id.Length != 32 || !Guid.TryParseExact(id, "N", out parsed)) throw new InvalidDataException("Invalid recovery job.");
         string backup = request.InstallRoot + ".update-backup-" + id;
         string displaced = request.InstallRoot + ".update-failed-" + id;
+        string stage = request.InstallRoot + ".update-stage-" + id;
+        string candidate = Path.Combine(stage, Path.GetFileName(request.InstallRoot));
         string journal = Path.Combine(request.JobDirectory, "transaction.json");
         var record = DesktopUpdateFiles.ReadObject(journal);
         if (DesktopUpdateFiles.Text(record, "installRoot") != request.InstallRoot || DesktopUpdateFiles.Text(record, "backup") != backup ||
@@ -255,13 +301,35 @@ public sealed class UpdateEngine : IDisposable
             var old = DesktopInstallIdentity.Read(backup, request.Platform);
             if (old.Version != request.CurrentVersion || old.InstallId != DesktopUpdateFiles.Text(record, "installId"))
                 throw new InvalidDataException("Retained backup identity does not match the journal.");
+            string resourceOwner = null;
+            if (request.Platform == "windows")
+            {
+                if (DesktopUpdateFiles.Text(record, "stage") != stage) throw new InvalidDataException("Recovery staging path does not match the request.");
+                DesktopUpdateFiles.NoLinks(candidate);
+                // A hard exit can leave resources in the backup, prepared candidate,
+                // live app, or displaced app. Validate every possible owner first;
+                // never merge two trees or move files out of an unrelated directory.
+                foreach (string root in new[] { backup, candidate, request.InstallRoot, displaced })
+                {
+                    if (!Directory.Exists(root)) continue;
+                    if (root != backup) old.RequireUpdate(DesktopInstallIdentity.Read(root, request.Platform), request.Version);
+                    if (!HasWindowsResources(root)) continue;
+                    if (resourceOwner != null) throw new IOException("Multiple applications contain downloaded resources; resolve the conflict before recovery.");
+                    resourceOwner = root;
+                }
+            }
             if (Directory.Exists(request.InstallRoot))
             {
                 if (Directory.Exists(displaced)) throw new IOException("A prior failed application is retained; move it aside before recovery.");
                 var next = DesktopInstallIdentity.Read(request.InstallRoot, request.Platform); old.RequireUpdate(next, request.Version);
                 Directory.Move(request.InstallRoot, displaced);
+                if (resourceOwner == request.InstallRoot) resourceOwner = displaced;
+                if (request.Platform == "windows") checkpoint("recovery-displaced");
             }
+            if (resourceOwner != null && resourceOwner != backup) MoveWindowsResources(resourceOwner, backup);
+            if (request.Platform == "windows") checkpoint("recovery-resources-restored");
             Directory.Move(backup, request.InstallRoot);
+            if (request.Platform == "windows") checkpoint("recovery-restored");
         }
     }
     public void Dispose() { installLock.Dispose(); }
