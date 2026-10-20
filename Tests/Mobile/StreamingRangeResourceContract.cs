@@ -19,7 +19,7 @@ internal static class StreamingRangeResourceContract
     private static void Assert(bool condition, string message)
     {
         if (!condition) throw new Exception(message);
-        checks++;
+        Interlocked.Increment(ref checks);
     }
 
     private static void Reject(Action action, string message)
@@ -109,6 +109,10 @@ internal static class StreamingRangeResourceContract
             TestCancellation(file);
             TestOffsetValidation(file);
             TestChangedPartial(file);
+            TestDispatchCapability(file);
+            TestConcurrentDispatchIsolation(root);
+            TestDispatchGuards(file);
+            TestDispatchCancellation(file);
             Console.WriteLine("PASS resumable HTTP resource contracts (" + checks +
                 " checks; loopback HTTP/temp files only, no Unity/device/production validation)");
         }
@@ -346,6 +350,227 @@ internal static class StreamingRangeResourceContract
                     Response("206 Partial Content", "Content-Range: bytes 3-9/10\r\nContent-Length: 7\r\n", "defghij"));
             }, uri => Reject(() => Download(uri, file, 10, 3), "Partial changed while awaiting response"));
             Assert(File.ReadAllText(file) == "changed", "Recheck under file lock prevents stale-offset write/truncation");
+        }
+    }
+
+    private static void AssertArchiveCapability(string request, bool dispatch)
+    {
+        Assert(request.StartsWith("GET ", StringComparison.Ordinal), "Capability negotiation uses an actual GET");
+        int count = 0;
+        foreach (string line in request.Split('\n'))
+        {
+            int colon = line.IndexOf(':');
+            if (colon >= 0 && string.Equals(line.Substring(0, colon), "X-Resource-Archive", StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+                Assert(line.Substring(colon + 1).Trim() == "tar-v1", "Archive capability is exactly tar-v1");
+            }
+        }
+        Assert(count == (dispatch ? 1 : 0), dispatch ?
+            "Dispatch GET sends exactly one archive capability header" :
+            "Ordinary resource GET never sends archive capability");
+        Assert(request.IndexOf("Authorization:", StringComparison.OrdinalIgnoreCase) < 0 &&
+            request.IndexOf("Cookie:", StringComparison.OrdinalIgnoreCase) < 0, "Capability does not enable credentials or cookies");
+    }
+
+    private static void TestDispatchCapability(string file)
+    {
+        // The same instance and loopback hostname are intentionally reused after Set-Cookie.
+        // Cookies are not port-scoped, so a shared cookie container would leak into later requests.
+        for (int cycle = 0; cycle < 2; cycle++)
+        {
+            var progress = new List<long>();
+            string request = Serve(Response("200 OK", "Content-Length: 3\r\nSet-Cookie: fixture=must-not-return; Path=/\r\n", "abc"),
+                uri => Transport.DownloadDispatch(new Uri(uri.AbsoluteUri + "?existing=unchanged%20value&mode=legacy"),
+                    file, 100, CancellationToken.None, progress.Add));
+            AssertArchiveCapability(request, true);
+            Assert(request.StartsWith("GET /fixture?existing=unchanged%20value&mode=legacy HTTP/1.1\n", StringComparison.Ordinal),
+                "Archive capability leaves dispatch URL and existing query parameters unchanged");
+            Assert(request.IndexOf("Range:", StringComparison.OrdinalIgnoreCase) < 0, "Dispatch GET is not a range request");
+            Assert(File.ReadAllText(file) == "abc" && progress[0] == 0 && progress[progress.Count - 1] == 3,
+                "Dispatch retains maximum-bound transfer and progress semantics");
+
+            request = Serve(Response("200 OK", "Content-Length: 10\r\n", Content),
+                uri => Transport.Download(uri, file, 100, CancellationToken.None, null));
+            AssertArchiveCapability(request, false);
+            Assert(File.ReadAllText(file) == Content, "Ordinary Download still transfers after dispatch");
+
+            File.WriteAllText(file, "abc");
+            request = Serve(Response("206 Partial Content", "Content-Range: bytes 3-9/10\r\nContent-Length: 7\r\n", "defghij"),
+                uri => Transport.DownloadResumable(uri, file, 10, 3, CancellationToken.None, null));
+            AssertArchiveCapability(request, false);
+            Assert(request.Contains("Range: bytes=3-") && File.ReadAllText(file) == Content,
+                "Ordinary DownloadResumable keeps its exact Range without archive capability");
+
+            File.WriteAllText(file, "abc");
+            request = Serve(Response("206 Partial Content", "Content-Range: bytes 3-9/10\r\nContent-Length: 7\r\n", "defghij"),
+                uri => Download(uri, file, 10, 3));
+            AssertArchiveCapability(request, false);
+            Assert(request.Contains("Range: bytes=3-") && File.ReadAllText(file) == Content,
+                "Ordinary DownloadVerifiedResumable keeps its exact Range and proof without archive capability");
+        }
+    }
+
+    private static void TestConcurrentDispatchIsolation(string root)
+    {
+        using (var arrived = new CountdownEvent(4))
+        {
+            var transfers = new Task<string>[4];
+            for (int i = 0; i < transfers.Length; i++)
+            {
+                int kind = i;
+                string file = Path.Combine(root, "concurrent-capability-" + i);
+                if (kind >= 2) File.WriteAllText(file, "abc");
+                transfers[i] = Task.Factory.StartNew(() => Serve(stream =>
+                {
+                    // Every request must be on the wire while dispatch is still outstanding.
+                    arrived.Signal();
+                    if (!arrived.Wait(5000)) throw new Exception("Concurrent capability requests did not overlap");
+                    Send(stream, kind >= 2 ?
+                        Response("206 Partial Content", "Content-Range: bytes 3-9/10\r\nContent-Length: 7\r\n", "defghij") :
+                        Response("200 OK", "Content-Length: 10\r\n", Content));
+                }, uri =>
+                {
+                    if (kind == 0) Transport.DownloadDispatch(uri, file, 100, CancellationToken.None, null);
+                    else if (kind == 1) Transport.Download(uri, file, 100, CancellationToken.None, null);
+                    else if (kind == 2) Transport.DownloadResumable(uri, file, 10, 3, CancellationToken.None, null);
+                    else Transport.DownloadVerifiedResumable(uri, file, 10, 3, CancellationToken.None, null);
+                }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+            Assert(Task.WaitAll(transfers, 10000), "Shared-instance dispatch and ordinary transfers finish concurrently");
+            for (int i = 0; i < transfers.Length; i++)
+            {
+                AssertArchiveCapability(transfers[i].Result, i == 0);
+                Assert(File.ReadAllText(Path.Combine(root, "concurrent-capability-" + i)) == Content,
+                    "Concurrent capability test transfers the correct bytes");
+                Assert((transfers[i].Result.IndexOf("Range: bytes=3-", StringComparison.OrdinalIgnoreCase) >= 0) == (i >= 2),
+                    "Concurrent calls keep their independent range semantics");
+            }
+        }
+    }
+
+    private static void TestDispatchGuards(string file)
+    {
+        foreach (string response in new[]
+        {
+            Response("200 OK", "Content-Length: 11\r\n", "abcdefghijk"),
+            Response("200 OK", "Content-Length: 10\r\nContent-Encoding: gzip\r\n", Content),
+            Response("206 Partial Content", "Content-Range: bytes 0-9/10\r\nContent-Length: 10\r\n", Content),
+            Response("401 Unauthorized", "WWW-Authenticate: Basic realm=\"fixture\"\r\nContent-Length: 0\r\n", "")
+        })
+        {
+            File.WriteAllText(file, "original");
+            string request = Serve(response, uri => Reject(() =>
+                Transport.DownloadDispatch(uri, file, 10, CancellationToken.None, null), "Invalid dispatch response"));
+            AssertArchiveCapability(request, true);
+            Assert(File.ReadAllText(file) == "original", "Dispatch response preflight preserves the existing destination");
+        }
+        string oversized = Serve(Response("200 OK", "", "abcdefghijk"), uri => Reject(() =>
+            Transport.DownloadDispatch(uri, file, 10, CancellationToken.None, null), "Unknown-length dispatch exceeds limit"));
+        AssertArchiveCapability(oversized, true);
+        Assert(new FileInfo(file).Length <= 10, "Unknown-length dispatch cannot write beyond the maximum");
+        string empty = Serve(Response("200 OK", "Content-Length: 0\r\n", ""), uri =>
+            Transport.DownloadDispatch(uri, file, 0, CancellationToken.None, null));
+        AssertArchiveCapability(empty, true);
+        Assert(new FileInfo(file).Length == 0, "Dispatch supports an empty response with a zero bound");
+
+        var redirectTarget = new TcpListener(IPAddress.Loopback, 0);
+        redirectTarget.Start();
+        int port = ((IPEndPoint)redirectTarget.LocalEndpoint).Port;
+        int redirected = 0;
+        Task target = Task.Run(() =>
+        {
+            try
+            {
+                using (var socket = redirectTarget.AcceptTcpClient())
+                using (var stream = socket.GetStream())
+                {
+                    Interlocked.Increment(ref redirected);
+                    stream.ReadTimeout = 5000;
+                    using (var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true))
+                        while (!string.IsNullOrEmpty(reader.ReadLine())) { }
+                    Send(stream, Response("200 OK", "Content-Length: 3\r\n", "abc"));
+                }
+            }
+            catch (SocketException) { }
+        });
+        try
+        {
+            File.WriteAllText(file, "original");
+            string request = Serve(Response("302 Found", "Location: http://127.0.0.1:" + port +
+                "/must-not-follow\r\nContent-Length: 0\r\n", ""), uri => Reject(() =>
+                    Transport.DownloadDispatch(uri, file, 10, CancellationToken.None, null), "Dispatch redirect"));
+            AssertArchiveCapability(request, true);
+            Assert(Volatile.Read(ref redirected) == 0 && !redirectTarget.Pending(), "Dispatch never contacts a live redirect target");
+            Assert(File.ReadAllText(file) == "original", "Dispatch redirect does not truncate the destination");
+        }
+        finally
+        {
+            redirectTarget.Stop();
+            Assert(target.Wait(5000), "Redirect target observer completed");
+        }
+
+        var unused = new TcpListener(IPAddress.Loopback, 0);
+        unused.Start();
+        try
+        {
+            var uri = new Uri("http://127.0.0.1:" + ((IPEndPoint)unused.LocalEndpoint).Port + "/must-not-request");
+            File.WriteAllText(file, "original");
+            Throws<ArgumentOutOfRangeException>(() => Transport.DownloadDispatch(uri, file, -1, CancellationToken.None, null),
+                "Dispatch rejects a negative maximum");
+            Throws<ArgumentNullException>(() => Transport.DownloadDispatch(null, file, 10, CancellationToken.None, null),
+                "Dispatch rejects a null URL");
+            Throws<ArgumentException>(() => Transport.DownloadDispatch(new Uri("/relative", UriKind.Relative), file, 10, CancellationToken.None, null),
+                "Dispatch rejects a relative URL");
+            Throws<ArgumentException>(() => Transport.DownloadDispatch(new Uri("file:///unused"), file, 10, CancellationToken.None, null),
+                "Dispatch rejects a non-HTTP URL");
+            Throws<ArgumentException>(() => Transport.DownloadDispatch(new UriBuilder(uri) { UserName = "user", Password = "password" }.Uri,
+                file, 10, CancellationToken.None, null), "Dispatch rejects credentials in its URL");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.Cancel();
+                Throws<OperationCanceledException>(() => Transport.DownloadDispatch(uri, file, 10, cancellation.Token, null),
+                    "Dispatch rejects pre-cancellation before creating a request");
+            }
+            Assert(!unused.Pending(), "Dispatch validation and pre-cancellation do not reach the network");
+            Assert(File.ReadAllText(file) == "original", "Dispatch validation and pre-cancellation preserve the destination");
+        }
+        finally { unused.Stop(); }
+    }
+
+    private static void TestDispatchCancellation(string file)
+    {
+        using (var cancellation = new CancellationTokenSource())
+        using (var progressSeen = new ManualResetEventSlim(false))
+        using (var releaseServer = new ManualResetEventSlim(false))
+        {
+            string request = Serve(stream =>
+            {
+                Send(stream, Response("200 OK", "Content-Length: 10\r\n", "a"));
+                if (!releaseServer.Wait(5000)) throw new Exception("Dispatch blocked-read cancellation did not finish");
+            }, uri =>
+            {
+                Task<Exception> transfer = Task.Run(() =>
+                {
+                    try
+                    {
+                        Transport.DownloadDispatch(uri, file, 10, cancellation.Token, total => { if (total > 0) progressSeen.Set(); });
+                        return null;
+                    }
+                    catch (Exception error) { return error; }
+                });
+                try
+                {
+                    bool received = progressSeen.Wait(5000);
+                    cancellation.Cancel();
+                    bool stopped = transfer.Wait(5000);
+                    Assert(received, "Dispatch receives the first byte before its response stalls");
+                    Assert(stopped && transfer.Result is OperationCanceledException, "Dispatch external cancellation aborts a blocked response read");
+                    Assert(File.ReadAllText(file) == "a", "Cancelled dispatch retains only its bounded received prefix");
+                }
+                finally { releaseServer.Set(); }
+            });
+            AssertArchiveCapability(request, true);
         }
     }
 }

@@ -42,6 +42,16 @@ public sealed class MobileResourceVerifiedFile
 public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTransport
 {
     public const int ConcurrentConnectionLimit = 4;
+    public const string ArchiveCapabilityHeader = "X-Resource-Archive";
+    public const string ArchiveCapabilityValue = "tar-v1";
+
+    /// <summary>Dispatch-only capability. Resource and client-artifact downloads never send it.</summary>
+    public void DownloadDispatch(Uri uri, string destination, long maximumBytes, CancellationToken cancellation, Action<long> progress)
+    {
+        if (maximumBytes < 0) throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+        Transfer(uri, destination, maximumBytes, 0, false, cancellation, progress, dispatch: true);
+    }
+
     public void Download(Uri uri, string destination, long maximumBytes, CancellationToken cancellation, Action<long> progress)
     {
         if (maximumBytes < 0) throw new ArgumentOutOfRangeException(nameof(maximumBytes));
@@ -67,7 +77,7 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
     }
 
     private static MobileResourceVerifiedFile Transfer(Uri uri, string destination, long maximumBytes, long offset, bool exact,
-        CancellationToken cancellation, Action<long> progress, bool verify = false, Action<long> prefixProgress = null)
+        CancellationToken cancellation, Action<long> progress, bool verify = false, Action<long> prefixProgress = null, bool dispatch = false)
     {
         if (uri == null) throw new ArgumentNullException(nameof(uri));
         if (!uri.IsAbsoluteUri || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
@@ -78,6 +88,7 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
             throw new InvalidDataException("Partial resource length does not match the requested offset.");
         var request = (HttpWebRequest)WebRequest.Create(uri);
         request.Method = "GET";
+        if (dispatch) request.Headers[ArchiveCapabilityHeader] = ArchiveCapabilityValue;
         request.AllowAutoRedirect = false;
         request.UseDefaultCredentials = false;
         request.Credentials = null;

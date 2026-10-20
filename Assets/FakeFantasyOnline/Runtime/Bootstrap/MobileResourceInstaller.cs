@@ -296,11 +296,11 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
     }
 
     private static ClientUpdatePlan ReadDispatch(string address, string version, bool allowHttp,
-        IMobileResourceTransport transport, CancellationToken cancellation, string temporary)
+        MobileResourceHttpTransport transport, CancellationToken cancellation, string temporary)
     {
         try
         {
-            transport.Download(MobileResourceBootstrapConfig.ValidateEndpoint(address, allowHttp), temporary,
+            transport.DownloadDispatch(MobileResourceBootstrapConfig.ValidateEndpoint(address, allowHttp), temporary,
                 ClientUpdatePlan.MaxDispatchBytes, cancellation, null);
             cancellation.ThrowIfCancellationRequested();
             return ClientUpdatePlan.Parse(new System.Text.UTF8Encoding(false, true).GetString(File.ReadAllBytes(temporary)),
