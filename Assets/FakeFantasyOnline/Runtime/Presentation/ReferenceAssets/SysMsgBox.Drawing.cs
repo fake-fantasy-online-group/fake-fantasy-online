@@ -11,6 +11,10 @@ public partial class SysMsgBox
     private void OnGUI()
     {
         if (!shown) return;
+        // GUI.depth orders this MonoBehaviour, not just the next draw call. Keep the
+        // confirmation above ordinary windows (including owners at default depth 0).
+        // Do not restore a default/window depth at the end of this callback.
+        GUI.depth = -100;
         EnsureAssets();
         float sc = UIScale.Factor;
         Event e = Event.current;
