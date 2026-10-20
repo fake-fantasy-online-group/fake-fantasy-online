@@ -55,12 +55,11 @@ public static class DesktopResourceFreeBuild
                 MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(profile.Bootstrap, true));
             GbkBuildTable.WriteTo(Path.Combine(UnityEngine.Application.dataPath, "Resources"));
             DesktopBuildPayload.CopyHelpers(helpers, Path.Combine(UnityEngine.Application.streamingAssetsPath, "DesktopUpdater"), platform);
-            PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
-            PlayerSettings.SetIcons(NamedBuildTarget.Standalone, new Texture2D[0], IconKind.Any);
             PlayerSettings.insecureHttpOption = profile.Bootstrap.developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
             if (platform == "macos") PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, 2); // Intel + Apple silicon universal.
             AssetDatabase.Refresh();
+            ClientBuild.ConfigureResourceFreeBranding(NamedBuildTarget.Standalone);
             ClientBuild.PrepareClientScene(true);
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions

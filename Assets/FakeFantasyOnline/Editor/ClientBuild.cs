@@ -22,7 +22,7 @@ public static class ClientBuild
         PrepareClientScene(false);
     }
 
-    // Resource-free builds use the source scene and Unity defaults, with no local icon.
+    // Resource-free callers configure their staged local icon for the selected platform.
     internal static void PrepareClientScene(bool resourceFree)
     {
         // Shared by desktop and mobile: all Players must contain the reviewed startup
@@ -46,6 +46,16 @@ public static class ClientBuild
 
     private static void ConfigureBranding()
     {
+        ConfigureBrandingForTargets(NamedBuildTarget.Unknown, NamedBuildTarget.Standalone);
+    }
+
+    internal static void ConfigureResourceFreeBranding(NamedBuildTarget target)
+    {
+        ConfigureBrandingForTargets(NamedBuildTarget.Unknown, target);
+    }
+
+    private static void ConfigureBrandingForTargets(params NamedBuildTarget[] targets)
+    {
         const string iconPath = "Assets/LocalBranding/AppIcon.png";
         if (!File.Exists(iconPath))
         {
@@ -59,7 +69,7 @@ public static class ClientBuild
         if (icon == null)
             throw new InvalidDataException("The application icon could not be imported as a Texture2D.");
 
-        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Unknown, NamedBuildTarget.Standalone })
+        foreach (NamedBuildTarget target in targets)
         {
             int[] sizes = PlayerSettings.GetIconSizes(target, IconKind.Any);
             Texture2D[] icons = new Texture2D[sizes.Length];

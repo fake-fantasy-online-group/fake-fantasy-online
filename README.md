@@ -57,6 +57,8 @@ zpatch_tower10.pkg
 
 应用图标读取 `Assets/LocalBranding/AppIcon.png`，构建时自动应用到默认图标和桌面平台图标；Unity 启动画面已关闭。图标、游戏素材及其元数据均由 `.gitignore` 排除，仅在本地保留，不随源码仓库或源码压缩包发布。
 
+Android、Windows 和 macOS 的 resource-free 构建同样要求这张原有本地图标（非空普通 PNG，最多 4 MiB）。构建仅暂存并导入 `AppIcon.png` 及其已有 `.meta`，应用到默认与目标平台图标；其余本地素材继续隔离，构建成功或失败后均恢复原目录。缺图、文件过大、链接文件或导入失败会停止构建，不再静默生成默认图标；无需重新下载游戏资源。
+
 ```bash
 make build-macos
 make build-windows

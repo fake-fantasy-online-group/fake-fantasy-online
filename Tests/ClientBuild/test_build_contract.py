@@ -78,6 +78,25 @@ class BuildContract(unittest.TestCase):
         self.assertNotIn('SearchOption.AllDirectories', stage)
         self.assertNotIn('Directory.Delete', stage)
 
+    def test_resource_free_branding_is_shared_and_restored(self):
+        editor = ROOT / 'Assets/FakeFantasyOnline/Editor'
+        client = (editor / 'ClientBuild.cs').read_text()
+        self.assertIn('ConfigureBrandingForTargets(NamedBuildTarget.Unknown, target)', client)
+        self.assertIn('foreach (NamedBuildTarget target in targets)', client)
+        self.assertIn('AssetDatabase.ImportAsset(iconPath, ImportAssetOptions.ForceSynchronousImport)', client)
+        self.assertIn('if (icon == null)', client)
+        self.assertIn('PlayerSettings.SetIcons(target, icons, IconKind.Any)', client)
+        for filename, target, snapshot in [('MobileClientBuild.cs', 'UnityEditor.Build.NamedBuildTarget.Android', 'androidIcons'),
+                                            ('DesktopResourceFreeBuild.cs', 'NamedBuildTarget.Standalone', 'desktopIcons')]:
+            source = (editor / filename).read_text()
+            call = 'ClientBuild.ConfigureResourceFreeBranding(' + target + ');'
+            self.assertIn(call, source)
+            self.assertNotIn('new Texture2D[0]', source)
+            self.assertLess(source.index('new ResourceFreeBuildStage('), source.index(call))
+            self.assertLess(source.index('AssetDatabase.Refresh();'), source.index(call))
+            self.assertLess(source.index(call), source.index('BuildPipeline.BuildPlayer('))
+            self.assertLess(source.index('stage?.Dispose();'), source.index(snapshot + '.Restore();'))
+
     def test_manifest_hash_layout_and_excluded_code(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

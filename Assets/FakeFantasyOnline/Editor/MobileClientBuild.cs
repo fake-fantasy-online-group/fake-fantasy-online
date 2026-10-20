@@ -67,13 +67,12 @@ public static class MobileClientBuild
                     Path.GetFullPath("LocalMobileBuild/ResourceFree"),
                     MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(profile.Bootstrap, true));
                 GbkBuildTable.WriteTo(Path.Combine(UnityEngine.Application.dataPath, "Resources"));
-                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
-                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, new Texture2D[0], IconKind.Any);
                 if (development) PlayerSettings.Android.useCustomKeystore = false;
                 // Resource delivery mode must not change the application identity.
                 // Preserve the project identifier (including Unity's resolved default).
                 PlayerSettings.insecureHttpOption = developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
                 AssetDatabase.Refresh();
+                ClientBuild.ConfigureResourceFreeBranding(UnityEditor.Build.NamedBuildTarget.Android);
             }
             else
             {

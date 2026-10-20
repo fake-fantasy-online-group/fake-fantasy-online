@@ -39,6 +39,13 @@ public static class ResourceFreeBuildStageContract
         }
         return image;
     }
+    private static string CreateBrandingIcon(string assets)
+    {
+        string icon = Path.Combine(assets, ResourceFreeBuildStage.BrandingIconRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(icon));
+        File.WriteAllText(icon, "local-branding-fixture");
+        return icon;
+    }
     public static void Main(string[] args)
     {
         if (args.Length == 1)
@@ -75,13 +82,21 @@ public static class ResourceFreeBuildStageContract
             File.WriteAllText(Path.Combine(resources, "private.txt"), "original-resource");
             File.WriteAllText(resources + ".meta", "original-resource-guid");
             string branding = Path.Combine(assets, "LocalBranding");
-            Directory.CreateDirectory(branding);
-            File.WriteAllText(Path.Combine(branding, "AppIcon.png"), "local-branding-fixture");
+            string brandingIcon = CreateBrandingIcon(assets);
+            File.WriteAllText(brandingIcon + ".meta", "original-icon-guid-and-import-settings");
             File.WriteAllText(branding + ".meta", "original-branding-guid");
+            File.WriteAllText(Path.Combine(branding, "other.png"), "unreviewed-local-artwork");
+            Directory.CreateDirectory(Path.Combine(branding, "Resources"));
+            File.WriteAllText(Path.Combine(branding, "Resources/private.txt"), "unreviewed-nested-resource");
             var stage = new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}");
             Check(Directory.GetFiles(streaming).Length == 1, "Only bootstrap marker must remain in StreamingAssets");
             Check(Directory.GetFiles(resources).Length == 0, "Resources must be isolated without a recursive file scan");
-            Check(Directory.GetFiles(branding).Length == 0, "Local artwork must be outside the import tree");
+            Check(Directory.GetFiles(branding).Length == 2 && Directory.GetDirectories(branding).Length == 0, "Only the exact local icon and its metadata may remain in the import tree");
+            Check(File.ReadAllText(brandingIcon) == "local-branding-fixture", "The original icon bytes must be available during the build");
+            Check(File.ReadAllText(brandingIcon + ".meta") == "original-icon-guid-and-import-settings", "The icon keeps its GUID and import settings during the build");
+            Check(File.ReadAllText(Path.Combine(backup, ResourceFreeBuildStage.BrandingIconRelativePath)) == "local-branding-fixture", "The original icon remains untouched in the recoverable backup");
+            File.WriteAllText(brandingIcon, "temporary-import-mutation");
+            File.WriteAllText(brandingIcon + ".meta", "temporary-import-metadata");
             Check(!File.Exists(resources + ".meta"), "Original directory metadata is kept with its backup");
             File.WriteAllText(resources + ".meta", "generated-resource-guid");
             File.WriteAllText(streaming + ".meta", "generated-streaming-guid");
@@ -95,6 +110,8 @@ public static class ResourceFreeBuildStageContract
             Check(File.ReadAllText(resources + ".meta") == "original-resource-guid", "Original directory GUID must be restored");
             Check(!File.Exists(streaming + ".meta"), "A newly generated directory GUID must not pollute an existing directory without a meta");
             Check(File.ReadAllText(Path.Combine(branding, "AppIcon.png")) == "local-branding-fixture", "Local branding restored byte-for-byte");
+            Check(File.ReadAllText(brandingIcon + ".meta") == "original-icon-guid-and-import-settings", "Original icon metadata is restored after temporary imports");
+            Check(File.ReadAllText(Path.Combine(branding, "Resources/private.txt")) == "unreviewed-nested-resource", "Excluded nested local resources must be restored unchanged");
             Check(File.ReadAllText(branding + ".meta") == "original-branding-guid", "Local branding GUID restored");
             Check(!File.Exists(Path.Combine(streaming, "resource-bootstrap.json")), "Generated config must not pollute the restored source tree");
             Check(File.ReadAllText(embedded) == "source-owned-artwork-fixture", "Staging must not move or rewrite the embedded background");
@@ -103,6 +120,19 @@ public static class ResourceFreeBuildStageContract
             catch (InvalidOperationException) { }
             Check(File.Exists(Path.Combine(streaming, "private.pkg")), "Failed builds must restore source resources");
             Check(File.Exists(embedded), "Failed builds must retain the embedded background");
+            Check(File.ReadAllText(brandingIcon) == "local-branding-fixture", "Failed builds must restore the original icon");
+            File.Delete(brandingIcon);
+            ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Missing app icon must fail before resource staging");
+            Check(File.Exists(Path.Combine(streaming, "private.pkg")), "Missing branding must leave resource trees untouched");
+            Directory.CreateDirectory(brandingIcon);
+            ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "An icon path which is a directory must be rejected");
+            Directory.Delete(brandingIcon);
+            File.WriteAllText(brandingIcon, "");
+            ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Empty app icon must fail closed");
+            using (var iconFile = new FileStream(brandingIcon, FileMode.Open, FileAccess.Write))
+                iconFile.SetLength(ResourceFreeBuildStage.MaxBrandingIconBytes + 1);
+            ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Oversized app icon must not become an embedded game resource");
+            CreateBrandingIcon(assets);
             string unreviewed = Path.Combine(Path.GetDirectoryName(embedded), "other.png");
             File.WriteAllText(unreviewed, "private-artwork-fixture");
             ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Embedded whitelist must reject an extra image");
@@ -149,6 +179,15 @@ public static class ResourceFreeBuildStageContract
             {
                 string target = Path.Combine(temp, "linked-artwork-fixture");
                 File.WriteAllText(target, "unreviewed-external-artwork");
+                File.Delete(brandingIcon);
+                Check(Symlink(target, brandingIcon) == 0, "Create linked-icon fixture");
+                ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Linked branding icon must be rejected before staging");
+                File.Delete(brandingIcon);
+                CreateBrandingIcon(assets);
+                File.Delete(brandingIcon + ".meta");
+                Check(Symlink(target, brandingIcon + ".meta") == 0, "Create linked-icon-metadata fixture");
+                ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Linked icon metadata must be rejected");
+                File.Delete(brandingIcon + ".meta");
                 File.Delete(embedded);
                 Check(Symlink(target, embedded) == 0, "Create linked-artwork fixture");
                 ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}"), "Symlinked startup artwork must be rejected");
@@ -166,19 +205,24 @@ public static class ResourceFreeBuildStageContract
             ExpectFailure(() => new ResourceFreeBuildStage(assets, Path.Combine(assets, "Backup"), "resource-bootstrap.json", "{}"), "Never stage resources inside Assets");
             string clean = Path.Combine(temp, "CleanAssets");
             string cleanBackground = CreateEmbeddedBackground(clean);
+            ExpectFailure(() => new ResourceFreeBuildStage(clean, Path.Combine(temp, "CleanBackup"), "resource-bootstrap.json", "{}"), "Source-only checkout must request the original local app icon rather than silently build a default");
+            string cleanIcon = CreateBrandingIcon(clean);
             using (new ResourceFreeBuildStage(clean, Path.Combine(temp, "CleanBackup"), "resource-bootstrap.json", "{}"))
             {
-                Check(File.Exists(Path.Combine(clean, "StreamingAssets/resource-bootstrap.json")), "Clean checkout with no private resource directories must work");
+                Check(File.Exists(Path.Combine(clean, "StreamingAssets/resource-bootstrap.json")), "Checkout with only the required local icon and no game resources must work");
                 Check(File.Exists(cleanBackground), "Resource-free first startup must retain the same bundled background");
+                Check(File.ReadAllText(cleanIcon) == "local-branding-fixture", "An icon without original metadata remains available for Unity to import");
+                File.WriteAllText(cleanIcon + ".meta", "generated-import-metadata");
             }
             Check(!Directory.Exists(Path.Combine(clean, "Resources")), "Absent Resources must remain absent after restoration");
             Check(!Directory.Exists(Path.Combine(clean, "StreamingAssets")), "Absent StreamingAssets must remain absent after restoration");
-            Check(!Directory.Exists(Path.Combine(clean, "LocalBranding")), "Absent local branding remains absent after restoration");
+            Check(File.ReadAllText(cleanIcon) == "local-branding-fixture" && !File.Exists(cleanIcon + ".meta"), "Generated icon metadata must not pollute the original local branding");
             // A failed restore must keep original bytes, restore the other directory, and
             // allow a retry once the external obstruction is removed.
             string restoreAssets = Path.Combine(temp, "RestoreAssets");
             string restoreBackup = Path.Combine(temp, "RestoreBackup");
             CreateEmbeddedBackground(restoreAssets);
+            CreateBrandingIcon(restoreAssets);
             Directory.CreateDirectory(Path.Combine(restoreAssets, "Resources"));
             Directory.CreateDirectory(Path.Combine(restoreAssets, "StreamingAssets"));
             File.WriteAllText(Path.Combine(restoreAssets, "Resources/private.txt"), "restore-original");
