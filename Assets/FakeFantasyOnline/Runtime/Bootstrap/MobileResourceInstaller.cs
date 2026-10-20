@@ -195,7 +195,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         if (!configurationRequired) downloadRequested = true;
         string storage = Path.Combine(UnityEngine.Application.persistentDataPath, "MobileResources", "Remote");
         var transport = new MobileResourceHttpTransport();
-        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey());
+        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey(),
+            availableBytes: ClientStorageSpace.CreateAvailableBytesQuery());
         Phase("检查并更新", "填写 dispatch.json 地址。资源清单、客户端版本和下载信息均由此获取。", 0);
         while (true)
         {

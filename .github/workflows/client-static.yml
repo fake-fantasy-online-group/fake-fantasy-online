@@ -22,4 +22,6 @@ jobs:
       - name: Install distribution C# compiler for engine-free staging test
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends mono-mcs libmono-i18n-cjk4.0-cil
       - name: Test resource staging and restoration
-        run: Tests/ClientBuild/run-stage-contract.sh
+        run: |
+          Tests/ClientBuild/run-stage-contract.sh
+          bash Tests/Mobile/run-storage-space-contract.sh

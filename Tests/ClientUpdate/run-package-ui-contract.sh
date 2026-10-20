@@ -11,6 +11,8 @@ for platform in desktop android windows macos; do
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Bootstrap/MobileResourceInstaller.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Bootstrap/MobileResourceInstaller.ClientPackages.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Bootstrap/ClientUpdateIcons.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Bootstrap/ClientStorageSpace.cs" \
+  "$ROOT/Tests/Mobile/StorageSpaceUnityStubs.cs" \
   "$ROOT/Tests/ClientUpdate/UpdateGateUnityStubs.cs" "$ROOT/Tests/ClientUpdate/ClientPackageUiContract.cs"
  "$FFO_MONO_ROOT/bin/mono" "$OUT/$platform.exe"
 done

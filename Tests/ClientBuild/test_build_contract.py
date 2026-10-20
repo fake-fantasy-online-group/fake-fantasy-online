@@ -114,6 +114,22 @@ class BuildContract(unittest.TestCase):
         self.assertNotIn('PlayerSettings.stripEngineCode',
                          (ROOT / 'Assets/FakeFantasyOnline/Editor/DesktopResourceFreeBuild.cs').read_text())
 
+    def test_every_runtime_downloader_injects_platform_storage(self):
+        runtime = ROOT / 'Assets/FakeFantasyOnline/Runtime'
+        constructors = []
+        for path in runtime.rglob('*.cs'):
+            source = path.read_text()
+            for name in ('MobileRemoteResourceInstall', 'ClientArtifactDownload'):
+                marker = 'new ' + name + '('
+                for call in source.split(marker)[1:]:
+                    constructors.append((path.name, name))
+                    self.assertIn('availableBytes: ClientStorageSpace.CreateAvailableBytesQuery()',
+                                  call.split(';', 1)[0], str(path))
+        self.assertEqual(len(constructors), 2, constructors)
+        for name in ('MobileRemoteResourceInstall', 'ClientArtifactDownload'):
+            self.assertIn('new DriveInfo(path).AvailableFreeSpace',
+                          (runtime / 'Foundation' / (name + '.cs')).read_text())
+
     def test_manifest_hash_layout_and_excluded_code(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

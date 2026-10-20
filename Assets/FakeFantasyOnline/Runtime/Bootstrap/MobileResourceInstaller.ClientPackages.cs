@@ -117,7 +117,8 @@ public sealed partial class MobileResourceInstaller
         var artifact = updatePlan.Artifact;
         string selectedIdentity = ArtifactIdentity();
         var downloader = new ClientArtifactDownload(Path.Combine(UnityEngine.Application.persistentDataPath, "ClientPackages"),
-            config.appVersion, PlatformKey(), allowDevelopmentHttp, transport);
+            config.appVersion, PlatformKey(), allowDevelopmentHttp, transport,
+            availableBytes: ClientStorageSpace.CreateAvailableBytesQuery());
         failed = false;
         clientPackageMode = true;
         clientPackageNotice = "";

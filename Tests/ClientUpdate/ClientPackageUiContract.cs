@@ -10,6 +10,7 @@ using UnityEngine;
 internal static class ClientPackageUiContract
 {
     private static int checks;
+    private static int payloadTransfers;
     private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly byte[] Bytes = Encoding.UTF8.GetBytes("synthetic inert package bytes, not an installer");
     private static void Check(bool value, string text) { if (!value) throw new Exception(text); checks++; }
@@ -57,7 +58,7 @@ internal static class ClientPackageUiContract
     private sealed class FakeTransport:IMobileResourceTransport
     {
         public void Download(Uri uri,string file,long maximum,CancellationToken token,Action<long> progress)
-        { token.ThrowIfCancellationRequested();progress?.Invoke(0);File.WriteAllBytes(file,Bytes);progress?.Invoke(Bytes.Length); }
+        { payloadTransfers++;token.ThrowIfCancellationRequested();progress?.Invoke(0);File.WriteAllBytes(file,Bytes);progress?.Invoke(Bytes.Length); }
     }
     private static void TestRealDispatchLoop(string root)
     {
@@ -163,6 +164,25 @@ internal static class ClientPackageUiContract
             Set(page,"remoteCancellation",null);int cancelBefore=AndroidClientPackageInstaller.Cancels;Set(page,"androidPackageActive",true);
             Invoke(page,"OnApplicationPause",true);Check(AndroidClientPackageInstaller.Cancels==cancelBefore,"permission/installer activity pause does not cancel platform session");
             TestRealDispatchLoop(Path.Combine(root, "dispatcher"));
+#if UNITY_ANDROID
+            Application.persistentDataPath = Path.Combine(root, "android-storage");
+            StorageSpaceStub.Reset(); StorageSpaceStub.Available = 0;
+            int transfersBefore = payloadTransfers;
+            page = Page(); Run(page);
+            Check(Get<bool>(page, "failed") && Get<string>(page, "verifiedClientPackage") == null,
+                "actual Android package gate rejects zero StatFs capacity");
+            Check(payloadTransfers == transfersBefore, "insufficient Android capacity prevents payload download");
+            Check(StorageSpaceStub.Path == Path.Combine(Application.persistentDataPath, "ClientPackages"),
+                "actual package gate probes its own cache filesystem");
+            StorageSpaceStub.Reset(); StorageSpaceStub.QueryThrows = true;
+            page = Page(); Run(page);
+            Check(Get<bool>(page, "failed") && payloadTransfers == transfersBefore,
+                "Android StatFs query failure cannot bypass storage admission");
+            StorageSpaceStub.Reset(); StorageSpaceStub.Available = 8L * 1024 * 1024 * 1024;
+            page = Page(); Run(page);
+            Check(!Get<bool>(page, "failed") && Get<string>(page, "verifiedClientPackage") != null,
+                "Android retry rechecks live StatFs capacity and completes when space is available");
+#endif
             Console.WriteLine("PASS client package UI ("+Platform+"): "+checks+" checks; actual gate, synthetic transport and platform substitutes, no Unity/device/installer execution.");
         }
         finally { if(Directory.Exists(root))Directory.Delete(root,true); }
