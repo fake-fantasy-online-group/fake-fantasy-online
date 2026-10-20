@@ -38,6 +38,47 @@ class FormalBuildContract(unittest.TestCase):
         with self.assertRaises(ValueError):
             build.validate_dispatch('http://8.8.8.8/d', True)
 
+    def test_private_profile_legacy_inputs_and_no_implicit_migration(self):
+        base = ['--platform', 'windows', '--version', '1.0.0', '--dispatch-url', 'https://current.example.test/d']
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(build.legacy_dispatches(build.parser().parse_args(base)), [])
+        with patch.dict(os.environ, {'FFO_RESOURCE_LEGACY_DISPATCH_URLS': 'https://old.example.test/d\r\nhttps://older.example.test/d'}):
+            self.assertEqual(build.legacy_dispatches(build.parser().parse_args(base)),
+                             ['https://old.example.test/d', 'https://older.example.test/d'])
+            self.assertEqual(build.legacy_dispatches(build.parser().parse_args(base + ['--legacy-dispatch-url', 'https://explicit.example.test/d'])),
+                             ['https://explicit.example.test/d'])
+        for value in ('', ' https://old.example.test/d', 'https://user:secret@example.test/d',
+                      'https://old.example.test/d?token=x', 'http://localhost/d', 'https://current.example.test/d'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                build.legacy_dispatches(build.parser().parse_args(base + ['--legacy-dispatch-url', value]))
+        for values in ('https://old.example.test/d', [1], ['https://old.example.test/d'] * 2,
+                       ['https://old.example.test/' + str(i) for i in range(9)]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                build.validate_legacy_dispatches(values, 'https://current.example.test/d')
+        with self.assertRaises(ValueError):
+            build.validate_legacy_dispatches(['https://old.example.test/d'], '')
+        self.assertEqual(build.validate_legacy_dispatches(None, ''), [])
+
+    def test_private_profile_reaches_unity_without_profile_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'candidate.exe'
+            captured = {}
+            def fake_unity(command, cwd, env):
+                captured.update(env)
+                output.write_bytes(b'inert synthetic fixture, never executed')
+                return type('Result', (), {'returncode': 0})()
+            args = ['--platform', 'windows', '--version', '1.0.0', '--configuration', 'development',
+                    '--dispatch-url', 'https://current.example.test/d', '--updater-directory', temporary,
+                    '--output', str(output)]
+            with patch.dict(os.environ, {'FFO_RESOURCE_LEGACY_DISPATCH_URLS': 'https://old.example.test/d'}), \
+                    patch.object(build.shutil, 'which', return_value='/synthetic/Unity'), \
+                    patch.object(build.subprocess, 'check_output', side_effect=['a' * 40 + '\n', '']), \
+                    patch.object(build.subprocess, 'run', side_effect=fake_unity):
+                self.assertEqual(build.main(args), 0)
+            self.assertEqual(captured['FFO_RESOURCE_DISPATCH_URL'], 'https://current.example.test/d')
+            self.assertEqual(captured['FFO_RESOURCE_LEGACY_DISPATCH_URLS'], 'https://old.example.test/d')
+            self.assertFalse(json.loads(Path(str(output) + '.local-build.json').read_text())['productionReady'])
+
     def test_source_tag_release_gate_fails_before_editor(self):
         with self.assertRaisesRegex(ValueError, 'requires --configuration formal'):
             build.main(['--platform', 'android', '--version', '1.0.0', '--dispatch-url', 'https://example.com/d', '--release'])
@@ -143,6 +184,21 @@ class FormalBuildContract(unittest.TestCase):
             self.assertLessEqual(pack.MAX_ENTRIES, 65534)
             self.assertIn('allowZip64=False', (ROOT / 'scripts/ci/package-desktop-update.py').read_text())
 
+    def test_unconfigured_development_bootstrap_stays_offline(self):
+        for legacy in ([], None, ['https://old.example.test/d'], 'invalid-list'):
+            with self.subTest(legacy=legacy), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / 'synthetic.apk'
+                with zipfile.ZipFile(output, 'w') as archive:
+                    archive.writestr('lib/arm64-v8a/libil2cpp.so', b'synthetic')
+                    archive.writestr('lib/arm64-v8a/libunity.so', b'synthetic')
+                    archive.writestr('assets/resource-bootstrap.json', json.dumps({'schemaVersion': 1, 'mode': 'resource-free',
+                        'appVersion': '1.0.0', 'dispatchUrl': '', 'legacyDispatchUrls': legacy, 'developmentHttp': False}))
+                if legacy is None or legacy == []:
+                    self.assertEqual(apk.verify(output)['status'], 'development-candidate')
+                else:
+                    with self.assertRaises(ValueError):
+                        apk.verify(output)
+
     def test_formal_apk_metadata_is_honest_and_dispatch_bound(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'candidate.apk'
@@ -150,8 +206,11 @@ class FormalBuildContract(unittest.TestCase):
                 archive.writestr('lib/arm64-v8a/libil2cpp.so', b'synthetic')
                 archive.writestr('lib/arm64-v8a/libunity.so', b'synthetic')
                 archive.writestr('assets/resource-bootstrap.json', json.dumps({'schemaVersion': 1, 'mode': 'resource-free',
-                    'appVersion': '1.0.0', 'dispatchUrl': 'https://example.com/dispatch.json', 'developmentHttp': False}))
-            result = apk.verify(output, configuration='formal', expected_dispatch='https://example.com/dispatch.json')
+                    'appVersion': '1.0.0', 'dispatchUrl': 'https://example.com/dispatch.json', 'legacyDispatchUrls': ['https://retired.example.test/d'], 'developmentHttp': False}))
+            result = apk.verify(output, configuration='formal', expected_dispatch='https://example.com/dispatch.json',
+                                expected_legacy_dispatches=['https://retired.example.test/d'])
+            with self.assertRaisesRegex(ValueError, 'legacy dispatch list'):
+                apk.verify(output, configuration='formal', expected_legacy_dispatches=[])
             self.assertEqual(result['status'], 'formal-candidate')
             self.assertFalse(result['acceptance']['signingCertificate'])
             with self.assertRaises(ValueError):

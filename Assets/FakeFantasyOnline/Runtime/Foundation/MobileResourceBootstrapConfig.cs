@@ -11,8 +11,11 @@ public sealed class MobileResourceBootstrapConfig
     public const string FileName = "resource-bootstrap.json";
     public const int MaxConfigBytes = 16384;
     public const int MaxEndpointBytes = 4096;
+    public const int MaxLegacyDispatchUrls = 8;
     public int schemaVersion;
     public string mode, appVersion, dispatchUrl;
+    // Release-specific retired defaults, supplied only by the build profile. Never a global migration list.
+    public string[] legacyDispatchUrls;
     // Legacy serialized field, ignored by the unified gate. Only dispatchUrl selects remote metadata.
     public string resourceManifestUrl;
     public bool developmentHttp;
@@ -25,6 +28,15 @@ public sealed class MobileResourceBootstrapConfig
         if (developmentHttp && !isDevelopmentBuild)
             throw new InvalidDataException("Development HTTP requires an explicit development build.");
         if (!string.IsNullOrWhiteSpace(dispatchUrl)) ValidateEndpoint(dispatchUrl, developmentHttp && isDevelopmentBuild);
+        if (legacyDispatchUrls == null || legacyDispatchUrls.Length == 0) return;
+        if (legacyDispatchUrls.Length > MaxLegacyDispatchUrls || string.IsNullOrWhiteSpace(dispatchUrl))
+            throw new InvalidDataException("Legacy dispatch migration requires a current default and at most eight retired URLs.");
+        var seen = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal) { dispatchUrl };
+        foreach (string legacy in legacyDispatchUrls)
+        {
+            ValidateEndpoint(legacy, developmentHttp && isDevelopmentBuild);
+            if (!seen.Add(legacy)) throw new InvalidDataException("Legacy dispatch URLs must be distinct from each other and the current default.");
+        }
     }
 
     public static Uri ValidateEndpoint(string value, bool allowDevelopmentLanHttp)

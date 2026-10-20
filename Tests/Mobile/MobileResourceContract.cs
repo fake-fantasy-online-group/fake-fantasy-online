@@ -140,7 +140,7 @@ internal static class MobileResourceContract
         File.Delete(receipt);
         Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "partial first receipt is not success");
         File.WriteAllText(receipt, goodReceipt);
-        foreach (string broken in new[] { "", "junk", goodReceipt.Substring(0, goodReceipt.Length / 2), goodReceipt.Replace("FFO-VERIFIED-1", "FFO-VERIFIED-9"), goodReceipt.Replace("a", "b") })
+        foreach (string broken in new[] { "", "junk", goodReceipt.Substring(0, goodReceipt.Length / 2), goodReceipt.Replace("FFO-VERIFIED-2", "FFO-VERIFIED-9"), goodReceipt.Replace("a", "b") })
         {
             File.WriteAllText(receipt, broken);
             Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "malformed receipt requires full verification");
@@ -159,7 +159,7 @@ internal static class MobileResourceContract
         Reject(() => corrupt.CommitReceipt(), "failed verification never saves success");
         Assert(File.ReadAllText(receipt) == goodReceipt, "failed check preserves old receipt only");
         var updatedManifest = MobileResourceManifest.Parse(manifestText());
-        Assert(new MobileResourceVerification(updatedManifest, installed, receipt).CachedFiles == 0, "changed embedded manifest invalidates whole receipt");
+        Assert(new MobileResourceVerification(updatedManifest, installed, receipt).CachedFiles == 1, "changed expected file hash invalidates only corresponding receipt row");
         File.WriteAllText(a, "short");
         var truncated = new MobileResourceVerification(manifest, installed, receipt);
         Assert(truncated.NeedsHash(0) && !truncated.Verify(0), "length changes reject cached file");
@@ -178,7 +178,7 @@ internal static class MobileResourceContract
         var duringHash = new MobileResourceVerification(manifest, installed, receipt);
         Assert(!duringHash.Verify(1, bytes => { if (bytes > 0) File.SetLastWriteTimeUtc(b, File.GetLastWriteTimeUtc(b).AddSeconds(5)); }),
             "change while hashing cannot be cached");
-        File.WriteAllText(receipt, goodReceipt.Replace(manifest.Version, new string('0', 64)));
+        File.WriteAllText(receipt, goodReceipt.Substring(0, goodReceipt.LastIndexOf('\n', goodReceipt.Length - 2) + 1) + new string('0', 64) + "\n");
         Assert(new MobileResourceVerification(manifest, installed, receipt).CachedFiles == 0, "stale fingerprint rejected");
     }
 

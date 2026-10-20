@@ -24,4 +24,6 @@ jobs:
       - name: Test resource staging and restoration
         run: |
           Tests/ClientBuild/run-stage-contract.sh
+          bash Tests/ClientBuild/run-profile-contract.sh
           bash Tests/Mobile/run-storage-space-contract.sh
+          bash Tests/Mobile/run-resource-performance-contract.sh

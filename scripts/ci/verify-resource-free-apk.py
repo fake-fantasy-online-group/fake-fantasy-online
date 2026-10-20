@@ -21,7 +21,7 @@ def setting(name):
     return match.group(1)
 
 
-def verify(apk, configuration='development', expected_dispatch=None, source_commit=None):
+def verify(apk, configuration='development', expected_dispatch=None, source_commit=None, expected_legacy_dispatches=None):
     if configuration not in ('development', 'formal'):
         raise ValueError('Configuration must be development or formal')
     apk = Path(apk)
@@ -51,11 +51,16 @@ def verify(apk, configuration='development', expected_dispatch=None, source_comm
             raise ValueError('APK default dispatch differs from the explicitly requested endpoint')
         if configuration == 'formal' and (not config.get('dispatchUrl') or config.get('developmentHttp')):
             raise ValueError('Formal APK must contain its HTTPS default dispatch and must not enable development HTTP')
-        if configuration == 'formal':
+        if expected_legacy_dispatches is not None and config.get('legacyDispatchUrls', []) != expected_legacy_dispatches:
+            raise ValueError('APK legacy dispatch list differs from the explicitly requested profile')
+        if configuration == 'formal' or 'legacyDispatchUrls' in config:
             spec = importlib.util.spec_from_file_location('build_inputs', Path(__file__).with_name('build-resource-free.py'))
             inputs = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(inputs)
-            inputs.validate_dispatch(config['dispatchUrl'])
+            if configuration == 'formal' or config.get('dispatchUrl'):
+                inputs.validate_dispatch(config['dispatchUrl'], configuration == 'development' and bool(config.get('developmentHttp')))
+            inputs.validate_legacy_dispatches(config.get('legacyDispatchUrls', []), config.get('dispatchUrl', ''),
+                                              configuration == 'development' and bool(config.get('developmentHttp')))
     digest = hashlib.sha256()
     with apk.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):

@@ -49,6 +49,9 @@ public sealed class ResourceFreeBuildStage : IDisposable
             throw new ArgumentException("Bootstrap config must be a file name.", nameof(configName));
         if (string.IsNullOrWhiteSpace(configJson))
             throw new ArgumentException("Bootstrap config must not be empty.", nameof(configJson));
+        // Match the runtime bootstrap read bound before moving any private source assets.
+        if (Encoding.UTF8.GetByteCount(configJson) > 16384)
+            throw new InvalidDataException("Resource bootstrap configuration is too large.");
         assetsRoot = Path.GetFullPath(assetsRoot);
         backupRoot = Path.GetFullPath(backupRoot);
         if (backupRoot == assetsRoot || backupRoot.StartsWith(assetsRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))

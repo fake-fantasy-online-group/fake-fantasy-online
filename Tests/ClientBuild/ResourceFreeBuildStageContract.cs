@@ -17,6 +17,7 @@ public static class ResourceFreeBuildStageContract
     {
         try { action(); }
         catch (IOException) { assertions++; return; }
+        catch (InvalidDataException) { assertions++; return; }
         throw new Exception(message);
     }
     private static string CreateEmbeddedBackground(string assets)
@@ -88,6 +89,8 @@ public static class ResourceFreeBuildStageContract
             File.WriteAllText(Path.Combine(branding, "other.png"), "unreviewed-local-artwork");
             Directory.CreateDirectory(Path.Combine(branding, "Resources"));
             File.WriteAllText(Path.Combine(branding, "Resources/private.txt"), "unreviewed-nested-resource");
+            ExpectFailure(() => new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", new string('中', 5462)), "Oversized UTF-8 bootstrap must fail before staging");
+            Check(File.ReadAllText(Path.Combine(streaming, "private.pkg")) == "original-private-resource" && !Directory.Exists(backup), "Oversized profile cannot disturb private assets");
             var stage = new ResourceFreeBuildStage(assets, backup, "resource-bootstrap.json", "{}");
             Check(Directory.GetFiles(streaming).Length == 1, "Only bootstrap marker must remain in StreamingAssets");
             Check(Directory.GetFiles(resources).Length == 0, "Resources must be isolated without a recursive file scan");

@@ -39,11 +39,20 @@ public sealed class ResourceFreeBuildProfile
             mode = "resource-free",
             appVersion = projectVersion,
             dispatchUrl = environment("FFO_RESOURCE_DISPATCH_URL") ?? "",
+            legacyDispatchUrls = ParseLegacyDispatchUrls(environment("FFO_RESOURCE_LEGACY_DISPATCH_URLS")),
             developmentHttp = http == "1"
         };
         if (!Development && string.IsNullOrWhiteSpace(Bootstrap.dispatchUrl))
             throw new InvalidOperationException("Formal resource-free builds require an explicit public FFO_RESOURCE_DISPATCH_URL.");
         Bootstrap.Validate(Development);
+    }
+
+    private static string[] ParseLegacyDispatchUrls(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return new string[0];
+        // Newline-delimited input keeps the existing environment-only Unity build interface.
+        // Do not trim or discard empty entries: malformed profiles must fail, not silently change meaning.
+        return value.Replace("\r\n", "\n").Split('\n');
     }
 
     public static void ValidateVersion(string version)

@@ -83,8 +83,10 @@ public sealed class MobileRemoteResourceInstall
         RejectLink(staging);
         Directory.CreateDirectory(staging);
         ValidateTree(staging, manifest, true);
-        var verification = new MobileResourceVerification(manifest, staging, Path.Combine(staging, Receipt), false);
-        var reusable = FindReusableFiles();
+        var verification = new MobileResourceVerification(manifest, staging, Path.Combine(staging, Receipt), !fullVerification);
+        try
+        {
+        var reusable = FindReusableFiles(!fullVerification);
         long total = 0, completed = 0, additional = 0;
         foreach (var entry in manifest.Entries) total = checked(total + entry.Length);
         for (int i = 0; i < manifest.Entries.Count; i++)
@@ -128,13 +130,19 @@ public sealed class MobileRemoteResourceInstall
                     try { verification.CommitFile(i, part, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying retained download", label, bytes, entry.Length); }); ready = true; }
                     catch (InvalidDataException) { DeletePartial(part); offset = PreparePartial(part, ResumeIdentity(source, entry), entry.Length); }
                 }
-                string reusablePath;
-                if (!ready && offset == 0 && reusable.TryGetValue(ContentKey(entry), out reusablePath))
-                    ready = TryReuse(verification, i, reusablePath, part, entry, cancellation, progress, label);
+                ReusableResource reusableFile;
+                if (!ready && offset == 0 && reusable.TryGetValue(ContentKey(entry), out reusableFile))
+                    ready = TryReuse(verification, i, reusableFile, part, entry, cancellation, progress, label);
                 if (!ready)
                 {
+                    MobileResourceVerifiedFile proof = null;
+                    var streaming = transport as IMobileResourceVerifiedTransport;
                     var resumable = transport as IMobileResourceResumableTransport;
-                    if (resumable != null)
+                    if (streaming != null)
+                        proof = streaming.DownloadVerifiedResumable(source, part, entry.Length, offset, cancellation,
+                            bytes => Report(progress, "Downloading resources", label, previous + bytes, total),
+                            bytes => Report(progress, "Verifying resumed prefix", label, bytes, offset));
+                    else if (resumable != null)
                         resumable.DownloadResumable(source, part, entry.Length, offset, cancellation,
                             bytes => Report(progress, "Downloading resources", label, previous + bytes, total));
                     else
@@ -143,7 +151,7 @@ public sealed class MobileRemoteResourceInstall
                     cancellation.ThrowIfCancellationRequested();
                     try
                     {
-                        verification.CommitFile(i, part,
+                        verification.CommitFile(i, part, proof,
                             bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying downloaded resource", label, bytes, entry.Length); });
                     }
                     catch (InvalidDataException) { DeletePartial(part); throw; }
@@ -166,6 +174,8 @@ public sealed class MobileRemoteResourceInstall
         // Same-filesystem atomic marker replacement preserves the old marker on failure.
         CommitMarker(generation, cancellation);
         return installed;
+        }
+        finally { verification.CheckpointReceipt(); }
     }
 
     // Receipt checks detect ordinary file changes, not malicious same-size/same-timestamp
@@ -177,6 +187,8 @@ public sealed class MobileRemoteResourceInstall
         ValidateManifest(manifest, appVersion, platform);
         ValidateTree(root, manifest, false);
         var verification = new MobileResourceVerification(manifest, root, Path.Combine(root, Receipt), !fullVerification);
+        try
+        {
         long total = verification.BytesToHash, completed = 0;
         Report(progress, fullVerification ? "Repairing resource verification" : "Checking installed resource metadata",
             fullVerification ? "Reading every installed resource for a complete SHA-256 check..." : "Checking the saved verification receipt...", 0, total);
@@ -195,6 +207,8 @@ public sealed class MobileRemoteResourceInstall
         cancellation.ThrowIfCancellationRequested();
         verification.CommitReceipt();
         return root;
+        }
+        finally { verification.CheckpointReceipt(); }
     }
 
     private MobileResourceManifest ReadInstalledManifest(string root)
@@ -207,22 +221,31 @@ public sealed class MobileRemoteResourceInstall
         return manifest;
     }
 
-    private Dictionary<string, string> FindReusableFiles()
+    private sealed class ReusableResource
     {
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        public string Path;
+        public MobileResourceVerification Verification;
+        public int Index;
+    }
+
+    private Dictionary<string, ReusableResource> FindReusableFiles(bool useCachedReceipt)
+    {
+        var result = new Dictionary<string, ReusableResource>(StringComparer.Ordinal);
         try
         {
             string root = ReadActiveRoot();
             var previous = ReadInstalledManifest(root);
-            // Old app-compatible content can be reused solely as bytes. The new manifest
-            // remains the authority and the copied bytes are always fully SHA-256 checked.
+            // Old app-compatible content can be reused solely as bytes. Explicit repair
+            // must hash source bytes too, never revive a rejected file through its receipt.
             ValidateManifest(previous, previous.ClientVersion, platform);
             ValidateTree(root, previous, false);
-            foreach (var entry in previous.Entries)
+            var verification = new MobileResourceVerification(previous, root, Path.Combine(root, Receipt), useCachedReceipt);
+            for (int i = 0; i < previous.Entries.Count; i++)
             {
+                var entry = previous.Entries[i];
                 string path = SafePath(root, entry.Destination);
                 if (File.Exists(path) && new FileInfo(path).Length == entry.Length)
-                    result[ContentKey(entry)] = path;
+                    result[ContentKey(entry)] = new ReusableResource { Path = path, Verification = verification, Index = i };
             }
         }
         catch (InvalidDataException) { }
@@ -230,24 +253,24 @@ public sealed class MobileRemoteResourceInstall
         return result;
     }
 
-    private static bool TryReuse(MobileResourceVerification verification, int index, string source, string part,
+    private static bool TryReuse(MobileResourceVerification verification, int index, ReusableResource source, string part,
         MobileResourceManifest.Entry entry, CancellationToken cancellation, Action<string, string, long, long> progress, string label)
     {
         try
         {
-            RejectPathLinks(source);
-            using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var output = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                MobileResourceHttpTransport.CopyBounded(input, output, entry.Length, cancellation,
-                    bytes => Report(progress, "Reusing installed resources", label, bytes, entry.Length));
-                output.Flush(true);
-            }
-            verification.CommitFile(index, part, bytes => { cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying reused resource", label, bytes, entry.Length); });
+            RejectPathLinks(source.Path);
+            if (!source.Verification.Verify(source.Index, bytes => {
+                cancellation.ThrowIfCancellationRequested(); Report(progress, "Verifying reused resource", label, bytes, entry.Length);
+            })) return false;
+            var proof = source.Verification.CopyVerified(source.Index, part, cancellation,
+                bytes => Report(progress, "Reusing installed resources", label, bytes, entry.Length));
+            if (proof == null) return false;
+            verification.CommitFile(index, part, proof);
+            source.Verification.CheckpointReceipt();
             return true;
         }
         catch (InvalidDataException) { if (File.Exists(part)) File.Delete(part); return false; }
-        // Real I/O failures (e.g. no space) stop safely rather than hiding them with a download.
+        // I/O failures stop safely; never disguise full storage with a network retry.
     }
 
     private static string ContentKey(MobileResourceManifest.Entry entry)

@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace FakeFantasyOnline.Foundation
@@ -19,7 +20,24 @@ public interface IMobileResourceResumableTransport : IMobileResourceTransport
 }
 
 /// <summary>Runs on a worker thread; bounded streaming, normal TLS validation, no redirects/cookies/authentication.</summary>
-public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransport
+public interface IMobileResourceVerifiedTransport : IMobileResourceResumableTransport
+{
+    MobileResourceVerifiedFile DownloadVerifiedResumable(Uri uri, string destination, long expectedBytes, long offset,
+        CancellationToken cancellation, Action<long> progress, Action<long> prefixProgress = null);
+}
+
+/// <summary>Internal transfer proof, valid only for the exact bytes and metadata just written.</summary>
+public sealed class MobileResourceVerifiedFile
+{
+    private readonly string path, hash;
+    private readonly long length, stamp;
+    internal MobileResourceVerifiedFile(string path, long length, string hash, long stamp)
+    { this.path = Path.GetFullPath(path); this.length = length; this.hash = hash; this.stamp = stamp; }
+    internal bool Matches(string candidate, long bytes, string digest, long ticks)
+    { return Path.GetFullPath(candidate) == path && bytes == length && digest == hash && ticks == stamp; }
+}
+
+public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTransport
 {
     public void Download(Uri uri, string destination, long maximumBytes, CancellationToken cancellation, Action<long> progress)
     {
@@ -37,8 +55,16 @@ public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransp
         Transfer(uri, destination, expectedBytes, offset, true, cancellation, progress);
     }
 
-    private static void Transfer(Uri uri, string destination, long maximumBytes, long offset, bool exact,
-        CancellationToken cancellation, Action<long> progress)
+    public MobileResourceVerifiedFile DownloadVerifiedResumable(Uri uri, string destination, long expectedBytes, long offset,
+        CancellationToken cancellation, Action<long> progress, Action<long> prefixProgress = null)
+    {
+        if (expectedBytes < 0 || offset < 0 || offset > expectedBytes || (offset == expectedBytes && offset != 0))
+            throw new ArgumentOutOfRangeException(nameof(offset));
+        return Transfer(uri, destination, expectedBytes, offset, true, cancellation, progress, true, prefixProgress);
+    }
+
+    private static MobileResourceVerifiedFile Transfer(Uri uri, string destination, long maximumBytes, long offset, bool exact,
+        CancellationToken cancellation, Action<long> progress, bool verify = false, Action<long> prefixProgress = null)
     {
         if (uri == null) throw new ArgumentNullException(nameof(uri));
         if (!uri.IsAbsoluteUri || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
@@ -83,12 +109,37 @@ public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransp
                 // Abort alone does not interrupt every runtime's synchronous response Read.
                 using (cancellation.Register(input.Dispose))
                 using (var output = OpenOutput(destination, offset, append))
+                using (var hash = verify ? SHA256.Create() : null)
                 {
-                    long received = CopyBoundedFrom(input, output, maximumBytes, initialBytes, cancellation, progress);
+                    if (hash != null && initialBytes > 0)
+                    {
+                        // A resumed hash includes the retained prefix. Never persist opaque
+                        // hash state or trust only the newly received suffix.
+                        output.Position = 0; var buffer = new byte[65536]; long done = 0;
+                        while (done < initialBytes)
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            int count = output.Read(buffer, 0, (int)Math.Min(buffer.Length, initialBytes - done));
+                            if (count == 0) throw new InvalidDataException("Partial resource changed while hashing prefix.");
+                            hash.TransformBlock(buffer, 0, count, buffer, 0); done += count; prefixProgress?.Invoke(done);
+                        }
+                        output.Position = initialBytes;
+                    }
+                    long received = CopyBoundedFrom(input, output, maximumBytes, initialBytes, cancellation, progress, hash);
                     if (exact && (received != maximumBytes || output.Length != maximumBytes))
                         throw new InvalidDataException("Resource response ended before its declared size.");
                     output.Flush(true);
+                    if (hash != null)
+                    {
+                        hash.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                        string digest = BitConverter.ToString(hash.Hash).Replace("-", "").ToLowerInvariant();
+                        // Close before capturing final metadata, and retain no authority if
+                        // the file is subsequently changed before the atomic commit.
+                        output.Dispose();
+                        return new MobileResourceVerifiedFile(destination, received, digest, File.GetLastWriteTimeUtc(destination).Ticks);
+                    }
                 }
+                return null;
             }
         }
         catch (WebException error)
@@ -113,8 +164,8 @@ public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransp
 
     private static FileStream OpenOutput(string destination, long offset, bool append)
     {
-        if (offset == 0) return new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
-        var output = new FileStream(destination, FileMode.Open, FileAccess.Write, FileShare.None);
+        if (offset == 0) return new FileStream(destination, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        var output = new FileStream(destination, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         try
         {
             // Recheck under the exclusive file handle in case the partial changed during HTTP.
@@ -149,7 +200,7 @@ public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransp
     }
 
     private static long CopyBoundedFrom(Stream input, Stream output, long maximumBytes, long initialBytes,
-        CancellationToken cancellation, Action<long> progress)
+        CancellationToken cancellation, Action<long> progress, HashAlgorithm hash = null)
     {
         var buffer = new byte[65536];
         long received = initialBytes;
@@ -163,6 +214,7 @@ public sealed class MobileResourceHttpTransport : IMobileResourceResumableTransp
             if (count > maximumBytes - received)
                 throw new InvalidDataException("Resource response exceeds its declared size limit.");
             output.Write(buffer, 0, count);
+            hash?.TransformBlock(buffer, 0, count, buffer, 0);
             received += count;
             progress?.Invoke(received);
         }

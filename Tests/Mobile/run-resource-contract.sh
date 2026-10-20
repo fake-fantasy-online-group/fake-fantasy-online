@@ -8,6 +8,7 @@ trap 'rm -rf "$OUT"' EXIT
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/ClientResourcePaths.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceManifest.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceVerification.cs" \
+  "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceHttpTransport.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileStreamingAssetsStage.cs" \
   "$ROOT/Assets/FakeFantasyOnline/Runtime/Protocol/PrivateServerOptions.cs" \
   "$ROOT/Tests/Mobile/MobileResourceContract.cs"
