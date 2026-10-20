@@ -19,7 +19,7 @@ namespace UnityEngine
  public static class Mathf { public static float Min(float a,float b)=>Math.Min(a,b); public static float Max(float a,float b)=>Math.Max(a,b); public static float Clamp(float v,float lo,float hi)=>Math.Max(lo,Math.Min(v,hi)); }
  public class GUIContent { public static GUIContent none=new GUIContent(); }
  public class GUIStyle { public static GUIStyle none=new GUIStyle(); }
- public static class GUI { public static int depth; public static string faceLabel; public static bool Button(Rect r,GUIContent c,GUIStyle s)=>Button(r,faceLabel); public static bool enabled=true; public static string click; public static bool Button(Rect r,string label){if(enabled && label==click){click=null;return true;}return false;} public static void Box(Rect r,string s){} }
+ public static class GUI { public static int depth; public static readonly List<string> labels=new List<string>(); public static string faceLabel; public static bool Button(Rect r,GUIContent c,GUIStyle s)=>Button(r,faceLabel); public static bool enabled=true; public static string click; public static bool Button(Rect r,string label){labels.Add(label);if(enabled && label==click){click=null;return true;}return false;} public static void Box(Rect r,string s){} }
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
@@ -49,6 +49,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
   private void DrawTooltip(string name,string text,Vector2 point){}
   internal void PetActions(int id){cur="petdlg";petSkillPanelOpen=true;SelectForActions(id);}
   internal void ReadPet(Event ev)=>ReadMobilePetSkills(ev,p=>10);
+  internal void DrawPetActions()=>DrawMobilePetSkillSelection();
   internal void Cover(bool value){mobileSkillInputBlocked=value;} private float PetSkillExtraH()=>0; private float s=1,winX,winY; private bool positioned,dragging; private string cur="skilldlg"; internal static float skillScroll; private static int skillTab;
   public static SkInfo info=new SkInfo {id=10,icon=2};
   public static int SkillIconId(int id)=>0;

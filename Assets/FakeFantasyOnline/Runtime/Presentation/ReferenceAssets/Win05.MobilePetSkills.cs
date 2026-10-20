@@ -35,7 +35,9 @@ public partial class Win05
             return;
         }
         bool usable = MobileShortcutEligibility.Pet(live.id, live.level, live.active);
-        Rect box = MobilePanelLayout.Actions(mobileSkillAnchor, mobileSkills.ChoosingSlot ? 9 : 2, out float scale);
+        Rect box = MobilePanelLayout.Actions(mobileSkillAnchor, mobileSkills.ChoosingSlot ? 9 : 2 +
+            (GameHud.CanBindMobileMountSkill(false, live) ? 1 : 0) +
+            (GameHud.CanBindMobileMountSkill(true, live) ? 1 : 0), out float scale);
         mobileSkillActionsRect = box;
         int depth = GUI.depth; GUI.depth = 0;
         if (mobileSkills.ChoosingSlot)
@@ -49,7 +51,14 @@ public partial class Win05
         {
             if (MobilePanelLayout.Action(box, 0, "放入快捷栏", scale, usable))
             { mobileBindingPage = 0; mobileSkills.Choose(usable); }
-            if (MobilePanelLayout.Action(box, 1, "取消", scale)) ResetMobileSkills();
+            int row = 1;
+            if (GameHud.CanBindMobileMountSkill(false, live) &&
+                MobilePanelLayout.Action(box, row++, "设为上坐骑", scale) &&
+                GameHud.BindMobileMountSkill(false, live.id)) ResetMobileSkills();
+            if (GameHud.CanBindMobileMountSkill(true, live) &&
+                MobilePanelLayout.Action(box, row++, "设为下坐骑", scale) &&
+                GameHud.BindMobileMountSkill(true, live.id)) ResetMobileSkills();
+            if (MobilePanelLayout.Action(box, row, "取消", scale)) ResetMobileSkills();
         }
         Event ev = Event.current;
         if (box.Contains(ev.mousePosition) && (ev.type == EventType.MouseDown || ev.type == EventType.MouseUp || ev.type == EventType.MouseDrag)) ev.Use();

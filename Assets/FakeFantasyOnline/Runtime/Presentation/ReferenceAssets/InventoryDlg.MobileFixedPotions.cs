@@ -6,7 +6,8 @@ internal partial class InventoryDlg
 {
     private int MobileFixedPotionActionRows(Item item) => 6 +
         (GameHud.CanBindMobilePotion(MobileFixedAction.HealthPotion, tab, item) ? 1 : 0) +
-        (GameHud.CanBindMobilePotion(MobileFixedAction.ManaPotion, tab, item) ? 1 : 0);
+        (GameHud.CanBindMobilePotion(MobileFixedAction.ManaPotion, tab, item) ? 1 : 0) +
+        (GameHud.CanBindMobileSaddle(tab, item) ? 1 : 0);
 
     private int DrawMobileFixedPotionBindings(Rect box, float scale, Item item, bool bindingAllowed)
     {
@@ -18,6 +19,9 @@ internal partial class InventoryDlg
             if (MobilePanelLayout.Action(box, row++, label, scale, bindingAllowed && !item.locked) &&
                 GameHud.BindMobilePotion(action, tab, mobileSlot, mobileId)) ClearMobileSelection();
         }
+        if (GameHud.CanBindMobileSaddle(tab, item) &&
+            MobilePanelLayout.Action(box, row++, "设为上坐骑", scale, bindingAllowed && !item.locked && item.blocked == 0) &&
+            GameHud.BindMobileSaddle(tab, mobileSlot, mobileId)) ClearMobileSelection();
         return row;
     }
 }

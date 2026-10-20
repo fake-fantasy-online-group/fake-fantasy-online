@@ -63,26 +63,7 @@ static class MobileFixedActionContract
         CharData.PrefSuffix = "character-a";
         Check(GameHud.MobileFixedState(HP).ItemId == 801, "original character binding retained");
 
-        CharData.riding = false; CharData.rideAnchorId = 0; CharData.petModel = 0; CharData.petRidable = false;
-        CharData.petSkills = new CharData.PetSkill[0]; Time.unscaledTime = 10;
-        Check(!GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).Label == "上坐骑", "no pet has unavailable up action");
-        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 0, "no pet never sends mount command");
-        CharData.petModel = 12; CharData.petRidable = true;
-        Check(!GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).Reason.Contains("鞍具"), "saddle-only cannot invent a skill");
-        CharData.petSkills = new[] { new CharData.PetSkill { id = 321, name = "坐骑", icon = 80, active = true, level = 1 } };
-        Check(GameHud.MobileFixedState(Mount).Available && !GameHud.MobileFixedState(Mount).Active, "server learned mount skill enables up action");
-        GameHud.UseMobileFixedAction(Mount);
-        Check(NetClient.I.mountUses == 1 && NetClient.I.lastSkill == 321 && !CharData.riding, "uses received mount skill id without faking riding");
-        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 1, "repeat tap while awaiting server cannot toggle twice");
-        CharData.riding = true; CharData.mountModel = 12;
-        Check(GameHud.MobileFixedState(Mount).Active && GameHud.MobileFixedState(Mount).Label == "下坐骑", "server receipt changes action label and active state");
-        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.petShows == 1 && CharData.riding, "own dismount requests original pet show without local state change");
-        CharData.riding = false; GameHud.MobileFixedState(Mount);
-        CharData.riding = true; CharData.rideAnchorId = 77;
-        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.rideLeaves == 1 && CharData.rideAnchorId == 77, "passenger dismount uses leave ride route and waits for receipt");
-        Time.unscaledTime += 3; Check(GameHud.MobileFixedState(Mount).Available, "server rejection or missed receipt permits bounded retry");
-        CharData.riding = false; CharData.rideAnchorId = 0; CharData.petRidable = false;
-        Check(!GameHud.MobileFixedState(Mount).Available, "server non-ridable state wins over skill presence");
+        TestManualMountBindings();
         Check(GameHud.MobileFixedState(MobileFixedAction.Sit).Label == "坐下", "sit label reads native state");
         Check(GameHud.MobileFixedState(MobileFixedAction.Sit).Icon != null && Resources.lastPath == "FakeFantasyOnline/MobileControls/Sit" && Resources.loads == 1, "sit uses approved embedded icon and caches its load");
         GameHud.UseMobileFixedAction(MobileFixedAction.Sit);
@@ -91,4 +72,110 @@ static class MobileFixedActionContract
         Check(PlayerController.I.SittingForIndependentRuntime, "editing cannot toggle sit"); MobileClientPresentation.GameplayInputBlocked = false;
         Console.WriteLine("PASS fixed mobile mount/potion actual binding and dispatch: " + checks + " checks");
     }
+    static void TestManualMountBindings()
+    {
+        CharData.PrefSuffix = "mount-character-a";
+        CharData.riding = false; CharData.rideAnchorId = 0; CharData.petModel = 12; CharData.petRidable = true;
+        Time.unscaledTime = 10;
+        var up = new CharData.PetSkill { id = 321, name = "坐骑", icon = 80, active = true, level = 1 };
+        var down = new CharData.PetSkill { id = 322, name = "主动攻击", icon = 81, active = true, level = 1 };
+        var passive = new CharData.PetSkill { id = 323, name = "坐骑", active = false, level = 1 };
+        var unlearned = new CharData.PetSkill { id = 324, name = "坐骑", active = true, level = 0 };
+        CharData.petSkills = new[] { up, down, passive, unlearned };
+        Check(!GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).Label == "上坐骑", "learned mount skill never auto-selects");
+        GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.mountUses == 0 && NetClient.I.petShows == 0 && NetClient.I.rideLeaves == 0, "unbound action dispatches nothing");
+        Check(GameHud.CanBindMobileMountSkill(false, up) && !GameHud.CanBindMobileMountSkill(false, down), "up accepts mount skill only");
+        Check(GameHud.CanBindMobileMountSkill(true, down) && GameHud.CanBindMobileMountSkill(true, up), "down accepts every learned active including mount");
+        Check(!GameHud.CanBindMobileMountSkill(false, passive) && !GameHud.CanBindMobileMountSkill(true, passive), "passive cannot bind either role");
+        Check(!GameHud.CanBindMobileMountSkill(false, unlearned) && !GameHud.CanBindMobileMountSkill(true, unlearned), "unlearned cannot bind either role");
+        CharData.skills[999] = 1;
+        Check(!GameHud.BindMobileMountSkill(false, 999) && !GameHud.BindMobileMountSkill(true, 999), "character skill cannot bind pet roles");
+        Check(!GameHud.BindMobileMountSkill(false, down.id) && !GameHud.BindMobileMountSkill(true, passive.id), "binding API revalidates eligibility");
+        int writes = NetClient.I.writes, uses = NetClient.I.itemUses;
+        var ids = (int[])GameHud.hotSkill.Clone(); var kinds = (int[])GameHud.hotKind.Clone();
+        var panel = new Win05(); panel.PetActions(up.id); GUI.labels.Clear(); GUI.click = "设为上坐骑"; panel.DrawPetActions();
+        Check(GUI.labels.Contains("设为上坐骑") && GameHud.MobileFixedState(Mount).Available, "actual pet menu binds up role");
+        panel.PetActions(down.id); GUI.labels.Clear(); GUI.click = "设为下坐骑"; panel.DrawPetActions();
+        Check(GUI.labels.Contains("设为下坐骑"), "actual pet menu offers and binds down role");
+        Check(NetClient.I.mountUses == 0 && NetClient.I.itemUses == uses && NetClient.I.writes == writes, "binding never executes or writes server hotbar");
+        for (int i = 0; i < 30; i++) Check(GameHud.hotSkill[i] == ids[i] && GameHud.hotKind[i] == kinds[i], "mount binding preserves shortcut ids and kinds");
+        GameHud.fixedCooldown = .5f;
+        Check(!GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).CooldownFraction == .5f, "selected up skill respects shared cooldown");
+        GameHud.fixedCooldown = 0;
+        CharData.petRidable = false; Check(!GameHud.MobileFixedState(Mount).Available, "skill mounting respects server ridable state"); CharData.petRidable = true;
+        CharData.petModel = 0; Check(!GameHud.MobileFixedState(Mount).Available, "selected skill needs current pet"); CharData.petModel = 12;
+        PlayerController.I.IsDead = true; GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 0, "dead player cannot use mount binding"); PlayerController.I.IsDead = false;
+        SocialClient.TradeActive = true; GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 0 && !GameHud.BindMobileMountSkill(false, up.id), "trade blocks use and binding"); SocialClient.TradeActive = false;
+        MobileClientPresentation.GameplayInputBlocked = true; GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 0 && !GameHud.BindMobileMountSkill(true, down.id), "layout editing blocks mount use and binding"); MobileClientPresentation.GameplayInputBlocked = false;
+        NetClient.I.ConnectedForIndependentRuntime = false; GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 0, "disconnection blocks mount use"); NetClient.I.ConnectedForIndependentRuntime = true;
+        GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.mountUses == 1 && NetClient.I.lastSkill == up.id && !CharData.riding, "up dispatches explicit id without local riding mutation");
+        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 1, "pending blocks repeat click");
+        Time.unscaledTime += 2.49f; Check(!GameHud.MobileFixedState(Mount).Available, "pending lasts until 2.5 seconds");
+        Time.unscaledTime += .02f; Check(GameHud.MobileFixedState(Mount).Available, "pending permits retry after bounded timeout");
+        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.mountUses == 2, "bounded retry executes selected skill");
+        CharData.riding = true;
+        Check(GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).Active && GameHud.MobileFixedState(Mount).Label == "下坐骑", "receipt immediately clears pending and selects down role");
+        GameHud.fixedCooldown = .5f; Check(!GameHud.MobileFixedState(Mount).Available, "down skill cooldown is checked too"); GameHud.fixedCooldown = 0;
+        CharData.petSkills = new[] { up }; Check(!GameHud.MobileFixedState(Mount).Available, "missing down skill never falls back to mount skill or pet show"); CharData.petSkills = new[] { up, down };
+        GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.mountUses == 3 && NetClient.I.lastSkill == down.id && CharData.riding, "down dispatches explicit active pet skill and leaves server state alone");
+        Check(NetClient.I.petShows == 0 && NetClient.I.rideLeaves == 0, "no automatic pet show or ride leave");
+        CharData.riding = false; CharData.rideAnchorId = 77;
+        Check(GameHud.MobileFixedState(Mount).Label == "下坐骑" && GameHud.MobileFixedState(Mount).Available, "anchor alone selects down role");
+        GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.lastSkill == down.id && CharData.rideAnchorId == 77 && NetClient.I.rideLeaves == 0, "passenger uses selected skill, not forced leave");
+        CharData.rideAnchorId = 0;
+        CharData.petSkills = new[] { new CharData.PetSkill { id = 325, name = "坐骑", active = true, level = 1 } };
+        Check(!GameHud.MobileFixedState(Mount).Available, "pet change cannot replace missing selected mount skill");
+        int mountUses = NetClient.I.mountUses; GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.mountUses == mountUses, "missing selected skill sends no replacement");
+        CharData.petSkills = new[] { up, down };
+        CharData.PrefSuffix = "mount-character-b";
+        Check(!GameHud.MobileFixedState(Mount).Available, "other character has no default up binding");
+        CharData.riding = true; Check(!GameHud.MobileFixedState(Mount).Available, "other character has no default down binding");
+        Check(GameHud.BindMobileMountSkill(true, up.id), "down explicitly permits mount skill");
+        CharData.riding = false; Check(GameHud.BindMobileMountSkill(false, up.id), "other character can independently bind up");
+        CharData.PrefSuffix = "mount-character-a";
+        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.lastSkill == up.id, "first character up persists");
+        CharData.riding = true; GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.lastSkill == down.id, "first character down persists independently");
+        CharData.riding = false; CharData.rideAnchorId = 0; Time.unscaledTime += 3;
+        TestManualSaddleBinding();
+    }
+
+    static void TestManualSaddleBinding()
+    {
+        const int saddleId = 25038;
+        InventoryDlg.current = new InventoryDlg.Item { id = 987654, bagIdx = 0, count = 1, name = "鞍具", desc = "上坐骑" };
+        Check(!GameHud.CanBindMobileSaddle(0, InventoryDlg.current) && !GameHud.BindMobileSaddle(0, 0, 987654), "spoofed saddle name and description cannot bind");
+        InventoryDlg.current = new InventoryDlg.Item { id = saddleId, bagIdx = 0, count = 1, name = "鞍具" };
+        Check(GameHud.CanBindMobileSaddle(0, InventoryDlg.current), "authoritative saddle id accepted");
+        Check(GameHud.CanBindMobileSaddle(1, InventoryDlg.current) && GameHud.CanBindMobileSaddle(3, InventoryDlg.current), "saddle catalog eligibility covers both other inventory tabs");
+        Check(!GameHud.CanBindMobileSaddle(2, InventoryDlg.current), "equipment tab cannot bind saddle");
+        Check(!GameHud.CanBindMobileSaddle(-1, InventoryDlg.current) && !GameHud.CanBindMobileSaddle(4, InventoryDlg.current), "out-of-range tabs cannot bind saddle");
+        InventoryDlg.current.locked = true; Check(!GameHud.BindMobileSaddle(0, 0, saddleId), "locked saddle cannot bind"); InventoryDlg.current.locked = false;
+        InventoryDlg.current.blocked = 1; Check(!GameHud.BindMobileSaddle(0, 0, saddleId), "blocked saddle cannot bind"); InventoryDlg.current.blocked = 0;
+        Check(!GameHud.BindMobileSaddle(0, 0, saddleId + 1), "stale item id cannot bind");
+        int uses = NetClient.I.itemUses, writes = NetClient.I.writes, mountUses = NetClient.I.mountUses;
+        var bag = new InventoryDlg(); bag.Select(); GUI.labels.Clear(); GUI.click = "设为上坐骑"; bag.Draw();
+        Check(GUI.labels.Contains("设为上坐骑") && GameHud.MobileFixedState(Mount).ItemId == saddleId, "actual bag menu binds saddle up role");
+        Check(NetClient.I.itemUses == uses && NetClient.I.writes == writes && NetClient.I.mountUses == mountUses, "saddle bind does not use item or change server hotbar");
+        CharData.petRidable = false;
+        Check(GameHud.MobileFixedState(Mount).Available, "saddle eligibility does not incorrectly require petRidable");
+        CharData.petModel = 0; Check(!GameHud.MobileFixedState(Mount).Available, "saddle still needs a current pet"); CharData.petModel = 12;
+        InventoryDlg.current.bagIdx = 7;
+        GameHud.UseMobileFixedAction(Mount);
+        Check(NetClient.I.itemUses == uses + 1 && NetClient.I.lastItem == saddleId && NetClient.I.lastSlot == 7 && !CharData.riding, "saddle dispatch resolves moved item and leaves riding state unchanged");
+        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.itemUses == uses + 1, "saddle request has repeat guard");
+        Time.unscaledTime += 3;
+        InventoryDlg.current.locked = true; Check(!GameHud.MobileFixedState(Mount).Available, "locked selected saddle blocks use"); InventoryDlg.current.locked = false;
+        InventoryDlg.current.blocked = 1; Check(!GameHud.MobileFixedState(Mount).Available, "blocked selected saddle blocks use"); InventoryDlg.current.blocked = 0;
+        InventoryDlg.current.count = 0; Check(!GameHud.MobileFixedState(Mount).Available, "depleted selected saddle blocks use");
+        InventoryDlg.current = new InventoryDlg.Item { id = 987654, count = 1, name = "鞍具" };
+        Check(!GameHud.MobileFixedState(Mount).Available && GameHud.MobileFixedState(Mount).ItemId == saddleId, "missing saddle stays selected with no replacement");
+        GameHud.UseMobileFixedAction(Mount); Check(NetClient.I.itemUses == uses + 1, "missing saddle cannot consume other item");
+        Check(NetClient.I.petShows == 0 && NetClient.I.rideLeaves == 0, "no saddle path invents pet show or leave ride");
+    }
+
 }

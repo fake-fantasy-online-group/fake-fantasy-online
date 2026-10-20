@@ -89,44 +89,6 @@ public partial class GameHud
         return new MobileFixedActionState(label, icon, reason.Length == 0, count, cooldown, id, reason);
     }
 
-    private static CharData.PetSkill MobileMountSkill()
-    {
-        if (CharData.petSkills != null)
-            foreach (CharData.PetSkill skill in CharData.petSkills)
-                // Match the server's isMountPetSkill classification, never infer from a model.
-                if (skill.name == "坐骑" && skill.level > 0 && skill.active) return skill;
-        return default(CharData.PetSkill);
-    }
-
-    private static MobileFixedActionState MobileMountState()
-    {
-        bool mounted = CharData.riding || CharData.rideAnchorId != 0;
-        CharData.PetSkill skill = MobileMountSkill();
-        Texture2D icon = null;
-        if (ResLoader.I != null)
-        {
-            if (mounted && CharData.mountModel > 0)
-                icon = ResLoader.I.LoadGsa("res/peticon/M" + CharData.mountModel + ".gsa");
-            else if (skill.icon > 0)
-                icon = ResLoader.I.LoadTex("item/item/item" + skill.icon + ".gso", 0);
-        }
-        string reason = MobileFixedAdmission();
-        float cooldown = !mounted && skill.id > 0 ? CdFrac(skill.id) : 0f;
-        if (mobileMountRequestPending && (mobileMountRequestCharacter != CharData.PrefSuffix ||
-            mobileMountRequestRiding != CharData.riding || mobileMountRequestAnchor != CharData.rideAnchorId ||
-            Time.unscaledTime - mobileMountRequestTime >= 2.5f)) mobileMountRequestPending = false;
-        if (reason.Length == 0 && mobileMountRequestPending) reason = "等待坐骑状态更新";
-        if (reason.Length == 0 && !mounted)
-        {
-            if (CharData.petModel <= 0) reason = "请先出战可骑乘的宠物";
-            else if (!CharData.petRidable) reason = "当前出战宠物不可骑乘";
-            else if (skill.id <= 0) reason = "当前宠物未学坐骑技能，请使用鞍具上骑";
-            else if (cooldown > 0f) reason = "坐骑技能正在冷却中";
-        }
-        return new MobileFixedActionState(mounted ? "下坐骑" : "上坐骑", icon,
-            reason.Length == 0, 0, cooldown, 0, reason, mounted);
-    }
-
     private static string MobileFixedAdmission()
     {
         if (MobileClientPresentation.GameplayInputBlocked) return "请先完成界面布局编辑";
@@ -151,15 +113,7 @@ public partial class GameHud
         }
         if (action == MobileFixedAction.Mount)
         {
-            if (CharData.rideAnchorId != 0) NetClient.I.RideTogetherForIndependentRuntime(0);
-            else if (CharData.riding) NetClient.I.PetShowForIndependentRuntime(true);
-            else NetClient.I.PetUseSkillForIndependentRuntime(MobileMountSkill().id);
-            mobileMountRequestPending = true;
-            mobileMountRequestTime = Time.unscaledTime;
-            mobileMountRequestRiding = CharData.riding;
-            mobileMountRequestAnchor = CharData.rideAnchorId;
-            mobileMountRequestCharacter = CharData.PrefSuffix;
-            // Riding, pet selection and active-skill state change only on the server's receipt.
+            UseMobileMountBinding(state);
             return;
         }
         var item = InventoryDlg.FindItem(state.ItemId);
