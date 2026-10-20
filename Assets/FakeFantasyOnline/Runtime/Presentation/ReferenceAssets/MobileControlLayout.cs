@@ -50,7 +50,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal bool TryGet(MobileControlId id, out MobileControlPlacement placement) =>
             placements.TryGetValue(id, out placement);
 
-        internal Rect ResolveRect(MobileControlId id, Rect defaultRect, Rect safe, float uiScale)
+        internal Rect ResolveRect(MobileControlId id, Rect defaultRect, Rect safe, float uiScale, float defaultScale = 1f)
         {
             if (!ValidRect(safe)) return default(Rect);
             if (!Finite(uiScale) || uiScale <= 0f) uiScale = 1f;
@@ -59,7 +59,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (placements.TryGetValue(id, out MobileControlPlacement placement))
                 return Fit(defaultRect, safe, uiScale, placement.Scale,
                     safe.x + placement.CenterX * safe.width, safe.y + placement.CenterY * safe.height);
-            return Fit(defaultRect, safe, uiScale, 1f, defaultRect.center.x, defaultRect.center.y);
+            // Defaults are fallbacks, never persisted overrides. Keep the original
+            // baseline so existing saved sizes retain their exact v1 meaning.
+            if (!Finite(defaultScale) || defaultScale < MinScale || defaultScale > MaxScale) defaultScale = 1f;
+            return Fit(defaultRect, safe, uiScale, defaultScale, defaultRect.center.x, defaultRect.center.y);
         }
 
         // The editor passes GUI coordinates. Clamp the entire touch region, then persist

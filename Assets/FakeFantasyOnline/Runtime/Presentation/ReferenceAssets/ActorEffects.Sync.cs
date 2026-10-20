@@ -50,9 +50,10 @@ public sealed partial class ActorEffects
             int mode = pair.Value;
             if (mode < 0 || auras.ContainsKey(pair.Key)) continue;
 
-            string asset = EquipmentAuraAsset(pair.Key);
+            string statusAsset = PlayerController.AuraEffName(pair.Key);
+            string asset = EquipmentAuraAsset(statusAsset);
             // Equipment aliases keep the server-selected foot/orbit placement.
-            bool tfx = pair.Key?.StartsWith("TFX") ?? false;
+            bool tfx = statusAsset?.StartsWith("TFX") ?? false;
             EffectPlayer player = EffectPlayer.PlayNamed(
                 transform.position, asset, ppu, 1, -1, false, false);
             int slot = 0;

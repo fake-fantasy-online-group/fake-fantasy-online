@@ -18,6 +18,8 @@ public sealed class ResourceFreeBuildStage : IDisposable
         EmbeddedResourcesRelativePath + "/FakeFantasyOnline/Bootstrap/TaoistCloudSanctuary.png";
     public const long MaxEmbeddedBackgroundBytes = 4 * 1024 * 1024;
     public const long MaxEmbeddedControlIconBytes = 512 * 1024;
+    public const string BrandingIconRelativePath = "LocalBranding/AppIcon.png";
+    public const long MaxBrandingIconBytes = 4 * 1024 * 1024;
     private static readonly HashSet<string> EmbeddedResourceDirectories = new HashSet<string>(StringComparer.Ordinal)
     {
         "FakeFantasyOnline", "FakeFantasyOnline/Bootstrap", "FakeFantasyOnline/Registration", "FakeFantasyOnline/MobileControls"
@@ -47,6 +49,9 @@ public sealed class ResourceFreeBuildStage : IDisposable
             throw new ArgumentException("Bootstrap config must be a file name.", nameof(configName));
         if (string.IsNullOrWhiteSpace(configJson))
             throw new ArgumentException("Bootstrap config must not be empty.", nameof(configJson));
+        // Match the runtime bootstrap read bound before moving any private source assets.
+        if (Encoding.UTF8.GetByteCount(configJson) > 16384)
+            throw new InvalidDataException("Resource bootstrap configuration is too large.");
         assetsRoot = Path.GetFullPath(assetsRoot);
         backupRoot = Path.GetFullPath(backupRoot);
         if (backupRoot == assetsRoot || backupRoot.StartsWith(assetsRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
@@ -56,11 +61,21 @@ public sealed class ResourceFreeBuildStage : IDisposable
         DirectoryStage.Validate(Path.Combine(assetsRoot, "StreamingAssets"), Path.Combine(backupRoot, "StreamingAssets"));
         DirectoryStage.Validate(Path.Combine(assetsRoot, "Resources"), Path.Combine(backupRoot, "Resources"));
         DirectoryStage.Validate(Path.Combine(assetsRoot, "LocalBranding"), Path.Combine(backupRoot, "LocalBranding"));
+        // Branding is a tiny local build input, not downloadable game content. Validate
+        // the exact file before moving anything; a missing icon must not ship silently.
+        string icon = Path.Combine(assetsRoot, BrandingIconRelativePath);
+        RequireSmallRegularFile(icon, MaxBrandingIconBytes);
+        bool hasIconMetadata = File.Exists(icon + ".meta") || Directory.Exists(icon + ".meta");
+        if (hasIconMetadata) RequireSmallRegularFile(icon + ".meta", 16 * 1024);
         try
         {
             streamingAssets = new DirectoryStage(Path.Combine(assetsRoot, "StreamingAssets"), Path.Combine(backupRoot, "StreamingAssets"));
             resources = new DirectoryStage(Path.Combine(assetsRoot, "Resources"), Path.Combine(backupRoot, "Resources"));
             branding = new DirectoryStage(Path.Combine(assetsRoot, "LocalBranding"), Path.Combine(backupRoot, "LocalBranding"));
+            // Keep the original directory untouched in the backup. Only these exact
+            // bytes re-enter Unity's import tree; other local artwork stays excluded.
+            File.Copy(Path.Combine(backupRoot, BrandingIconRelativePath), icon);
+            if (hasIconMetadata) File.Copy(Path.Combine(backupRoot, BrandingIconRelativePath) + ".meta", icon + ".meta");
             File.WriteAllText(Path.Combine(assetsRoot, "StreamingAssets", configName), configJson, new UTF8Encoding(false));
         }
         catch { Dispose(); throw; }

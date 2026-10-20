@@ -24,7 +24,9 @@ public partial class PlayerController
                 if (string.IsNullOrEmpty(buff.name) || buff.posMode < 0) continue;
                 if (buff.remainSec >= 0 &&
                     unchecked(buff.remainSec - Mathf.FloorToInt(now - buff.recvTime)) <= 0) continue;
-                want[AuraEffName(buff.name)] = buff.posMode;
+                // Keep the status identity for refresh/removal. ActorEffects resolves
+                // artwork consistently for self, remote players and monsters.
+                want[buff.name] = buff.posMode;
             }
         }
         if (!string.IsNullOrEmpty(CharData.avEffect)) want[CharData.avEffect] = 2;

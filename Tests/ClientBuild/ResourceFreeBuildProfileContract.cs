@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using FakeFantasyOnline.Editor;
+using FakeFantasyOnline.Foundation;
 
 public static class ResourceFreeBuildProfileContract
 {
@@ -20,6 +21,42 @@ public static class ResourceFreeBuildProfileContract
             Check(!profile.Development && profile.Bootstrap.dispatchUrl == environment["FFO_RESOURCE_DISPATCH_URL"]);
             Check(profile.Bootstrap.appVersion == "1.0.0" && !profile.Bootstrap.developmentHttp);
         }
+        string retired = "https://retired.example.test/dispatch.json", current = environment["FFO_RESOURCE_DISPATCH_URL"];
+        string custom = "https://custom.example.test/dispatch.json";
+        environment["FFO_RESOURCE_LEGACY_DISPATCH_URLS"] = retired + "\r\nhttps://older.example.test/dispatch.json";
+        foreach (string platform in new[] { "android", "windows", "macos" })
+        {
+            var profile = new ResourceFreeBuildProfile(platform, "1.0.0", get);
+            Check(profile.Bootstrap.legacyDispatchUrls.Length == 2 && profile.Bootstrap.legacyDispatchUrls[0] == retired);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl(retired, custom, current, profile.Bootstrap.legacyDispatchUrls) == current);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl("", retired, current, profile.Bootstrap.legacyDispatchUrls) == current);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl(custom, retired, current, profile.Bootstrap.legacyDispatchUrls) == custom);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl("", custom, current, profile.Bootstrap.legacyDispatchUrls) == custom);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl("", "", current, profile.Bootstrap.legacyDispatchUrls) == current);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl(current, retired, current, profile.Bootstrap.legacyDispatchUrls) == current);
+            Check(ClientUpdateAddressStore.SelectDispatchUrl(retired + "/other", "", current, profile.Bootstrap.legacyDispatchUrls) == retired + "/other");
+        }
+        Check(ClientUpdateAddressStore.SelectDispatchUrl("", "", null, null) == "");
+        Check(ClientUpdateAddressStore.SelectDispatchUrl(custom, "", "", null) == custom);
+        Check(ClientUpdateAddressStore.SelectDispatchUrl(retired, "", current, null) == retired);
+        Check(ClientUpdateAddressStore.MigrateKnownDefault("", "", current) == "");
+        Check(ClientUpdateAddressStore.MigrateKnownDefault(retired, retired, "") == retired);
+        foreach (string invalid in new[] { current, retired + "\n" + retired, retired + "\n", " " + retired,
+            "https://user:secret@example.test/d", "https://example.test/d?token=x", "http://localhost/d",
+            string.Join("\n", new[] { retired, "https://e.test/2", "https://e.test/3", "https://e.test/4", "https://e.test/5", "https://e.test/6", "https://e.test/7", "https://e.test/8", "https://e.test/9" }) })
+        {
+            environment["FFO_RESOURCE_LEGACY_DISPATCH_URLS"] = invalid;
+            Reject(() => new ResourceFreeBuildProfile("android", "1.0.0", get));
+        }
+        environment["FFO_RESOURCE_LEGACY_DISPATCH_URLS"] = retired;
+        environment.Remove("FFO_RESOURCE_DISPATCH_URL");
+        environment["FFO_BUILD_CONFIGURATION"] = "development";
+        Reject(() => new ResourceFreeBuildProfile("android", "1.0.0", get));
+        environment.Remove("FFO_RESOURCE_LEGACY_DISPATCH_URLS");
+        var unconfigured = new ResourceFreeBuildProfile("android", "1.0.0", get);
+        Check(unconfigured.Bootstrap.dispatchUrl == "" && unconfigured.Bootstrap.legacyDispatchUrls.Length == 0);
+        environment["FFO_RESOURCE_DISPATCH_URL"] = current;
+        environment.Remove("FFO_BUILD_CONFIGURATION");
         foreach (string version in new[] { "1.0", "01.0.0", "1.0.0-rc.1", "1.0.0+build", "4294967296.0.0" })
             Reject(() => new ResourceFreeBuildProfile("android", version, get));
         environment["FFO_BUILD_PLATFORM"] = "macos";

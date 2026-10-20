@@ -8,6 +8,32 @@ namespace FakeFantasyOnline.Foundation
 public static class ClientUpdateAddressStore
 {
     public const string FileName = "update-dispatch-url.txt";
+    // Only the known retired default migrates; custom endpoints remain untouched.
+    public static string MigrateKnownDefault(string address, string previousDefault, string currentDefault)
+    {
+        return !string.IsNullOrWhiteSpace(address) && !string.IsNullOrWhiteSpace(previousDefault) &&
+            !string.IsNullOrWhiteSpace(currentDefault) && string.Equals(address.Trim(), previousDefault, StringComparison.Ordinal)
+            ? currentDefault : address;
+    }
+
+    public static string MigrateKnownDefaults(string address, string[] previousDefaults, string currentDefault)
+    {
+        if (previousDefaults != null)
+            foreach (string previous in previousDefaults)
+            {
+                string migrated = MigrateKnownDefault(address, previous, currentDefault);
+                if (migrated != address) return migrated;
+            }
+        return address;
+    }
+
+    public static string SelectDispatchUrl(string saved, string legacyPreference, string configuredDefault, string[] previousDefaults)
+    {
+        string selected = !string.IsNullOrEmpty(saved) ? saved :
+            !string.IsNullOrEmpty(legacyPreference) ? legacyPreference : configuredDefault ?? "";
+        return MigrateKnownDefaults(selected, previousDefaults, configuredDefault);
+    }
+
     public static string Read(string directory)
     {
         string path = Path.Combine(directory, FileName);

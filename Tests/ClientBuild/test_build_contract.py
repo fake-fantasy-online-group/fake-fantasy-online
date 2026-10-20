@@ -78,6 +78,58 @@ class BuildContract(unittest.TestCase):
         self.assertNotIn('SearchOption.AllDirectories', stage)
         self.assertNotIn('Directory.Delete', stage)
 
+    def test_resource_free_branding_is_shared_and_restored(self):
+        editor = ROOT / 'Assets/FakeFantasyOnline/Editor'
+        client = (editor / 'ClientBuild.cs').read_text()
+        self.assertIn('ConfigureBrandingForTargets(NamedBuildTarget.Unknown, target)', client)
+        self.assertIn('foreach (NamedBuildTarget target in targets)', client)
+        self.assertIn('AssetDatabase.ImportAsset(iconPath, ImportAssetOptions.ForceSynchronousImport)', client)
+        self.assertIn('if (icon == null)', client)
+        self.assertIn('PlayerSettings.SetIcons(target, icons, IconKind.Any)', client)
+        for filename, target, snapshot in [('MobileClientBuild.cs', 'UnityEditor.Build.NamedBuildTarget.Android', 'androidIcons'),
+                                            ('DesktopResourceFreeBuild.cs', 'NamedBuildTarget.Standalone', 'desktopIcons')]:
+            source = (editor / filename).read_text()
+            call = 'ClientBuild.ConfigureResourceFreeBranding(' + target + ');'
+            self.assertIn(call, source)
+            self.assertNotIn('new Texture2D[0]', source)
+            self.assertLess(source.index('new ResourceFreeBuildStage('), source.index(call))
+            self.assertLess(source.index('AssetDatabase.Refresh();'), source.index(call))
+            self.assertLess(source.index(call), source.index('BuildPipeline.BuildPlayer('))
+            self.assertLess(source.index('stage?.Dispose();'), source.index(snapshot + '.Restore();'))
+
+    def test_android_resource_free_retains_native_imgui_classes(self):
+        source = (ROOT / 'Assets/FakeFantasyOnline/Editor/MobileClientBuild.cs').read_text()
+        snapshot = 'bool stripEngineCode = PlayerSettings.stripEngineCode;'
+        disable = 'PlayerSettings.stripEngineCode = false;'
+        restore = 'PlayerSettings.stripEngineCode = stripEngineCode;'
+        self.assertIn(snapshot, source)
+        self.assertEqual(source.count(disable), 1)
+        free_branch = source.split('if (resourceFree)', 1)[1].split('\n            else\n', 1)[0]
+        self.assertIn(disable, free_branch)
+        self.assertLess(source.index(snapshot), source.index(disable))
+        self.assertLess(source.index(disable), source.index('BuildPipeline.BuildPlayer('))
+        cleanup = source.split('try { stage?.Dispose(); }', 1)[1]
+        self.assertTrue(cleanup.lstrip().startswith('finally'))
+        self.assertIn(restore, cleanup)
+        self.assertNotIn('PlayerSettings.stripEngineCode',
+                         (ROOT / 'Assets/FakeFantasyOnline/Editor/DesktopResourceFreeBuild.cs').read_text())
+
+    def test_every_runtime_downloader_injects_platform_storage(self):
+        runtime = ROOT / 'Assets/FakeFantasyOnline/Runtime'
+        constructors = []
+        for path in runtime.rglob('*.cs'):
+            source = path.read_text()
+            for name in ('MobileRemoteResourceInstall', 'ClientArtifactDownload'):
+                marker = 'new ' + name + '('
+                for call in source.split(marker)[1:]:
+                    constructors.append((path.name, name))
+                    self.assertIn('availableBytes: ClientStorageSpace.CreateAvailableBytesQuery()',
+                                  call.split(';', 1)[0], str(path))
+        self.assertEqual(len(constructors), 2, constructors)
+        for name in ('MobileRemoteResourceInstall', 'ClientArtifactDownload'):
+            self.assertIn('new DriveInfo(path).AvailableFreeSpace',
+                          (runtime / 'Foundation' / (name + '.cs')).read_text())
+
     def test_manifest_hash_layout_and_excluded_code(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

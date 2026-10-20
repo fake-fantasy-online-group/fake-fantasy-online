@@ -48,6 +48,7 @@ public static class MobileClientBuild
         string manifestPath = Path.Combine(root, MobileResourceManifest.FileName);
         byte[] previousManifest = !resourceFree && File.Exists(manifestPath) ? File.ReadAllBytes(manifestPath) : null;
         var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Android);
+        bool stripEngineCode = PlayerSettings.stripEngineCode;
         var architectures = PlayerSettings.Android.targetArchitectures;
         bool appBundle = EditorUserBuildSettings.buildAppBundle;
         bool customKeystore = PlayerSettings.Android.useCustomKeystore;
@@ -62,18 +63,22 @@ public static class MobileClientBuild
         {
             if (resourceFree)
             {
+                // The startup screen uses Unity's built-in IMGUI skin. Native stripping
+                // can remove MonoScript (class ID 115), making GUI skin creation fail
+                // before the resource-independent first screen can render. Managed
+                // link.xml preservation does not restore a stripped native class.
+                PlayerSettings.stripEngineCode = false;
                 // Never generate or hash a game-resource manifest for this build mode.
                 stage = new ResourceFreeBuildStage(UnityEngine.Application.dataPath,
                     Path.GetFullPath("LocalMobileBuild/ResourceFree"),
                     MobileResourceBootstrapConfig.FileName, JsonUtility.ToJson(profile.Bootstrap, true));
                 GbkBuildTable.WriteTo(Path.Combine(UnityEngine.Application.dataPath, "Resources"));
-                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Unknown, new Texture2D[0], IconKind.Any);
-                PlayerSettings.SetIcons(UnityEditor.Build.NamedBuildTarget.Android, new Texture2D[0], IconKind.Any);
                 if (development) PlayerSettings.Android.useCustomKeystore = false;
                 // Resource delivery mode must not change the application identity.
                 // Preserve the project identifier (including Unity's resolved default).
                 PlayerSettings.insecureHttpOption = developmentHttp ? InsecureHttpOption.DevelopmentOnly : InsecureHttpOption.NotAllowed;
                 AssetDatabase.Refresh();
+                ClientBuild.ConfigureResourceFreeBranding(UnityEditor.Build.NamedBuildTarget.Android);
             }
             else
             {
@@ -113,6 +118,7 @@ public static class MobileClientBuild
             try { stage?.Dispose(); }
             finally
             {
+                PlayerSettings.stripEngineCode = stripEngineCode;
                 PlayerSettings.insecureHttpOption = previousHttpPolicy;
                 PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, backend);
                 PlayerSettings.Android.targetArchitectures = architectures;

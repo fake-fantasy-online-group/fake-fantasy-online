@@ -183,10 +183,14 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
     {
         resourceFree = true;
         string addressDirectory = UnityEngine.Application.persistentDataPath;
-        try { dispatchUrl = ClientUpdateAddressStore.Read(addressDirectory); }
-        catch (Exception) { dispatchUrl = ""; } // Recover in the editable single-address field.
-        if (string.IsNullOrEmpty(dispatchUrl)) dispatchUrl = PlayerPrefs.GetString("FFO.ResourceDispatchUrl", "");
-        if (string.IsNullOrEmpty(dispatchUrl)) dispatchUrl = config.dispatchUrl ?? "";
+        string saved = "";
+        try { saved = ClientUpdateAddressStore.Read(addressDirectory); }
+        catch (Exception) { } // Invalid saved configuration remains recoverable in the address field.
+        string legacy = PlayerPrefs.GetString("FFO.ResourceDispatchUrl", "");
+        // Only this release's explicit retired defaults migrate. Arbitrary user overrides stay untouched.
+        // Save the selected value only after the complete dispatch validates below; a failed migration
+        // must not destroy the previous persisted address or rewrite unrelated legacy preferences.
+        dispatchUrl = ClientUpdateAddressStore.SelectDispatchUrl(saved, legacy, config.dispatchUrl, config.legacyDispatchUrls);
         configurationRequired = string.IsNullOrWhiteSpace(dispatchUrl);
         configurationOpen = configurationRequired;
         draftDispatchUrl = dispatchUrl;
@@ -195,7 +199,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         if (!configurationRequired) downloadRequested = true;
         string storage = Path.Combine(UnityEngine.Application.persistentDataPath, "MobileResources", "Remote");
         var transport = new MobileResourceHttpTransport();
-        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey());
+        var installer = new MobileRemoteResourceInstall(storage, config.appVersion, allowHttp, transport, PlatformKey(),
+            availableBytes: ClientStorageSpace.CreateAvailableBytesQuery());
         Phase("检查并更新", "填写 dispatch.json 地址。资源清单、客户端版本和下载信息均由此获取。", 0);
         while (true)
         {

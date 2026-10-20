@@ -48,9 +48,9 @@ class LayoutSessionContract {
  Check(Same(customWheel,reloaded.ResolveRect(MobileControlId.GroupWheel,MobileClientPresentation.DefaultControlRect(MobileControlId.GroupWheel),MobileClientPresentation.SafeAreaGui,MobileClientPresentation.Scale)),"saved wheel overrides restored default after reload");
  Check(File.ReadAllText(path)==customFile,"resolving updated defaults never rewrites saved file");
  Time.frameCount++;MobileClientPresentation.BeginLayoutEdit();MobileClientPresentation.ResetLayoutEdit();
- var expectedArc=new[]{new Vector2(-116,32),new Vector2(-116,-40),new Vector2(-116,-116),new Vector2(-40,-156),new Vector2(36,-156),new Vector2(64,-80)};
- for(int k=0;k<6;k++)Check((MobileClientPresentation.SkillRect(k).center-MobileClientPresentation.AttackRect.center-expectedArc[k]).sqrMagnitude<.0001f,"explicit Reset restores thumb arc slot "+k);
- Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-184,-146)).sqrMagnitude<.0001f,"Reset restores original wheel location");
+ var expectedArc=new[]{new Vector2(-177.18376f,35.76483f),new Vector2(-106.85673f,35.76483f),new Vector2(-102.74753f,-33.18696f),new Vector2(-35.82306f,-98.36820f),new Vector2(31.81393f,-166.51180f),new Vector2(37.04461f,-98.36820f)};
+ for(int k=0;k<6;k++)Check((MobileClientPresentation.SkillRect(k).center-MobileClientPresentation.AttackRect.center-expectedArc[k]*MobileClientPresentation.DefaultControlScale(MobileControlId.Skill0)).sqrMagnitude<.0001f,"explicit Reset restores comfortable slot "+k);
+ Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-99.79882f,-92.52787f)*MobileClientPresentation.DefaultControlScale(MobileControlId.GroupWheel)).sqrMagnitude<.0001f,"Reset restores comfortable wheel location");
  Check(File.ReadAllText(path)==customFile,"Reset does not write until Save");MobileClientPresentation.CancelLayoutEdit();
  Check(Same(customSkill,MobileClientPresentation.SkillRect(0))&&Same(customWheel,MobileClientPresentation.PageRect)&&File.ReadAllText(path)==customFile,"cancel Reset preserves custom skill and wheel");
 

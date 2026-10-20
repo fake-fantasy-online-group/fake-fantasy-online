@@ -9,6 +9,9 @@ public partial class PlayerController
     // 06000a21: preserve allocation, population and publication order in one partial.
     private static readonly Dictionary<string, string> AuraEffOverride = new Dictionary<string, string>
     {
+        // Restored armor break keeps its skill display name on the wire; its
+        // original persistent status artwork is the defense-down template.
+        ["破防之枪"] = "防御下降",
         ["春风"] = "补血",
         ["补充生命"] = "补血",
         ["补充法力"] = "补魔法",

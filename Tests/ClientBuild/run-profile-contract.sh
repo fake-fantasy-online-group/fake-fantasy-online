@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
-SOURCES=("$ROOT/Assets/FakeFantasyOnline/Editor/ResourceFreeBuildProfile.cs" "$ROOT/Assets/FakeFantasyOnline/Editor/DesktopBuildPayload.cs" "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" "$ROOT/Tests/ClientBuild/ResourceFreeBuildProfileContract.cs")
+SOURCES=("$ROOT/Assets/FakeFantasyOnline/Editor/ResourceFreeBuildProfile.cs" "$ROOT/Assets/FakeFantasyOnline/Editor/DesktopBuildPayload.cs" "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/MobileResourceBootstrapConfig.cs" "$ROOT/Assets/FakeFantasyOnline/Runtime/Foundation/ClientUpdateAddressStore.cs" "$ROOT/Tests/ClientBuild/ResourceFreeBuildProfileContract.cs")
 if [[ -n "${FFO_DOTNET_CSC:-}" ]]; then
     : "${FFO_DOTNET:?Set FFO_DOTNET}"
     : "${FFO_DOTNET_FRAMEWORK_DIR:?Set FFO_DOTNET_FRAMEWORK_DIR to installed runtime assemblies}"

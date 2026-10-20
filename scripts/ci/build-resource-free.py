@@ -44,11 +44,39 @@ def validate_dispatch(value, development_http=False):
     return value
 
 
+def validate_legacy_dispatches(values, dispatch_url, development_http=False):
+    if values is None:
+        values = []
+    if not isinstance(values, list) or len(values) > 8:
+        raise ValueError('Legacy dispatch migration accepts at most eight retired URLs')
+    if values:
+        validate_dispatch(dispatch_url, development_http)
+    seen = {dispatch_url}
+    for value in values:
+        if not isinstance(value, str):
+            raise ValueError('Legacy dispatch URLs must be strings')
+        validate_dispatch(value, development_http)
+        if value in seen:
+            raise ValueError('Legacy dispatch URLs must be distinct from each other and the current default')
+        seen.add(value)
+    return values
+
+
+def legacy_dispatches(args):
+    if args.legacy_dispatch_url is not None:
+        values = args.legacy_dispatch_url
+    else:
+        value = os.environ.get('FFO_RESOURCE_LEGACY_DISPATCH_URLS', '')
+        values = value.replace('\r\n', '\n').split('\n') if value else []
+    return validate_legacy_dispatches(values, args.dispatch_url, args.development_http)
+
+
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument('--platform', required=True, choices=('android', 'windows', 'macos'))
     result.add_argument('--version', required=True, type=validate_version, help='Must match ProjectSettings bundleVersion; never changed by the build')
     result.add_argument('--dispatch-url', required=True, help='Public credential-free endpoint baked into resource-bootstrap.json')
+    result.add_argument('--legacy-dispatch-url', action='append', help='Retired default to migrate to --dispatch-url; repeat for each. Defaults to newline-delimited FFO_RESOURCE_LEGACY_DISPATCH_URLS')
     result.add_argument('--configuration', choices=('formal', 'development'), default='formal')
     result.add_argument('--development-http', action='store_true')
     result.add_argument('--output', type=Path)
@@ -65,6 +93,7 @@ def main(argv=None):
     if args.development_http and args.configuration != 'development':
         raise ValueError('HTTP opt-in is available only for explicit development builds')
     validate_dispatch(args.dispatch_url, args.development_http)
+    legacy = legacy_dispatches(args)
     settings = (ROOT / 'ProjectSettings/ProjectSettings.asset').read_text()
     project_version = re.search(r'^  bundleVersion:\s*(\S+)\s*$', settings, re.M).group(1)
     if args.version != project_version:
@@ -102,7 +131,7 @@ def main(argv=None):
     if output.exists():
         raise ValueError('Use a fresh output location; an earlier artifact must not be mistaken for this build')
     env = dict(os.environ, FFO_BUILD_PLATFORM=args.platform, FFO_BUILD_VERSION=args.version,
-               FFO_RESOURCE_DISPATCH_URL=args.dispatch_url, FFO_BUILD_CONFIGURATION=args.configuration,
+               FFO_RESOURCE_DISPATCH_URL=args.dispatch_url, FFO_RESOURCE_LEGACY_DISPATCH_URLS='\n'.join(legacy), FFO_BUILD_CONFIGURATION=args.configuration,
                FFO_BUILD_DEVELOPMENT_HTTP='1' if args.development_http else '0', FFO_BUILD_OUTPUT=str(output))
     if args.platform == 'android':
         env['FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH'] = str(output)
@@ -125,7 +154,7 @@ def main(argv=None):
         spec = importlib.util.spec_from_file_location('apkcheck', ROOT / 'scripts/ci/verify-resource-free-apk.py')
         check = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(check)
-        check.verify(output, configuration=args.configuration, expected_dispatch=args.dispatch_url, source_commit=head)
+        check.verify(output, configuration=args.configuration, expected_dispatch=args.dispatch_url, source_commit=head, expected_legacy_dispatches=legacy)
     receipt = {'schemaVersion': 1, 'status': 'local-build-candidate', 'appVersion': args.version,
                'platform': args.platform, 'configuration': args.configuration, 'sourceCommit': head,
                'sourceDirty': bool(dirty),

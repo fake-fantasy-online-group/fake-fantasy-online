@@ -83,7 +83,7 @@ internal sealed partial class TitleFlow
         if (source.Count == 0)
         {
             NetClient net = NetClient.I;
-            srvWorlds.Add("吊服");
+            srvWorlds.Add("龙城");
             srvLines.Add(new List<SrvLine>
             {
                 new SrvLine
@@ -100,7 +100,7 @@ internal sealed partial class TitleFlow
         {
             ServerSelectionItem row = source[i];
             if (row == null) continue;
-            string world = string.IsNullOrWhiteSpace(row.ZoneName) ? "吊服" : row.ZoneName.Trim();
+            string world = string.IsNullOrWhiteSpace(row.ZoneName) ? "龙城" : row.ZoneName.Trim();
             int wi = srvWorlds.IndexOf(world);
             if (wi < 0)
             {

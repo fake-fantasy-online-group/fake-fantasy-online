@@ -7,6 +7,7 @@ These commands build local candidates using an already installed, legitimately l
 - `--platform`: `android`, `windows`, or `macos`.
 - `--version`: stable `MAJOR.MINOR.PATCH`, exactly matching `ProjectSettings/ProjectSettings.asset` `bundleVersion`. The entry does not rewrite the version, package identifier or Android `versionCode`.
 - `--dispatch-url`: the explicit public HTTPS dispatch endpoint to bundle in `resource-bootstrap.json`. No production hostname is assumed. It cannot contain credentials, query parameters, fragments, or a loopback host. Existing runtime user overrides remain separate from this default.
+- `--legacy-dispatch-url`: optional, repeatable retired default URLs that this release may migrate to `--dispatch-url`. No list is assumed; unrelated/custom user addresses are preserved. At most eight distinct URLs, each meeting the same endpoint policy.
 - `--configuration formal` (default): non-development Player. `--configuration development` is explicit; only that mode may add `--development-http` for a private LAN IPv4 endpoint.
 - `--output`: an optional fresh output. Desktop output must be a dedicated new application directory. Keep personal configuration and player data outside it.
 - `--release --source-tag v1.0.0`: additionally require an existing tag matching the requested version, exact `HEAD`, and clean tracked/source checkout. Never creates or moves a tag. Ignored local resources are not inspected by this source check. Persisted changes to tracked signing/project settings block the check; do not bypass it with a blanket dirty-tree exception or commit credentials.
@@ -30,6 +31,18 @@ make build-resource-free PLATFORM=android VERSION=1.0.0 \
 ```
 
 Android uses ARM64 IL2CPP and preserves the existing application ID and integer versionCode. Formal mode requires an existing custom keystore file and configured alias in Unity; it never falls back to debug signing or reads/logs key bytes/passwords. Unity must successfully use the user's existing signing setup. The path/alias checks cannot prove certificate continuity. Independently verify the actual APK manifest, certificate, and versionCode against the installed baseline and store history before distributing an upgrade. APK structural checks do not parse the binary manifest or prove non-debuggable/signature state. The legacy `build-android-resource-free.sh` entry remains a development-candidate path.
+
+## Private release profile boundary
+
+Keep deployment-specific values and the publishing wrapper outside source control, for example in already ignored `LocalConfig/` or an external private directory. The source builder does not search for or load a private profile automatically. An existing one-click publishing wrapper can read its own profile and pass the selected inputs without changing the user's build/publish interaction:
+
+- Direct Unity entry: set `FFO_RESOURCE_DISPATCH_URL` to the current default and optionally `FFO_RESOURCE_LEGACY_DISPATCH_URLS` to newline-delimited retired defaults. Do not include trailing/blank lines. CRLF and LF separators are accepted.
+- Python/shell entry: pass the existing `--dispatch-url` and repeat `--legacy-dispatch-url` as needed. Explicit CLI legacy values replace the environment list; otherwise the environment list is used. An absent/empty environment list means no migration.
+- The same `ResourceFreeBuildProfile` feeds Android, Windows and macOS. The only added bootstrap field is optional `legacyDispatchUrls`; old profiles without it remain valid.
+
+A formal build without an explicit default fails. An unconfigured development build opens address configuration without contacting a service. Runtime priority remains saved address, legacy preference, then embedded default. Only an exact listed retired default (ignoring surrounding saved whitespace) is replaced; custom URLs, including other paths on the same host, are not changed. The new address is persisted only after the fetched dispatch validates. Failed migration leaves the old persisted value intact, and repair/retry can try again.
+
+The generated bootstrap and build receipts contain public routing metadata, not credentials. Release binaries necessarily expose their routing URLs to recipients; private source separation is not endpoint secrecy. Never put tokens, signing secrets, deployment IDs or account details in these inputs. The source examples are non-production examples, and clean third-party builds have no implicit service or migration map. Existing private publishing tools, credentials and profile files are not included in the Player or committed.
 
 ## Desktop helper and trust pins
 

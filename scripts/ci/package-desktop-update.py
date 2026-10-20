@@ -106,6 +106,7 @@ def inspect_tree(source, platform):
     if type(config.get('schemaVersion')) is not int or config.get('schemaVersion') != 1 or config.get('mode') != 'resource-free' or config.get('appVersion') != marker['version'] or config.get('developmentHttp'):
         raise ValueError('Desktop update package requires matching stable resource-free HTTPS bootstrap')
     inputs.validate_dispatch(config.get('dispatchUrl', ''))
+    inputs.validate_legacy_dispatches(config.get('legacyDispatchUrls', []), config['dispatchUrl'])
     helpers = ['DesktopUpdater.exe'] if platform == 'windows' else ['DesktopUpdater-osx-arm64', 'DesktopUpdater-osx-x64']
     helper_root = streaming / 'DesktopUpdater'
     if sorted(p.name for p in helper_root.iterdir()) != helpers or any(not (helper_root / name).is_file() or (helper_root / name).stat().st_size == 0 for name in helpers):

@@ -14,13 +14,41 @@ public static partial class MobileClientPresentation
     internal static Rect HealthPotionRect => ResolveControlRect(MobileControlId.HealthPotion);
     internal static Rect ManaPotionRect => ResolveControlRect(MobileControlId.ManaPotion);
     internal static Rect SitRect => ResolveControlRect(MobileControlId.Sit);
-    // Keep the established right-thumb arc around attack. Only align the three
-    // left-hand skill centers; do not regroup the six slots into a grid.
+    // Captured comfortable layout: 2616 x 1212 landscape, GUI safe area
+    // (104, 0, 2512, 1212), UI scale 1212 / 540. Convert the safe-normalized
+    // centers to logical offsets around the unchanged attack/joystick anchor.
+    // Only the lower skill pair, upper skill pair and potion row are aligned
+    // to their respective midpoint (at most 2.83 physical pixels on that phone).
     private static readonly Vector2[] DefaultSkillOffsets =
     {
-        new Vector2(-116f, 32f), new Vector2(-116f, -40f), new Vector2(-116f, -116f),
-        new Vector2(-40f, -156f), new Vector2(36f, -156f), new Vector2(64f, -80f)
+        new Vector2(-177.18376f, 35.76483f), new Vector2(-106.85673f, 35.76483f),
+        new Vector2(-102.74753f, -33.18696f), new Vector2(-35.82306f, -98.36820f),
+        new Vector2(31.81393f, -166.51180f), new Vector2(37.04461f, -98.36820f)
     };
+    private const float DefaultAttackScale = 1.3344183f;
+    // The left edge of Skill0, including its 32-unit half-width.
+    private const float DefaultClusterLeftExtent = 209.18376f;
+
+    private static float DefaultClusterScale
+    {
+        get
+        {
+            // Keep the captured arrangement and sizes on wide phones. On narrower
+            // safe areas, fit the whole default cluster uniformly beside chat instead
+            // of compressing only the centers into overlapping touch targets.
+            // ResolveScale's width / 940 cap keeps this factor >= .8767; Fit still
+            // enforces the 44-unit touch minimum for pickup and the group wheel.
+            float scale = Scale;
+            float attackX = SafeAreaGui.xMax - 100f * scale;
+            float available = attackX - ChatRect.xMax - 8f * scale;
+            return Mathf.Max(MobileControlLayout.MinScale,
+                Mathf.Min(1f, available / (DefaultClusterLeftExtent * scale)));
+        }
+    }
+
+    internal static float DefaultControlScale(MobileControlId control) =>
+        control == MobileControlId.Joystick || control == MobileControlId.Mount || control == MobileControlId.Sit
+            ? 1f : DefaultClusterScale * (control == MobileControlId.Attack ? DefaultAttackScale : 1f);
 
     private static MobileControlLayout CurrentControlLayout
     {
@@ -39,20 +67,23 @@ public static partial class MobileClientPresentation
         Vector2 attack = new Vector2(safe.xMax - 100f * scale, safe.yMax - 110f * scale);
         if (control == MobileControlId.Joystick)
             return Centered(new Vector2(safe.x + 100f * scale, attack.y), 160f * scale);
+        // Keep the original size baselines: saved v1 multipliers must not be
+        // multiplied by the new defaults, especially the larger attack button.
         if (control == MobileControlId.Attack) return Centered(attack, 96f * scale);
-        if (control == MobileControlId.Pickup) return Centered(attack + new Vector2(74f, 64f) * scale, 48f * scale);
+        float clusterScale = scale * DefaultClusterScale;
+        if (control == MobileControlId.Pickup)
+            return Centered(attack + new Vector2(-170.38122f, -30.00996f) * clusterScale, 48f * scale);
         if (control >= MobileControlId.Skill0 && control <= MobileControlId.Skill5)
         {
             int index = (int)control - (int)MobileControlId.Skill0;
-            return Centered(attack + DefaultSkillOffsets[index] * scale, 64f * scale);
+            return Centered(attack + DefaultSkillOffsets[index] * clusterScale, 64f * scale);
         }
         if (control == MobileControlId.GroupWheel)
-            return Centered(attack + new Vector2(-184f, -146f) * scale, 48f * scale);
+            return Centered(attack + new Vector2(-99.79882f, -92.52787f) * clusterScale, 48f * scale);
         if (control == MobileControlId.HealthPotion || control == MobileControlId.ManaPotion)
         {
-            int column = control == MobileControlId.HealthPotion ? 0 : 1;
-            return Centered(new Vector2(MinimapRect.x + (34f + column * 64f) * scale,
-                MinimapRect.yMax + 34f * scale), 52f * scale);
+            float x = control == MobileControlId.HealthPotion ? -107.37580f : -45.55954f;
+            return Centered(attack + new Vector2(x, -173.83856f) * clusterScale, 52f * scale);
         }
         if (control == MobileControlId.Mount)
         {
@@ -64,7 +95,7 @@ public static partial class MobileClientPresentation
     }
 
     internal static Rect ResolveControlRect(MobileControlId control) =>
-        CurrentControlLayout.ResolveRect(control, DefaultControlRect(control), SafeAreaGui, Scale);
+        CurrentControlLayout.ResolveRect(control, DefaultControlRect(control), SafeAreaGui, Scale, DefaultControlScale(control));
     internal static float ControlScale(MobileControlId control) =>
         ResolveControlRect(control).width / DefaultControlRect(control).width;
     internal static Rect FixedActionRect(MobileFixedAction action) =>
@@ -106,7 +137,7 @@ public static partial class MobileClientPresentation
     internal static void SetControlCenter(MobileControlId control, Vector2 center)
     {
         if (!LayoutEditing) return;
-        float size = editingControlLayout.TryGet(control, out MobileControlPlacement value) ? value.Scale : 1f;
+        float size = editingControlLayout.TryGet(control, out MobileControlPlacement value) ? value.Scale : DefaultControlScale(control);
         editingControlLayout.Set(control, center, size, DefaultControlRect(control), SafeAreaGui, Scale);
     }
     internal static void SetControlScale(MobileControlId control, float size)

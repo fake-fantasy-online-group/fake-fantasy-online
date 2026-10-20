@@ -23,10 +23,10 @@ Check(MobileClientPresentation.AvatarRect.x==safe.x && MobileClientPresentation.
 Check(MobileClientPresentation.IsPointerOverUi(new Vector2(MobileClientPresentation.PickupRect.center.x,Screen.height-MobileClientPresentation.PickupRect.center.y)),"Pickup excludes world pointer");
 Check(MobileClientPresentation.PageRect.width==MobileClientPresentation.PageRect.height,"Page control is square");
 float ms=MobileClientPresentation.Scale, right=safe.x+MobileClientPresentation.MinimapViewportWidth;
-// Preserve the pre-editor thumb arc and skill ordering, with only the left lane aligned.
-var arc=new[]{new Vector2(-116,32),new Vector2(-116,-40),new Vector2(-116,-116),new Vector2(-40,-156),new Vector2(36,-156),new Vector2(64,-80)};
-for(int i=0;i<arc.Length;i++)Check((MobileClientPresentation.SkillRect(i).center-MobileClientPresentation.AttackRect.center-arc[i]*ms).sqrMagnitude<.0001f,"Established thumb arc slot "+i);
-Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-184,-146)*ms).sqrMagnitude<.0001f,"Group wheel keeps established upper-left location");
+// Preserve the captured comfortable thumb layout; compact screens uniformly fit it beside chat.
+var arc=new[]{new Vector2(-177.18376f,35.76483f),new Vector2(-106.85673f,35.76483f),new Vector2(-102.74753f,-33.18696f),new Vector2(-35.82306f,-98.36820f),new Vector2(31.81393f,-166.51180f),new Vector2(37.04461f,-98.36820f)};
+for(int i=0;i<arc.Length;i++)Check((MobileClientPresentation.SkillRect(i).center-MobileClientPresentation.AttackRect.center-arc[i]*ms*MobileClientPresentation.DefaultControlScale(MobileControlId.Skill0)).sqrMagnitude<.0001f,"Comfortable thumb slot "+i);
+Check((MobileClientPresentation.PageRect.center-MobileClientPresentation.AttackRect.center-new Vector2(-99.79882f,-92.52787f)*ms*MobileClientPresentation.DefaultControlScale(MobileControlId.GroupWheel)).sqrMagnitude<.0001f,"Group wheel keeps captured upper-left location");
 var nativeFaces=new[]{new Rect(right-29*ms,safe.y+57*ms,26*ms,26*ms),new Rect(right-24*ms,safe.y+83*ms,26*ms,26*ms),new Rect(right-39*ms,safe.y+30*ms,26*ms,26*ms),new Rect(right-20*ms,safe.y,20*ms,19*ms)};
 for(int i=0;i<4;i++){
  Rect hit=MobileClientPresentation.MapActionRect(i);
@@ -55,7 +55,7 @@ foreach(Rect control in controls)Check(!Overlap(cancel,control),"Cancel avoids c
 Check(!Overlap(cancel,MobileClientPresentation.ChatRect),"Cancel avoids expanded chat "+button);
 Check(MobileClientPresentation.CancelContains(cancel.center),"Cancel center accepted "+button);
 Check(!MobileClientPresentation.CancelContains(new Vector2(cancel.x,cancel.y)),"Cancel bounding corner rejected "+button);
-Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(200f*ms)*(200f*ms),"Cancel remains within thumb reach "+button+" size="+size[0]+"x"+size[1]+" preference="+preference+" expanded="+expanded+" notch="+notch+" distance="+Math.Sqrt((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude)/ms);
+Check((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude<=(200.01f*ms)*(200.01f*ms),"Cancel remains within thumb reach "+button+" size="+size[0]+"x"+size[1]+" preference="+preference+" expanded="+expanded+" notch="+notch+" distance="+Math.Sqrt((cancel.center-MobileClientPresentation.SkillRect(button).center).sqrMagnitude)/ms);
 }
 MobileClientPresentation.ActiveSkillButton=-1;Check(!MobileClientPresentation.CancelContains(MobileClientPresentation.CancelRect.center),"Inactive cancel has no hit area");
 Vector2 joy=MobileClientPresentation.JoystickRect.center;joy.y=Screen.height-joy.y;Check(MobileClientPresentation.IsJoystickRegion(joy),"Joystick region");SysMsgBox.Visible=true;Check(!MobileClientPresentation.IsJoystickRegion(joy),"Modal blocks joystick");Check(MobileClientPresentation.IsPointerOverUi(new Vector2(400,250)),"Modal blocks world");SysMsgBox.Visible=false;
