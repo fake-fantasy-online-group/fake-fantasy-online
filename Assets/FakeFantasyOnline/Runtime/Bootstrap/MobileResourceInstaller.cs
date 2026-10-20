@@ -37,6 +37,9 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
 
     private void Awake()
     {
+        // Desktop updating must keep running before GameBootstrap.Start, including
+        // when a different window has focus. Mobile lifecycle behavior is unchanged.
+        if (!UnityEngine.Application.isMobilePlatform) UnityEngine.Application.runInBackground = true;
         // The boot scene has no camera. A label alone leaves the Android backbuffer
         // undefined while hashing; explicitly clear it from the first rendered frame.
         var host = new GameObject("Mobile startup clear camera");
@@ -387,6 +390,8 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             case "Downloading resources": return "正在下载资源";
             case "Downloading first-install archive": return "正在下载首次资源包";
             case "Extracting first-install archive": return "正在解包并验证资源";
+            case "Resuming first-install archive": return "继续解包已下载资源（无需重新下载）";
+            case "Checking first-install archive": return "校验已下载资源包";
             case "Verifying downloaded resource": return "验证下载内容";
             case "Finishing resource check": return "启用完整资源";
             default: return value;
@@ -624,9 +629,10 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
 
     private void OnApplicationPause(bool paused)
     {
-        // Leaving the app pauses network/disk transfer. Do not cancel Android installer
+        // Only mobile backgrounding pauses network/disk transfer. Desktop focus loss
+        // must not cancel an update. Do not cancel Android installer
         // sessions here: the required system permission/confirmation screens also pause Unity.
-        if (!paused || remoteCancellation == null) return;
+        if (!UnityEngine.Application.isMobilePlatform || !paused || remoteCancellation == null) return;
         remoteCancellation.Cancel();
         downloadBytesPerSecond = null;
         lock (remoteProgressLock) downloadRate.Reset();

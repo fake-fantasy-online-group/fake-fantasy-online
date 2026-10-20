@@ -480,7 +480,7 @@ internal static class ArchiveResourceInstallContract
 
     private static void TestExtractionCancellation(string storage)
     {
-        foreach (int cancelIndex in new[] { 0, 1 })
+        foreach (int cancelIndex in new[] { 0, 1, 2 })
         {
             string path = Path.Combine(storage, "entry-" + cancelIndex);
             var fixture = new Fixture();
@@ -506,26 +506,38 @@ internal static class ArchiveResourceInstallContract
             Assert(!File.Exists(Path.Combine(staging, Destinations[cancelIndex] + ".part")),
                 "Interrupted extracted payload cannot masquerade as an HTTP-resumable partial");
 
+            var lowSpace = new MemoryTransport(fixture);
+            Throws<IOException>(() => Install(path, fixture, lowSpace, free: 0),
+                "Low space stops safely without discarding downloaded archive");
+            Assert(lowSpace.Requests.Count == 1 && File.Exists(cache) && File.Exists(cache + ".verified"),
+                "Low-space retry retains completed archive and proof, without payload requests");
+            var outputFailure = new MemoryTransport(fixture);
+            Throws<IOException>(() => Install(path, fixture, outputFailure, progress: (phase, label, done, total) =>
+            {
+                if (phase == "Resuming first-install archive" && label == Destinations[cancelIndex])
+                    throw new IOException("Synthetic output disk failure");
+            }), "Output failure propagates rather than falling back to downloading payloads");
+            Assert(outputFailure.Requests.Count == 1 && File.Exists(cache) && File.Exists(cache + ".verified"),
+                "Output failure preserves verified archive and starts no scatter downloads");
             var retry = new MemoryTransport(fixture);
-            long stagedHashCallbacks = 0, networkBytes = 0;
+            long stagedHashCallbacks = 0, archiveHashCallbacks = 0, networkBytes = 0, resumedBytes = 0;
+            bool resumedPhase = false, archiveDownloadPhase = false;
             string installed = Install(path, fixture, retry, progress: (phase, label, done, total) =>
             {
+                if (phase == "Checking first-install archive") archiveHashCallbacks++;
+                if (phase == "Downloading first-install archive") archiveDownloadPhase = true;
+                if (phase == "Resuming first-install archive") { resumedPhase = true; resumedBytes = done; }
                 if (phase == "Checking staged resources" || phase == "Verifying downloaded resource") stagedHashCallbacks++;
             }, networkProgress: value => networkBytes = value);
             VerifyInstalled(installed, fixture);
             Assert(retry.Count(ArchiveUrl) == 0, "Retry never redownloads a completely verified archive cache");
             Assert(stagedHashCallbacks == 0, "Retry preserves completed extraction proofs without rehashing staged payloads");
-            if (cancelIndex == 0)
-            {
-                AssertScatter(retry, 3);
-                Assert(networkBytes == fixture.Payloads[3].Length, "Reusing complete archive cache contributes zero network bytes");
-            }
-            else
-            {
-                AssertScatter(retry, 1, 2, 3);
-                Assert(networkBytes == fixture.Payloads[1].Length + fixture.Payloads[2].Length + fixture.Payloads[3].Length,
-                    "Mostly staged retry counts only its remaining scatter transfers");
-            }
+            Assert(resumedPhase && !archiveDownloadPhase && resumedBytes == fixture.PayloadBytes - fixture.Payloads[3].Length,
+                "Resume UI distinguishes local extraction and includes previously committed bytes");
+            Assert(archiveHashCallbacks == 0, "Retry trusts the unchanged verified archive receipt without rehashing it");
+            AssertScatter(retry, 3);
+            Assert(networkBytes == fixture.Payloads[3].Length,
+                "Early, middle and late extraction retries use local archive, downloading only the unarchived payload");
             Assert(!File.Exists(cache) && !File.Exists(cache + ".resume") && !File.Exists(cache + ".verified"),
                 "Successful retry removes complete archive cache and its private metadata");
         }

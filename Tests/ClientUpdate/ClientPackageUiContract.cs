@@ -126,6 +126,10 @@ internal static class ClientPackageUiContract
         string root=Path.Combine(Path.GetTempPath(),"client-package-ui-"+Guid.NewGuid().ToString("N"));Application.persistentDataPath=root;Application.version="1.0.0";
         try
         {
+            Application.isMobilePlatform = Platform == "android";
+            Application.runInBackground = false;
+            Invoke(new MobileResourceInstaller(), "Awake");
+            Check(Application.runInBackground == !Application.isMobilePlatform, "desktop updater enables background execution before game startup; mobile is unchanged");
             TestResourceProgress();
             var page=Page(); Draw(page,"下载客户端");Check(Get<bool>(page,"clientPackageRequested"),"mandatory upgrade queues download");
             Check(Application.Opened.Count==0 && AndroidClientPackageInstaller.Prepares==0,"download does not open URL or start installer");
@@ -187,7 +191,11 @@ internal static class ClientPackageUiContract
             var token=new CancellationTokenSource();Set(page,"remoteCancellation",token);Set(page,"awaitingChoice",false);Set(page,"downloadBytesPerSecond",(double?)1000);Draw(page,"暂停更新");
             Check(token.IsCancellationRequested&&Get<double?>(page,"downloadBytesPerSecond")==null,"package pause cancels transfer and rate");
             token.Dispose();token=new CancellationTokenSource();Set(page,"remoteCancellation",token);Set(page,"downloadBytesPerSecond",(double?)4000);
-            Invoke(page,"OnApplicationPause",true);Check(token.IsCancellationRequested&&Get<double?>(page,"downloadBytesPerSecond")==null,"background pauses download and clears rate");
+            Invoke(page,"OnApplicationPause",false);
+            Check(!token.IsCancellationRequested,"returning to foreground does not cancel an update");
+            Invoke(page,"OnApplicationPause",true);
+            Check(token.IsCancellationRequested == Application.isMobilePlatform,"only mobile backgrounding cancels update");
+            Check((Get<double?>(page,"downloadBytesPerSecond")==null) == Application.isMobilePlatform,"desktop backgrounding preserves transfer rate; mobile clears it");
             Set(page,"remoteCancellation",null);int cancelBefore=AndroidClientPackageInstaller.Cancels;Set(page,"androidPackageActive",true);
             Invoke(page,"OnApplicationPause",true);Check(AndroidClientPackageInstaller.Cancels==cancelBefore,"permission/installer activity pause does not cancel platform session");
             TestRealDispatchLoop(Path.Combine(root, "dispatcher"));
