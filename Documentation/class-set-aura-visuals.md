@@ -83,3 +83,33 @@ allowing this opt-in. Formal builds still reject loopback, even HTTPS, and
 reject developmentHttp=true. Wildcard listeners, localhost subdomains, non-
 canonical IPv4 and credentials/query/fragment URLs remain disallowed. This
 changes no OS permissions or server listening interface.
+
+## Existing server.json local game connection
+
+Game-server selection is independent of resource updating. Both formal and
+ development clients read the original `{ "host": "127.0.0.1", "port": 19000 }`
+local file contract in this exact order:
+
+1. `Application.persistentDataPath/server.json` (external user configuration).
+2. `Application.streamingAssetsPath/server.json` (original bundled location).
+3. With neither file present, the existing release/dispatch flow is unchanged.
+
+The host may be a user-selected valid DNS name or IP address, not only loopback.
+The port must be an integer from 1 to 65535. Bad higher-priority configuration
+shows an error; it never silently falls back to another server. Downloaded game
+resource roots are not searched for this file. No permanent appearance, account,
+resource or saved update address is changed.
+
+With local configuration, the actual native game address resolver publishes its
+local server directory and host/port without requesting game discovery HTTP.
+The resource updater still uses its original HTTPS dispatch/manifest rules and
+saved update endpoint. No new HTTP adapter, global HTTP permission change,
+forced embedded endpoint, or test-only build flag is involved. Local direct
+connections do not infer an HTTP notice endpoint from the game TCP address.
+
+The cloud `run-local-server-contract.py` executes the actual ClientBootstrap
+selection block, configuration parser and native resolver, then connects a real
+loopback TCP fixture. It covers external/legacy/no-file priority, invalid local
+configuration, zero local discovery requests and restoring ordinary dispatch by
+removing configuration. Unity host wiring is checked separately; actual packaged
+Player and authenticated login remain local acceptance steps.

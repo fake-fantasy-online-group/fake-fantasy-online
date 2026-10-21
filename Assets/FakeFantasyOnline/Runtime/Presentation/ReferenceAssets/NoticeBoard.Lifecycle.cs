@@ -41,6 +41,7 @@ public static partial class NoticeBoard
     // Official 1.5.8 0x060008e7 / iterator 0x060008f0. Only the endpoint is injected.
     private static IEnumerator Fetch()
     {
+        if (string.IsNullOrEmpty(endpointForIndependentRuntime)) yield break;
         _fetching = true;
         using (UnityWebRequest request = UnityWebRequest.Get(endpointForIndependentRuntime))
         {

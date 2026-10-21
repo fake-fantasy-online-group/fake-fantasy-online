@@ -24,6 +24,9 @@ public sealed partial class NetClient
     private Action<ClientConfig.Srv[]> publishServers;
     internal ClientConfig.Srv[] ServersForIndependentRuntime => readServers();
 
+    private ClientConfig.Srv localServer;
+    public void ConfigureLocalServer(ClientConfig.Srv server) => localServer = server;
+
     private Func<IAddressRequest> createAddressRequest;
     private Func<string, ClientConfig.Dispatch> parseAddressDispatch;
     private Func<float, object> addressRetryWait;
@@ -74,6 +77,16 @@ public sealed partial class NetClient
     // and the already-configured private DispatchUri are supplied by the composition root.
     public IEnumerator ResolveServerAddress()
     {
+        if (localServer != null)
+        {
+            publishServers(new[] { localServer });
+            host = localServer.host;
+            port = localServer.port;
+            AddressReady = true;
+            AddressError = null;
+            ClearResolvedAddressRetryNotice();
+            yield break;
+        }
         int attempt = 0;
         while (!AddressReady)
         {

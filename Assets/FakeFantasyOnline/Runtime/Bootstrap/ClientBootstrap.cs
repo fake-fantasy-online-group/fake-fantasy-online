@@ -73,8 +73,10 @@ public sealed class ClientBootstrap : MonoBehaviour
         yield return null;
         try
         {
-            PrivateServerOptions options;
-            if (installer.ResourceFree) options = PrivateServerOptions.MobileConfigured(installer.DispatchUrl);
+            PrivateServerOptions options = PrivateServerOptions.FromLocalServerFiles(
+                UnityEngine.Application.persistentDataPath, UnityEngine.Application.streamingAssetsPath);
+            if (options != null) { } // Explicit local configuration wins, including in release builds.
+            else if (installer.ResourceFree) options = PrivateServerOptions.MobileConfigured(installer.DispatchUrl);
             else if (UnityEngine.Application.isMobilePlatform)
                 options = PrivateServerOptions.MobileConfigured(File.ReadAllText(
                     Path.Combine(ClientResourcePaths.InstalledRoot, "mobile-dispatch.txt")).Trim());
@@ -86,7 +88,7 @@ public sealed class ClientBootstrap : MonoBehaviour
 
     private void InitializeClient(PrivateServerOptions options, MobileResourceInstaller startup = null)
     {
-        NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri.AbsoluteUri);
+        NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri?.AbsoluteUri);
         // Before title creation the native test-world path still has its original
         // unbound session. SetupNet transfers this graph to its first actual owner.
         _unboundNetwork = new NativeNetClientHost(options);

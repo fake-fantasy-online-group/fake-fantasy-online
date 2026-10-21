@@ -1,4 +1,8 @@
 using System;
+using System.IO;
+using System.Collections.Generic;
+using FakeFantasyOnline.Application;
+using FakeFantasyOnline.Foundation;
 
 namespace FakeFantasyOnline.Protocol
 {
@@ -18,10 +22,13 @@ public sealed class PrivateServerOptions
         bool debugDetected = false,
         Uri noticeUri = null,
         Uri versionManifestUriMac = null,
-        Uri versionManifestUriWin = null)
+        Uri versionManifestUriWin = null,
+        ClientConfig.Srv localServer = null)
     {
-        DispatchUri = dispatchUri ?? throw new ArgumentNullException(nameof(dispatchUri));
-        NoticeUri = noticeUri ?? new Uri(DispatchUri.GetLeftPart(UriPartial.Authority) + "/changelog.json");
+        if (dispatchUri == null && localServer == null) throw new ArgumentNullException(nameof(dispatchUri));
+        DispatchUri = dispatchUri;
+        LocalServer = localServer;
+        NoticeUri = noticeUri ?? (dispatchUri == null ? null : new Uri(dispatchUri.GetLeftPart(UriPartial.Authority) + "/changelog.json"));
         VersionManifestUriMac = ValidateVersionManifestUri(versionManifestUriMac, nameof(versionManifestUriMac));
         VersionManifestUriWin = ValidateVersionManifestUri(versionManifestUriWin, nameof(versionManifestUriWin));
         if (string.IsNullOrWhiteSpace(deviceIdentifier))
@@ -49,6 +56,7 @@ public sealed class PrivateServerOptions
     }
 
     public Uri DispatchUri { get; }
+    public ClientConfig.Srv LocalServer { get; }
 
     public Uri NoticeUri { get; }
 
@@ -76,6 +84,31 @@ public sealed class PrivateServerOptions
     internal byte[] GetRsaExponent()
     {
         return Convert.FromBase64String(ExponentBase64);
+    }
+
+    public static PrivateServerOptions FromLocalServerFiles(string persistentDirectory, string streamingDirectory)
+    {
+        return FromLocalServerFile(Path.Combine(persistentDirectory, "server.json")) ??
+            FromLocalServerFile(Path.Combine(streamingDirectory, "server.json"));
+    }
+
+    // Trusted local startup file only. Never look under downloaded game resources.
+    public static PrivateServerOptions FromLocalServerFile(string path)
+    {
+        if (!File.Exists(path)) return null;
+        if (new FileInfo(path).Length > 4096) throw new InvalidDataException("server.json is too large.");
+        var data = BoundedJson.Parse(File.ReadAllText(path)) as Dictionary<string, object>;
+        object hostValue, portValue;
+        if (data == null || data.Count != 2 || !data.TryGetValue("host", out hostValue) ||
+            !data.TryGetValue("port", out portValue) || !(hostValue is string) || !(portValue is long))
+            throw new InvalidDataException("server.json requires host (string) and port (integer).");
+        string host = (string)hostValue;
+        long port = (long)portValue;
+        if (host != host.Trim() || Uri.CheckHostName(host) == UriHostNameType.Unknown ||
+            host == "0.0.0.0" || host == "::" || host == "[::]" || port < 1 || port > 65535)
+            throw new InvalidDataException("server.json has an invalid host or port.");
+        return new PrivateServerOptions(null, Guid.NewGuid().ToString("D").ToUpperInvariant(),
+            localServer: new ClientConfig.Srv { name = "本地配置", host = host.Trim('[', ']'), port = (int)port, zone = "local" });
     }
 
     public static PrivateServerOptions LocalDefault()

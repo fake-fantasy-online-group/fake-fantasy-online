@@ -171,7 +171,7 @@ public sealed partial class ClientRootView : MonoBehaviour, IWorldReceiveContext
             throw new InvalidOperationException("The client view is already initialized.");
         }
 
-        _noticeUri = noticeUri ?? throw new ArgumentNullException(nameof(noticeUri));
+        _noticeUri = noticeUri; // Direct local server configuration need not provide an HTTP notice endpoint.
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _requestTerminalQuit = requestTerminalQuit ??
             throw new ArgumentNullException(nameof(requestTerminalQuit));

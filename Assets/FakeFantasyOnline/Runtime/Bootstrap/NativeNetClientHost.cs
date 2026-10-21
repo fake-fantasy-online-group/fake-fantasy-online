@@ -77,6 +77,7 @@ internal sealed class NativeNetClientHost : INetClientInstanceHost
             seconds => new WaitForSeconds(seconds),
             () => FakeFantasyOnline.Presentation.ReferenceAssets.NetClient.Servers,
             servers => FakeFantasyOnline.Presentation.ReferenceAssets.NetClient.Servers = servers);
+        _gateway.ConfigureLocalServerForIndependentRuntime(options.LocalServer);
         IServerAddressDiscovery discovery = _gateway.CreateAddressDiscoveryForIndependentRuntime();
         Session = new ClientSessionCoordinator(discovery, _gateway, new InProcessEventBus());
 

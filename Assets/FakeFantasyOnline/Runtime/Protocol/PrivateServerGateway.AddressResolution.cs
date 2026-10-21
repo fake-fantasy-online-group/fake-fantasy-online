@@ -22,6 +22,8 @@ public sealed partial class PrivateServerGateway
         _netClient.BindAddressResolutionForIndependentRuntime(
             requestFactory, parseDispatch, scaledWait, serverReader, serverPublisher);
 
+    public void ConfigureLocalServerForIndependentRuntime(ClientConfig.Srv server) => _netClient.ConfigureLocalServer(server);
+
     public IEnumerator ResolveServerAddressForIndependentRuntime() => _netClient.ResolveServerAddress();
 
     // Read-only host admission for the automatic QA entry, never an alternate ready producer.
