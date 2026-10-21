@@ -70,8 +70,12 @@ internal sealed partial class TitleFlow
         ClearRecoverFields();
     }
 
+    private int _loginAttempt;
+
     private void BeginLogin(string submittedAccount, bool savePreferences = true)
     {
+        if (loggingIn) return;
+        int attempt = ++_loginAttempt;
         // Accepted native DrawLogin prefix: latch, clock, message, raw password capture,
         // optional preference save, then the actual ConnectAsync call at the button site.
         loggingIn = true;
@@ -84,6 +88,11 @@ internal sealed partial class TitleFlow
         {
             NetClient.I.ConnectTitleLoginForIndependentRuntime(ok =>
             {
+                if (attempt != _loginAttempt || !loggingIn)
+                {
+                    transientPassword = null;
+                    return;
+                }
                 if (!ok)
                 {
                     loggingIn = false;
@@ -122,6 +131,11 @@ internal sealed partial class TitleFlow
 
     internal void ReceiveNativeNetworkError(string error)
     {
+        if (loggingIn)
+        {
+            ++_loginAttempt;
+            NetClient.I?.CancelTitleLoginForIndependentRuntime();
+        }
         PublishPluginTitleResult("network_error");
         netMsg = error;
         loggingIn = false;

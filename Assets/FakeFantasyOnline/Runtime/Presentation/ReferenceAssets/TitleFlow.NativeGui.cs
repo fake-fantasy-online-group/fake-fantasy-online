@@ -77,7 +77,9 @@ internal sealed partial class TitleFlow
 
         if (loggingIn && Time.realtimeSinceStartup - loginAtMs > 10f)
         {
+            ++_loginAttempt;
             loggingIn = false;
+            NetClient.I?.CancelTitleLoginForIndependentRuntime();
             netMsg = "登录超时, 请重试";
             PublishPluginTitleResult("login_timeout");
         }

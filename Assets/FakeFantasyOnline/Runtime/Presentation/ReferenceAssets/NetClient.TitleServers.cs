@@ -10,6 +10,7 @@ internal partial class NetClient
     private Action<string> requestTitleEntry;
     private Action<Action<bool>> connectTitleLogin;
     private Action<string, string> sendTitleLogin;
+    private Action cancelTitleLogin;
     private Action clearTitleEntryNotice;
     private Action sendTitleEntryCaps;
 
@@ -23,11 +24,14 @@ internal partial class NetClient
     internal void SendTitleEntryCapsForIndependentRuntime() => sendTitleEntryCaps();
 
     internal void BindTitleLoginForIndependentRuntime(Action<Action<bool>> connect,
-        Action<string, string> login)
+        Action<string, string> login, Action cancel = null)
     {
         connectTitleLogin = connect;
         sendTitleLogin = login;
+        cancelTitleLogin = cancel;
     }
+
+    internal void CancelTitleLoginForIndependentRuntime() => cancelTitleLogin?.Invoke();
 
     internal void ConnectTitleLoginForIndependentRuntime(Action<bool> onDone) => connectTitleLogin(onDone);
     internal void SendTitleLoginForIndependentRuntime(string account, string password) =>

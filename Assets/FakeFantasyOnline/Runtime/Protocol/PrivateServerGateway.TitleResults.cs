@@ -13,8 +13,58 @@ public sealed partial class PrivateServerGateway : ITitleResultReceiptSource
     // native callback, correlates a packet to an attempt, or owns a second result queue.
     private bool _titleLoginResultWithoutWaiter;
 
+    // Login owns an authentication session, unlike registration/recovery. A second
+    // login must never reuse a socket on which a Login request has already been sent.
+    private bool _loginRequestSent;
+    private bool _titleLoginInProgress;
+    private bool _taskLoginInProgress;
+    private CancellationToken _taskLoginCallerToken;
+
+    public void ConnectTitleLoginForIndependentRuntime(Action<bool> onDone)
+    {
+        RetireCancelledTaskLogin();
+        if (_titleLoginInProgress) return;
+        if (_taskLoginInProgress || Volatile.Read(ref _authenticationWaiters) != 0)
+        {
+            onDone?.Invoke(false);
+            return;
+        }
+        PrepareLoginConnection();
+        _titleLoginInProgress = true;
+        if (!BeginNativeConnection(ok =>
+        {
+            if (!ok) _titleLoginInProgress = false;
+            onDone?.Invoke(ok);
+        }, CancellationToken.None, out _, out _))
+        {
+            _titleLoginInProgress = false;
+            onDone?.Invoke(false);
+        }
+    }
+
+    private void RetireCancelledTaskLogin()
+    {
+        // Cancellation between Connect returning and Authenticate starting must not
+        // leave an owner that permanently blocks the next login attempt.
+        if (_taskLoginInProgress && _taskLoginCallerToken.IsCancellationRequested)
+            DisposeConnectionCore();
+    }
+
+    private void PrepareLoginConnection()
+    {
+        if (_loginRequestSent || _stage == GatewayStage.Authenticated)
+            DisposeConnectionCore();
+    }
+
+    public void CancelTitleLoginForIndependentRuntime()
+    {
+        if (_titleLoginInProgress) DisposeConnectionCore();
+    }
+
     public void SendTitleLoginForIndependentRuntime(string account, string password)
     {
+        if (!_titleLoginInProgress || _loginRequestSent) return;
+        _loginRequestSent = true;
         _titleLoginResultWithoutWaiter = true;
         endgameAccount = account;
         _netClient.Login(account, password);
@@ -59,7 +109,11 @@ public sealed partial class PrivateServerGateway : ITitleResultReceiptSource
             }
             // Only an actual decoded success supplies the host authentication state after an
             // ordinary native send. Existing Task readers retain their linked-lifetime commit.
-            if (loginWithoutWaiter && code == 0) _stage = GatewayStage.Authenticated;
+            if (loginWithoutWaiter)
+            {
+                _titleLoginInProgress = false;
+                if (code == 0) _stage = GatewayStage.Authenticated;
+            }
             // No message normalization, trailing-byte guard or callback exception catch.
             receive(code, message);
         }

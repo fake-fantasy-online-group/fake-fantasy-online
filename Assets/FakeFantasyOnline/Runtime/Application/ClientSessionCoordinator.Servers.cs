@@ -57,8 +57,8 @@ public sealed partial class ClientSessionCoordinator
         return Result.Success();
     }
 
-    // ef4 Return is only state=Login. It neither closes transport nor clears the roster.
+    // Returning to login ends authentication; returning to character selection does not.
     public void ReturnToLoginFromServerPageForIndependentRuntime() =>
-        TransitionTo(ClientSessionState.Offline, string.Empty);
+        ReturnToLogin();
 }
 }

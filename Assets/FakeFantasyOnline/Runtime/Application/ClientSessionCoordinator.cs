@@ -729,7 +729,9 @@ public sealed partial class ClientSessionCoordinator : IDisposable
         bool lockTaken = false;
         try
         {
-            await _operation.WaitAsync(cancellationToken);
+            if (!await _operation.WaitAsync(0, cancellationToken))
+                return Result<IReadOnlyList<ServerCharacterRecord>>.Failure(
+                    "session.login.busy", "A session operation is already in progress.");
             lockTaken = true;
             _characters = Array.Empty<ServerCharacterRecord>();
             TransitionTo(ClientSessionState.DiscoveringAddress, string.Empty);
@@ -773,7 +775,7 @@ public sealed partial class ClientSessionCoordinator : IDisposable
 
             TransitionTo(ClientSessionState.Connecting, string.Empty);
             // Login and the three account operations share the native connection admission.
-            // A connected socket is reused; no second EstablishConnection worker is started.
+            // The gateway retires any previous authentication before admitting a new login.
             Interlocked.Exchange(ref _localPlayerStatusEffectConsumedRevision, 0);
             if (!(_gateway is IWorldCombatNumberStreamSource)) ResetCombatNumberPresentation();
             Result<CancellationToken> connection = await _gateway.ConnectAsync(

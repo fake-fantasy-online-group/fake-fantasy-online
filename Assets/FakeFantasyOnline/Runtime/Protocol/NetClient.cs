@@ -413,8 +413,12 @@ public sealed partial class NetClient : IDisposable
         _sendSeq = 0;
         _nextPingAt = 0f;
 
-        while (_inbox.TryDequeue(out _))
+        // Serialize retirement with the receive worker's generation check/publication.
+        // Otherwise a worker can pass the check, pause, and enqueue after this drain.
+        lock (_inbox)
         {
+            _dropped = false;
+            while (_inbox.TryDequeue(out _)) { }
         }
     }
 
@@ -831,21 +835,16 @@ public sealed partial class NetClient : IDisposable
         }
         catch (Exception ex)
         {
-            if (!_run)
+            // Retire errors and packets under the same connection-publication fence.
+            lock (_inbox)
             {
-                return;
+                if (!_run || Volatile.Read(ref _gen) != generation) return;
+                string reason = TransmitInterruptedPrefix + ex.Message;
+                _errs.Enqueue(new QueuedNetworkError(reason, generation: generation));
+                LastDropReason = reason;
+                _run = false;
+                _dropped = true;
             }
-
-            if (Volatile.Read(ref _gen) != generation)
-            {
-                return;
-            }
-
-            string reason = TransmitInterruptedPrefix + ex.Message;
-            _errs.Enqueue(new QueuedNetworkError(reason));
-            LastDropReason = reason;
-            _run = false;
-            _dropped = true;
         }
     }
 
@@ -1003,12 +1002,11 @@ public sealed partial class NetClient : IDisposable
                 ushort opcode = (ushort)(plain[8] | (plain[9] << 8));
                 byte[] payload = new byte[plain.Length - 10];
                 Array.Copy(plain, 10, payload, 0, payload.Length);
-                if (generation != Volatile.Read(ref _gen))
+                lock (_inbox)
                 {
-                    break;
+                    if (generation != Volatile.Read(ref _gen)) break;
+                    _inbox.Enqueue(new ProtocolPacket(opcode, payload));
                 }
-
-                _inbox.Enqueue(new ProtocolPacket(opcode, payload));
                 expectedSequence = unchecked(receivedSequence + 1);
             }
         }
@@ -1017,16 +1015,18 @@ public sealed partial class NetClient : IDisposable
             failure = ReceiveInterruptedPrefix + ex.Message;
         }
 
-        if (_run && generation == Volatile.Read(ref _gen))
+        lock (_inbox)
         {
-            if (failure != null)
+            if (_run && generation == Volatile.Read(ref _gen))
             {
-                _errs.Enqueue(new QueuedNetworkError(failure));
-                LastDropReason = failure;
+                if (failure != null)
+                {
+                    _errs.Enqueue(new QueuedNetworkError(failure, generation: generation));
+                    LastDropReason = failure;
+                }
+                _run = false;
+                _dropped = true;
             }
-
-            _run = false;
-            _dropped = true;
         }
     }
 
@@ -1150,6 +1150,8 @@ public sealed partial class NetClient : IDisposable
         DrainTx();
         while (_errs.TryDequeue(out QueuedNetworkError queuedError))
         {
+            if (queuedError.Generation.HasValue && queuedError.Generation.Value != Volatile.Read(ref _gen))
+                continue;
             // Discovery can recover before a pending frame drains its retry notices.
             // Suppress only those locally owned notices; all other errors retain order.
             if (queuedError.IsAddressRetry && AddressReady) continue;

@@ -1245,22 +1245,32 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         bool admitted = false;
         await _host.RunAsync(() =>
         {
+            RetireCancelledTaskLogin();
+            if (_titleLoginInProgress || _taskLoginInProgress ||
+                Volatile.Read(ref _authenticationWaiters) != 0)
+            {
+                completion.TrySetResult(Result<CancellationToken>.Failure(
+                    "session.login.busy", "A login is already in progress."));
+                return;
+            }
+            PrepareLoginConnection();
+            _taskLoginInProgress = true;
+            _taskLoginCallerToken = cancellationToken;
             admitted = BeginNativeConnection(ok =>
             {
-                // This is an explicit login admission, unlike the shared account callback.
-                // A queued retry may reuse an already-authenticated native socket. Re-enter
-                // the host's pre-auth stage only after that live connect succeeds, so the
-                // unchanged AuthenticateAsync guard admits its real Login request and reply.
-                if (ok) _stage = GatewayStage.Connected;
+                if (!ok) _taskLoginInProgress = false;
                 completion.TrySetResult(ok
                     ? Result<CancellationToken>.Success(connectionToken)
                     : Result<CancellationToken>.Failure("transport.connect.failure",
                         "The game server connection could not be established."));
             }, cancellationToken, out connection, out connectionToken);
             if (!admitted)
+            {
+                _taskLoginInProgress = false;
                 completion.TrySetResult(Result<CancellationToken>.Failure(
                     ClientSessionCoordinator.NativeConnectCallbackDroppedCode,
                     "The native connection owner did not retain this callback."));
+            }
         }, cancellationToken).ConfigureAwait(false);
 
         // Cancellation belongs to the host Task API, not native ConnectAsync. It releases the
@@ -1302,22 +1312,33 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                 "The game connection is not ready for authentication.");
         }
 
-        Interlocked.Increment(ref _authenticationWaiters);
+        if (Interlocked.CompareExchange(ref _authenticationWaiters, 1, 0) != 0)
+            return Result.Failure("session.login.busy", "A login is already in progress.");
+        CancellationTokenSource authenticationLifetime = _connectionLifetime;
         try
         {
             // Login is a direct NetClient write outside _sendOperation; only its thread
             // ownership moves to the host, it is not serialized behind the send semaphore.
+            bool sent = false;
             await _host.RunAsync(
                     () =>
                     {
+                        if (!ReferenceEquals(_connectionLifetime, authenticationLifetime) ||
+                            _titleLoginInProgress || _loginRequestSent || _stage != GatewayStage.Connected)
+                            return;
                         // A later cancelled Task reply keeps its original Task observation
                         // path; absence of an active waiter alone never grants native UI ownership.
+                        _loginRequestSent = true;
                         _titleLoginResultWithoutWaiter = false;
                         endgameAccount = credentials.AccountName;
                         _netClient.Login(credentials.AccountName, credentials.Password);
+                        sent = true;
                     },
                     cancellationToken)
                 .ConfigureAwait(false);
+
+            if (!sent)
+                return Result.Failure("session.login.busy", "The login session changed or already has a request.");
 
             ProtocolPacket packet = await ReadUntilAsync(
                 ProtocolOpcodes.LoginResult,
@@ -1345,6 +1366,11 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            await _host.RunAsync(() =>
+            {
+                if (ReferenceEquals(_connectionLifetime, authenticationLifetime))
+                    DisposeConnectionCore();
+            }, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
         catch (OperationCanceledException)
@@ -1364,6 +1390,11 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         finally
         {
             Interlocked.Decrement(ref _authenticationWaiters);
+            await _host.RunAsync(() =>
+            {
+                if (ReferenceEquals(_connectionLifetime, authenticationLifetime))
+                    _taskLoginInProgress = false;
+            }, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -9042,6 +9073,14 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
 
     private void DisposeConnectionCore(bool closeNativeConnection)
     {
+        _loginRequestSent = false;
+        _titleLoginInProgress = false;
+        _taskLoginInProgress = false;
+        _taskLoginCallerToken = CancellationToken.None;
+        _titleLoginResultWithoutWaiter = false;
+        if ((Interlocked.Exchange(ref _accountHasSecurityCode, 0) != 0) |
+            (Interlocked.Exchange(ref _accountSecurityWindowMilliseconds, 0) != 0))
+            Interlocked.Increment(ref _accountSecuritySeedVersion);
         ResetEndgameConnection();
         lock (_worldDrainSync)
         {

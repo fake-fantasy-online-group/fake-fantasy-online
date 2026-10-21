@@ -101,7 +101,8 @@ internal sealed class NativeNetClientHost : INetClientInstanceHost
             owner, Session, _gateway, () => _view != null ? _view.WorldBootstrapForIndependentRuntime : null);
         Session.BindCharacterSkillUsePort(_characterSkillUse);
         owner.BindTitleLoginForIndependentRuntime(
-            _gateway.ConnectForAccount, _gateway.SendTitleLoginForIndependentRuntime);
+            _gateway.ConnectTitleLoginForIndependentRuntime, _gateway.SendTitleLoginForIndependentRuntime,
+            _gateway.CancelTitleLoginForIndependentRuntime);
         Action<string> sendEntry = _gateway.SendTitleEntryForIndependentRuntime;
         owner.BindTitleEntryForIndependentRuntime(name =>
         {
