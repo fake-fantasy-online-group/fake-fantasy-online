@@ -23,6 +23,7 @@ public sealed partial class ActorEffects : MonoBehaviour
         public Kind kind;
         public int idx;
         public int slot;
+        public float groundOffsetY;
     }
 
     private const float OrbitRX = 30f;
@@ -190,7 +191,7 @@ public sealed partial class ActorEffects : MonoBehaviour
                     0f);
                 return;
             case 2:
-                effectTransform.localPosition = Vector3.zero;
+                effectTransform.localPosition = new Vector3(0f, instance.groundOffsetY / ppu, 0f);
                 return;
             case 1:
                 float angle = now * Mathf.PI;

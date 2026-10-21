@@ -17,8 +17,14 @@ Existing `equipmentAuraStatuses` sends the `VisualKey` as the status/buff name,
 with source-bound remainSec -2. `ActorEffects.SyncAuras` keys by that identity,
 so snapshot renewal does not restart or duplicate an emitter. Removing the key
 stops it. Use native base attachment (PositionMode 0); selected aliases resolve
-to mode 3 at the actor base/mount offset, with actor-relative layer sorting.
-Do not send head attachment mode 4 for these full-body/base-authored templates.
+to ground mode 2, excluding saddle/head offsets, with actor-relative layer sorting.
+The five set display names are aliases of the same selected visuals.
+These five identities stay grounded even if a stale sender supplies mode 4;
+ordinary buffs retain their original mode behavior. Ground-ring translations in
+original pixels are warrior -47, swordsman -1.5, assassin 0, mage +11, healer +4.4
+(Y up). They compensate original ring GSO pivot and EFF position/scale, not
+character height. The complete effect is translated, preserving its upper ornaments,
+colors, scale, native layer planes, and original fade/loop timing. No source EFF is changed.
 
 Only these five exact class-set identities use existing EffectPlayer loopMode 1
 with selfDestroy=false, starting from time zero. All authored layers, colors,
