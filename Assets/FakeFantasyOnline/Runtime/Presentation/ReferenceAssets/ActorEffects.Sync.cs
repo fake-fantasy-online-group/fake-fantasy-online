@@ -11,6 +11,11 @@ public sealed partial class ActorEffects
     {
         switch (key)
         {
+            case "套装光环·战士": return "TFX074_40";
+            case "套装光环·剑客": return "TFX028_40";
+            case "套装光环·刺客": return "TFX7012_40";
+            case "套装光环·术士": return "TFX7015_40";
+            case "套装光环·药师": return "TFX7018_40";
             case "白虎守城":
             case "白虎卫身": return "钢铁";
             case "倒骑观火":
@@ -23,6 +28,15 @@ public sealed partial class ActorEffects
             case "玄武镇门": return "TFX028_40";
             default: return key;
         }
+    }
+
+    // Only the explicitly selected class-set visuals loop. Ordinary sustained
+    // buffs must retain their authored settled/transparent final state.
+    internal static bool EquipmentAuraLoops(string key)
+    {
+        return key == "套装光环·战士" || key == "套装光环·剑客" ||
+            key == "套装光环·刺客" || key == "套装光环·术士" ||
+            key == "套装光环·药师";
     }
 
     // 0x06000027
@@ -53,7 +67,8 @@ public sealed partial class ActorEffects
             string statusAsset = PlayerController.AuraEffName(pair.Key);
             string asset = EquipmentAuraAsset(statusAsset);
             // Equipment aliases keep the server-selected foot/orbit placement.
-            bool tfx = statusAsset?.StartsWith("TFX") ?? false;
+            bool classSetLoop = EquipmentAuraLoops(pair.Key);
+            bool tfx = (statusAsset?.StartsWith("TFX") ?? false) || classSetLoop;
             EffectPlayer player = EffectPlayer.PlayNamed(
                 transform.position, asset, ppu, 1, -1, false, false);
             int slot = 0;
@@ -74,10 +89,13 @@ public sealed partial class ActorEffects
                 continue;
             }
 
-            player.loopMode = 0;
+            // Reuse the existing bounded full-template clock. Keep native fade
+            // in/out, tint, layer scale and sprite animation; never freeze a
+            // hand-picked opaque frame or alter ordinary buff rendering.
+            player.loopMode = classSetLoop ? 1 : 0;
             player.selfDestroy = false;
             player.transform.SetParent(transform, false);
-            player.SettleToEnd();
+            if (!classSetLoop) player.SettleToEnd();
             if (!orbit && playerSr)
             {
                 player.attachSort = playerSr;
