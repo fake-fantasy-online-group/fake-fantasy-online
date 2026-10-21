@@ -113,3 +113,23 @@ loopback TCP fixture. It covers external/legacy/no-file priority, invalid local
 configuration, zero local discovery requests and restoring ordinary dispatch by
 removing configuration. Unity host wiring is checked separately; actual packaged
 Player and authenticated login remain local acceptance steps.
+
+### Direct local login: optional announcement UI regression
+
+The local server configuration intentionally has no HTTP announcement URI. The title
+binding now accepts that absent URI, and the title changelog iterator terminates before
+creating a request. `NoticeBoard.Fetch` already has the corresponding empty-endpoint
+guard. No fake HTTP URL or production announcement fallback is inferred.
+
+`Tests/ClientBuild/run-local-title-notice-contract.py` compiles and executes the exact
+production Bootstrap selection block, local options parser, title `Awake`, owner
+publication, input binding, login action, announcement button, and complete changelog
+and NoticeBoard lifecycle implementations. Unity, texture loading, and login transport
+are doubles. It checks that null announcements do not interrupt resource initialization
+or the Awake completion callback, the character surface is published, login can invoke
+connection/send after that callback, and neither announcement iterator requests an
+empty URL. Existing remote announcement and login behavior is also exercised.
+
+This is not a Unity Player, rendered button click, real SetupNet lifecycle, or authenticated
+server login test. The separate local-server contract exercises the actual resolver
+and a real loopback TCP socket; final Player startup/login still requires local validation.

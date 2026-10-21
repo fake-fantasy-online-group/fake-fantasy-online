@@ -48,6 +48,7 @@ internal sealed partial class TitleFlow
                 {
                     case 0:
                         _state = -1;
+                        if (string.IsNullOrEmpty(Owner._changelogEndpoint)) return false;
                         _request = UnityWebRequest.Get(Owner._changelogEndpoint);
                         _state = -3;
                         _request.timeout = 6;

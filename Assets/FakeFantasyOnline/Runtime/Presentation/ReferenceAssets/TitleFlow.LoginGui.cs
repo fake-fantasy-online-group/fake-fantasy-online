@@ -93,7 +93,8 @@ internal sealed partial class TitleFlow
         guiHost = host ?? throw new ArgumentNullException(nameof(host));
         creationGui = creation;
         pluginTitleOwner = this;
-        _changelogEndpoint = (noticeUri ?? throw new ArgumentNullException(nameof(noticeUri))).AbsoluteUri;
+        // Direct local game endpoints do not imply an HTTP announcement service.
+        _changelogEndpoint = noticeUri?.AbsoluteUri;
     }
 
     internal bool RegisterOpen
