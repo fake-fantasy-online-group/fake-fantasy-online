@@ -74,7 +74,9 @@ internal partial class InventoryDlg
         string name = heldName;
         Item item = ItemAt(bagTab, bagSlot);
         string fused = FusedGuard.What(item);
-        if (heldBound || fused.Length > 0 || item.quality > 2 || item.count > 1)
+        // Quality 6 is the two-affix light-blue presentation, not a rarity above gold.
+        bool preciousQuality = item.quality > 2 && item.quality != 6;
+        if (heldBound || fused.Length > 0 || preciousQuality || item.count > 1)
         {
             var text = new StringBuilder();
             text.Append('【').Append(name).Append('】');
@@ -83,7 +85,7 @@ internal partial class InventoryDlg
             else text.Append(item.count > 1 ? "\n" : "");
             text.Append(heldBound ? "已绑定, 直接丢弃将销毁(无法捡回)" : "丢弃后掉在地上, 别人也能捡走");
             if (item.count > 1) text.Append("。\n★这一格会【一次全部丢出去】, 不能只丢一部分。");
-            if (item.quality > 2 && !heldBound)
+            if (preciousQuality && !heldBound)
                 text.Append("。\n★这是").Append(item.quality == 3 ? "【紫色】" : "【金色】")
                     .Append("装备, 落地后 30 秒内就可能被路过的人捡走, 捡走了要不回来。");
             if (fused.Length > 0)

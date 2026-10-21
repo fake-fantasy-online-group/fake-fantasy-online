@@ -35,13 +35,15 @@ for label, expected in [('case 1', (64, 224, 96, 255)),
 
 check("if (line.Length >= 2 && line[0] == '\\u0003')" in native,
       'Native parser must consume explicit quality zero/five markers')
-check("line[1] >= '0' && line[1] <= '5'" in diagnostic,
-      'Diagnostic parser must accept the supported quality range zero through five')
+check("line[1] >= '0' && line[1] <= '6'" in diagnostic,
+      'Diagnostic parser must accept the supported quality range zero through six')
 check(entry(diagnostic, 'case 4') == (255, 180, 40, 255),
       'Existing diagnostic ordinary quality four palette must stay unchanged')
 check('case 4: return GameSettings.ColorWeak ? new Color32(255, 180, 40, 255) : new Color32(238, 222, 70, 255);' in native,
       'Native ordinary rare quality must preserve its existing color-weak behavior')
 for source in [native, diagnostic]:
+    check(source.count('EquipmentTooltipColors.ActiveBlue') == 2,
+          'Direct light-blue prefix must use the shared active effect color')
     check('new Color32(255, 136, 48, 255)' in source,
           'Orange direct effect color remains available')
 

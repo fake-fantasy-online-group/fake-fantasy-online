@@ -210,7 +210,7 @@ public sealed class ReferenceFirstWorldUiTip : IDisposable
 
             Color color;
             if (line.Length >= 2 && line[0] == '\u0003' &&
-                line[1] >= '0' && line[1] <= '5')
+                line[1] >= '0' && line[1] <= '6')
             {
                 color = QualityColor(line[1] - '0');
                 line = line.Substring(2);
@@ -304,6 +304,8 @@ public sealed class ReferenceFirstWorldUiTip : IDisposable
                 return new Color32(64, 224, 96, 255);
             case 2:
                 return new Color32(82, 150, 252, 255);
+            case 6:
+                return EquipmentTooltipColors.ActiveBlue;
             case 3:
                 return new Color32(210, 90, 255, 255);
             case 4:
@@ -406,7 +408,7 @@ public sealed class ReferenceFirstWorldUiTip : IDisposable
             case '\u0004':
                 return new Color32(255, 80, 80, 255);
             case '\u0005':
-                return new Color32(86, 196, 255, 255);
+                return EquipmentTooltipColors.ActiveBlue;
             case '\u0006':
                 return new Color32(255, 136, 48, 255);
             default:

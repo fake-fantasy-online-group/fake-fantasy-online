@@ -138,7 +138,7 @@ internal static partial class UITip
             else if (line.Length > 0 && line[0] == '\u0004')
             { color = new Color32(255, 80, 80, 255); line = line.Substring(1); }
             else if (line.Length > 0 && line[0] == '\u0005')
-            { color = new Color32(86, 196, 255, 255); line = line.Substring(1); }
+            { color = EquipmentTooltipColors.ActiveBlue; line = line.Substring(1); }
             else if (line.Length > 0 && line[0] == '\u0006')
             { color = new Color32(255, 136, 48, 255); line = line.Substring(1); }
             else color = LineColor(line, i);
@@ -175,6 +175,7 @@ internal static partial class UITip
         {
             case 1: return new Color32(64, 224, 96, 255);
             case 2: return new Color32(82, 150, 252, 255);
+            case 6: return EquipmentTooltipColors.ActiveBlue; // Two-affix equipment, not the one-affix quality 2.
             case 3: return new Color32(210, 90, 255, 255);
             case 5: return new Color32(183, 155, 98, 255); // Endgame dark gold; ordinary rare quality stays yellow.
             case 4: return GameSettings.ColorWeak ? new Color32(255, 180, 40, 255) : new Color32(238, 222, 70, 255);
