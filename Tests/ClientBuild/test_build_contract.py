@@ -25,7 +25,12 @@ apkcheck = module('scripts/ci/verify-resource-free-apk.py', 'apkcheck')
 
 class BuildContract(unittest.TestCase):
     def test_application_version_single_source(self):
-        self.assertEqual(apkcheck.setting('bundleVersion'), '1.0.0')
+        self.assertEqual(apkcheck.setting('bundleVersion'), '1.0.1')
+        protocol = (ROOT / 'Assets/FakeFantasyOnline/Runtime/Protocol/NetClient.cs').read_text()
+        self.assertIn('public const string ClientVersion = "1.6.0";', protocol)
+        self.assertIn('payload.Str(ClientVersion)', protocol)
+        desktop_free = (ROOT / 'Assets/FakeFantasyOnline/Editor/DesktopResourceFreeBuild.cs').read_text()
+        self.assertIn('ResourceFreeBuildProfile(platform, PlayerSettings.bundleVersion', desktop_free)
         desktop = (ROOT / 'Assets/FakeFantasyOnline/Editor/ClientBuild.cs').read_text()
         self.assertNotIn('PlayerSettings.bundleVersion =', desktop)
         mobile = (ROOT / 'Assets/FakeFantasyOnline/Editor/MobileClientBuild.cs').read_text()
@@ -43,7 +48,7 @@ class BuildContract(unittest.TestCase):
         free_branch = mobile.split('if (resourceFree)', 1)[1].split('\n            else\n', 1)[0]
         self.assertNotIn('GenerateManifest(', free_branch)
         self.assertNotIn('Directory.GetFiles(', free_branch)
-        self.assertEqual(apkcheck.setting('AndroidBundleVersionCode'), '2')
+        self.assertEqual(apkcheck.setting('AndroidBundleVersionCode'), '7')
         for entry in (ROOT / 'Assets/FakeFantasyOnline/Editor').glob('*.cs'):
             self.assertNotRegex(entry.read_text(), r'Android\.bundleVersionCode\s*=')
 
@@ -258,7 +263,7 @@ class BuildContract(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Reserved resource filename'):
                 manifest.generate(root, '1.0.0')
 
-    def make_apk(self, path, extra=None, version='1.0.0'):
+    def make_apk(self, path, extra=None, version='1.0.1'):
         with zipfile.ZipFile(path, 'w') as z:
             # Deliberately synthetic fixtures; no assertion of valid Android packaging.
             z.writestr('lib/arm64-v8a/libil2cpp.so', b'synthetic library fixture')
