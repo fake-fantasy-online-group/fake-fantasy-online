@@ -46,9 +46,9 @@ public sealed class MobileResourceBootstrapConfig
         if (string.IsNullOrWhiteSpace(value) || value != value.Trim() || System.Text.Encoding.UTF8.GetByteCount(value) > MaxEndpointBytes ||
             !Uri.TryCreate(value, UriKind.Absolute, out uri) || string.IsNullOrEmpty(uri.Host) ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
-            uri.IsLoopback || IsLocalhost(uri.Host) || uri.Port < 1 || uri.Port > 65535 || uri.Host == "0.0.0.0" || (uri.Host == "::" || uri.Host == "[::]") || value.IndexOf('\\') >= 0 ||
-            (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && allowDevelopmentLanHttp && IsPrivateLan(uri.Host))))
-            throw new InvalidDataException("Use a credential-free HTTPS URL. HTTP is allowed only for explicitly enabled development LAN IPs.");
+            ((uri.IsLoopback || IsLocalhost(uri.Host)) && !(allowDevelopmentLanHttp && IsDevelopmentLoopback(uri.Host))) || uri.Port < 1 || uri.Port > 65535 || uri.Host == "0.0.0.0" || (uri.Host == "::" || uri.Host == "[::]") || value.IndexOf('\\') >= 0 ||
+            (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && allowDevelopmentLanHttp && (IsPrivateLan(uri.Host) || IsDevelopmentLoopback(uri.Host)))))
+            throw new InvalidDataException("Use a credential-free HTTPS URL. HTTP is allowed only for explicitly enabled development LAN IPs or local test loopback.");
         // Reject scoped IPv6 and legacy numeric IPv4 spellings rather than normalizing them into a different host.
         int authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
         string authority = value.Substring(authorityStart).Split('/')[0];
@@ -57,6 +57,12 @@ public sealed class MobileResourceBootstrapConfig
         if (uri.HostNameType == UriHostNameType.IPv4 && originalHost != uri.Host)
             throw new InvalidDataException("Use canonical dotted-decimal IPv4 addresses.");
         return uri;
+    }
+
+    private static bool IsDevelopmentLoopback(string host)
+    {
+        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            host == "127.0.0.1" || host == "::1" || host == "[::1]";
     }
 
     private static bool IsLocalhost(string host)

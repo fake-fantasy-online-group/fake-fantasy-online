@@ -24,6 +24,18 @@ apk = load('formal_apk', 'scripts/ci/verify-resource-free-apk.py')
 
 
 class FormalBuildContract(unittest.TestCase):
+    def test_local_test_endpoint_requires_explicit_opt_in(self):
+        for host in ('localhost', '127.0.0.1', '[::1]'):
+            value = 'http://' + host + ':8088/dispatch.json'
+            self.assertEqual(build.validate_dispatch(value, True), value)
+            with self.assertRaises(ValueError):
+                build.validate_dispatch(value, False)
+            with self.assertRaises(ValueError):
+                build.main(['--platform', 'macos', '--version', '1.0.0', '--configuration', 'formal', '--development-http', '--dispatch-url', value])
+        for value in ('http://0.0.0.0/d', 'http://[::]/d', 'http://sub.localhost/d', 'http://127.0.0.2/d', 'http://127.1/d', 'http://user:pass@localhost/d', 'http://localhost/d?token=x'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                build.validate_dispatch(value, True)
+
     def test_explicit_formal_cli_and_endpoint_policy(self):
         args = build.parser().parse_args(['--platform', 'windows', '--version', '1.0.0', '--dispatch-url', 'https://example.com/dispatch.json'])
         self.assertEqual(args.configuration, 'formal')

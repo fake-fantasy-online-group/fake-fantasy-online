@@ -70,8 +70,23 @@ public static class ResourceFreeBuildProfileContract
         environment["FFO_BUILD_CONFIGURATION"] = "development";
         environment["FFO_RESOURCE_DISPATCH_URL"] = "http://192.168.1.20/dispatch.json";
         Check(new ResourceFreeBuildProfile("android", "1.0.0", get).Development);
-        environment["FFO_RESOURCE_DISPATCH_URL"] = "http://localhost/dispatch.json";
-        Reject(() => new ResourceFreeBuildProfile("android", "1.0.0", get));
+        foreach (string local in new[] { "http://localhost:8088/dispatch.json", "http://127.0.0.1:8088/dispatch.json", "http://[::1]:8088/dispatch.json" })
+        {
+            environment["FFO_RESOURCE_DISPATCH_URL"] = local;
+            foreach (string platform in new[] { "android", "windows", "macos" })
+                Check(new ResourceFreeBuildProfile(platform, "1.0.0", get).Development);
+            environment["FFO_BUILD_DEVELOPMENT_HTTP"] = "0";
+            Reject(() => new ResourceFreeBuildProfile("macos", "1.0.0", get));
+            environment["FFO_BUILD_DEVELOPMENT_HTTP"] = "1";
+            environment["FFO_BUILD_CONFIGURATION"] = "formal";
+            Reject(() => new ResourceFreeBuildProfile("macos", "1.0.0", get));
+            environment["FFO_BUILD_CONFIGURATION"] = "development";
+        }
+        foreach (string badLocal in new[] { "http://0.0.0.0/d", "http://[::]/d", "http://sub.localhost/d", "http://127.0.0.2/d", "http://127.1/d", "http://user:pass@localhost/d", "http://localhost/d?token=x" })
+        {
+            environment["FFO_RESOURCE_DISPATCH_URL"] = badLocal;
+            Reject(() => new ResourceFreeBuildProfile("macos", "1.0.0", get));
+        }
         environment["FFO_BUILD_CONFIGURATION"] = "formal";
         environment["FFO_BUILD_DEVELOPMENT_HTTP"] = "0";
         environment["FFO_RESOURCE_DISPATCH_URL"] = "https://example.com/dispatch.json";

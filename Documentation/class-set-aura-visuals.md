@@ -72,3 +72,14 @@ eligibility, input immutability, shared owners, all action slots, missing-action
 isolation and normal appearance restoration. It does not substitute for a Unity
 Player test. Original model files are decoded separately for offline inspection
 and are not committed to the open-source repository.
+
+## Private local-development bootstrap
+
+Local test builds may inject `FFO_BUILD_CONFIGURATION=development`,
+`FFO_BUILD_DEVELOPMENT_HTTP=1` and `FFO_RESOURCE_DISPATCH_URL` together, using
+localhost, canonical 127.0.0.1 or ::1 with the local dispatch port. No instance
+address is committed. Runtime additionally checks `Debug.isDebugBuild` before
+allowing this opt-in. Formal builds still reject loopback, even HTTPS, and
+reject developmentHttp=true. Wildcard listeners, localhost subdomains, non-
+canonical IPv4 and credentials/query/fragment URLs remain disallowed. This
+changes no OS permissions or server listening interface.

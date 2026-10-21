@@ -28,7 +28,8 @@ def validate_dispatch(value, development_http=False):
     if not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or '?' in value or '#' in value or '%' in parsed.netloc:
         raise ValueError('Dispatch URL must not contain credentials, query, fragment or an escaped host')
     host = parsed.hostname.rstrip('.').lower()
-    if host == 'localhost' or host.endswith('.localhost'):
+    local_test = parsed.hostname.lower() in ('localhost', '127.0.0.1', '::1')
+    if (host == 'localhost' or host.endswith('.localhost')) and not (development_http and local_test):
         raise ValueError('Loopback dispatch URLs are not distributable')
     if parsed.port is not None and not 1 <= parsed.port <= 65535:
         raise ValueError('Invalid dispatch port')
@@ -36,11 +37,11 @@ def validate_dispatch(value, development_http=False):
         address = ipaddress.ip_address(host)
     except ValueError:
         address = None
-    if address and (address.is_loopback or address.is_unspecified):
+    if address and (address.is_unspecified or (address.is_loopback and not (development_http and local_test))):
         raise ValueError('Loopback dispatch URLs are not distributable')
     lan = address is not None and address.version == 4 and any(address in ipaddress.ip_network(net) for net in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
-    if parsed.scheme != 'https' and not (development_http and parsed.scheme == 'http' and lan):
-        raise ValueError('Dispatch URL requires HTTPS; explicit development HTTP permits private LAN IPv4 only')
+    if parsed.scheme != 'https' and not (development_http and parsed.scheme == 'http' and (lan or local_test)):
+        raise ValueError('Dispatch URL requires HTTPS; explicit development HTTP permits private LAN IPv4 or local test loopback')
     return value
 
 
