@@ -47,3 +47,28 @@ These are source-executing cloud contracts, **not Unity Player or device tests**
 Offline previews compose original EFF and GSO assets and reproduce the full
 loop clock; they are not screenshots of the running game. Assets and instance
 configuration are not bundled in this code change.
+
+## Blue dragon-person complete-body appearance
+
+Approved model: 1371, from `avatar/npc/npc1371{action:02}.gsn`.
+Existing appearance protocol is reused: Body=1371 and Cap/Face/Backpack/WeaponR/
+WeaponL=0. Head/Hair/Gender and player identity, equipment storage, skills and
+combat weapon type/range stay unchanged. `PlayerAvatar.Build` normalizes only a
+value-copy of appearance, skips human-head asset reads/composition for 1371,
+and uses the complete body bounds for nameplate height. Local PlayerController,
+RemotePlayer and the shared ReferencePlayerAvatarRuntime all use this owner.
+A later ordinary appearance snapshot rebuilds the original head/equipment.
+Missing transformed action art cannot fall back to a normal human body.
+
+The server decides transformation eligibility, including source equipment
+removal/breakage. Death remains a dragon with its death action while the server
+still reports that body. Map-entry appearance uses the same fields. This client
+change does not auto-dismount or change existing mount priority; riding uses the
+native action-13 pose when selected by the existing controller.
+
+`run-dragon-transform-contract.py` executes actual production Build/action
+methods with lightweight asset/Unity doubles to test body-only composition
+eligibility, input immutability, shared owners, all action slots, missing-action
+isolation and normal appearance restoration. It does not substitute for a Unity
+Player test. Original model files are decoded separately for offline inspection
+and are not committed to the open-source repository.

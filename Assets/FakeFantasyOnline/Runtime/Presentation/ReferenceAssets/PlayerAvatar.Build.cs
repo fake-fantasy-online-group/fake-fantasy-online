@@ -7,8 +7,19 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
 public partial class PlayerAvatar
 {
+    // This approved complete-body costume includes its own head and equipment.
+    // Normalize a value-copy only; never mutate character/equipment records.
+    internal static bool IsCompleteTransformation(int body) => body == 1371;
+
+    internal static Appear TransformationAppearance(Appear ap)
+    {
+        return IsCompleteTransformation(ap.Body) ? new Appear { Body = ap.Body } : ap;
+    }
+
     public static PlayerAvatar Build(int gender, int head, int hairColor, Appear ap, float ppu)
     {
+        ap = TransformationAppearance(ap);
+        bool completeBody = IsCompleteTransformation(ap.Body);
         ap.WeaponL = ReferenceAvatarWeaponPresentation.LeftModel(ap.WeaponR, ap.WeaponL);
         PlayerAvatar avatar = new PlayerAvatar();
         if (_liveAvatars.Count >= _avatarPurgeAt)
@@ -25,7 +36,7 @@ public partial class PlayerAvatar
         string sexCode = gender == 1 ? "01" : "51";
         head = Mathf.Clamp(head, 1, 8);
         hairColor = Mathf.Clamp(hairColor, 1, HairRGB.Length);
-        int fallbackBody = gender == 1 ? 141 : 142;
+        int fallbackBody = completeBody ? ap.Body : gender == 1 ? 141 : 142;
         int bodyModel = ap.Body > 0 ? ap.Body : fallbackBody;
         byte[] standBytes = ReadPkg(string.Format("avatar/npc/npc{0}01.gsn", bodyModel)) ??
             ReadPkg(string.Format("avatar/npc/npc{0}01.gsn", fallbackBody));
@@ -35,10 +46,10 @@ public partial class PlayerAvatar
             ReadPkg(string.Format("avatar/npc/npc{0}03.gsn", fallbackBody));
         byte[] rideBytes = ReadPkg(string.Format("avatar/npc/npc{0}13.gsn", bodyModel)) ??
             ReadPkg(string.Format("avatar/npc/npc{0}13.gsn", fallbackBody));
-        byte[] headBytes = ReadPkg(string.Format("avatar/head/head{0:D2}{1}.gsn", head, sexCode));
-        if (standBytes == null || walkBytes == null || headBytes == null) return avatar;
+        byte[] headBytes = completeBody ? null : ReadPkg(string.Format("avatar/head/head{0:D2}{1}.gsn", head, sexCode));
+        if (standBytes == null || walkBytes == null || (!completeBody && headBytes == null)) return avatar;
         DimgDecoder.Raw[] heads = new DimgDecoder.Raw[5];
-        for (int d = 0; d < 5; d++)
+        for (int d = 0; d < 5 && !completeBody; d++)
         {
             DimgDecoder.Raw raw = DimgDecoder.DecodeRaw(headBytes, d);
             if (raw.px == null && raw.px16 != null)
@@ -151,7 +162,7 @@ public partial class PlayerAvatar
         {
             DimgDecoder.Raw body = DimgDecoder.DecodeRaw(standBytes, d, false);
             if (!body.ok) continue;
-            if (!body.hasBind)
+            if (completeBody || !body.hasBind)
             {
                 headTop = Math.Max(headTop, body.boundCy - body.nTop);
                 continue;
