@@ -139,3 +139,19 @@ empty URL. Existing remote announcement and login behavior is also exercised.
 This is not a Unity Player, rendered button click, real SetupNet lifecycle, or authenticated
 server login test. The separate local-server contract exercises the actual resolver
 and a real loopback TCP socket; final Player startup/login still requires local validation.
+
+### Pending entity skill dispatch regression
+
+A separate pre-existing targeting defect affected authoritative entity skills, not
+only transformed warriors. `Update` reached `CastAtTarget` after approaching the target;
+that method re-entered `RequestSkill`, which re-queued the same request. The caller
+then cleared it, so no network writer ran. The consumer now sends the entity request
+only after checking its current target, range and cast pause; other modes keep their
+existing routing. It does not remove MP, learned-skill, cooldown or target checks.
+
+`run-pending-entity-cast-contract.py` reproduces the missing send on baseline 56d81c3
+(with `FFO_CAST_BASELINE=56d81c3`) and tests the repaired request/pending-stage/consumer/
+network-writer composition, including approach, pause/replay, single dispatch, rejected
+targets, friendly/self casts and ground casts. F-key and mouse share the original
+hotbar admission call sites. Unity input/rendering and transport are doubles here;
+this is not a claim of completed in-game casting validation.

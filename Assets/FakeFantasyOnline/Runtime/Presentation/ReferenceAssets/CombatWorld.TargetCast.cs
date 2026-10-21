@@ -45,7 +45,26 @@ public partial class CombatWorld
     {
         if (AuthoritativeProfessionSkill.Uses(skillId))
         {
-            RequestSkill(skillId, AuthoritativeProfessionSkill.Current(skillId)?.CastDistance ?? 0);
+            var behavior = AuthoritativeProfessionSkill.Current(skillId);
+            // A pending entity cast has already approached its target. Re-entering
+            // RequestSkill here only queues it again; Update then clears that queue.
+            float range = behavior != null && behavior.CastDistance > 0
+                ? behavior.CastDistance / (ppu > 0f ? ppu : 100f)
+                : float.PositiveInfinity;
+            if (behavior != null && behavior.InputMode == "entity" && target != null &&
+                pvpTarget == null && !(TargetSelect.CurrentSourceForIndependentRuntime is RemotePlayer) &&
+                Time.time >= castPauseUntil && TargetWithin(range))
+            {
+                string error = AuthoritativeProfessionSkill.ValidateTarget(skillId, target);
+                if (error != null) skillTipForIndependentRuntime(error, UIScale.Factor);
+                else if (NetClient.I != null)
+                {
+                    NetClient.I.UseSkill(skillId, target.id);
+                    autoAttacking = CharData.race < 3;
+                }
+                return;
+            }
+            RequestSkill(skillId, behavior?.CastDistance ?? 0);
             return;
         }
         int gx, gy;
