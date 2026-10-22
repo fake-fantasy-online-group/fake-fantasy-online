@@ -71,9 +71,8 @@ public partial class ResLoader
             List<string> candidates;
             if (!candidatesByObject.TryGetValue(objectKey, out candidates))
             {
-                List<string> paths = Pkg.FindAll(
-                    "object/" + objectName + "/",
-                    string.Format("_{0:D4}.gso", imageId & 0xffff));
+                IReadOnlyList<string> paths = Pkg.FindObjectCandidates(
+                    objectName, imageId & 0xffff);
                 List<string> cityCodes = new List<string>();
                 foreach (string path in paths)
                 {

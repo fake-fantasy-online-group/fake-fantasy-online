@@ -15,11 +15,51 @@ public static class BitmapFont
     private static byte[] wid;
     private static int cols;
     private static bool tried;
+    private static Texture2D nameTagAtlas;
+    private static ushort[] nameTagIndex;
+    private static byte[] nameTagWidths;
+    private static object nameTagIdentity;
+    private static byte[] nameTagAlpha;
 
     public static bool Ready => atlas && idx != null;
     // Font metrics are replaced as a set by Ensure. Layout caches must not reuse
     // rows measured against a previous index table after a reload.
     internal static object LayoutIdentity => idx;
+
+    // A map transition does not replace the font. A new atlas or metrics binding
+    // does: discard the one cached alpha plane and invalidate existing name tags.
+    internal static object NameTagIdentity
+    {
+        get
+        {
+            Ensure();
+            RefreshNameTagBinding();
+            return nameTagIdentity;
+        }
+    }
+
+    private static void RefreshNameTagBinding()
+    {
+        if (nameTagIdentity != null && ReferenceEquals(nameTagAtlas, atlas) &&
+            ReferenceEquals(nameTagIndex, idx) && ReferenceEquals(nameTagWidths, wid)) return;
+        nameTagAtlas = atlas;
+        nameTagIndex = idx;
+        nameTagWidths = wid;
+        nameTagAlpha = null;
+        nameTagIdentity = new object();
+    }
+
+    private static byte[] NameTagAlpha()
+    {
+        RefreshNameTagBinding();
+        if (nameTagAlpha != null) return nameTagAlpha;
+        Color32[] pixels = atlas.GetPixels32();
+        byte[] alpha = new byte[pixels.Length];
+        for (int i = 0; i < pixels.Length; i++) alpha[i] = pixels[i].a;
+        // Publish only a complete read. A failed read must be retried, not cached.
+        nameTagAlpha = alpha;
+        return alpha;
+    }
 
     private static void Ensure()
     {
@@ -40,6 +80,7 @@ public static class BitmapFont
             cols = atlas.width / CELL;
             atlas.filterMode = FilterMode.Point;
         }
+        RefreshNameTagBinding();
         if (!Ready) tried = false;
     }
 
@@ -158,7 +199,7 @@ public static class BitmapFont
         if ((W & 1) != 0) W++;
         int H = (topCount + 1 + (hasTitle ? 1 : 0) + (hasBottom ? 1 : 0)) * lineH + 2 * scale + extra;
         Color32[] buf = new Color32[W * H];
-        Color32[] ap = atlas.GetPixels32();
+        byte[] ap = NameTagAlpha();
         int aw = atlas.width;
         int ah = atlas.height;
 
@@ -243,8 +284,8 @@ public static class BitmapFont
                     {
                         for (int x = 0; x < CELL; x++)
                         {
-                            Color32 source = ap[(ah - 1 - sourceTop - y) * aw + sourceX + x];
-                            if (source.a < 8) continue;
+                            byte sourceAlpha = ap[(ah - 1 - sourceTop - y) * aw + sourceX + x];
+                            if (sourceAlpha < 8) continue;
                             for (int sy = 0; sy < scale; sy++)
                             {
                                 for (int sx = 0; sx < scale; sx++)
@@ -253,7 +294,7 @@ public static class BitmapFont
                                     int dy = dispTop + y * scale + sy + offy;
                                     if (dx < 0 || dx >= W || dy < 0 || dy >= H) continue;
                                     int at = (H - 1 - dy) * W + dx;
-                                    byte alpha = (byte)(source.a * col.a / 255);
+                                    byte alpha = (byte)(sourceAlpha * col.a / 255);
                                     if (alpha >= buf[at].a)
                                         buf[at] = new Color32(col.r, col.g, col.b, alpha);
                                 }

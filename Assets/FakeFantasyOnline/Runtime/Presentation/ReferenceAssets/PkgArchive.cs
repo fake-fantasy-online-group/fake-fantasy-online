@@ -23,6 +23,7 @@ public class PkgArchive
     }
 
     private readonly Dictionary<string, Entry> index;
+    private Dictionary<string, IReadOnlyList<string>> objectCandidateIndex;
 
     private const uint MAGIC_ENC = 1363695685u;
     private const ulong FNV_OFFSET = 14695981039346656037UL;
@@ -153,6 +154,7 @@ public class PkgArchive
                         pkg = file,
                         offset = -1L
                     };
+                    objectCandidateIndex = null;
                 }
             }
 
@@ -331,6 +333,7 @@ public class PkgArchive
                         enc = magic == MAGIC_ENC,
                         seed = magic == MAGIC_ENC ? FileSeed(name) : 0UL
                     };
+                    objectCandidateIndex = null;
                 }
 
                 pos = next;
@@ -406,6 +409,57 @@ public class PkgArchive
         }
 
         return result;
+    }
+
+    // BuildCityTable queries only object/<kind>/ + _<number:D4>.gso. Derive all
+    // of those candidates in one pass over the final mounted index, rather than
+    // scanning every resource again for each distinct object on every map.
+    internal IReadOnlyList<string> FindObjectCandidates(string objectName, int objectNumber)
+    {
+        if (objectCandidateIndex == null)
+        {
+            var candidates = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in index.Keys)
+            {
+                if (!path.StartsWith("object/", StringComparison.OrdinalIgnoreCase) ||
+                    !path.EndsWith(".gso", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                int slash = path.IndexOf('/', "object/".Length);
+                int underscore = path.LastIndexOf('_');
+                if (slash < 0 || underscore <= slash)
+                {
+                    continue;
+                }
+
+                // Retain the exact suffix, including leading zeroes, and include
+                // nested directories just as FindAll(prefix, suffix) does.
+                string key = path.Substring("object/".Length, slash - "object/".Length) +
+                    "/" + path.Substring(underscore);
+                List<string> paths;
+                if (!candidates.TryGetValue(key, out paths))
+                {
+                    paths = new List<string>();
+                    candidates.Add(key, paths);
+                }
+                paths.Add(path);
+            }
+
+            var complete = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, List<string>> candidate in candidates)
+            {
+                complete.Add(candidate.Key, candidate.Value.AsReadOnly());
+            }
+            objectCandidateIndex = complete;
+        }
+
+        string candidateKey = objectName + "/" + string.Format("_{0:D4}.gso", objectNumber);
+        IReadOnlyList<string> result;
+        return objectCandidateIndex.TryGetValue(candidateKey, out result)
+            ? result
+            : Array.Empty<string>();
     }
 
     public byte[] Read(string path)
