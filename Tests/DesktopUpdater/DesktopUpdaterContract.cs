@@ -145,6 +145,11 @@ internal static class DesktopUpdaterContract
         var calls = new List<string>();
         string team = "", identifier = mac.InstallId, version = mac.Version;
         bool corrupt = false, rejectAssessment = false;
+        Func<string, bool> verificationCommand = call =>
+            call == "/usr/bin/codesign --verify --deep --strict " + DesktopUpdateFiles.QuoteArgument(root) ||
+            call == "/usr/bin/codesign -d --verbose=4 " + DesktopUpdateFiles.QuoteArgument(root) ||
+            call == "/usr/libexec/PlistBuddy -c " + DesktopUpdateFiles.QuoteArgument("Print :CFBundleShortVersionString") + " " + DesktopUpdateFiles.QuoteArgument(Path.Combine(root, "Contents/Info.plist")) ||
+            call == "/usr/sbin/spctl --assess --type execute --verbose=4 " + DesktopUpdateFiles.QuoteArgument(root);
         var platform = new DesktopPlatform((command, arguments) => {
             calls.Add(command + " " + arguments);
             if (command.EndsWith("codesign") && arguments.StartsWith("--verify") && corrupt) throw new IOException("invalid code signature");
@@ -154,15 +159,21 @@ internal static class DesktopUpdaterContract
             return "";
         });
         platform.ValidateTrust(root, mac);
-        Check(calls.Exists(x => x.Contains("codesign --verify --deep --strict")) && calls.Exists(x => x.Contains("xattr -w com.apple.quarantine")), "ad-hoc Mac retains integrity and quarantine");
+        Check(calls.Exists(x => x.Contains("codesign --verify --deep --strict")), "ad-hoc Mac retains code integrity verification");
+        Check(calls.TrueForAll(call => verificationCommand(call)),
+            "ad-hoc Mac validation only verifies; it never adds, rewrites or removes existing quarantine");
         Check(!calls.Exists(x => x.Contains("spctl")), "empty Mac team does not demand Developer ID assessment");
         corrupt = true; Reject(() => platform.ValidateTrust(root, mac), "corrupt ad-hoc signature still rejected"); corrupt = false;
         identifier = "com.other.game"; Reject(() => platform.ValidateTrust(root, mac), "ad-hoc identifier still checked"); identifier = mac.InstallId;
         version = "9.0.0"; Reject(() => platform.ValidateTrust(root, mac), "ad-hoc bundle version still checked"); version = mac.Version;
+        Check(calls.TrueForAll(call => verificationCommand(call)), "ad-hoc rejection only verifies; no metadata mutation or retry bypass");
         mac.MacTeamId = team = "ABCDE12345"; calls.Clear(); platform.ValidateTrust(root, mac);
         Check(calls.Exists(x => x.Contains("spctl --assess --type execute")), "signed Mac retains OS assessment");
+        Check(calls.TrueForAll(call => verificationCommand(call)),
+            "signed Mac validation only verifies; it never adds, rewrites or removes existing quarantine");
         team = "OTHER12345"; Reject(() => platform.ValidateTrust(root, mac), "signed Mac team mismatch rejected"); team = mac.MacTeamId;
         rejectAssessment = true; Reject(() => platform.ValidateTrust(root, mac), "signed Mac OS assessment rejection enforced");
+        Check(calls.TrueForAll(call => verificationCommand(call)), "signed Mac rejection only verifies; no metadata mutation or retry bypass");
         int publisherChecks = 0; string expectedPin = new string('a', 64); bool rejectPublisher = false;
         var win = new DesktopInstallIdentity { Platform = "windows", Version = "1.0.1", InstallId = "com.example.game",
             Executable = "game.exe", MacTeamId = "", WindowsSignerSha256 = "" };

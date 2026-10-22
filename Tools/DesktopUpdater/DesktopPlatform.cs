@@ -53,9 +53,8 @@ internal sealed class DesktopPlatform : IDesktopPlatform
         DesktopUpdateFiles.NoLinks(executable);
         if (identity.Platform == "macos")
         {
-            // Mark the new app as downloaded. Gatekeeper remains authoritative; never remove quarantine.
-            string quarantine = "0083;" + DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString("x") + ";FFODesktopUpdater;" + Guid.NewGuid().ToString();
-            run("/usr/bin/xattr", "-w com.apple.quarantine " + DesktopUpdateFiles.QuoteArgument(quarantine) + " " + DesktopUpdateFiles.QuoteArgument(root));
+            // Validation does not create, rewrite or remove quarantine metadata. Non-sandboxed
+            // self-updates do not opt in here; existing marks and normal OS launch policy remain.
             // Ad-hoc signing still supplies the Mac bundle's code integrity; it is not a paid publisher identity.
             run("/usr/bin/codesign", "--verify --deep --strict " + DesktopUpdateFiles.QuoteArgument(root));
             string signing = run("/usr/bin/codesign", "-d --verbose=4 " + DesktopUpdateFiles.QuoteArgument(root));
