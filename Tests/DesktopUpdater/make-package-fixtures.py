@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic unsigned Players for packager->updater compatibility tests only."""
+"""Inert Players with signed-mode or empty pins for packager->updater tests only."""
 import importlib.util
 import json
 from pathlib import Path
@@ -8,9 +8,11 @@ root = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('packager', root / 'scripts/ci/package-desktop-update.py')
 packager = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(packager)
-output = Path(sys.argv[1])
-for platform in ('windows', 'macos'):
-    app = output / platform / ('fake-fantasy-online.app' if platform == 'macos' else 'fake-fantasy-online')
+
+
+def make_fixture(output, platform, pinned):
+    fixture_name = platform if pinned else platform + '-unsigned'
+    app = output / fixture_name / ('fake-fantasy-online.app' if platform == 'macos' else 'fake-fantasy-online')
     data = app / ('Contents/Resources/Data' if platform == 'macos' else 'fake-fantasy-online_Data')
     streaming = data / 'StreamingAssets'
     helpers = streaming / 'DesktopUpdater'
@@ -24,7 +26,15 @@ for platform in ('windows', 'macos'):
         (helpers / name).write_text('Synthetic unsigned helper; never execute.\n')
         (helpers / name).chmod(0o755)
     marker = dict(schemaVersion=1, platform=platform, version='1.0.1', installId='org.example.client', executable=executable,
-                  macTeamId='ABCDEFGHIJ' if platform == 'macos' else '', windowsSignerSha256='a'*64 if platform == 'windows' else '')
+                  macTeamId='ABCDEFGHIJ' if pinned and platform == 'macos' else '',
+                  windowsSignerSha256='a'*64 if pinned and platform == 'windows' else '')
     (marker_root / 'ffo-desktop-install.json').write_text(json.dumps(marker))
     (streaming / 'resource-bootstrap.json').write_text(json.dumps(dict(schemaVersion=1, mode='resource-free', appVersion='1.0.1', dispatchUrl='https://example.test/dispatch.json', developmentHttp=False)))
-    packager.package(app, platform, output / (platform + '.zip'))
+    packager.package(app, platform, output / (fixture_name + '.zip'))
+
+
+if __name__ == '__main__':
+    output = Path(sys.argv[1])
+    for platform in ('windows', 'macos'):
+        for pinned in (True, False):
+            make_fixture(output, platform, pinned)

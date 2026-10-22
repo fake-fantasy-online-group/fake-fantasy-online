@@ -54,4 +54,5 @@ mapfile -t sources < "$OUT/project-sources.txt"
  -main:DesktopUpdaterContract -out:"$OUT/DesktopUpdaterContract.exe" \
  "${sources[@]}" "$ROOT/Tests/DesktopUpdater/DesktopUpdaterContract.cs"
 python3 "$ROOT/Tests/DesktopUpdater/make-package-fixtures.py" "$OUT/packaged"
-"${runtime[@]}" "$OUT/DesktopUpdaterContract.exe" "$OUT/packaged/windows.zip" "$OUT/packaged/macos.zip"
+"${runtime[@]}" "$OUT/DesktopUpdaterContract.exe" "$OUT/packaged/windows.zip" "$OUT/packaged/macos.zip" \
+ "$OUT/packaged/windows-unsigned.zip" "$OUT/packaged/macos-unsigned.zip"

@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -106,7 +108,17 @@ class FormalBuildContract(unittest.TestCase):
             self.assertNotIn(secret, source)
             self.assertNotIn(secret, (ROOT / 'Assets/FakeFantasyOnline/Editor/ResourceFreeBuildProfile.cs').read_text())
 
-    def fixture(self, parent, platform='windows'):
+    def test_desktop_formal_build_keeps_required_signing_pin(self):
+        for platform, option in (('windows', '--windows-signer-sha256'), ('macos', '--mac-team-id')):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary, \
+                    patch.object(build.subprocess, 'check_output', side_effect=['a' * 40 + '\n', '']), \
+                    patch.object(build.subprocess, 'run') as run:
+                with self.assertRaisesRegex(ValueError, option):
+                    build.main(['--platform', platform, '--version', '1.0.2', '--configuration', 'formal',
+                                '--dispatch-url', 'https://example.com/dispatch.json', '--updater-directory', temporary])
+                run.assert_not_called()
+
+    def fixture(self, parent, platform='windows', pinned=True):
         root = parent / ('fake-fantasy-online.app' if platform == 'macos' else 'fake-fantasy-online')
         root.mkdir()
         executable = 'Contents/MacOS/fake-fantasy-online' if platform == 'macos' else 'fake-fantasy-online.exe'
@@ -126,26 +138,113 @@ class FormalBuildContract(unittest.TestCase):
             'appVersion': '1.0.2', 'dispatchUrl': 'https://example.com/dispatch.json', 'developmentHttp': False}))
         marker = root / ('Contents/Resources/ffo-desktop-install.json' if platform == 'macos' else 'ffo-desktop-install.json')
         marker.write_text(json.dumps({'schemaVersion': 1, 'platform': platform, 'version': '1.0.2', 'installId': 'org.example.client',
-            'executable': executable, 'macTeamId': 'ABCDEFGHIJ' if platform == 'macos' else '', 'windowsSignerSha256': 'a' * 64 if platform == 'windows' else ''}))
+            'executable': executable, 'macTeamId': 'ABCDEFGHIJ' if pinned and platform == 'macos' else '',
+            'windowsSignerSha256': 'a' * 64 if pinned and platform == 'windows' else ''}))
         return root
 
     def test_actual_zip_roundtrip_and_no_signature_claim(self):
         for platform in ('windows', 'macos'):
+            for pinned in (True, False):
+                with self.subTest(platform=platform, pinned=pinned), tempfile.TemporaryDirectory() as temporary:
+                    root = self.fixture(Path(temporary), platform, pinned)
+                    output = Path(temporary) / 'candidate.zip'
+                    receipt = pack.package(root, platform, output)
+                    self.assertFalse(receipt['signingVerified'])
+                    self.assertFalse(receipt['productionReady'])
+                    self.assertEqual(len(receipt['sha256']), 64)
+                    with zipfile.ZipFile(output) as archive:
+                        self.assertTrue(all(name.startswith(root.name + '/') for name in archive.namelist()))
+                        player = root.name + ('/Contents/MacOS/fake-fantasy-online' if platform == 'macos' else '/fake-fantasy-online.exe')
+                        self.assertTrue(archive.getinfo(player).external_attr >> 16 & 0o111)
+                        self.assertEqual(archive.read(player), b'synthetic non-executable fixture')
+                        marker_name = ('Contents/Resources/' if platform == 'macos' else '') + 'ffo-desktop-install.json'
+                        marker = json.loads(archive.read(root.name + '/' + marker_name))
+                        self.assertEqual(marker['macTeamId'], 'ABCDEFGHIJ' if pinned and platform == 'macos' else '')
+                        self.assertEqual(marker['windowsSignerSha256'], 'a' * 64 if pinned and platform == 'windows' else '')
+                    self.assertFalse(list(output.parent.glob('*.part')))
+                    with self.assertRaises(ValueError):
+                        pack.package(root, platform, output)
+
+    def test_signing_pins_are_explicit_empty_or_valid_strings_on_both_platforms(self):
+        invalid_values = {
+            'macTeamId': (None, False, 0, [], {}, ' ', 'ABCDEFGHI', 'ABCDEFGHIJK', 'abcdefghij', 'ABCDEFGHI-', 'ABCDEFGHIJ\n'),
+            'windowsSignerSha256': (None, False, 0, [], {}, ' ', 'a' * 63, 'a' * 65, 'g' * 64, 'a' * 63 + '\n', ' a' * 32),
+        }
+        for platform in ('windows', 'macos'):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
-                root = self.fixture(Path(temporary), platform)
-                output = Path(temporary) / 'candidate.zip'
-                receipt = pack.package(root, platform, output)
-                self.assertFalse(receipt['signingVerified'])
-                self.assertFalse(receipt['productionReady'])
-                self.assertEqual(len(receipt['sha256']), 64)
-                with zipfile.ZipFile(output) as archive:
-                    self.assertTrue(all(name.startswith(root.name + '/') for name in archive.namelist()))
-                    player = root.name + ('/Contents/MacOS/fake-fantasy-online' if platform == 'macos' else '/fake-fantasy-online.exe')
-                    self.assertTrue(archive.getinfo(player).external_attr >> 16 & 0o111)
-                    self.assertEqual(archive.read(player), b'synthetic non-executable fixture')
-                self.assertFalse(list(output.parent.glob('*.part')))
-                with self.assertRaises(ValueError):
-                    pack.package(root, platform, output)
+                root = self.fixture(Path(temporary), platform, pinned=False)
+                marker_path = root / (('Contents/Resources/' if platform == 'macos' else '') + 'ffo-desktop-install.json')
+                valid = json.loads(marker_path.read_text())
+                for field, values in invalid_values.items():
+                    # A missing field must not silently become an unsigned policy.
+                    missing = dict(valid)
+                    del missing[field]
+                    marker_path.write_text(json.dumps(missing))
+                    with self.subTest(field=field, missing=True), self.assertRaisesRegex(ValueError, field):
+                        pack.inspect_tree(root, platform)
+                    for value in values:
+                        marker_path.write_text(json.dumps(dict(valid, **{field: value})))
+                        with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, field):
+                            pack.inspect_tree(root, platform)
+                # Pin fields are not rewritten or normalized during packaging.
+                valid.update(macTeamId='A1B2C3D4E5', windowsSignerSha256='aB' * 32)
+                marker_path.write_text(json.dumps(valid))
+                self.assertEqual(pack.inspect_tree(root, platform)[2], valid)
+
+    def test_csharp_fixtures_include_signed_mode_and_unsigned_packages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'packaged'
+            subprocess.run([sys.executable, str(ROOT / 'Tests/DesktopUpdater/make-package-fixtures.py'), str(output)], check=True)
+            self.assertEqual(sorted(path.name for path in output.glob('*.zip')),
+                             ['macos-unsigned.zip', 'macos.zip', 'windows-unsigned.zip', 'windows.zip'])
+            for path in sorted(output.glob('*.zip')):
+                with self.subTest(package=path.name), zipfile.ZipFile(path) as archive:
+                    marker_name = next(name for name in archive.namelist() if name.endswith('/ffo-desktop-install.json'))
+                    marker = json.loads(archive.read(marker_name))
+                    self.assertEqual(bool(marker['macTeamId'] or marker['windowsSignerSha256']), '-unsigned' not in path.stem)
+                    self.assertEqual(marker['platform'], path.stem.split('-')[0])
+
+    def test_unsigned_package_keeps_identity_bootstrap_and_resource_checks(self):
+        cases = (
+            ('marker', 'schemaVersion', True), ('marker', 'platform', 'android'),
+            ('marker', 'version', '1.0.2-beta'), ('marker', 'installId', 'invalid'),
+            ('marker', 'executable', '../outside.exe'),
+            ('bootstrap', 'appVersion', '9.9.9'), ('bootstrap', 'developmentHttp', True),
+            ('bootstrap', 'dispatchUrl', 'http://example.com/dispatch.json'),
+            ('bootstrap', 'dispatchUrl', 'https://user:secret@example.com/dispatch.json'),
+            ('bootstrap', 'legacyDispatchUrls', ['http://old.example.com/dispatch.json']),
+        )
+        for platform in ('windows', 'macos'):
+            for target, field, value in cases:
+                with self.subTest(platform=platform, field=field, value=value), tempfile.TemporaryDirectory() as temporary:
+                    root = self.fixture(Path(temporary), platform, pinned=False)
+                    if target == 'marker':
+                        path = root / (('Contents/Resources/' if platform == 'macos' else '') + 'ffo-desktop-install.json')
+                    else:
+                        path = root / ('Contents/Resources/Data' if platform == 'macos' else 'fake-fantasy-online_Data') / 'StreamingAssets/resource-bootstrap.json'
+                    metadata = json.loads(path.read_text())
+                    metadata[field] = value
+                    path.write_text(json.dumps(metadata))
+                    with self.assertRaises(ValueError):
+                        pack.inspect_tree(root, platform)
+            for location in ('streaming', 'private'):
+                with self.subTest(platform=platform, location=location), tempfile.TemporaryDirectory() as temporary:
+                    root = self.fixture(Path(temporary), platform, pinned=False)
+                    data = root / ('Contents/Resources/Data' if platform == 'macos' else 'fake-fantasy-online_Data')
+                    destination = data / 'StreamingAssets/private.pkg' if location == 'streaming' else root / '.env'
+                    destination.write_text('synthetic, not user data')
+                    with self.assertRaises(ValueError):
+                        pack.inspect_tree(root, platform)
+
+    def test_unsigned_macos_requires_player_and_helper_execute_permissions(self):
+        for relative in ('Contents/MacOS/fake-fantasy-online',
+                         'Contents/Resources/Data/StreamingAssets/DesktopUpdater/DesktopUpdater-osx-arm64',
+                         'Contents/Resources/Data/StreamingAssets/DesktopUpdater/DesktopUpdater-osx-x64'):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as temporary:
+                root = self.fixture(Path(temporary), 'macos', pinned=False)
+                (root / relative).chmod(0o644)
+                with self.assertRaisesRegex(ValueError, 'must be executable'):
+                    pack.inspect_tree(root, 'macos')
 
     def test_rejects_private_data_links_and_case_collisions(self):
         for name in ('.env', 'LocalConfig/user.json', 'SavedVariables/private.json', 'secret.pfx', 'CON.txt', 'file:stream'):

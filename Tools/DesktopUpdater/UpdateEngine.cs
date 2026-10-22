@@ -13,6 +13,7 @@ public interface IDesktopPlatform
     void SetPermissions(string path, bool executable);
     void ValidateTrust(string root, DesktopInstallIdentity identity);
     void StartApplication(string root, DesktopInstallIdentity identity);
+    void RequireApplicationStopped(string root, DesktopInstallIdentity identity);
 }
 
 /// <summary>One same-volume, recoverable directory replacement. Never deletes an old application or user data.</summary>
@@ -136,14 +137,20 @@ public sealed class UpdateEngine : IDisposable
             }
             Directory.Move(candidate, request.InstallRoot); movedNew = true; checkpoint("new-renamed");
             platform.ValidateTrust(request.InstallRoot, next);
-            DesktopUpdateFiles.WriteNew(Path.Combine(request.JobDirectory, "installed"), "installed\n");
-            // No fallible transaction work after a successful launch: the new process may hold files open.
+            DesktopUpdateFiles.WriteNew(Path.Combine(request.JobDirectory, "launching"), "launching\n");
             platform.StartApplication(request.InstallRoot, next);
+        }
+        catch (DesktopLaunchUncertainException)
+        {
+            // The OS may still be showing its launch decision. Keep both versions and the recovery
+            // journal; do not move an app which could be starting, or report the update as installed.
+            throw;
         }
         catch
         {
             if (movedNew && Directory.Exists(request.InstallRoot))
             {
+                platform.RequireApplicationStopped(request.InstallRoot, next);
                 Directory.Move(request.InstallRoot, displaced);
                 if (request.Platform == "windows")
                 {
@@ -156,6 +163,13 @@ public sealed class UpdateEngine : IDisposable
             if (movedOld && !Directory.Exists(request.InstallRoot) && Directory.Exists(backup)) Directory.Move(backup, request.InstallRoot);
             if (movedOld && request.Platform == "windows") checkpoint("rollback-restored");
             throw;
+        }
+        // Outside the rollback scope: a receipt/logging failure cannot move a confirmed running app.
+        try { DesktopUpdateFiles.WriteNew(Path.Combine(request.JobDirectory, "installed"), "installed\n"); }
+        catch (Exception error)
+        {
+            try { Console.Error.WriteLine("Application started; unable to save launch receipt: " + error.Message); }
+            catch (IOException) { } catch (ObjectDisposedException) { }
         }
     }
     private static bool HasWindowsResources(string root)

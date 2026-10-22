@@ -111,13 +111,16 @@ def inspect_tree(source, platform):
     helper_root = streaming / 'DesktopUpdater'
     if sorted(p.name for p in helper_root.iterdir()) != helpers or any(not (helper_root / name).is_file() or (helper_root / name).stat().st_size == 0 for name in helpers):
         raise ValueError('Incorrect self-contained updater payload')
+    # Empty pins describe the existing no-certificate distribution. They are
+    # still explicit strings in the install contract, not a server-controlled
+    # switch. Never reinterpret malformed or omitted signing metadata as empty.
+    for field, pattern in (('macTeamId', r'[A-Z0-9]{10}'), ('windowsSignerSha256', r'[0-9a-fA-F]{64}')):
+        pin = marker.get(field)
+        if not isinstance(pin, str) or (pin != '' and not re.fullmatch(pattern, pin)):
+            raise ValueError('Invalid desktop signing identity: ' + field)
     if platform == 'macos':
-        if not re.fullmatch(r'[A-Z0-9]{10}', marker.get('macTeamId', '')):
-            raise ValueError('Existing Developer ID Team ID is required')
         if any(not path.stat().st_mode & 0o111 for path in [source / executable, *[helper_root / name for name in helpers]]):
             raise ValueError('Player and updater binaries must be executable before signing/packaging')
-    elif not re.fullmatch(r'[0-9a-fA-F]{64}', marker.get('windowsSignerSha256', '')):
-        raise ValueError('Existing Windows signer SHA-256 is required')
     return source, files, marker
 
 
@@ -138,7 +141,7 @@ def package(source, platform, output):
             for path, name, before in files:
                 after = path.lstat()
                 if (after.st_ino, after.st_dev, after.st_mode, after.st_size, after.st_mtime_ns) != (before.st_ino, before.st_dev, before.st_mode, before.st_size, before.st_mtime_ns):
-                    raise ValueError('Build tree changed during packaging; retry from immutable signed output')
+                    raise ValueError('Build tree changed during packaging; retry from immutable output')
                 archive.write(path, name + ('/' if stat.S_ISDIR(before.st_mode) else ''))
         if Path(temporary).stat().st_size > MAX_COMPRESSED:
             raise ValueError('Compressed archive exceeds updater limit')
@@ -169,4 +172,4 @@ if __name__ == '__main__':
         result = package(args.source, args.platform, args.output)
     except (ValueError, OSError, KeyError, TypeError, zipfile.LargeZipFile) as error:
         raise SystemExit(str(error))
-    print('ZIP structure and SHA-256 verified; OS signature/notarization and actual update acceptance remain required.')
+    print('ZIP structure and SHA-256 verified; configured signing policy, OS launch policy and actual update acceptance remain unverified.')

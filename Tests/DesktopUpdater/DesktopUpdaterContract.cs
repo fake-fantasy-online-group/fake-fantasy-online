@@ -16,12 +16,23 @@ internal static class DesktopUpdaterContract
     private static readonly List<string> liveResourceFailures = new List<string>();
     private static void Check(bool value, string name) { if (!value) throw new Exception(name); checks++; }
     private static void Reject(Action action, string name) { try { action(); } catch (Exception) { checks++; return; } throw new Exception("Expected rejection: " + name); }
+    private sealed class FailedLog : TextWriter
+    {
+        public override Encoding Encoding { get { return Encoding.UTF8; } }
+        public override void Write(char value) { throw new IOException("stderr unavailable"); }
+    }
     private sealed class Platform : IDesktopPlatform
     {
-        public bool RejectTrust, RejectLaunch; public int Trusts, Launches, RejectTrustAt;
+        public bool RejectTrust, RejectLaunch, UncertainLaunch, RunningAtRollback; public int Trusts, Launches, RejectTrustAt;
         public void SetPermissions(string path, bool executable) { }
         public void ValidateTrust(string root, DesktopInstallIdentity id) { Trusts++; if (RejectTrust || Trusts == RejectTrustAt) throw new IOException("trust denied"); }
-        public void StartApplication(string root, DesktopInstallIdentity id) { Launches++; if (RejectLaunch) throw new IOException("launch denied"); }
+        public void StartApplication(string root, DesktopInstallIdentity id) {
+            Launches++;
+            if (UncertainLaunch) throw new DesktopLaunchUncertainException("launch still pending");
+            if (RejectLaunch) throw new IOException("launch denied");
+        }
+        public void RequireApplicationStopped(string root, DesktopInstallIdentity id)
+        { if (RunningAtRollback) throw new DesktopLaunchUncertainException("new application running"); }
     }
     private sealed class Fixture : IDisposable
     {
@@ -126,8 +137,81 @@ internal static class DesktopUpdaterContract
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root,true); }
     }
+    private static void TrustModes()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "nonexistent-trust-fixture-" + Guid.NewGuid().ToString("N"));
+        var mac = new DesktopInstallIdentity { Platform = "macos", Version = "1.0.1", InstallId = "com.example.game",
+            Executable = "Contents/MacOS/game", MacTeamId = "", WindowsSignerSha256 = "" };
+        var calls = new List<string>();
+        string team = "", identifier = mac.InstallId, version = mac.Version;
+        bool corrupt = false, rejectAssessment = false;
+        var platform = new DesktopPlatform((command, arguments) => {
+            calls.Add(command + " " + arguments);
+            if (command.EndsWith("codesign") && arguments.StartsWith("--verify") && corrupt) throw new IOException("invalid code signature");
+            if (command.EndsWith("codesign") && arguments.StartsWith("-d")) return "Identifier=" + identifier + "\nTeamIdentifier=" + team + "\n";
+            if (command.EndsWith("PlistBuddy")) return version;
+            if (command.EndsWith("spctl") && rejectAssessment) throw new IOException("Gatekeeper rejected package");
+            return "";
+        });
+        platform.ValidateTrust(root, mac);
+        Check(calls.Exists(x => x.Contains("codesign --verify --deep --strict")) && calls.Exists(x => x.Contains("xattr -w com.apple.quarantine")), "ad-hoc Mac retains integrity and quarantine");
+        Check(!calls.Exists(x => x.Contains("spctl")), "empty Mac team does not demand Developer ID assessment");
+        corrupt = true; Reject(() => platform.ValidateTrust(root, mac), "corrupt ad-hoc signature still rejected"); corrupt = false;
+        identifier = "com.other.game"; Reject(() => platform.ValidateTrust(root, mac), "ad-hoc identifier still checked"); identifier = mac.InstallId;
+        version = "9.0.0"; Reject(() => platform.ValidateTrust(root, mac), "ad-hoc bundle version still checked"); version = mac.Version;
+        mac.MacTeamId = team = "ABCDE12345"; calls.Clear(); platform.ValidateTrust(root, mac);
+        Check(calls.Exists(x => x.Contains("spctl --assess --type execute")), "signed Mac retains OS assessment");
+        team = "OTHER12345"; Reject(() => platform.ValidateTrust(root, mac), "signed Mac team mismatch rejected"); team = mac.MacTeamId;
+        rejectAssessment = true; Reject(() => platform.ValidateTrust(root, mac), "signed Mac OS assessment rejection enforced");
+        int publisherChecks = 0; string expectedPin = new string('a', 64); bool rejectPublisher = false;
+        var win = new DesktopInstallIdentity { Platform = "windows", Version = "1.0.1", InstallId = "com.example.game",
+            Executable = "game.exe", MacTeamId = "", WindowsSignerSha256 = "" };
+        version = win.Version;
+        var windows = new DesktopPlatform(verifyWindowsPublisher: (path, pin) => {
+            publisherChecks++; Check(pin == expectedPin && path == Path.Combine(root, "game.exe"), "signed Windows validation receives exact pin and executable");
+            if (rejectPublisher) throw new IOException("publisher verification rejected");
+        }, productVersion: path => version);
+        windows.ValidateTrust(root, win); Check(publisherChecks == 0, "unsigned Windows does not require Authenticode");
+        version = "9.0.0"; Reject(() => windows.ValidateTrust(root, win), "unsigned Windows version mismatch rejected"); version = win.Version;
+        win.WindowsSignerSha256 = expectedPin; windows.ValidateTrust(root, win); Check(publisherChecks == 1, "signed Windows publisher validation retained");
+        rejectPublisher = true; Reject(() => windows.ValidateTrust(root, win), "signed Windows validation failure remains fatal");
+        foreach (string os in new[] { "windows", "macos" })
+        using (var f = new Fixture(os))
+        {
+            var installed = DesktopInstallIdentity.Read(f.Install, os);
+            var next = DesktopInstallIdentity.Read(f.Install, os); next.Version = "1.0.1";
+            if (os == "windows") installed.WindowsSignerSha256 = expectedPin; else installed.MacTeamId = "ABCDE12345";
+            Reject(() => installed.RequireUpdate(next, "1.0.1"), os + " signed policy cannot downgrade to empty");
+            next.WindowsSignerSha256 = installed.WindowsSignerSha256; next.MacTeamId = installed.MacTeamId;
+            installed.RequireUpdate(next, "1.0.1"); Check(true, os + " matching signed policy accepted");
+        }
+    }
+    private static void LaunchConfirmation()
+    {
+        double seconds = 0;
+        DesktopPlatform.ConfirmLaunch(() => seconds < 1 ? 0 : 1, () => seconds += .25, () => TimeSpan.FromSeconds(seconds));
+        Check(seconds == 4, "launch waits for actual process and three seconds of survival");
+        seconds = 0;
+        DesktopPlatform.ConfirmLaunch(() => seconds < 29 ? 0 : 1, () => seconds += .25, () => TimeSpan.FromSeconds(seconds));
+        Check(seconds == 32, "late process receives the complete survival window");
+        string root = Path.Combine(Path.GetTempPath(), "launch-identity-fixture");
+        Check(DesktopPlatform.MatchesExecutable(Path.Combine(root, "game.exe"), Path.Combine(root, "game.exe"), "windows"), "matching executable path accepted");
+        Check(!DesktopPlatform.MatchesExecutable(Path.Combine(root, "other", "game.exe"), Path.Combine(root, "game.exe"), "windows"), "same process name from another directory cannot confirm launch");
+        seconds = 0;
+        Reject(() => DesktopPlatform.ConfirmLaunch(() => seconds < 1 ? 1 : -1, () => seconds += .25,
+            () => TimeSpan.FromSeconds(seconds)), "immediate process exit is launch failure");
+        seconds = 0; bool uncertain = false;
+        try { DesktopPlatform.ConfirmLaunch(() => 0, () => seconds += 1, () => TimeSpan.FromSeconds(seconds)); }
+        catch (DesktopLaunchUncertainException) { uncertain = true; }
+        Check(uncertain && seconds == 30, "accepted launch with no process is uncertain, not successful or safely stopped");
+        uncertain = false;
+        try { DesktopPlatform.ConfirmLaunch(() => { throw new InvalidOperationException("inspection failed"); }, () => {}, () => TimeSpan.Zero); }
+        catch (DesktopLaunchUncertainException) { uncertain = true; }
+        Check(uncertain, "inspection failure cannot cause blind rollback");
+    }
     public static int Main(string[] args)
     {
+        TrustModes(); LaunchConfirmation();
         foreach (string platform in new[] { "windows", "macos" })
         using (var f = new Fixture(platform))
         {
@@ -185,6 +269,34 @@ internal static class DesktopUpdaterContract
             { engine.Prepare(CancellationToken.None); Reject(engine.Commit, "installed trust failure rolls back"); }
             Check(DesktopInstallIdentity.Read(f.Install,"windows").Version == "1.0.0", "installed trust failure old app restored");
             CheckResources(f.Install, "installed trust failure preserves resources");
+        }
+        foreach (string os in new[] { "windows", "macos" })
+        foreach (bool running in new[] { false, true })
+        using (var f = new Fixture(os))
+        {
+            SeedResources(f.Install); f.Zip(); string backup;
+            var platform = new Platform { UncertainLaunch = !running, RejectLaunch = running, RunningAtRollback = running };
+            using (var engine = new UpdateEngine(f.Request, platform))
+            { engine.Prepare(CancellationToken.None); backup = engine.BackupPath; Reject(engine.Commit, "uncertain/running launch retained " + os); }
+            Check(DesktopInstallIdentity.Read(f.Install, os).Version == "1.0.1", "possibly running app was not moved " + os);
+            Check(DesktopInstallIdentity.Read(backup, os).Version == "1.0.0", "old backup retained for recovery " + os);
+            Check(!File.Exists(Path.Combine(f.Job, "installed")), "uncertain launch has no success receipt " + os);
+            Check(!Directory.Exists(f.Install + ".update-failed-" + Path.GetFileName(f.Job)), "no live-root rename on uncertainty " + os);
+            CheckResources(os == "windows" ? f.Install : backup, "uncertain launch resource owner " + os);
+        }
+        foreach (bool failedLog in new[] { false, true })
+        using (var f = new Fixture())
+        {
+            f.Zip();
+            using (var engine = new UpdateEngine(f.Request, new Platform(), point => {
+                if (point == "new-renamed") Directory.CreateDirectory(Path.Combine(f.Job, "installed"));
+            }))
+            {
+                engine.Prepare(CancellationToken.None); var previousLog = Console.Error;
+                try { if (failedLog) Console.SetError(new FailedLog()); engine.Commit(); }
+                finally { Console.SetError(previousLog); }
+            }
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.1", "receipt failure after confirmed launch cannot roll back running app");
         }
         foreach (string point in new[] { "old-renamed", "resources-staged", "new-renamed", "recovery-displaced", "recovery-resources-restored" })
         using (var f = new Fixture())

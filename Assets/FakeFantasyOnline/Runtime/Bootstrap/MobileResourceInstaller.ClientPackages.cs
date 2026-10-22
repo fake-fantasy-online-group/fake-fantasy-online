@@ -162,7 +162,7 @@ public sealed partial class MobileResourceInstaller
                         UnityEngine.Application.persistentDataPath, path, PlatformKey(), config.appVersion, artifact);
                 }
                 desktopState = "preparing";
-                Phase("准备桌面更新", "独立更新器正在检查 ZIP、应用身份和系统签名。游戏尚未退出。", 0);
+                Phase("准备桌面更新", "独立更新器正在检查更新包、应用身份和当前发行的签名要求。游戏尚未退出。", 0);
                 clientPackageNotice = "验证通过后需点击退出并安装 · 用户数据和旧版本保留";
             }
             catch (Exception exception)
@@ -218,8 +218,8 @@ public sealed partial class MobileResourceInstaller
             if (snapshot == "ready")
             {
                 failed = false;
-                Phase("更新包已通过系统验证", "点击后游戏退出，独立更新器会替换应用并重新打开。", 0);
-                clientPackageNotice = "退出后安装 · 用户设置和资源保留 · 旧应用保留用于恢复";
+                Phase("更新包已准备好", "点击后游戏退出，独立更新器会替换应用并尝试重新打开；系统可能要求确认。", 0);
+                clientPackageNotice = "退出后安装 · 用户设置和资源保留 · 启动失败可恢复旧应用";
             }
             else if (snapshot.StartsWith("failed\n", StringComparison.Ordinal))
             {
