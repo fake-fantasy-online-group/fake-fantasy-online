@@ -176,7 +176,8 @@ public sealed class EndgameRiftView
         Tier = EndgameData.Int(d, "tier"); Progress = EndgameData.Int(d, "progress"); ProgressMax = EndgameData.Int(d, "progressMax"); RemainingSeconds = EndgameData.Int(d, "remainingSeconds"); TotalSeconds = EndgameData.Int(d, "totalSeconds");
         BossName = EndgameData.String(d, "bossName"); KeyCount = EndgameData.Int(d, "keyCount"); KeyItemID = EndgameData.Int(d, "keyItemId"); Claimable = EndgameData.Bool(d, "claimable"); PendingLoot = EndgameData.Int(d, "pendingLoot");
         Members = EndgameData.List(d, "members", 5, v => new EndgameRiftMemberView(EndgameData.Object(v)));
-        Auras = EndgameData.List(d, "auras", 2048, v => new EndgameRiftAuraView(EndgameData.Object(v)));
+        // Aura population is gameplay-owned. Frame/assembled-byte and JSON node budgets bound allocation.
+        Auras = EndgameData.List(d, "auras", int.MaxValue, v => new EndgameRiftAuraView(EndgameData.Object(v)));
         Globes = EndgameData.List(d, "globes", 1024, v => new EndgameRiftGlobeView(EndgameData.Object(v)));
         Telegraphs = EndgameData.List(d, "telegraphs", 128, v => new EndgameRiftTelegraphView(EndgameData.Object(v)));
         MapID = EndgameData.Int(d, "mapId"); ServerNowMS = EndgameData.Long(d, "serverNowMS");
@@ -210,7 +211,7 @@ public sealed class EndgameRiftView
                     throw new FormatException("Invalid rift aura snapshot.");
                 if (aura.CloneOf.Length > 0) clones++;
             }
-            if (clones > 96 || Auras.Count - clones > 321) throw new FormatException("Rift aura budget exceeded.");
+            if (clones > 96) throw new FormatException("Rift aura budget exceeded.");
         }
         GuardianArrival = EndgameData.Optional(d, "guardianArrival", v => new EndgameRiftGuardianArrivalView(EndgameData.Object(v)));
         if (Phase != "boss_arriving" && GuardianArrival != null) throw new FormatException("Invalid guardian arrival phase.");

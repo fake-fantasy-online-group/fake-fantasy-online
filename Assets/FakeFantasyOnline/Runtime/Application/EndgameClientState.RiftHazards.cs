@@ -14,6 +14,7 @@ public sealed partial class EndgameClientState
     private int riftHazardBoundFloor, riftHazardBoundMap;
     public void NoteRiftSceneChange()
     {
+        DiscardRiftPages();
         RiftHazards.Suspend();
         // Private context normally precedes the native teleport. Consume it once;
         // a reused native map cannot borrow a previous floor's context.

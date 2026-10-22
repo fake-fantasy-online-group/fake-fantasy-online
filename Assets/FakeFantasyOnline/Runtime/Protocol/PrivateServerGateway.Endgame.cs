@@ -24,6 +24,7 @@ public sealed partial class PrivateServerGateway : IEndgameClient
         if (!_host.IsHostThread || !EndgameInWorld || _worldEntryAdmission != null) return;
         Endgame.Tick(DateTime.UtcNow);
         if (!Endgame.HelloSent) SendEndgame(new EndgameRequest("hello"));
+        if (Endgame.NeedsRiftPageNegotiation) SendEndgame(new EndgameRequest("capabilities"));
         // Native lock/warehouse/appearance receipts need not include a sidecar.
         // Run after this frame's Pump: a full push or an assembling push already
         // owns recovery; otherwise issue one read for all native changes drained.
@@ -76,16 +77,20 @@ public sealed partial class PrivateServerGateway : IEndgameClient
             EndgameResponse response = PrivateServerEndgameCodec.Decode(payload);
             if (response.Kind == "rift.context") { Endgame.Apply(response); return true; }
             if (!EndgameInWorld || !Endgame.HelloSent) return true;
-            bool previouslyNegotiated = Endgame.Negotiated;
+            response = Endgame.ResolveRiftPage(response);
+            if (response == null) return true;
+            bool previouslyNegotiated = Endgame.Negotiated, previouslyPaged = Endgame.RiftPagesV1;
             Endgame.Apply(response);
             if (response.RequestID.Length > 0 && !Endgame.Pending) endgameRetryJournal.Complete(EndgameScope, response.RequestID);
             if (!previouslyNegotiated && Endgame.Negotiated)
             {
                 Endgame.RestoreUncertainRequest(endgameRetryJournal.Find(EndgameScope));
                 SendEndgame(new EndgameRequest("snapshot"));
-                SendEndgame(new EndgameRequest("rift.state"));
+                if (Endgame.NeedsRiftPageNegotiation) SendEndgame(new EndgameRequest("capabilities"));
+                else if (!Endgame.RiftPagesAvailable) SendEndgame(new EndgameRequest("rift.state"));
                 if (Endgame.GrowthV5) SendEndgame(new EndgameRequest("skill.ranks"));
             }
+            if (!previouslyPaged && Endgame.RiftPagesV1) SendEndgame(new EndgameRequest("rift.state"));
             if (response.Error == "stale_revision")
             {
                 SendEndgame(new EndgameRequest("snapshot"));

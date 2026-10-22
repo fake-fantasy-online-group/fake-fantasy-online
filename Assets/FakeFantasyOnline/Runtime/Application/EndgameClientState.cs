@@ -65,7 +65,7 @@ public sealed partial class EndgameClientState
     public void Reset()
     {
         Negotiated = NativeEquipmentStats = GrowthV5 = SkillBehaviorV1 = SkillVariantsV1 = HelloSent = HasSnapshot = false; ResetSkillRanks(); Revision = SnapshotRevision = "0"; CatalogVersion = Error = Message = "";
-        responses.Clear(); responseOrder.Clear(); RiftHazards.Reset(); ResetRiftHazardContext();
+        responses.Clear(); responseOrder.Clear(); ResetRiftPages(); RiftHazards.Reset(); ResetRiftHazardContext();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         CubeItemID = 0; CubeNPC = CubeLore = "";
         PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
@@ -82,6 +82,7 @@ public sealed partial class EndgameClientState
         if (request.Op == "hello")
         { RiftEntrances = Array.Empty<EndgameRiftEntranceView>(); helloRequestID = request.RequestID; HelloSent = true; helloAttempts++; helloRetryScheduled = false; helloAwaitingResponse = true; helloRequestedAt = DateTime.UtcNow; Error = ""; Version++; return true; }
         if (!Negotiated) return false;
+        if (request.Op == "capabilities") return BeginRiftCapabilities(request);
         // A native-only publication gets one coalesced read, including a failed
         // send. Manual refresh remains available; host ticks never retry forever.
         if (request.Op == "snapshot") nativeSnapshotRefreshPending = false;
@@ -109,11 +110,13 @@ public sealed partial class EndgameClientState
     {
         if (request != null && !request.Mutates) ReleaseReadRequest(request.RequestID);
         if (request != null && request.Op == "hello") ScheduleHelloRetry(DateTime.UtcNow);
+        if (request != null && request.Op == "capabilities") RetryRiftCapabilities(DateTime.UtcNow);
         Error = "pending"; Message = message; Version++;
     }
-    public void NoteInvalidResponse(string message) { DiscardChunks(); Error = "invalid_response"; Message = message; Version++; }
+    public void NoteInvalidResponse(string message) { DiscardChunks(); DiscardRiftPages(); Error = "invalid_response"; Message = message; Version++; }
     public void Tick(DateTime now)
     {
+        TickRiftPages(now);
         // A read-only hello can disappear during a map transfer or a dropped
         // send. Release it after a bounded wait, then use the same cooldown as
         // transient server errors. Never retry each host frame indefinitely.
@@ -167,6 +170,8 @@ public sealed partial class EndgameClientState
     }
     public bool Apply(EndgameResponse response)
     {
+        response = ResolveRiftPage(response);
+        if (response == null) return false;
         // The scene context precedes native map entry and is safe before hello.
         // It grants no mutation capability; it only prevents speculative gate loads.
         if (response.Kind == "rift.context")
@@ -175,6 +180,7 @@ public sealed partial class EndgameClientState
             if (!response.OK || !response.Result.TryGetValue("inInstance", out string inside) ||
                 (inside != "true" && inside != "false"))
                 throw new FormatException("Invalid rift scene context.");
+            DiscardRiftPages();
             ApplyRiftHazardContext(response, inside == "true");
             RiftInInstance = inside == "true";
             RiftContextKnown = hasRiftSceneContext = true;
@@ -226,6 +232,7 @@ public sealed partial class EndgameClientState
                 SkillBehaviorV1 = GrowthV5 && skillBehavior; SkillVariantsV1 = SkillBehaviorV1 && skillVariants;
                 if (!GrowthV5 || previousVariants != SkillVariantsV1) ResetSkillRanks();
             }
+            if (accepted) OfferRiftPages(response);
             Error = accepted ? "" : response.Error;
             helloAwaitingResponse = helloRetryScheduled = false;
             if (!accepted && transientHello)
@@ -240,17 +247,20 @@ public sealed partial class EndgameClientState
             Version++; return accepted;
         }
         if (!Negotiated) return false;
+        if (response.Kind == "capabilities") return ApplyRiftCapabilities(response);
         if (PendingRequest != null && response.RequestID == PendingRequest.RequestID && !PendingRequest.MatchesResponse(response))
         { NoteInvalidResponse("服务器回执类型与原请求不符，请查询原请求。"); return false; }
         if (QuoteRequestID.Length > 0 && response.RequestID == QuoteRequestID && response.Kind != "cube.quote")
         { NoteInvalidResponse("服务器问鼎回执类型无效，请刷新重试。"); return false; }
         if (response.RequestID == QuoteRequestID) QuotePending = false;
         bool receipt = PendingRequest != null && response.RequestID == PendingRequest.RequestID;
+        double receivedNow = MonotonicMS;
+        double assemblyAge = response.RiftPageReceivedUtc == default(DateTime) ? 0 : Math.Max(0, receivedNow - response.RiftPageReceivedMS);
         // A rejected admission can still return the authoritative prior run to claim.
         if (response.Rift != null && (Rift == null || Rift.RunID != response.Rift.RunID || CompareRevision(response.Rift.Revision, Rift.Revision) >= 0) &&
-            RiftHazards.Apply(response.Rift, MonotonicMS))
+            RiftHazards.Apply(response.Rift, receivedNow, assemblyAge))
         {
-            DateTime received = DateTime.UtcNow;
+            DateTime received = response.RiftPageReceivedUtc == default(DateTime) ? DateTime.UtcNow : response.RiftPageReceivedUtc;
             var previousArrival = Rift?.GuardianArrival;
             var nextArrival = response.Rift.GuardianArrival;
             if (Rift != null && Rift.RunID == response.Rift.RunID && previousArrival != null && nextArrival != null && previousArrival.ID == nextArrival.ID)
@@ -306,6 +316,7 @@ public sealed partial class EndgameClientState
             case "materials": return "材料不足或所选材料已变化。";
             case "funds": return "铜币不足。";
             case "locked": return "所选物品已锁定。";
+            case "update_required": return "请更新客户端后进入洞天。";
             case "run_expired": return "洞天已结束。";
             case "party_changed": return "队伍已变化，请重新集合。";
             default: return code;

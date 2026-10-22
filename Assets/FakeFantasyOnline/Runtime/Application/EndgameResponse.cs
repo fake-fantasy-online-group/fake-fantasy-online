@@ -20,6 +20,10 @@ public sealed class EndgameResponse
     public string SnapshotID { get; }
     public int Chunk { get; }
     public int Chunks { get; }
+    public int TotalBytes { get; }
+    public string Data { get; }
+    internal DateTime RiftPageReceivedUtc { get; set; }
+    internal double RiftPageReceivedMS { get; set; }
     public IReadOnlyList<EndgameItemView> Items { get; }
     public IReadOnlyList<EndgameRuneView> Runes { get; }
     public IReadOnlyList<EndgameFormationView> Formations { get; }
@@ -33,12 +37,22 @@ public sealed class EndgameResponse
     public IReadOnlyDictionary<string, string> Result { get; }
     private EndgameResponse(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances");
+        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data");
         Kind = EndgameData.String(d, "kind", 64); RequestID = EndgameData.String(d, "requestId", 64); OK = EndgameData.Bool(d, "ok");
         Error = EndgameData.String(d, "error", 64); Message = EndgameData.String(d, "message"); Revision = EndgameData.ID(d, "revision"); CatalogVersion = EndgameData.String(d, "catalogVersion", 128);
         Capabilities = EndgameData.List(d, "capabilities", 16, v => EndgameData.Text(v, "capabilities", 64));
         Cursor = EndgameData.String(d, "cursor", 128); NextCursor = EndgameData.String(d, "nextCursor", 128); SnapshotID = EndgameData.String(d, "snapshotId", 128);
         Chunk = EndgameData.Int(d, "chunk"); Chunks = EndgameData.Int(d, "chunks");
+        TotalBytes = EndgameData.Int(d, "totalBytes"); Data = EndgameData.String(d, "data", RiftPageBytes / 3 * 4);
+        if (Kind == "rift.page")
+        {
+            EndgameData.Keys(d, "kind", "ok", "snapshotId", "chunk", "chunks", "totalBytes", "data");
+            EndgameData.Required(d, "ok", "snapshotId", "chunks", "totalBytes", "data");
+            if (!OK || SnapshotID.Length == 0 || TotalBytes <= 0 || TotalBytes > MaximumRiftSnapshotBytes ||
+                Chunks != (TotalBytes + RiftPageBytes - 1) / RiftPageBytes || Chunk < 0 || Chunk >= Chunks || Data.Length == 0)
+                throw new FormatException("Invalid rift page envelope.");
+        }
+        else if (d.ContainsKey("totalBytes") || d.ContainsKey("data")) throw new FormatException("Unexpected rift page fields.");
         Items = EndgameData.List(d, "items", 32, v => new EndgameItemView(EndgameData.Object(v)));
         Runes = EndgameData.List(d, "runes", 32, v => new EndgameRuneView(EndgameData.Object(v)));
         Formations = EndgameData.List(d, "formations", 32, v => new EndgameFormationView(EndgameData.Object(v)));
@@ -55,6 +69,18 @@ public sealed class EndgameResponse
         if (Kind.Length == 0 || Chunk < 0 || Chunks < 0 || Chunks > 128) throw new FormatException("Invalid endgame envelope.");
     }
     public const int MaximumBytes = 60 * 1024;
+    public const int RiftPageBytes = 36 * 1024;
+    public const int MaximumRiftSnapshotBytes = 1024 * 1024;
+    // Only the negotiated, bounded page assembler may parse a larger logical document.
+    // Native frame size, schema, strict UTF-8 and the shared JSON structural limits do not change.
+    internal static EndgameResponse ParseAssembledRift(byte[] utf8)
+    {
+        if (utf8 == null || utf8.Length == 0 || utf8.Length > MaximumRiftSnapshotBytes) throw new FormatException("Rift snapshot exceeds limit.");
+        var response = new EndgameResponse(EndgameData.Object(BoundedJson.Parse(new UTF8Encoding(false, true).GetString(utf8))));
+        if (response.Rift == null || !response.Kind.StartsWith("rift.", StringComparison.Ordinal) || response.Kind == "rift.page" || response.Kind == "rift.context")
+            throw new FormatException("Invalid assembled rift response.");
+        return response;
+    }
     public static EndgameResponse Parse(string json)
     {
         if (json == null || Encoding.UTF8.GetByteCount(json) > MaximumBytes) throw new FormatException("Endgame payload exceeds limit.");

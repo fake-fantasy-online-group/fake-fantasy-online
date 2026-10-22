@@ -44,8 +44,10 @@ public sealed class EndgameRiftHazardState
         return latestLocal;
     }
     public double ServerTimeMS(double monotonicMS) => serverAnchor + Math.Max(0, ObserveLocal(monotonicMS) - localAnchor);
-    public bool Apply(EndgameRiftView next, double monotonicMS)
+    public bool Apply(EndgameRiftView next, double monotonicMS) => Apply(next, monotonicMS, 0);
+    public bool Apply(EndgameRiftView next, double monotonicMS, double snapshotAgeMS)
     {
+        if (double.IsNaN(snapshotAgeMS) || double.IsInfinity(snapshotAgeMS) || snapshotAgeMS < 0) throw new ArgumentOutOfRangeException(nameof(snapshotAgeMS));
         double localNow = ObserveLocal(monotonicMS);
         if (next == null || next.ServerNowMS == 0)
         {
@@ -62,7 +64,9 @@ public sealed class EndgameRiftHazardState
             foreach (var hazard in next.Hazards)
                 if (lifetimes.TryGetValue(hazard.ID, out Lifetime prior) && !SameEffect(prior.View, hazard))
                     throw new FormatException("Rift hazard identity changed.");
-        double serverNow = snapshotTime == 0 ? next.ServerNowMS : Math.Max(ServerTimeMS(localNow), next.ServerNowMS);
+        // Page assembly must not restart an effect clock after a slow transfer.
+        double receivedServerNow = next.ServerNowMS + snapshotAgeMS;
+        double serverNow = snapshotTime == 0 ? receivedServerNow : Math.Max(ServerTimeMS(localNow), receivedServerNow);
         serverAnchor = serverNow; localAnchor = localNow; snapshotTime = next.ServerNowMS;
         if (!sameScope) lifetimes.Clear();
         var present = new HashSet<string>(StringComparer.Ordinal);
