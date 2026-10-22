@@ -235,11 +235,23 @@ internal static class DesktopUpdaterContract
                     "unknown unrelated named system process is not an app " + platform);
             }
             foreach (string unknownName in new string[] { null, "", " " })
-                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(null, () => unknownName, f.Install, identity, false),
-                    "missing process name is not proof of unrelated process " + platform);
-            ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(null,
-                () => { throw new System.ComponentModel.Win32Exception("denied"); }, f.Install, identity, false),
-                "unreadable name blocks replacement " + platform);
+                Check(!DesktopPlatform.MatchesObservedProcess(null, () => unknownName, f.Install, identity, false),
+                    "anonymous system process is not a target candidate " + platform);
+            for (int poll = 0; poll < 3; poll++)
+                Check(!DesktopPlatform.MatchesObservedProcess(
+                    () => { throw new System.ComponentModel.Win32Exception("denied"); },
+                    () => null, () => null, f.Install, identity, false),
+                    "permanently unreadable system process does not block every poll " + platform);
+            foreach (Exception error in new Exception[] { new System.ComponentModel.Win32Exception("denied"), new InvalidOperationException("unavailable") })
+            {
+                Check(!DesktopPlatform.MatchesObservedProcess(() => { throw error; }, () => { throw error; },
+                    () => { throw error; }, f.Install, identity, false), "anonymous query failures are not target evidence " + platform);
+                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(() => { throw error; }, () => { throw error; },
+                    () => "game", f.Install, identity, false), "unreadable same-name target still blocks replacement " + platform);
+                Check(DesktopPlatform.MatchesObservedProcess(() => { throw error; },
+                    () => Path.Combine(f.Install, identity.Executable), () => { throw error; }, f.Install, identity, false),
+                    "failed exit/name queries cannot hide a readable target path " + platform);
+            }
             if (platform == "macos")
             {
                 identity.Executable = "Contents/MacOS/FFOUpdaterFixture";

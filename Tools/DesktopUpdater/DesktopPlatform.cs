@@ -106,7 +106,8 @@ internal sealed class DesktopPlatform : IDesktopPlatform
                 if (!MatchesExecutable(DesktopUpdateFiles.ProcessModulePath(application.MainModule), executable, identity.Platform))
                     throw new DesktopLaunchUncertainException("The OS returned a different application process." + RecoveryHint);
                 long currentStart = application.StartTime.ToUniversalTime().Ticks;
-                if (startTicks != 0 && currentStart != startTicks) return -1; // Never mistake a reused PID for this launch.
+                if (startTicks != 0 && currentStart != startTicks)
+                    throw new DesktopLaunchUncertainException("The live application process identity changed." + RecoveryHint);
                 startTicks = currentStart;
                 return 1;
             }, () => Thread.Sleep(200), () => clock.Elapsed);
@@ -165,14 +166,30 @@ internal sealed class DesktopPlatform : IDesktopPlatform
             return exactExecutable ? MatchesExecutable(path, expected, identity.Platform) : DesktopUpdateFiles.Below(root, path);
         string actual;
         try { actual = readName(); }
-        catch (System.ComponentModel.Win32Exception)
-        { throw new DesktopLaunchUncertainException("A process cannot be identified." + RecoveryHint); }
+        catch (System.ComponentModel.Win32Exception) { return false; }
+        catch (InvalidOperationException) { return false; }
+        // An unidentified system process is not evidence of this app. Known parent/launch
+        // PIDs are checked separately and remain conservative if their identity is unreadable.
+        if (string.IsNullOrWhiteSpace(actual)) return false;
         string name = Path.GetFileNameWithoutExtension(expected);
-        if (string.IsNullOrWhiteSpace(actual) || actual.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+        if (actual.Equals(name, StringComparison.OrdinalIgnoreCase) ||
             (identity.Platform == "macos" && actual.Length == 15 && name.StartsWith(actual, StringComparison.OrdinalIgnoreCase)))
             throw new DesktopLaunchUncertainException("A possible application process cannot be inspected." + RecoveryHint);
         // An unrelated named system process with no readable module does not belong to this app.
         return false;
+    }
+    internal static bool MatchesObservedProcess(Func<bool> hasExited, Func<string> readPath, Func<string> readName,
+        string root, DesktopInstallIdentity identity, bool exactExecutable)
+    {
+        try { if (hasExited()) return false; }
+        catch (System.ComponentModel.Win32Exception) { }
+        catch (InvalidOperationException) { }
+        // One failed metadata query must not suppress the other identity evidence.
+        string path = null;
+        try { path = readPath(); }
+        catch (System.ComponentModel.Win32Exception) { }
+        catch (InvalidOperationException) { }
+        return MatchesObservedProcess(path, readName, root, identity, exactExecutable);
     }
     private static Process FindApplication(string root, DesktopInstallIdentity identity, bool exactExecutable)
     {
@@ -182,29 +199,10 @@ internal sealed class DesktopPlatform : IDesktopPlatform
         {
             foreach (var process in processes)
             {
-                try
-                {
-                    if (process.HasExited) continue;
-                    string path;
-                    try { path = DesktopUpdateFiles.ProcessModulePath(process.MainModule); }
-                    catch (System.ComponentModel.Win32Exception) { path = null; }
-                    if (MatchesObservedProcess(path, () => process.ProcessName, root, identity, exactExecutable))
-                    { match = process; break; }
-                }
-                catch (InvalidOperationException)
-                {
-                    bool exited = false;
-                    try { process.Refresh(); exited = process.HasExited; }
-                    catch (InvalidOperationException) { }
-                    catch (System.ComponentModel.Win32Exception) { }
-                    if (!exited) throw new DesktopLaunchUncertainException("A process could not be inspected or confirmed exited." + RecoveryHint);
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // HasExited can also be inaccessible; apply the same fail-closed candidate check.
-                    if (MatchesObservedProcess(null, () => process.ProcessName, root, identity, exactExecutable))
-                    { match = process; break; }
-                }
+                if (MatchesObservedProcess(() => process.HasExited,
+                    () => DesktopUpdateFiles.ProcessModulePath(process.MainModule), () => process.ProcessName,
+                    root, identity, exactExecutable))
+                { match = process; break; }
             }
             return match;
         }
