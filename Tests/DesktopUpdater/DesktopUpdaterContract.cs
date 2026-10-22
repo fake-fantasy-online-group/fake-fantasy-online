@@ -209,9 +209,72 @@ internal static class DesktopUpdaterContract
         catch (DesktopLaunchUncertainException) { uncertain = true; }
         Check(uncertain, "inspection failure cannot cause blind rollback");
     }
+    private static void ExpectUncertain(Action action, string name)
+    {
+        bool uncertain = false;
+        try { action(); } catch (DesktopLaunchUncertainException) { uncertain = true; }
+        Check(uncertain, name);
+    }
+    private static void ProcessInspection()
+    {
+        Check(DesktopUpdateFiles.ProcessModulePath(null) == null, "null macOS MainModule means unknown path");
+        Check(!DesktopPlatform.MatchesExecutable(null, "/game", "macos"), "null module cannot confirm launch");
+        Check(!DesktopPlatform.MatchesExecutable("", "/game", "macos"), "empty file name cannot confirm launch");
+        Check(!DesktopPlatform.MatchesExecutable(" ", "/game", "macos"), "blank file name cannot confirm launch");
+        foreach (string platform in new[] { "macos", "windows" })
+        using (var f = new Fixture(platform))
+        {
+            var identity = DesktopInstallIdentity.Read(f.Install, platform);
+            foreach (string unknown in new string[] { null, "", " " })
+            {
+                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(unknown, () => "game", f.Install, identity, false),
+                    "unknown same-name app blocks replacement " + platform);
+                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(unknown, () => "game", f.Install, identity, true),
+                    "unknown same-name app cannot confirm launch " + platform);
+                Check(!DesktopPlatform.MatchesObservedProcess(unknown, () => "unrelated-system-process", f.Install, identity, false),
+                    "unknown unrelated named system process is not an app " + platform);
+            }
+            foreach (string unknownName in new string[] { null, "", " " })
+                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(null, () => unknownName, f.Install, identity, false),
+                    "missing process name is not proof of unrelated process " + platform);
+            ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(null,
+                () => { throw new System.ComponentModel.Win32Exception("denied"); }, f.Install, identity, false),
+                "unreadable name blocks replacement " + platform);
+            if (platform == "macos")
+            {
+                identity.Executable = "Contents/MacOS/FFOUpdaterFixture";
+                ExpectUncertain(() => DesktopPlatform.MatchesObservedProcess(null, () => "FFOUpdaterFixture".Substring(0, 15), f.Install, identity, false),
+                    "macOS 15-character process name still blocks replacement");
+            }
+            // Exercise the real production scan over this OS's processes, not IDesktopPlatform stubs.
+            Program.RequireApplicationStopped(f.Request);
+            Check(true, "real process enumeration allows a stopped isolated installation " + platform);
+            string backup = f.Install + ".update-backup-" + Path.GetFileName(f.Job);
+            Directory.Move(f.Install, backup);
+            Program.RequireApplicationStopped(f.Request);
+            Check(true, "pre-recovery scan works when only the renamed old app remains " + platform);
+        }
+        using (var process = Process.GetCurrentProcess())
+        using (var f = new Fixture())
+        {
+            string actual = DesktopUpdateFiles.ProcessModulePath(process.MainModule);
+            Check(!string.IsNullOrEmpty(actual), "real current process module yields executable path");
+            var identity = new DesktopInstallIdentity { Platform = "windows", Executable = Path.GetFileName(actual) };
+            ExpectUncertain(() => new DesktopPlatform().RequireApplicationStopped(Path.GetDirectoryName(actual), identity),
+                "real process enumeration refuses a running application directory");
+            f.Request.ParentStartTicks -= TimeSpan.TicksPerSecond * 10;
+            Check(Program.ParentAlive(f.Request, p => null), "live PID with mismatched time and null module remains alive");
+            Check(Program.ParentAlive(f.Request, p => ""), "live PID with empty path remains alive");
+            Check(Program.ParentAlive(f.Request, p => { throw new System.ComponentModel.Win32Exception("denied"); }),
+                "live PID with inaccessible module remains alive");
+            Check(Program.ParentAlive(f.Request, p => { throw new InvalidOperationException("racing query"); }),
+                "unconfirmed parent exit is retried, not declared stopped");
+            Check(!Program.ParentAlive(f.Request, p => actual), "known reused PID outside installation can be ignored");
+        }
+    }
     public static int Main(string[] args)
     {
-        TrustModes(); LaunchConfirmation();
+        TrustModes(); LaunchConfirmation(); ProcessInspection();
         foreach (string platform in new[] { "windows", "macos" })
         using (var f = new Fixture(platform))
         {
@@ -502,7 +565,7 @@ internal static class DesktopUpdaterContract
         }
         using (var f = new Fixture())
         {
-            var alive = typeof(FakeFantasyOnline.DesktopUpdater.Program).GetMethod("ParentAlive",BindingFlags.NonPublic|BindingFlags.Static);
+            var alive = typeof(FakeFantasyOnline.DesktopUpdater.Program).GetMethod("ParentAlive",BindingFlags.NonPublic|BindingFlags.Static, null, new[] { typeof(DesktopUpdateRequest) }, null);
             Check((bool)alive.Invoke(null,new object[]{f.Request}), "helper recognizes live original parent");
             f.Request.ParentStartTicks -= 1;
             Check((bool)alive.Invoke(null,new object[]{f.Request}), "subsecond runtime precision cannot skip waiting for parent");

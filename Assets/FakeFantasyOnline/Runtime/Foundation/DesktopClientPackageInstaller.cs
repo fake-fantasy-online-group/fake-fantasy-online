@@ -20,7 +20,7 @@ public sealed class DesktopClientPackageInstaller : IDisposable
         string executable = Path.GetFullPath(Path.Combine(installRoot, identity.Executable));
         using (var process = Process.GetCurrentProcess())
         {
-            if (!string.Equals(Path.GetFullPath(process.MainModule.FileName), executable,
+            if (!string.Equals(DesktopUpdateFiles.ProcessModulePath(process.MainModule), executable,
                 platform == "windows" ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw new InvalidDataException("This process is not the marked desktop executable.");
             string helperName = platform == "windows" ? "DesktopUpdater.exe" :

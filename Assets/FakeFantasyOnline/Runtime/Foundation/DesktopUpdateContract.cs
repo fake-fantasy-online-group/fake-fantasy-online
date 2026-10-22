@@ -107,6 +107,13 @@ public sealed class DesktopUpdateRequest
 
 public static class DesktopUpdateFiles
 {
+    // macOS/.NET can return no main module for an inaccessible system process.
+    // A missing path is unknown, not proof that the process has exited.
+    internal static string ProcessModulePath(ProcessModule module)
+    {
+        string path = module == null ? null : module.FileName;
+        return string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+    }
     public static bool Below(string root, string child)
     { return child.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase); }
     public static bool Overlaps(string first, string second)

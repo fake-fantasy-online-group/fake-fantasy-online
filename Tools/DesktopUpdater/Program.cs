@@ -64,37 +64,35 @@ internal static class Program
             Console.Error.WriteLine(exception); return 1;
         }
     }
-    private static void RequireApplicationStopped(DesktopUpdateRequest request)
+    internal static void RequireApplicationStopped(DesktopUpdateRequest request)
     {
-        // Covers a second copy started while the original game was preparing the update.
-        foreach (var process in Process.GetProcesses())
-        using (process)
-        {
-            string executable;
-            try { if (process.HasExited) continue; executable = process.MainModule.FileName; }
-            catch (System.ComponentModel.Win32Exception) { continue; } // Other users/system processes cannot be inspected.
-            catch (InvalidOperationException) { continue; }
-            if (DesktopUpdateFiles.Below(request.InstallRoot, Path.GetFullPath(executable)))
-                throw new IOException("Close every copy of this application before installation or recovery.");
-        }
+        // Share the same null-module and inaccessible-candidate policy as launch/rollback.
+        // Recovery may run after the old app was renamed but before the new app became live.
+        string identityRoot = Directory.Exists(request.InstallRoot) ? request.InstallRoot :
+            request.InstallRoot + ".update-backup-" + Path.GetFileName(request.JobDirectory);
+        var identity = DesktopInstallIdentity.Read(identityRoot, request.Platform);
+        new DesktopPlatform().RequireApplicationStopped(request.InstallRoot, identity);
     }
     private static bool ParentAlive(DesktopUpdateRequest request)
+    { return ParentAlive(request, process => DesktopUpdateFiles.ProcessModulePath(process.MainModule)); }
+    internal static bool ParentAlive(DesktopUpdateRequest request, Func<Process, string> readPath)
     {
+        Process process;
+        try { process = Process.GetProcessById(request.ParentProcessId); }
+        catch (ArgumentException) { return false; } // Only an absent PID proves absence here.
+        using (process)
         try
         {
-            using (var process = Process.GetProcessById(request.ParentProcessId))
-            {
-                if (process.HasExited) return false;
-                long delta = Math.Abs(process.StartTime.ToUniversalTime().Ticks - request.ParentStartTicks);
-                // Unity/Mono and .NET can expose different subsecond precision on macOS.
-                // A live same-PID process within that precision window must be waited for.
-                if (delta <= TimeSpan.TicksPerSecond * 2) return true;
-                string executable = Path.GetFullPath(process.MainModule.FileName);
-                // A reused PID running another copy of this app is also a reason to wait.
-                return DesktopUpdateFiles.Below(request.InstallRoot, executable);
-            }
+            if (process.HasExited) return false;
+            long delta = Math.Abs(process.StartTime.ToUniversalTime().Ticks - request.ParentStartTicks);
+            // Unity/Mono and .NET can expose different subsecond precision on macOS.
+            if (delta <= TimeSpan.TicksPerSecond * 2) return true;
+            string executable = readPath(process);
+            // A reused PID with an unreadable path may still be another copy of this app.
+            return string.IsNullOrWhiteSpace(executable) || DesktopUpdateFiles.Below(request.InstallRoot, executable);
         }
-        catch (ArgumentException) { return false; }
+        catch (System.ComponentModel.Win32Exception) { return true; }
+        catch (InvalidOperationException) { return true; } // Recheck on the next poll, never infer exit.
     }
     private static void SafeStatus(DesktopUpdateRequest request, string value)
     { try { Status(request, value); } catch (Exception exception) { Console.Error.WriteLine("Status could not be written: " + exception.Message); } }
