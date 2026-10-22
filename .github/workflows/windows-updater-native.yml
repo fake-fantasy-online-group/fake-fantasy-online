@@ -1,0 +1,30 @@
+name: Windows updater native checks
+
+# Deliberately opt-in: no push, pull_request, release or scheduled triggers.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-updater:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test real Windows updater APIs with disposable PE fixtures
+        shell: pwsh
+        run: ./Tests/DesktopUpdater/WindowsNative/run-windows-native.ps1
+      - name: Record scope and limitations
+        if: always()
+        shell: pwsh
+        run: |
+          @'
+          Native Windows tests use the production UpdateEngine and DesktopPlatform with no mocks.
+          Disposable unsigned PE fixtures cover replacement, NTFS MOTW, startup survival, early-exit rollback, resource preservation, and signed-policy rejection.
+          The actual production CLI must reject this hosted runner's administrator token. No accounts, UAC, Defender, SmartScreen, certificate stores or OS security settings are changed.
+          This is NOT standard-user end-to-end helper success, interactive SmartScreen acceptance, or full game/login health validation. See Tests/DesktopUpdater/WindowsNative/README.md.
+          '@ >> $env:GITHUB_STEP_SUMMARY
