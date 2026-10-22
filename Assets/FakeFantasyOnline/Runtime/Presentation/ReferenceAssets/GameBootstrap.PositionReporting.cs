@@ -54,7 +54,11 @@ public partial class GameBootstrap
         }
     }
 
-    public static void FlushMoveReport()
+    public static void FlushMoveReport() => FlushMoveReport(false);
+
+    // A physical portal edge must publish even if Update reported the previous
+    // position earlier in this frame. Other native callers keep their throttles.
+    internal static void FlushMoveReport(bool force)
     {
         GameBootstrap owner = I;
         if (owner == null || owner.pcRef == null || owner.pcRef.Root == null ||
@@ -62,14 +66,14 @@ public partial class GameBootstrap
         {
             return;
         }
-        if (owner._moveReportTimer < 0.06f)
+        if (!force && owner._moveReportTimer < 0.06f)
         {
             return;
         }
 
         int x = (int)owner.pcRef.WorldX;
         int y = (int)owner.pcRef.WorldY;
-        if (owner._lastReportX != int.MinValue)
+        if (!force && owner._lastReportX != int.MinValue)
         {
             long dx = (long)x - owner._lastReportX;
             long dy = (long)y - owner._lastReportY;

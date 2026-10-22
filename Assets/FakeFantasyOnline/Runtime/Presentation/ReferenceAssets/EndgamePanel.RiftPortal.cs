@@ -81,6 +81,10 @@ public sealed partial class EndgamePanel
                 state.SnapshotRevision != state.Revision) return RiftPortalContinuation.Waiting;
             // CanAdvance is a periodically refreshed presentation hint. Let the
             // server validate the opener and current gate position at this edge.
+            // Movement is normally sampled every 0.3 seconds. Queue the current
+            // position first without local throttling, even if the previous
+            // sample was sent before player movement in this same frame.
+            GameBootstrap.FlushMoveReport(true);
             panel.Send(new EndgameRequest("rift.advance", state.Revision,
                 runID: runID, floorIndex: floorIndex));
             return RiftPortalContinuation.Sent;

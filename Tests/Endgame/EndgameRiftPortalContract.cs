@@ -24,6 +24,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public static class SocialClient { public static List<(int,string,int,int,int,int,int,int,bool)> Party = new List<(int,string,int,int,int,int,int,int,bool)> { default }; }
     public class NetClient { public static NetClient I = new NetClient(); public int Commands; public void GmCmdForIndependentRuntime(string cmd) { Commands++; } }
+    public static class GameBootstrap { public static void FlushMoveReport(bool force = false) { } }
     public static class ChatUI { public static void Add(string channel,string text,Color color,string sender) { } }
     public static class DifficultyBox { public static int Shown; public static void Show(string t,string n,string h,Action a,Action b) { Shown++; } }
     public sealed partial class EndgamePanel
