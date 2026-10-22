@@ -7,7 +7,7 @@ namespace FakeFantasyOnline.Application
 /// <summary>
 /// Full-snapshot owner with an authoritative server clock advanced by a monotonic local clock.
 /// Neither repeated snapshots nor a local wall-clock adjustment can restart an effect lifetime.
-/// Tombstones last only until the original server deadline; removed owners cannot reappear early.
+/// Tombstones last until the original or observed conflicting deadline; removed owners cannot reappear early.
 /// </summary>
 public sealed class EndgameRiftHazardState
 {
@@ -15,6 +15,7 @@ public sealed class EndgameRiftHazardState
     {
         internal EndgameRiftHazardView View;
         internal bool Retired;
+        internal long RetiredUntilMS;
     }
     private readonly Dictionary<string, Lifetime> lifetimes = new Dictionary<string, Lifetime>(StringComparer.Ordinal);
     private readonly List<EndgameRiftHazardView> active = new List<EndgameRiftHazardView>();
@@ -63,7 +64,10 @@ public sealed class EndgameRiftHazardState
         if (sameScope)
             foreach (var hazard in next.Hazards)
                 if (lifetimes.TryGetValue(hazard.ID, out Lifetime prior) && !SameEffect(prior.View, hazard))
-                    throw new FormatException("Rift hazard identity changed.");
+                {
+                    prior.Retired = true;
+                    prior.RetiredUntilMS = Math.Max(prior.RetiredUntilMS, Math.Max(prior.View.ExpiresMS, hazard.ExpiresMS));
+                } // Isolate a conflicting effect ID; keep progress and unrelated effects.
         // Page assembly must not restart an effect clock after a slow transfer.
         double receivedServerNow = next.ServerNowMS + snapshotAgeMS;
         double serverNow = snapshotTime == 0 ? receivedServerNow : Math.Max(ServerTimeMS(localNow), receivedServerNow);
@@ -74,7 +78,7 @@ public sealed class EndgameRiftHazardState
         var expired = new List<string>();
         foreach (var pair in lifetimes)
         {
-            if (pair.Value.View.ExpiresMS <= serverNow) expired.Add(pair.Key);
+            if (Math.Max(pair.Value.View.ExpiresMS, pair.Value.RetiredUntilMS) <= serverNow) expired.Add(pair.Key);
             else if (!present.Contains(pair.Key)) pair.Value.Retired = true;
         }
         foreach (string id in expired) lifetimes.Remove(id);

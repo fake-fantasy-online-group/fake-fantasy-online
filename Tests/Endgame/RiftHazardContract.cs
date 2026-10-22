@@ -17,6 +17,11 @@ internal static class RiftHazardContract
         try { action(); } catch (FormatException) { checks++; return; }
         throw new Exception("Accepted " + name);
     }
+    private static void Isolate(Func<EndgameResponse> action, string name)
+    {
+        var response = action();
+        Check(response.Rift != null && response.Rift.SkippedVisualEntries > 0, "isolated optional row: " + name);
+    }
     private static Dictionary<string, object> Object(object value) => (Dictionary<string, object>)value;
     private static List<object> List(object value) => (List<object>)value;
     private static EndgameResponse Edit(Action<Dictionary<string, object>> edit)
@@ -71,40 +76,40 @@ internal static class RiftHazardContract
         Check(PrivateServerEndgameCodec.Decode(metadataPayload).Rift.Impacts.Count==2, "actual production metadata wire decodes without binary extension");
         var legacy = EndgameResponse.Parse(File.ReadAllText(Path.Combine(args[0], "full-fields.json")));
         Check(legacy.Rift.Hazards.Count == 0 && legacy.Rift.ServerNowMS == 0 && legacy.Rift.Auras[0].AbilityIDs.Count == 0, "old v5 and floorless payloads still parse");
-        Reject(() => Edit(r => Hazard(r)["unknown"] = true), "unknown hazard field");
+        Check(Edit(r => Hazard(r)["unknown"] = true).Rift.Hazards.Count == 5, "unknown optional hazard field preserves known effect");
         foreach (string key in new[] {"id","sourceId","abilityId","mechanism","x","y","radius","bornMS","expiresMS","remainingMS"})
-            Reject(() => Edit(r => Hazard(r).Remove(key)), "missing required hazard " + key);
-        Reject(() => Edit(r => Hazard(r)["mechanism"] = "ice_orb"), "mechanism does not match ability ID");
-        Reject(() => Edit(r => Hazard(r)["abilityId"] = 0L), "buff cannot masquerade as hazard");
-        foreach (string id in new[] {"0","01","-1","4294967296","1e3"}) Reject(() => Edit(r => Hazard(r)["sourceId"] = id), "noncanonical native source " + id);
-        Reject(() => Edit(r => Hazard(r)["remainingMS"] = 15000.5), "fractional duration");
-        Reject(() => Edit(r => Hazard(r)["remainingMS"] = 14999L), "deadline/sample discrepancy");
-        Reject(() => Edit(r => Hazard(r)["bornMS"] = 1000001L), "future birth");
-        Reject(() => Edit(r => Hazard(r)["expiresMS"] = 1060001L), "duration over hard cap");
-        Reject(() => Edit(r => Wall(r)["x"] = "1280"), "numeric geometry string");
-        Reject(() => Edit(r => Wall(r)["x"] = 1e8), "coordinate limit");
-        Reject(() => Edit(r => Wall(r)["width"] = 0L), "zero wall width");
-        Reject(() => Edit(r => Wall(r)["width"] = 1025L), "wall width cap");
-        Reject(() => Edit(r => { var w=Wall(r); w["x2"]=w["x"]; w["y2"]=w["y"]; }), "zero centerline");
-        Reject(() => Edit(r => Object(List(Hazard(r)["walls"])[1])["id"] = Wall(r)["id"]), "duplicate wall ID");
-        Reject(() => Edit(r => List(Hazard(r)["walls"]).RemoveAt(0)), "partial wall group");
-        Reject(() => Edit(r => List(r["hazards"]).Add(Hazard(r))), "duplicate owner");
+            Isolate(() => Edit(r => Hazard(r).Remove(key)), "missing required hazard " + key);
+        Isolate(() => Edit(r => Hazard(r)["mechanism"] = "ice_orb"), "mechanism does not match ability ID");
+        Isolate(() => Edit(r => Hazard(r)["abilityId"] = 0L), "buff cannot masquerade as hazard");
+        foreach (string id in new[] {"0","01","-1","4294967296","1e3"}) Isolate(() => Edit(r => Hazard(r)["sourceId"] = id), "noncanonical native source " + id);
+        Isolate(() => Edit(r => Hazard(r)["remainingMS"] = 15000.5), "fractional duration");
+        Isolate(() => Edit(r => Hazard(r)["remainingMS"] = 14999L), "deadline/sample discrepancy");
+        Isolate(() => Edit(r => Hazard(r)["bornMS"] = 1000001L), "future birth");
+        Isolate(() => Edit(r => Hazard(r)["expiresMS"] = 1060001L), "duration over hard cap");
+        Isolate(() => Edit(r => Wall(r)["x"] = "1280"), "numeric geometry string");
+        Isolate(() => Edit(r => Wall(r)["x"] = 1e8), "coordinate limit");
+        Isolate(() => Edit(r => Wall(r)["width"] = 0L), "zero wall width");
+        Isolate(() => Edit(r => Wall(r)["width"] = 1025L), "wall width cap");
+        Isolate(() => Edit(r => { var w=Wall(r); w["x2"]=w["x"]; w["y2"]=w["y"]; }), "zero centerline");
+        Isolate(() => Edit(r => Object(List(Hazard(r)["walls"])[1])["id"] = Wall(r)["id"]), "duplicate wall ID");
+        Isolate(() => Edit(r => List(Hazard(r)["walls"]).RemoveAt(0)), "partial wall group");
+        Isolate(() => Edit(r => List(r["hazards"]).Add(Hazard(r))), "duplicate owner");
         Reject(() => Edit(r => r.Remove("mapId")), "hazard snapshot without native map identity");
         Reject(() => Edit(r => r.Remove("serverNowMS")), "hazard snapshot without authoritative time");
-        Reject(() => Edit(r => Object(List(r["auras"])[0])["abilityIds"] = new List<object> {3L,3L}), "duplicate aura abilities");
-        Reject(() => Edit(r => Object(List(r["auras"])[0])["abilityIds"] = new List<object> {8L}), "unknown aura ability");
+        Isolate(() => Edit(r => Object(List(r["auras"])[0])["abilityIds"] = new List<object> {3L,3L}), "duplicate aura abilities");
+        Check(Edit(r => Object(List(r["auras"])[0])["abilityIds"] = new List<object> {8L}).Rift.Auras[0].AbilityIDs[0] == 8, "unknown aura ability preserves identity without enabling unknown renderer");
         Check(Edit(r => Wall(r)["x"] = 1280.25).Rift.Hazards[4].Walls[0].X == 1280.25, "fractional Go wall coordinates retained");
         var golden=Edit(r => {var aura=Object(List(r["auras"])[0]);aura["abilityIds"]=new List<object>{0L};aura["goldenUntilMS"]=1005000L;}).Rift;
         Check(golden.Auras[0].GoldenUntilMS==1005000, "golden body carries server deadline rather than local timer");
-        Reject(() => Edit(r => Object(List(r["auras"])[0])["goldenUntilMS"]=1005000L), "golden deadline without selected golden ability");
-        Reject(() => Edit(r => {var aura=Object(List(r["auras"])[0]);aura["abilityIds"]=new List<object>{0L};aura["goldenUntilMS"]=1005001L;}), "golden deadline exceeds five seconds");
+        Isolate(() => Edit(r => Object(List(r["auras"])[0])["goldenUntilMS"]=1005000L), "golden deadline without selected golden ability");
+        Isolate(() => Edit(r => {var aura=Object(List(r["auras"])[0]);aura["abilityIds"]=new List<object>{0L};aura["goldenUntilMS"]=1005001L;}), "golden deadline exceeds five seconds");
         Check(Edit(r => List(r["auras"]).Add(new Dictionary<string,object>{{"entityId","134217834"},{"class",0L},{"cloneOf","134217833"}})).Rift.Auras[1].CloneOf=="134217833", "native clone owner is explicit class-zero metadata");
-        Reject(() => Edit(r => Object(List(r["auras"])[0])["cloneOf"]="134217834"), "clone cannot inherit elite class or abilities");
+        Isolate(() => Edit(r => Object(List(r["auras"])[0])["cloneOf"]="134217834"), "clone cannot inherit elite class or abilities");
         var impact=new Dictionary<string,object>{{"id","impact-1"},{"mechanism","ice_orb"},{"x",1100L},{"y",1000L},{"radius",120L},{"atMS",1000000L},{"expiresMS",1000700L}};
         Check(Edit(r => r["impacts"]=new List<object>{impact}).Rift.Impacts[0].ExpiresMS==1000700, "server detonation receipt has short fixed deadline");
-        Reject(() => Edit(r => {var wrong=new Dictionary<string,object>(impact);wrong["expiresMS"]=1000701L;r["impacts"]=new List<object>{wrong};}), "impact TTL mismatch");
-        Reject(() => Edit(r => {var wrong=new Dictionary<string,object>(impact);wrong["mechanism"]="walls";r["impacts"]=new List<object>{wrong};}), "wall removal cannot masquerade as detonation");
-        Reject(() => Edit(r => r["impacts"]=new List<object>{impact,impact}), "duplicate impact receipt");
+        Isolate(() => Edit(r => {var wrong=new Dictionary<string,object>(impact);wrong["expiresMS"]=1000701L;r["impacts"]=new List<object>{wrong};}), "impact TTL mismatch");
+        Isolate(() => Edit(r => {var wrong=new Dictionary<string,object>(impact);wrong["mechanism"]="walls";r["impacts"]=new List<object>{wrong};}), "wall removal cannot masquerade as detonation");
+        Isolate(() => Edit(r => r["impacts"]=new List<object>{impact,impact}), "duplicate impact receipt");
         var oracle=Object(BoundedJson.Parse(File.ReadAllText(Path.Combine(args[0],"elite-wall-geometry-v6.json"))));
         Check(EndgameData.Number(oracle,"clearance")==EndgameRiftWallCollision.ActorClearance, "actual Go actor clearance equals client");
         foreach(var row in List(oracle["cases"]))
@@ -140,7 +145,7 @@ internal static class RiftHazardContract
         Check(clock.Apply(View(1000010,false,2),10) && !clock.Apply(View(1000020,false,1),20), "older floor cannot replace newer floor even with later time");
         Check(!clock.Apply(View(1000001,false,2),30), "out-of-order timestamp rejected");
         clock.Reset(); clock.Apply(initial,0);
-        Reject(() => clock.Apply(Edit(r => { r["floorIndex"]=1L; Wall(r)["width"]=21L; }).Rift,1), "same effect ID cannot change geometry");
+        Check(clock.Apply(Edit(r => { r["floorIndex"]=1L; Wall(r)["width"]=21L; }).Rift,1) && clock.CurrentHazards.Count == 4, "same effect ID conflict retires only that effect");
         var two=Edit(r => {r["floorIndex"]=1L; var copied=Object(BoundedJson.Parse(BoundedJson.Serialize(Hazard(r)))); copied["id"]="second-owner"; foreach(var o in List(copied["walls"])) Object(o)["id"] = "second-"+Object(o)["id"]; List(r["hazards"]).Add(copied);}).Rift;
         clock.Reset();clock.Apply(two,0);clock.Apply(initial,1);
         Check(clock.Blocks(7,1200,1000,1350,1000,1), "removing one overlapping owner preserves other owner");

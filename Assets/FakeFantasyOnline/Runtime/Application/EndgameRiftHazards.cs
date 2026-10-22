@@ -15,7 +15,6 @@ public sealed class EndgameRiftWallView
     public double Width { get; }
     internal EndgameRiftWallView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "x", "y", "x2", "y2", "width");
         EndgameData.Required(d, "id", "x", "y", "x2", "y2", "width");
         ID = EndgameData.String(d, "id", 128);
         X = EndgameData.Number(d, "x"); Y = EndgameData.Number(d, "y");
@@ -46,7 +45,6 @@ public sealed class EndgameRiftHazardView
     public IReadOnlyList<EndgameRiftWallView> Walls { get; }
     internal EndgameRiftHazardView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "sourceId", "abilityId", "mechanism", "x", "y", "radius", "width", "bornMS", "expiresMS", "remainingMS", "firstPulseMS", "pulseMS", "propagationMS", "walls");
         EndgameData.Required(d, "id", "sourceId", "abilityId", "mechanism", "x", "y", "radius", "bornMS", "expiresMS", "remainingMS");
         ID = EndgameData.String(d, "id", 128); SourceID = EndgameData.String(d, "sourceId", 20);
         AbilityID = EndgameData.Int(d, "abilityId"); Mechanism = EndgameData.String(d, "mechanism", 32);
@@ -83,7 +81,6 @@ public sealed class EndgameRiftImpactView
     public long ExpiresMS { get; }
     internal EndgameRiftImpactView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "mechanism", "x", "y", "radius", "atMS", "expiresMS");
         EndgameData.Required(d, "id", "mechanism", "x", "y", "radius", "atMS", "expiresMS");
         ID = EndgameData.String(d, "id", 128); Mechanism = EndgameData.String(d, "mechanism", 32);
         X = EndgameData.Int(d, "x"); Y = EndgameData.Int(d, "y"); Radius = EndgameData.Int(d, "radius");

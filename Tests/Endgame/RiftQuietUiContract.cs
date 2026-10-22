@@ -122,11 +122,12 @@ partial class EndgameUiContract
         Func<string, EndgameRiftView> parse = arrival => EndgameResponse.Parse("{\"kind\":\"rift.state\",\"ok\":true,\"rift\":{\"runId\":\"schema-run\",\"revision\":\"4\",\"phase\":\"boss_arriving\",\"guardianArrival\":" + arrival + "}}").Rift;
         var rift = parse(ArrivalJson);
         Check(rift.GuardianArrival.DurationMS == 5000 && rift.GuardianArrival.DeadlineMS == 1791892805000 && rift.GuardianArrival.AnchorCharID == "42" && rift.GuardianArrival.Seed == "18446744073709551615", "arrival DTO preserves integer timestamps and uint64 seed without precision loss");
-        foreach (string invalid in new[] { ArrivalJson.Replace("\"remainingMS\":5000", "\"remainingMS\":5001"), ArrivalJson.Replace("\"durationMS\":5000", "\"durationMS\":0"), ArrivalJson.Replace("1791892805000", "1791892805001"), ArrivalJson.Replace("\"42\"", "\"0\""), ArrivalJson.Replace("\"x\":720", "\"x\":720.5"), ArrivalJson.Replace("\"seed\":\"18446744073709551615\"", "\"seed\":\"01\""), ArrivalJson.Replace("{", "{\"unknown\":1,") })
+        foreach (string invalid in new[] { ArrivalJson.Replace("\"remainingMS\":5000", "\"remainingMS\":5001"), ArrivalJson.Replace("\"durationMS\":5000", "\"durationMS\":0"), ArrivalJson.Replace("1791892805000", "1791892805001"), ArrivalJson.Replace("\"42\"", "\"0\""), ArrivalJson.Replace("\"x\":720", "\"x\":720.5"), ArrivalJson.Replace("\"seed\":\"18446744073709551615\"", "\"seed\":\"01\"") })
         {
-            bool rejected = false; try { parse(invalid); } catch (FormatException) { rejected = true; }
-            Check(rejected, "invalid arrival schema rejects whole DTO");
+            var partial = parse(invalid);
+            Check(partial.GuardianArrival == null && partial.SkippedVisualEntries == 1, "invalid optional arrival is isolated from run DTO");
         }
+        Check(parse(ArrivalJson.Replace("{", "{\"unknown\":1,")).GuardianArrival != null, "additive arrival metadata preserves known countdown");
         Check(parse("null").GuardianArrival == null, "waiting for an eligible native anchor does not invent a countdown or reject the run");
         DateTime received = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
         Func<DateTime, int> remaining = now => (int)HudCall(null, "RiftArrivalRemainingMS", rift, received, now);

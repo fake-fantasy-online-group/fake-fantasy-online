@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 
 namespace FakeFantasyOnline.Application
@@ -31,7 +32,6 @@ public sealed class EndgameRiftMemberView
     public bool Claimed { get; }
     internal EndgameRiftMemberView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "charId", "name", "level", "eligible", "claimed");
         CharID = EndgameData.ID(d, "charId"); Name = EndgameData.String(d, "name"); Level = EndgameData.Int(d, "level");
         Eligible = EndgameData.Bool(d, "eligible"); Claimed = EndgameData.Bool(d, "claimed");
     }
@@ -48,16 +48,16 @@ public sealed class EndgameRiftAuraView
     public string CloneOf { get; }
     internal EndgameRiftAuraView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "entityId", "class", "affixes", "originalName", "abilityIds", "goldenUntilMS", "cloneOf");
         EntityID = EndgameData.ID(d, "entityId"); Class = EndgameData.Int(d, "class"); OriginalName = EndgameData.String(d, "originalName", 128);
         if (!uint.TryParse(EntityID, NumberStyles.None, CultureInfo.InvariantCulture, out uint id) || id == 0 || Class < 0 || Class > 3) throw new FormatException("Invalid rift aura.");
         NativeEntityID = unchecked((int)id);
         Affixes = EndgameData.List(d, "affixes", 8, v => EndgameData.Text(v, "affixes", 64));
-        AbilityIDs = EndgameData.List(d, "abilityIds", 3, v => EndgameData.Integer(v, "abilityIds"));
-        if (d.ContainsKey("abilityIds") && AbilityIDs.Count != Class) throw new FormatException("Invalid rift aura ability count.");
+        AbilityIDs = EndgameData.List(d, "abilityIds", 32, v => EndgameData.Integer(v, "abilityIds"));
+        // Classification and optional ability metadata evolve independently. Unknown IDs
+        // are retained as bounded integers; presentation only enables IDs it understands.
         GoldenUntilMS = EndgameData.Long(d, "goldenUntilMS"); CloneOf = EndgameData.String(d, "cloneOf", 20);
         var ids = new HashSet<int>();
-        foreach (int ability in AbilityIDs) if (ability < 0 || ability > 7 || !ids.Add(ability)) throw new FormatException("Invalid rift aura ability ID.");
+        foreach (int ability in AbilityIDs) if (ability < 0 || !ids.Add(ability)) throw new FormatException("Invalid rift aura ability ID.");
         if (GoldenUntilMS < 0 || GoldenUntilMS > 0 && !ids.Contains(0)) throw new FormatException("Invalid rift golden-body aura.");
         if (CloneOf.Length > 0 && (!EndgameRiftHazardView.ValidEntityID(CloneOf) || CloneOf == EntityID || Class != 0 || Affixes.Count != 0 || AbilityIDs.Count != 0 || GoldenUntilMS != 0))
             throw new FormatException("Invalid rift clone aura.");
@@ -71,7 +71,6 @@ public sealed class EndgameRiftGlobeView
     public int Value { get; }
     internal EndgameRiftGlobeView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "entityId", "x", "y", "value");
         EntityID = EndgameData.ID(d, "entityId"); X = EndgameData.Int(d, "x"); Y = EndgameData.Int(d, "y"); Value = EndgameData.Int(d, "value");
         if (!uint.TryParse(EntityID, NumberStyles.None, CultureInfo.InvariantCulture, out uint id) || id == 0 || Value < 0) throw new FormatException("Invalid rift globe.");
     }
@@ -92,7 +91,6 @@ public sealed class EndgameRiftTelegraphView
     public int RemainingMS { get; }
     internal EndgameRiftTelegraphView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "entityId", "ability", "shape", "x", "y", "endX", "endY", "radius", "innerRadius", "remainingMS");
         ID = EndgameData.String(d, "id", 128); EntityID = EndgameData.ID(d, "entityId");
         Ability = EndgameData.String(d, "ability", 128); Shape = EndgameData.String(d, "shape", 16);
         X = EndgameData.Int(d, "x"); Y = EndgameData.Int(d, "y"); EndX = EndgameData.Int(d, "endX"); EndY = EndgameData.Int(d, "endY");
@@ -117,7 +115,6 @@ public sealed class EndgameRiftGuardianArrivalView
     internal void LimitRemainingMS(int remaining) => RemainingMS = Math.Min(RemainingMS, Math.Max(0, remaining));
     internal EndgameRiftGuardianArrivalView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "id", "seed", "anchorCharId", "x", "y", "startedAtMS", "deadlineMS", "durationMS", "remainingMS");
         ID = EndgameData.String(d, "id", 128); Seed = EndgameData.String(d, "seed", 20); AnchorCharID = EndgameData.ID(d, "anchorCharId");
         X = EndgameData.Int(d, "x"); Y = EndgameData.Int(d, "y");
         StartedAtMS = EndgameData.Long(d, "startedAtMS"); DeadlineMS = EndgameData.Long(d, "deadlineMS");
@@ -165,9 +162,9 @@ public sealed class EndgameRiftView
     public IReadOnlyList<EndgameRiftGlobeView> Globes { get; }
     public IReadOnlyList<EndgameRiftTelegraphView> Telegraphs { get; }
     public EndgameRiftGuardianArrivalView GuardianArrival { get; }
+    public int SkippedVisualEntries { get; private set; }
     internal EndgameRiftView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "runId", "revision", "phase", "name", "tier", "progress", "progressMax", "remainingSeconds", "totalSeconds", "bossName", "keyCount", "keyItemId", "claimable", "members", "auras", "globes", "seed", "generatorVersion", "floorIndex", "mapName", "canAdvance", "transitioning", "exitX", "exitY", "maxTier", "unlockedTier", "telegraphs", "guardianArrival", "pendingLoot", "mapId", "serverNowMS", "hazards", "impacts");
         RunID = EndgameData.String(d, "runId", 128); Revision = EndgameData.ID(d, "revision"); Phase = EndgameData.String(d, "phase", 32); Name = EndgameData.String(d, "name");
         Seed = EndgameData.String(d, "seed", 20); GeneratorVersion = EndgameData.Int(d, "generatorVersion"); FloorIndex = EndgameData.Int(d, "floorIndex");
         MapName = EndgameData.String(d, "mapName", 256); CanAdvance = EndgameData.Bool(d, "canAdvance"); Transitioning = EndgameData.Bool(d, "transitioning");
@@ -176,48 +173,84 @@ public sealed class EndgameRiftView
         Tier = EndgameData.Int(d, "tier"); Progress = EndgameData.Int(d, "progress"); ProgressMax = EndgameData.Int(d, "progressMax"); RemainingSeconds = EndgameData.Int(d, "remainingSeconds"); TotalSeconds = EndgameData.Int(d, "totalSeconds");
         BossName = EndgameData.String(d, "bossName"); KeyCount = EndgameData.Int(d, "keyCount"); KeyItemID = EndgameData.Int(d, "keyItemId"); Claimable = EndgameData.Bool(d, "claimable"); PendingLoot = EndgameData.Int(d, "pendingLoot");
         Members = EndgameData.List(d, "members", 5, v => new EndgameRiftMemberView(EndgameData.Object(v)));
-        // Aura population is gameplay-owned. Frame/assembled-byte and JSON node budgets bound allocation.
-        Auras = EndgameData.List(d, "auras", int.MaxValue, v => new EndgameRiftAuraView(EndgameData.Object(v)));
-        Globes = EndgameData.List(d, "globes", 1024, v => new EndgameRiftGlobeView(EndgameData.Object(v)));
-        Telegraphs = EndgameData.List(d, "telegraphs", 128, v => new EndgameRiftTelegraphView(EndgameData.Object(v)));
         MapID = EndgameData.Int(d, "mapId"); ServerNowMS = EndgameData.Long(d, "serverNowMS");
-        Hazards = EndgameData.List(d, "hazards", 56, v => new EndgameRiftHazardView(EndgameData.Object(v)));
-        Impacts = EndgameData.List(d, "impacts", 40, v => new EndgameRiftImpactView(EndgameData.Object(v)));
-        if (d.ContainsKey("mapId") || d.ContainsKey("serverNowMS") || d.ContainsKey("hazards") || d.ContainsKey("impacts"))
+        bool extended = d.ContainsKey("mapId") || d.ContainsKey("serverNowMS") || d.ContainsKey("hazards") || d.ContainsKey("impacts");
+        if (extended && (MapID <= 0 || ServerNowMS <= 0 || RunID.Length == 0 || Revision.Length == 0 || FloorIndex < 0))
+            throw new FormatException("Invalid rift hazard snapshot identity.");
+        // Optional rendering rows cannot veto authoritative progress or unrelated visuals.
+        // Container budgets and the shared JSON/transport limits still fail closed.
+        var duplicateAuras = DuplicateVisualIDs(d, "auras", "entityId", int.MaxValue);
+        int clones = 0;
+        Auras = VisualRows(d, "auras", int.MaxValue, v => new EndgameRiftAuraView(EndgameData.Object(v)), aura =>
         {
-            if (MapID <= 0 || ServerNowMS <= 0 || RunID.Length == 0 || Revision.Length == 0 || FloorIndex < 0)
-                throw new FormatException("Invalid rift hazard snapshot identity.");
-            var hazards = new HashSet<string>(StringComparer.Ordinal);
-            var walls = new HashSet<string>(StringComparer.Ordinal);
-            int active = 0, death = 0;
-            foreach (var hazard in Hazards)
-            {
-                if (!hazards.Add(hazard.ID) || hazard.BornMS > ServerNowMS || hazard.ExpiresMS <= ServerNowMS ||
-                    hazard.RemainingMS != hazard.ExpiresMS - ServerNowMS)
-                    throw new FormatException("Invalid rift hazard snapshot lifetime.");
-                if (hazard.Mechanism == "death_lava") death++; else active++;
-                foreach (var wall in hazard.Walls) if (!walls.Add(wall.ID)) throw new FormatException("Duplicate rift snapshot wall.");
-            }
-            if (active > 24 || death > 32) throw new FormatException("Rift hazard budget exceeded.");
-            var impacts = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var impact in Impacts)
-                if (!impacts.Add(impact.ID) || impact.AtMS > ServerNowMS || impact.ExpiresMS <= ServerNowMS)
-                    throw new FormatException("Invalid rift impact snapshot.");
-            int clones = 0;
-            var auraIDs = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var aura in Auras)
-            {
-                if (!auraIDs.Add(aura.EntityID) || aura.GoldenUntilMS > 0 && (aura.GoldenUntilMS <= ServerNowMS || aura.GoldenUntilMS - ServerNowMS > 5000))
-                    throw new FormatException("Invalid rift aura snapshot.");
-                if (aura.CloneOf.Length > 0) clones++;
-            }
-            if (clones > 96) throw new FormatException("Rift aura budget exceeded.");
+            if (duplicateAuras.Contains(aura.EntityID)) return false;
+            if (extended && aura.GoldenUntilMS > 0 && (aura.GoldenUntilMS <= ServerNowMS || aura.GoldenUntilMS - ServerNowMS > 5000)) return false;
+            if (aura.CloneOf.Length > 0 && ++clones > 96) return false;
+            return true;
+        });
+        Globes = VisualRows(d, "globes", 1024, v => new EndgameRiftGlobeView(EndgameData.Object(v)));
+        Telegraphs = VisualRows(d, "telegraphs", 128, v => new EndgameRiftTelegraphView(EndgameData.Object(v)));
+        var duplicateHazards = DuplicateVisualIDs(d, "hazards", "id", 56);
+        var duplicateWalls = DuplicateWallIDs(d);
+        int active = 0, death = 0;
+        Hazards = VisualRows(d, "hazards", 56, v => new EndgameRiftHazardView(EndgameData.Object(v)), hazard =>
+        {
+            if (duplicateHazards.Contains(hazard.ID) || hazard.BornMS > ServerNowMS || hazard.ExpiresMS <= ServerNowMS ||
+                hazard.RemainingMS != hazard.ExpiresMS - ServerNowMS) return false;
+            foreach (var wall in hazard.Walls) if (duplicateWalls.Contains(wall.ID)) return false;
+            if (hazard.Mechanism == "death_lava" ? ++death > 32 : ++active > 24) return false;
+            return true;
+        });
+        var duplicateImpacts = DuplicateVisualIDs(d, "impacts", "id", 40);
+        Impacts = VisualRows(d, "impacts", 40, v => new EndgameRiftImpactView(EndgameData.Object(v)), impact =>
+            impact.AtMS <= ServerNowMS && impact.ExpiresMS > ServerNowMS && !duplicateImpacts.Contains(impact.ID));
+        if (Phase == "boss_arriving")
+        {
+            try { GuardianArrival = EndgameData.Optional(d, "guardianArrival", v => new EndgameRiftGuardianArrivalView(EndgameData.Object(v))); }
+            catch (FormatException) { SkippedVisualEntries++; }
         }
-        GuardianArrival = EndgameData.Optional(d, "guardianArrival", v => new EndgameRiftGuardianArrivalView(EndgameData.Object(v)));
-        if (Phase != "boss_arriving" && GuardianArrival != null) throw new FormatException("Invalid guardian arrival phase.");
         if (Seed.Length > 0 && (Seed.Length > 1 && Seed[0] == '0' || !ulong.TryParse(Seed, NumberStyles.None, CultureInfo.InvariantCulture, out _))) throw new FormatException("Invalid rift seed.");
         if (GeneratorVersion < 0 || FloorIndex < 0 || MaxTier < 0 || MaxTier > 150 || UnlockedTier < 0 || UnlockedTier > 150) throw new FormatException("Invalid rift floor metadata.");
         if (Tier < 0 || Tier > 150 || Progress < 0 || ProgressMax < 0 || RemainingSeconds < 0 || TotalSeconds < 0 || KeyCount < 0 || PendingLoot < 0) throw new FormatException("Invalid rift state.");
+    }
+    private static HashSet<string> DuplicateWallIDs(IReadOnlyDictionary<string, object> d)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var duplicate = new HashSet<string>(StringComparer.Ordinal);
+        if (d.TryGetValue("hazards", out object item) && item is IReadOnlyList<object> hazards && hazards.Count <= 56)
+            foreach (object hazard in hazards)
+                if (hazard is IReadOnlyDictionary<string, object> row && row.TryGetValue("walls", out object nested) && nested is IReadOnlyList<object> walls && walls.Count <= 3)
+                    foreach (object wall in walls)
+                        if (wall is IReadOnlyDictionary<string, object> data && data.TryGetValue("id", out object id) && id is string text && !seen.Add(text))
+                            duplicate.Add(text);
+        return duplicate;
+    }
+    private static HashSet<string> DuplicateVisualIDs(IReadOnlyDictionary<string, object> d, string key, string identity, int maximum)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var duplicate = new HashSet<string>(StringComparer.Ordinal);
+        if (d.TryGetValue(key, out object item) && item is IReadOnlyList<object> values && values.Count <= maximum)
+            foreach (object value in values)
+                if (value is IReadOnlyDictionary<string, object> row && row.TryGetValue(identity, out object id) && id is string text && !seen.Add(text))
+                    duplicate.Add(text);
+        return duplicate; // Ambiguous identities never depend on first/last row order.
+    }
+    private IReadOnlyList<T> VisualRows<T>(IReadOnlyDictionary<string, object> d, string key, int maximum, Func<object, T> parse, Func<T, bool> valid = null)
+    {
+        if (!d.TryGetValue(key, out object item) || item == null) return Array.Empty<T>();
+        if (!(item is IReadOnlyList<object> values) || values.Count > maximum) throw new FormatException("Invalid list: " + key);
+        var rows = new List<T>(values.Count);
+        foreach (object value in values)
+        {
+            try
+            {
+                T row = parse(value);
+                if (valid == null || valid(row)) { rows.Add(row); continue; }
+            }
+            catch (FormatException) { } // Unsupported or unsafe optional row; never render it.
+            SkippedVisualEntries++;
+        }
+        return new ReadOnlyCollection<T>(rows);
     }
 }
 }

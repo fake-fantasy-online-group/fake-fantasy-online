@@ -103,8 +103,9 @@ class RiftPageContract
         next = Pages(dense, "wrong-count"); next[0]["chunks"] = 30; Reject(() => Response(next[0]), "page count not derived from byte count");
         var duplicate = Snapshot(3000); var dupAuras = (List<object>)((Dictionary<string, object>)duplicate["rift"])["auras"];
         ((Dictionary<string, object>)dupAuras[2999])["entityId"] = "1";
-        Reject(() => Apply(state, Pages(duplicate, "duplicate-aura")), "duplicate aura across distinct pages");
-        Check(ReferenceEquals(previous, state.Rift), "invalid final aggregate never publishes partial data");
+        Apply(state, Pages(duplicate, "duplicate-aura"));
+        Check(state.Rift.Auras.Count == 2998 && state.Rift.SkippedVisualEntries == 2, "complete aggregate isolates duplicate optional aura across pages");
+        previous = state.Rift;
         next = Pages(dense, "timeout"); state.Apply(Response(next[0])); state.Tick(DateTime.UtcNow.AddSeconds(16));
         Check(!state.RiftSnapshotLoading && state.Error == "timeout" && ReferenceEquals(previous, state.Rift), "timeout keeps last complete state");
         Apply(state, next); Check(!state.RiftSnapshotLoading && ReferenceEquals(previous, state.Rift), "timeout retires trailing pages");

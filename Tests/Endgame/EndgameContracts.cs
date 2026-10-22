@@ -267,7 +267,7 @@ class EndgameContracts
         Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"unlockedTier\":151}}"), "invalid tier unlock metadata");
         string tell = "{\"id\":\"tell-1\",\"entityId\":\"1\",\"shape\":\"circle\",\"radius\":105,\"remainingMS\":1500}";
         foreach (string invalid in new[] { tell.Replace("circle", "triangle"), tell.Replace("105", "-1"), tell.Replace("1500", "-1"), tell.Replace("\"1\"", "\"4294967296\""), tell.Replace("1500", "1500,\"innerRadius\":106") })
-            Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"telegraphs\":[" + invalid + "]}}"), "invalid danger geometry");
+            Check(Response("{\"kind\":\"rift.state\",\"rift\":{\"telegraphs\":[" + invalid + "]}}").Rift.Telegraphs.Count == 0, "invalid optional danger geometry isolated");
         var tooManyTells = new string[129]; for (int i = 0; i < tooManyTells.Length; i++) tooManyTells[i] = tell;
         Reject(() => Response("{\"kind\":\"rift.state\",\"rift\":{\"telegraphs\":[" + string.Join(",", tooManyTells) + "]}}"), "danger list capped before publication");
         var advance = new EndgameRequest("rift.advance", runID: "seeded", floorIndex: 3);

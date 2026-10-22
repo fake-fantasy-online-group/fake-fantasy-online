@@ -37,6 +37,9 @@ public sealed class EndgameResponse
     public IReadOnlyDictionary<string, string> Result { get; }
     private EndgameResponse(IReadOnlyDictionary<string, object> d)
     {
+        string messageKind = EndgameData.String(d, "kind", 64);
+        // Business rift snapshots allow additive metadata; transport and scene context remain exact.
+        if (!messageKind.StartsWith("rift.", StringComparison.Ordinal) || messageKind == "rift.page" || messageKind == "rift.context")
         EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data");
         Kind = EndgameData.String(d, "kind", 64); RequestID = EndgameData.String(d, "requestId", 64); OK = EndgameData.Bool(d, "ok");
         Error = EndgameData.String(d, "error", 64); Message = EndgameData.String(d, "message"); Revision = EndgameData.ID(d, "revision"); CatalogVersion = EndgameData.String(d, "catalogVersion", 128);
