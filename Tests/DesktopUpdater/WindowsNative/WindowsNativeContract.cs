@@ -30,6 +30,8 @@ internal static class WindowsNativeContract
         }
         Check(FileVersionInfo.GetVersionInfo(Path.Combine(oldBuild, Executable)).ProductVersion == "1.0.0", "old PE product version");
         Check(FileVersionInfo.GetVersionInfo(Path.Combine(newBuild, Executable)).ProductVersion == "1.0.1", "new PE product version");
+        Test("unsigned prepare preserves original install and native MOTW", PrepareWithMotw);
+        Test("native ShellExecute cancellation restores all old files and resources", OsCancellationRollback);
         Test("unsigned replacement, real launch survival, resources and MOTW", SuccessfulUpdate);
         Test("real early-exit launch rolls back without an installed receipt", EarlyExitRollback);
         Test("unsigned PE cannot satisfy pinned Authenticode policy", RejectUnsignedPin);
@@ -58,6 +60,66 @@ internal static class WindowsNativeContract
             return error;
         }
         throw new InvalidOperationException("Expected " + typeof(T).Name + ": " + expectedMessage);
+    }
+
+    private static void PrepareWithMotw()
+    {
+        using (var f = new Fixture("live"))
+        using (var engine = new UpdateEngine(f.Request, new DesktopPlatform()))
+        {
+            var original = Snapshot(f.Install);
+            engine.Prepare(CancellationToken.None);
+            CheckMotw(f.Candidate);
+            CheckSnapshot(f.Install, original);
+            Check(DesktopInstallIdentity.Read(f.Candidate, "windows").Version == "1.0.1", "native trust accepted unsigned candidate with empty pin");
+            Check(File.Exists(Path.Combine(f.Job, "transaction.json")), "valid candidate preparation recorded");
+            Check(!File.Exists(Path.Combine(f.Job, "installed")), "preparation alone is not success");
+            f.CheckResources(f.Install); f.CheckPersistentData();
+        }
+    }
+
+    private static void OsCancellationRollback()
+    {
+        using (var f = new Fixture("live"))
+        using (var engine = new UpdateEngine(f.Request, new DesktopPlatform()))
+        {
+            var original = Snapshot(f.Install);
+            engine.Prepare(CancellationToken.None);
+            bool cancelled = false;
+            try { engine.Commit(); }
+            catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
+            {
+                cancelled = true;
+                Console.WriteLine("Observed real ShellExecute ERROR_CANCELLED (1223); this does not identify which OS prompt or policy caused cancellation.");
+            }
+            Check(cancelled, "this unattended-runner cancellation scenario requires actual ShellExecute error 1223");
+            CheckSnapshot(f.Install, original);
+            Check(DesktopInstallIdentity.Read(f.Install, "windows").Version == "1.0.0", "OS cancellation restores old version");
+            string failedRoot = f.Install + ".update-failed-" + Path.GetFileName(f.Job);
+            Check(DesktopInstallIdentity.Read(failedRoot, "windows").Version == "1.0.1", "OS-rejected candidate retained");
+            CheckMotw(failedRoot);
+            Check(!File.Exists(Path.Combine(f.Job, "installed")), "OS cancellation never records success");
+            Check(File.Exists(Path.Combine(f.Job, "transaction.json")), "OS cancellation retains recovery journal");
+            f.CheckResources(f.Install); f.CheckPersistentData();
+            Check(!Directory.Exists(Path.Combine(failedRoot, "DownloadedResources")), "OS cancellation restores resources, not a duplicate");
+            new DesktopPlatform().RequireApplicationStopped(f.Install, DesktopInstallIdentity.Read(f.Install, "windows"));
+            Console.WriteLine("Verified rollback: every original install file has identical SHA-256; old PE, downloaded and partial resources, settings and recovery journal retained; no installed receipt.");
+        }
+    }
+
+    private static Dictionary<string, string> Snapshot(string root)
+    {
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string path in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            files.Add(Path.GetRelativePath(root, path), Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
+        return files;
+    }
+    private static void CheckSnapshot(string root, Dictionary<string, string> original)
+    {
+        var actual = Snapshot(root);
+        Check(actual.Count == original.Count, "restored install has exactly its original files");
+        foreach (var file in original)
+            Check(actual.TryGetValue(file.Key, out string hash) && hash == file.Value, "original file bytes retained: " + file.Key);
     }
 
     private static void SuccessfulUpdate()

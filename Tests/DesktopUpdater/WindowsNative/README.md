@@ -31,3 +31,14 @@ MOTW is retained, not bypassed. If OS launch policy blocks a fixture, the test
 fails rather than disabling that policy. A fixture stays alive for at most two
 minutes; cleanup only stops processes whose executable is under that test's
 unique temporary directory.
+
+## Unattended runner cancellation diagnostics
+
+The suite also records actual ShellExecute ERROR_CANCELLED (1223) on the
+unattended runner and verifies byte-for-byte restoration of every old install
+file, downloaded and partial resources, persistent settings, retained candidate
+and journal, and absence of an installed receipt. It does not infer which
+prompt or policy caused cancellation, or that interactive users see the same
+result. This diagnostic expects the real cancellation, not an injected one.
+The separate successful-launch and early-exit gates remain failures when the
+OS cancels before process creation; the diagnostic does not turn them green.
