@@ -31,13 +31,13 @@ class FormalBuildContract(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build.validate_dispatch(value, False)
             with self.assertRaises(ValueError):
-                build.main(['--platform', 'macos', '--version', '1.0.1', '--configuration', 'formal', '--development-http', '--dispatch-url', value])
+                build.main(['--platform', 'macos', '--version', '1.0.2', '--configuration', 'formal', '--development-http', '--dispatch-url', value])
         for value in ('http://0.0.0.0/d', 'http://[::]/d', 'http://sub.localhost/d', 'http://127.0.0.2/d', 'http://127.1/d', 'http://user:pass@localhost/d', 'http://localhost/d?token=x'):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 build.validate_dispatch(value, True)
 
     def test_explicit_formal_cli_and_endpoint_policy(self):
-        args = build.parser().parse_args(['--platform', 'windows', '--version', '1.0.1', '--dispatch-url', 'https://example.com/dispatch.json'])
+        args = build.parser().parse_args(['--platform', 'windows', '--version', '1.0.2', '--dispatch-url', 'https://example.com/dispatch.json'])
         self.assertEqual(args.configuration, 'formal')
         self.assertFalse(args.release)
         for endpoint in ('', 'https://user:secret@example.com/d', 'https://example.com/d?token=secret',
@@ -51,7 +51,7 @@ class FormalBuildContract(unittest.TestCase):
             build.validate_dispatch('http://8.8.8.8/d', True)
 
     def test_private_profile_legacy_inputs_and_no_implicit_migration(self):
-        base = ['--platform', 'windows', '--version', '1.0.1', '--dispatch-url', 'https://current.example.test/d']
+        base = ['--platform', 'windows', '--version', '1.0.2', '--dispatch-url', 'https://current.example.test/d']
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(build.legacy_dispatches(build.parser().parse_args(base)), [])
         with patch.dict(os.environ, {'FFO_RESOURCE_LEGACY_DISPATCH_URLS': 'https://old.example.test/d\r\nhttps://older.example.test/d'}):
@@ -79,7 +79,7 @@ class FormalBuildContract(unittest.TestCase):
                 captured.update(env)
                 output.write_bytes(b'inert synthetic fixture, never executed')
                 return type('Result', (), {'returncode': 0})()
-            args = ['--platform', 'windows', '--version', '1.0.1', '--configuration', 'development',
+            args = ['--platform', 'windows', '--version', '1.0.2', '--configuration', 'development',
                     '--dispatch-url', 'https://current.example.test/d', '--updater-directory', temporary,
                     '--output', str(output)]
             with patch.dict(os.environ, {'FFO_RESOURCE_LEGACY_DISPATCH_URLS': 'https://old.example.test/d'}), \
@@ -93,7 +93,7 @@ class FormalBuildContract(unittest.TestCase):
 
     def test_source_tag_release_gate_fails_before_editor(self):
         with self.assertRaisesRegex(ValueError, 'requires --configuration formal'):
-            build.main(['--platform', 'android', '--version', '1.0.1', '--dispatch-url', 'https://example.com/d', '--release'])
+            build.main(['--platform', 'android', '--version', '1.0.2', '--dispatch-url', 'https://example.com/d', '--release'])
         with self.assertRaisesRegex(ValueError, 'match ProjectSettings'):
             build.main(['--platform', 'android', '--version', '9.9.9', '--dispatch-url', 'https://example.com/d'])
 
@@ -123,9 +123,9 @@ class FormalBuildContract(unittest.TestCase):
             file.write_bytes(b'synthetic non-executable helper fixture')
             file.chmod(0o755)
         (streaming / 'resource-bootstrap.json').write_text(json.dumps({'schemaVersion': 1, 'mode': 'resource-free',
-            'appVersion': '1.0.1', 'dispatchUrl': 'https://example.com/dispatch.json', 'developmentHttp': False}))
+            'appVersion': '1.0.2', 'dispatchUrl': 'https://example.com/dispatch.json', 'developmentHttp': False}))
         marker = root / ('Contents/Resources/ffo-desktop-install.json' if platform == 'macos' else 'ffo-desktop-install.json')
-        marker.write_text(json.dumps({'schemaVersion': 1, 'platform': platform, 'version': '1.0.1', 'installId': 'org.example.client',
+        marker.write_text(json.dumps({'schemaVersion': 1, 'platform': platform, 'version': '1.0.2', 'installId': 'org.example.client',
             'executable': executable, 'macTeamId': 'ABCDEFGHIJ' if platform == 'macos' else '', 'windowsSignerSha256': 'a' * 64 if platform == 'windows' else ''}))
         return root
 
@@ -204,7 +204,7 @@ class FormalBuildContract(unittest.TestCase):
                     archive.writestr('lib/arm64-v8a/libil2cpp.so', b'synthetic')
                     archive.writestr('lib/arm64-v8a/libunity.so', b'synthetic')
                     archive.writestr('assets/resource-bootstrap.json', json.dumps({'schemaVersion': 1, 'mode': 'resource-free',
-                        'appVersion': '1.0.1', 'dispatchUrl': '', 'legacyDispatchUrls': legacy, 'developmentHttp': False}))
+                        'appVersion': '1.0.2', 'dispatchUrl': '', 'legacyDispatchUrls': legacy, 'developmentHttp': False}))
                 if legacy is None or legacy == []:
                     self.assertEqual(apk.verify(output)['status'], 'development-candidate')
                 else:
@@ -218,7 +218,7 @@ class FormalBuildContract(unittest.TestCase):
                 archive.writestr('lib/arm64-v8a/libil2cpp.so', b'synthetic')
                 archive.writestr('lib/arm64-v8a/libunity.so', b'synthetic')
                 archive.writestr('assets/resource-bootstrap.json', json.dumps({'schemaVersion': 1, 'mode': 'resource-free',
-                    'appVersion': '1.0.1', 'dispatchUrl': 'https://example.com/dispatch.json', 'legacyDispatchUrls': ['https://retired.example.test/d'], 'developmentHttp': False}))
+                    'appVersion': '1.0.2', 'dispatchUrl': 'https://example.com/dispatch.json', 'legacyDispatchUrls': ['https://retired.example.test/d'], 'developmentHttp': False}))
             result = apk.verify(output, configuration='formal', expected_dispatch='https://example.com/dispatch.json',
                                 expected_legacy_dispatches=['https://retired.example.test/d'])
             with self.assertRaisesRegex(ValueError, 'legacy dispatch list'):

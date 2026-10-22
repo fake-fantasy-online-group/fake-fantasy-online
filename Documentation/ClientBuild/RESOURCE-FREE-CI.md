@@ -8,9 +8,9 @@ This opt-in path builds an **Android ARM64 IL2CPP development candidate** from t
 
 ## Version and candidate identity
 
-- `ProjectSettings/ProjectSettings.asset` → `bundleVersion` is the single application-version source, currently `1.0.0`. Desktop builders no longer overwrite it, and the Android bootstrap reads `PlayerSettings.bundleVersion`.
+- `ProjectSettings/ProjectSettings.asset` → `bundleVersion` is the single application-version source, currently `1.0.2`. Desktop builders no longer overwrite it, and the Android bootstrap reads `PlayerSettings.bundleVersion`.
 - The application version change does **not** migrate the login protocol. The current protocol marker remains whatever `NetClient.ClientVersion` declares; client/server migration and paired compatibility acceptance are separate work. The artifact metadata reports this marker explicitly.
-- Resource-free mode preserves the current Unity project application identifier, including Unity’s resolved default; it no longer replaces it with a separate candidate package name. It uses development build options, ARM64, IL2CPP, an APK rather than AAB, and Unity’s default development signing. No production signing credential is read. The current application is `1.0.0` with Android integer `versionCode=2`, increased from the earlier candidate code 1 so same-package, same-signature upgrades can be accepted. All local build entries read the project settings; they do not overwrite either version value. Future APK upgrades must increase this integer again.
+- Resource-free mode preserves the current Unity project application identifier, including Unity’s resolved default; it no longer replaces it with a separate candidate package name. It uses development build options, ARM64, IL2CPP, an APK rather than AAB, and Unity’s default development signing. No production signing credential is read. The current application is `1.0.2` with Android integer `versionCode=8`, increased from the preceding code 7 so same-package, same-signature upgrades can be accepted. All local build entries read the project settings; they do not overwrite either version value. Future APK upgrades must increase this integer again.
 - A build is a candidate, not a production release. APK structure checks do not verify the signing certificate, installation/update behavior, resource completeness, or server compatibility.
 
 ## Local command
@@ -43,7 +43,7 @@ Create a remote resource manifest separately, on a machine holding the passive g
 
 ```sh
 python3 scripts/generate-resource-manifest.py /path/to/materialized-resources \
-  --client-version 1.0.0 --client-platform android --output /path/to/materialized-resources/mobile-resources.tsv
+  --client-version 1.0.2 --client-platform android --output /path/to/materialized-resources/mobile-resources.tsv
 ```
 
 The file begins with `FFO-MOBILE-1` and `@client<TAB><platform><TAB><exact application version>`. Select `android`, `windows`, `macos`, or `linux` with `--client-platform` (the default remains `android`). The runtime requires this platform and application version to match exactly; platform-neutral or unknown manifests are not accepted. Each following row records source path, destination path, byte length, and SHA-256. Serve the manifest from the root of that resource tree so its relative source paths resolve correctly. The command writes a new local file only; it never uploads or overwrites one. Asset rights, a legitimate HTTPS host, and the correct complete resource set are prerequisites outside this build workflow.
