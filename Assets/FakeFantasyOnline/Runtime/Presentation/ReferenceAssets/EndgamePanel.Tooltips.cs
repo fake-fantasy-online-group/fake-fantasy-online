@@ -39,6 +39,12 @@ public sealed partial class EndgamePanel
         var lines = new List<string>((original ?? "").Replace("\\n", "\n").Split('\n'));
         var attributes = new List<string>();
         var effects = new List<string>();
+        // Prefix the effect itself once, not a separate heading. Keep the server's
+        // wording after the prefix, including any name/colon inside the body.
+        string legendaryEffect = item.Legendary?.Description ?? "";
+        string legendaryPrefix = item.Legendary?.Name + "：";
+        if (legendaryEffect.Length > 0 && !string.IsNullOrEmpty(item.Legendary.Name) &&
+            !legendaryEffect.StartsWith(legendaryPrefix, StringComparison.Ordinal)) legendaryEffect = legendaryPrefix + legendaryEffect;
         bool nativeStats = Current?.State?.NativeEquipmentStats == true;
         bool nativeUniqueBlock = false;
         // Old servers put unique details above durability. Move the actual rolled lines,
@@ -95,9 +101,11 @@ public sealed partial class EndgamePanel
             // A legendary description is an effect, never lore. Reuse the same
             // orange rows and attribute-ending placement as existing equipment,
             // including older native payloads that omitted the effect marker.
-            if (item.Legendary != null && DescriptionContainsLine(item.Legendary.Description, plain) && plain.Length > 0)
+            if (item.Legendary != null && plain.Length > 0 &&
+                (DescriptionContainsLine(item.Legendary.Description, plain) || DescriptionContainsLine(legendaryEffect, plain)))
             {
-                AddMissingLine(effects, effects, Orange(plain));
+                foreach (string part in legendaryEffect.Replace("\\n", "\n").Split('\n'))
+                    if (part.Length > 0) AddMissingLine(effects, effects, Orange(part));
                 lines.RemoveAt(i--);
                 continue;
             }
@@ -132,7 +140,7 @@ public sealed partial class EndgamePanel
             else AddMissingLine(effects, lines, Orange(plain));
         }
         if (item.Legendary != null)
-            foreach (string part in item.Legendary.Description.Replace("\\n", "\n").Split('\n'))
+            foreach (string part in legendaryEffect.Replace("\\n", "\n").Split('\n'))
                 if (part.Length > 0) AddMissingLine(effects, lines, Orange(part));
         if (!nativeStats && !alreadyOverlaid && formation != null)
             // Legacy servers do not include formation attributes in the native
@@ -154,7 +162,7 @@ public sealed partial class EndgamePanel
             string composition = "\u0007" + DarkGold(runes);
             if (runes.Length > 0 && !lines.Contains(composition)) lines.Insert(NativeCompositionAnchor(lines), composition);
         }
-        if (item.Description.Length > 0) AddDescription(lines, item.Description);
+        if (item.Description.Length > 0) AddDescription(lines, item.Description, item.Legendary?.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
         return string.Join("\n", lines);
     }
@@ -194,11 +202,14 @@ public sealed partial class EndgamePanel
         }
         return Math.Min(1, lines.Count);
     }
-    private static void AddDescription(List<string> lines, string description)
+    private static void AddDescription(List<string> lines, string description, string effectDescription = null)
     {
+        // Legacy sidecars also placed the unprefixed effect in item lore. The
+        // named orange row now owns it, so do not append its raw wording again.
         foreach (string part in description.Replace("\\n", "\n").Split('\n'))
         {
-            if (part.Length == 0 || lines.Exists(line => PlainLine(line) == part)) continue;
+            if (part.Length == 0 || lines.Exists(line => PlainLine(line) == part) ||
+                effectDescription != null && DescriptionContainsLine(effectDescription, part)) continue;
             int footer = lines.FindIndex(line => PlainLine(line).StartsWith("（绑定物品不可交易", StringComparison.Ordinal));
             lines.Insert(footer >= 0 ? footer : lines.Count, part);
         }
