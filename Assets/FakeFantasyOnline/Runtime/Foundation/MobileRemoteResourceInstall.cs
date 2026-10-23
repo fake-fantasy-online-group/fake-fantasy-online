@@ -681,7 +681,8 @@ public sealed class MobileRemoteResourceInstall
         string[] pieces = path.Split('/');
         string ext = Path.GetExtension(path).ToLowerInvariant();
         return (pieces.Length == 4 && path.StartsWith("gameassets/respatch/effect/", StringComparison.Ordinal) && ext == ".eff") ||
-            (pieces.Length == 5 && path.StartsWith("gameassets/respatch/magic/magic/", StringComparison.Ordinal) && ext == ".gso");
+            (pieces.Length == 5 && path.StartsWith("gameassets/respatch/magic/magic/", StringComparison.Ordinal) && ext == ".gso") ||
+            (pieces.Length == 5 && path.StartsWith("gameassets/respatch/item/item/", StringComparison.Ordinal) && ext == ".gso");
     }
 
     private static void ValidateResourcePath(string path, bool destination)

@@ -116,21 +116,22 @@ internal static class RemoteResourceContract
 
     private static void TestPassiveOverlays(string storage)
     {
-        string[] accepted = { "gameassets/respatch/effect/龙霸.eff", "gameassets/respatch/magic/magic/magic9990.gso", "gameassets/tables/mapmusic.json" };
+        string[] accepted = { "gameassets/respatch/effect/龙霸.eff", "gameassets/respatch/magic/magic/magic9990.gso", "gameassets/respatch/item/item/item5002.gso", "gameassets/respatch/item/item/ITEM5003.GSO", "gameassets/tables/mapmusic.json" };
         string text = Manifest();
         foreach (string path in accepted) text += Row(path, path, A);
-        foreach (string platform in new[] { "android", "windows", "macos" })
+        foreach (string platform in new[] { "android", "windows", "macos", "linux" })
         {
             MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(text.Replace("@client\tandroid", "@client\t" + platform)), "1.0.0", platform);
             checks++;
         }
-        foreach (string path in new[] { "gameassets/rawmap/world.gsm", "gameassets/rawmap/world.gso", "ReferenceClient/rawmap/world.gso",
+        foreach (string path in new[] { "gameassets/respatch/item/item/sub/a.gso", "gameassets/respatch/item/a.gso", "gameassets/respatch/item/item/a.eff", "gameassets/respatch/item/item/a.dll", "gameassets/respatch/item/item/a.lua", "gameassets/respatch/item/Item/a.gso", "gameassets/Respatch/item/item/a.gso", "ReferenceClient/respatch/item/item/a.gso", "gameassets/respatch/item/item/../a.gso", "gameassets/respatch/item/item/./a.gso", "gameassets/respatch/item/item//a.gso", "gameassets/respatch/item/item/%2e%2e/a.gso",
+            "gameassets/rawmap/world.gsm", "gameassets/rawmap/world.gso", "ReferenceClient/rawmap/world.gso",
             "gameassets/respatch/other.gso", "gameassets/respatch/effect/a.gso", "gameassets/respatch/magic/magic/a.eff",
             "gameassets/respatch/effect/sub/a.eff", "gameassets/respatch/magic/magic/sub/a.gso",
             "gameassets/respatch/effect/a.dll", "gameassets/respatch/effect/a.lua", "AddOns/a.eff", "Music/mapmusic.json",
             "Music/credentials.json", "gameassets/Respatch/effect/a.eff", "ReferenceClient/respatch/effect/a.eff" })
             Reject(() => MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(Manifest() + Row("a.png", path, A)), "1.0.0"), "overlay destination boundary: " + path);
-        foreach (string path in new[] { "other/a.eff", "gameassets/rawmap/a.gso", "AddOns/a.eff", "gameassets/respatch/effect/sub/a.eff" })
+        foreach (string path in new[] { "gameassets/respatch/item/item/sub/a.gso", "gameassets/respatch/item/a.gso", "gameassets/respatch/item/item/a.eff", "gameassets/respatch/item/item/a.dll", "gameassets/respatch/item/item/a.lua", "gameassets/respatch/item/Item/a.gso", "gameassets/Respatch/item/item/a.gso", "ReferenceClient/respatch/item/item/a.gso", "gameassets/respatch/item/item/../a.gso", "gameassets/respatch/item/item/./a.gso", "gameassets/respatch/item/item//a.gso", "gameassets/respatch/item/item/%2e%2e/a.gso", "other/a.eff", "gameassets/rawmap/a.gso", "AddOns/a.eff", "gameassets/respatch/effect/sub/a.eff" })
             Reject(() => MobileRemoteResourceInstall.ValidateManifest(MobileResourceManifest.Parse(Manifest() + Row(path, accepted[0], A)), "1.0.0"), "overlay source boundary: " + path);
         var http = new FakeHttp(text);
         foreach (string path in accepted)

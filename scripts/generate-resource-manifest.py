@@ -26,7 +26,8 @@ def passive_overlay(path):
     pieces = path.split('/')
     extension = PurePosixPath(path).suffix.lower()
     return ((len(pieces) == 4 and pieces[:3] == ['gameassets', 'respatch', 'effect'] and extension == '.eff') or
-            (len(pieces) == 5 and pieces[:4] == ['gameassets', 'respatch', 'magic', 'magic'] and extension == '.gso'))
+            (len(pieces) == 5 and pieces[:4] == ['gameassets', 'respatch', 'magic', 'magic'] and extension == '.gso') or
+            (len(pieces) == 5 and pieces[:4] == ['gameassets', 'respatch', 'item', 'item'] and extension == '.gso'))
 
 
 def allowed(path):
