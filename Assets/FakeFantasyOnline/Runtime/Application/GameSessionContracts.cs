@@ -152,8 +152,10 @@ public sealed class CharacterAppearanceRecord
         int face,
         int attackVariant,
         int weaponCategory,
-        int attackDistance)
+        int attackDistance,
+        int? nativeAttackDistance = null)
     {
+        NativeAttackDistance = nativeAttackDistance;
         Body = body;
         Cap = cap;
         Backpack = backpack;
@@ -182,6 +184,14 @@ public sealed class CharacterAppearanceRecord
     public int WeaponCategory { get; }
 
     public int AttackDistance { get; }
+
+    // Optional negotiated extension: reach modifiers never redefine weapon presentation.
+    public int? NativeAttackDistance { get; }
+    public int AttackIdentityDistance => NativeAttackDistance ?? AttackDistance;
+
+    public CharacterAppearanceRecord WithNativeAttackDistance(int? distance) =>
+        new CharacterAppearanceRecord(Body, Cap, Backpack, RightWeapon, LeftWeapon, Face,
+            AttackVariant, WeaponCategory, AttackDistance, distance);
 }
 
 public sealed class WorldEntryRecord

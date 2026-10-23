@@ -6839,7 +6839,8 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
         CharacterAppearanceRecord old = previous.Appearance;
         CharacterAppearanceRecord appearance = new CharacterAppearanceRecord(
             old.Body, old.Cap, old.Backpack, old.RightWeapon, old.LeftWeapon, old.Face,
-            old.AttackVariant, received.Appearance.WeaponCategory, received.Appearance.AttackDistance);
+            old.AttackVariant, received.Appearance.WeaponCategory, received.Appearance.AttackDistance,
+            received.Appearance.NativeAttackDistance);
         return new WorldRemotePlayerState(previous.EntityId, previous.DisplayName,
             previous.X, previous.Y, previous.Level, previous.Gender, previous.Head,
             previous.Hair, previous.Title, appearance, previous.Dead,

@@ -61,7 +61,7 @@ public partial class CombatWorld
 
     private void PlayPvpAttackProjectile()
     {
-        var projectile = AtkProjectile(CharData.weaponCType, CharData.atkDist);
+        var projectile = AtkProjectile(CharData.weaponCType, CharData.AttackIdentityDistance);
         if (!projectile.HasValue) return;
         var specification = projectile.Value;
         Transform player = CombatNumber.PlayerTransform;

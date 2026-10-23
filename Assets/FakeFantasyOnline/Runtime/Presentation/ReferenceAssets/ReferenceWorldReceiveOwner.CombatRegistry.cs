@@ -26,7 +26,7 @@ public sealed partial class ReferenceWorldReceiveOwner : ICombatRegistryReceiveO
         player = CombatWorld.FindPlayer(value.EntityId);
         if (!ReferenceEquals(player, null)) player.SetInvis(value.Invisible);
         player = CombatWorld.FindPlayer(value.EntityId);
-        if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance);
+        if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance, a.NativeAttackDistance);
         return player;
     }
 

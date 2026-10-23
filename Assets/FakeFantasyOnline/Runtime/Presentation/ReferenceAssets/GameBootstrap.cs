@@ -226,7 +226,7 @@ public partial class GameBootstrap : MonoBehaviour
             CharData.attrs,
             new CharacterAppearanceRecord(CharData.apBody, CharData.apCap,
                 CharData.apBackpack, CharData.apWeaponR, CharData.apWeaponL,
-                CharData.apFace, CharData.atkVariant, CharData.weaponCType, CharData.atkDist),
+                CharData.apFace, CharData.atkVariant, CharData.weaponCType, CharData.atkDist, CharData.nativeAtkDist),
             new WorldPetRecord(CharData.petModel, CharData.petName, CharData.petLevel),
             CharData.charId, CharData.glowMode, GameSettings.SmartCast,
             CharData.glowUnlock, GameSettings.PetViewMask, CharData.level);
@@ -353,7 +353,7 @@ public partial class GameBootstrap : MonoBehaviour
             entry = entry.WithAppearance(
                 new CharacterAppearanceRecord(CharData.apBody, CharData.apCap,
                     CharData.apBackpack, CharData.apWeaponR, CharData.apWeaponL,
-                    CharData.apFace, CharData.atkVariant, CharData.weaponCType, CharData.atkDist),
+                    CharData.apFace, CharData.atkVariant, CharData.weaponCType, CharData.atkDist, CharData.nativeAtkDist),
                 CharData.glowMode, CharData.glowUnlock);
         }
         System.Diagnostics.Stopwatch buildClock = System.Diagnostics.Stopwatch.StartNew();

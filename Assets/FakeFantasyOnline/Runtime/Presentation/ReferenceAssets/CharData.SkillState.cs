@@ -46,6 +46,8 @@ internal static partial class CharData
     internal static int glowUnlock;
     internal static int atkVariant;
     internal static int atkDist;
+    internal static int? nativeAtkDist;
+    internal static int AttackIdentityDistance => nativeAtkDist ?? atkDist;
 
     // Official 0x8015 reached stores: points before count; dictionary replacement after count;
     // each fully read pair survives the next failed read; bonuses replace only after all

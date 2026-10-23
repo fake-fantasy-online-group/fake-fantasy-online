@@ -166,7 +166,7 @@ public partial class RemotePlayer
     internal PlayerAvatar AvatarForIndependentRuntime => avatar;
     internal CharacterAppearanceRecord AppearanceForIndependentRuntime => new CharacterAppearanceRecord(
         appear.Body, appear.Cap, appear.Backpack, appear.WeaponR, appear.WeaponL, appear.Face,
-        atkVariant, weaponCType, atkDistPx);
+        atkVariant, weaponCType, atkDistPx, nativeAtkDistPx);
     internal bool AvatarReadyForIndependentRuntime => avatar != null && avatar.ok;
     internal bool UpdateBodyPresentForIndependentRuntime => body != null;
     internal bool AvatarSelectableForIndependentRuntime => (avatar != null && avatar.ok) || rebuildTries >= MaxRebuildTries;

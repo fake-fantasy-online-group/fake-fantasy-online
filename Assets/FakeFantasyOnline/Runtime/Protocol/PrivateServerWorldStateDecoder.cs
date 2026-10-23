@@ -796,6 +796,8 @@ public static class PrivateServerWorldStateDecoder
                 glowUnlock = reader.ReadByte();
             }
 
+            if (reader.Remaining >= 1)
+                appearance = appearance.WithNativeAttackDistance(reader.ReadUInt16());
             reader.EnsureFinished();
             state = new WorldPlayerAppearanceState(
                 entityId,
@@ -2678,6 +2680,8 @@ public static class PrivateServerWorldStateDecoder
             invisible = invisibleByte != 0;
         }
 
+        int? nativeAttackDistance = reader.Remaining >= 1 ? (int?)reader.U16() : null;
+
         // Original remote spawn admission follows ALL optional reads, before the F32 casts.
         if (context != null && context.Switching) return;
         if (context != null && mapIdGuard > 0 && context.CurrentMapId > 0 &&
@@ -2720,7 +2724,8 @@ public static class PrivateServerWorldStateDecoder
                 face,
                 attackVariant,
                 weaponCategory,
-                attackDistance),
+                attackDistance,
+                nativeAttackDistance),
             deadByte != 0,
             avatarAura,
             soulEffects,

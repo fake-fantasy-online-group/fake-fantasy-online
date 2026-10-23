@@ -144,6 +144,9 @@ public sealed partial class PrivateServerGateway : IWorldEntryPrefixReceiptSourc
             petViewMask = reader.I32();
         }
 
+        if (reader.Remaining >= 1)
+            appearance = appearance.WithNativeAttackDistance(reader.U16());
+
         // Dispatch's settings precede the live callback lookup. The title's entering,
         // Notice and caps effects belong to that callback, not to a null-subscriber packet.
         _worldReceiveOwner?.ReceiveEntrySettings(petViewMask, smartCast);

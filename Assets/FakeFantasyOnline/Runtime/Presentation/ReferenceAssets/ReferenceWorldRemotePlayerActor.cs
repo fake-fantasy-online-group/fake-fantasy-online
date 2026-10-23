@@ -736,7 +736,7 @@ internal sealed class ReferenceWorldRemotePlayerActor :
                     appearance.RightWeapon, appearance.LeftWeapon, appearance.Face,
                     appearance.AttackVariant, value.AvatarAura, value.SoulEffects,
                     value.TitleEffect, value.GlowMode);
-                sourceIdentity.SetWeapon(appearance.WeaponCategory, appearance.AttackDistance);
+                sourceIdentity.SetWeapon(appearance.WeaponCategory, appearance.AttackDistance, appearance.NativeAttackDistance);
             }
             if (hairChanged) CombatWorld.UpdatePlayerHair(value.EntityId, value.Head, value.Hair);
             if (nameChanged) CombatWorld.RenamePlayer(value.EntityId, value.DisplayName);
@@ -801,7 +801,7 @@ internal sealed class ReferenceWorldRemotePlayerActor :
                 change.SoulEffects, change.TitleEffect, change.GlowMode ?? -1);
             // Dispatch's final null-conditional is CLR null, after the wrapper's Unity guards.
             RemotePlayer player = CombatWorld.FindPlayer(change.EntityId);
-            if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance);
+            if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance, a.NativeAttackDistance);
         }
         finally { ObserveNativePose(); }
     }
@@ -873,7 +873,7 @@ internal sealed class ReferenceWorldRemotePlayerActor :
     {
         ApplyRidingEvent(value.RidingState, value);
         sourceIdentity.SetInvis(value.Invisible);
-        sourceIdentity.SetWeapon(value.Appearance.WeaponCategory, value.Appearance.AttackDistance);
+        sourceIdentity.SetWeapon(value.Appearance.WeaponCategory, value.Appearance.AttackDistance, value.Appearance.NativeAttackDistance);
     }
 
     // Historical Editor entry retained as a forwarding seam. SpawnPlayer has already published

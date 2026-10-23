@@ -23,7 +23,7 @@ internal sealed class ReferencePlayerAvatarRuntime : IDisposable
         PlayerAvatar.Appear combined = CharData.CombinedAppear();
         Appearance = new CharacterAppearanceRecord(combined.Body, combined.Cap, combined.Backpack,
             combined.WeaponR, combined.WeaponL, combined.Face, appearance.AttackVariant,
-            appearance.WeaponCategory, appearance.AttackDistance);
+            appearance.WeaponCategory, appearance.AttackDistance, appearance.NativeAttackDistance);
         Source = PlayerAvatar.Build(character.Gender > 0 ? 1 : 0, character.Head, character.Hair, combined, ppu);
     }
 

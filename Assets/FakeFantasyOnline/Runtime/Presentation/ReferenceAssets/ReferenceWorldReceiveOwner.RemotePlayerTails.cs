@@ -16,6 +16,7 @@ public sealed partial class ReferenceWorldReceiveOwner : IRemotePlayerTailReceiv
         CharData.atkVariant = a.AttackVariant;
         CharData.weaponCType = a.WeaponCategory;
         CharData.atkDist = a.AttackDistance;
+        CharData.nativeAtkDist = a.NativeAttackDistance;
         CharData.SetAppearance(a.Body, a.Cap, a.Backpack, a.RightWeapon, a.LeftWeapon, a.Face);
         // Dispatch tests Unity liveness, then reads the singleton again at the call.
         if (PlayerController.I) PlayerController.I.SetSoulFx(state.SoulEffects);
@@ -41,7 +42,7 @@ public sealed partial class ReferenceWorldReceiveOwner : IRemotePlayerTailReceiv
             state.SoulEffects, state.TitleEffect, state.GlowMode.GetValueOrDefault(1));
         // This is a new lookup after all wrapper effects; its null check is physical.
         RemotePlayer player = CombatWorld.FindPlayer(state.EntityId);
-        if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance);
+        if (!ReferenceEquals(player, null)) player.SetWeapon(a.WeaponCategory, a.AttackDistance, a.NativeAttackDistance);
     }
 
     public void ReceiveRemoteRiding(WorldRemoteRidingState state)

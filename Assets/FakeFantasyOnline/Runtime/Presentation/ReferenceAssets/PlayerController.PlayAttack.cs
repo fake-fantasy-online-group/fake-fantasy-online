@@ -54,7 +54,7 @@ public partial class PlayerController
     private bool PlayMagicSwing(float swingSec)
     {
         if (avatar == null) return false;
-        if (!CombatWorld.BasicAtkUsesMagicPose(CharData.weaponCType, CharData.atkDist)) return false;
+        if (!CombatWorld.BasicAtkUsesMagicPose(CharData.weaponCType, CharData.AttackIdentityDistance)) return false;
         int fpd;
         PlayerAvatar.Pose[,] frames = avatar.MagicPose(out fpd);
         if (frames == null) return false;

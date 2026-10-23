@@ -24,8 +24,10 @@ public partial class CombatWorld
     // A long-reach weapon is therefore fast in every category EXCEPT 16, the magic category that
     // PlayerController.PlayMagicSwing takes instead of PlayAttackPose; category 8 is fast at any
     // reach. It is not the same predicate as "reach > 150" alone.
+    // Negotiated servers supply original weapon reach separately from effective target reach.
+    // Legacy servers retain the recovered predicate through AttackIdentityDistance fallback.
     private static bool IsFastAttack =>
-        (CharData.atkDist > 150 && CharData.weaponCType != 16) || CharData.weaponCType == 8;
+        (CharData.AttackIdentityDistance > 150 && CharData.weaponCType != 16) || CharData.weaponCType == 8;
 
     // Official CombatWorld.get_AtkInterval (0600012c, static System.Single
     // CombatWorld.get_AtkInterval(), arm64 0x23ded4 / 384 bytes, x86_64 0x24be30 / 352 bytes).

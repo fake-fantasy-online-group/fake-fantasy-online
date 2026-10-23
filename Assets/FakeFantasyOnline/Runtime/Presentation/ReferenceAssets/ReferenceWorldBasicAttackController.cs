@@ -206,7 +206,8 @@ internal sealed class ReferenceWorldBasicAttackController
         IReadOnlyList<int> attributeTotals,
         IReadOnlyList<int> attributes,
         float deltaTime,
-        out ReferenceWorldBasicAttackPlan plan)
+        out ReferenceWorldBasicAttackPlan plan,
+        int? nativeAttackDistancePixels = null)
     {
         plan = default(ReferenceWorldBasicAttackPlan);
         if (!IsFinite(targetX) || !IsFinite(targetY) ||
@@ -256,7 +257,7 @@ internal sealed class ReferenceWorldBasicAttackController
         }
 
         float interval = AttackIntervalSeconds(
-            attackDistancePixels, weaponCategory, attributeTotals, attributes);
+            attackDistancePixels, weaponCategory, attributeTotals, attributes, nativeAttackDistancePixels);
         if (phase == ReferenceWorldBasicAttackPhase.Windup)
         {
             PlayerController player = PlayerController.I;
@@ -316,9 +317,10 @@ internal sealed class ReferenceWorldBasicAttackController
         int attackDistancePixels,
         int weaponCategory,
         IReadOnlyList<int> attributeTotals,
-        IReadOnlyList<int> attributes)
+        IReadOnlyList<int> attributes,
+        int? nativeAttackDistancePixels = null)
     {
-        float baseInterval = IsRanged(attackDistancePixels) ||
+        float baseInterval = IsRanged(nativeAttackDistancePixels ?? attackDistancePixels) ||
                              weaponCategory == FastWeaponCategory
             ? RangedIntervalSeconds
             : MeleeIntervalSeconds;

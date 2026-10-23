@@ -2011,6 +2011,7 @@ public sealed class ReferenceWorldLocalPlayerDoll :
         CharData.glowUnlock = character.GlowUnlock ?? 0;
         CharData.atkVariant = character.Appearance.AttackVariant;
         CharData.atkDist = character.Appearance.AttackDistance;
+        CharData.nativeAtkDist = character.Appearance.NativeAttackDistance;
         CharData.race = character.Race;
         CharData.gender = character.Gender;
         // WBB-074: the doll build used to publish CharData.level (+0x20), CharData.hp (+0x58) and
@@ -2118,7 +2119,7 @@ public sealed class ReferenceWorldLocalPlayerDoll :
         PlayerAvatar.Appear combined = CharData.CombinedAppear();
         CharacterAppearanceRecord raw = character.Appearance;
         var appearance = new CharacterAppearanceRecord(combined.Body, combined.Cap, combined.Backpack,
-            combined.WeaponR, combined.WeaponL, combined.Face, raw.AttackVariant, raw.WeaponCategory, raw.AttackDistance);
+            combined.WeaponR, combined.WeaponL, combined.Face, raw.AttackVariant, raw.WeaponCategory, raw.AttackDistance, raw.NativeAttackDistance);
         nativeAvatar = new ReferencePlayerAvatarRuntime(source, appearance);
         normalPoses = nativeAvatar.Normal();
         sittingPoses = nativeAvatar.Sitting();

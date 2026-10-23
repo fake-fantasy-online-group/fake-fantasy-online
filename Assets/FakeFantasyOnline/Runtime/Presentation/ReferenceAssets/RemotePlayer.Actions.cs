@@ -21,11 +21,14 @@ public partial class RemotePlayer
 
     public int WeaponCType => weaponCType;
     public int AtkDistPx => atkDistPx;
+    private int? nativeAtkDistPx;
+    public int AttackIdentityDistance => nativeAtkDistPx ?? atkDistPx;
 
-    public void SetWeapon(int cType, int px)
+    public void SetWeapon(int cType, int px, int? nativePx = null)
     {
         weaponCType = cType;
         atkDistPx = px;
+        nativeAtkDistPx = nativePx;
     }
 
     private static int AtkSub(int variant)
@@ -46,7 +49,7 @@ public partial class RemotePlayer
         if (facePos.HasValue) FaceTo(facePos.Value);
         int fpd;
         PlayerAvatar.Pose[,] frames;
-        if (CombatWorld.BasicAtkUsesMagicPose(weaponCType, atkDistPx))
+        if (CombatWorld.BasicAtkUsesMagicPose(weaponCType, AttackIdentityDistance))
         {
             frames = avatar.MagicPose(out fpd);
             if (frames != null)
@@ -146,7 +149,7 @@ public partial class RemotePlayer
             WeaponR = value.RightWeapon, WeaponL = value.LeftWeapon, Face = value.Face
         };
         atkVariant = value.AttackVariant;
-        SetWeapon(value.WeaponCategory, value.AttackDistance);
+        SetWeapon(value.WeaponCategory, value.AttackDistance, value.NativeAttackDistance);
     }
 
     internal void StepActForIndependentRuntime() => StepAct();

@@ -62,6 +62,8 @@ public sealed partial class PrivateServerGateway
         string title = reader.Remaining > 0 ? reader.Str() : string.Empty;
         int glow = reader.Remaining >= 1 ? reader.U8() : 1;
         int? unlock = reader.Remaining >= 1 ? reader.U8() : (int?)null;
+        if (reader.Remaining >= 1)
+            appearance = appearance.WithNativeAttackDistance(reader.U16());
         return new WorldPlayerAppearanceState(id, appearance, aura, soul, title, glow, unlock);
     }
 }

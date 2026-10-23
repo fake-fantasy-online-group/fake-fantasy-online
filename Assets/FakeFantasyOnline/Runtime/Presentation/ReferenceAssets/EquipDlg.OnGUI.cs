@@ -162,7 +162,7 @@ internal partial class EquipDlg
         int hit = Mathf.Clamp(At(17) * 30 / 100 + 48, 5, 99);
         int dodge = Mathf.Clamp(At(18) * 30 / 100 + 48, 5, 99);
         int speed = Mathf.Max(At(33), 50);
-        float intervalBase = CharData.atkDist >= 151 && CharData.weaponCType != 16 ||
+        float intervalBase = CharData.AttackIdentityDistance >= 151 && CharData.weaponCType != 16 ||
             CharData.weaponCType == 8 ? 0.5f : 1f;
         float interval = intervalBase / (speed / 100f);
         float frequency = interval > 0f ? 1f / interval : 0f;

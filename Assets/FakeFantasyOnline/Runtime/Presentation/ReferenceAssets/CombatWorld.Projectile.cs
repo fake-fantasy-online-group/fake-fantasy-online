@@ -8,7 +8,7 @@ public partial class CombatWorld
     private static void PlayRemoteProjectile(RemotePlayer atkRp, Transform tT, bool skillHit)
     {
         if (skillHit) return;
-        var projectile = AtkProjectile(atkRp.WeaponCType, atkRp.AtkDistPx);
+        var projectile = AtkProjectile(atkRp.WeaponCType, atkRp.AttackIdentityDistance);
         if (!projectile.HasValue) return;
         var specification = projectile.Value;
         float pixelsPerUnit = CombatNumber.Ppu > 0f ? CombatNumber.Ppu : 100f;
@@ -34,7 +34,7 @@ public partial class CombatWorld
     // PlayNamed and restored to 1 afterwards, and MoveTo takes the max against 80 ms.
     private void PlayAttackProjectile()
     {
-        var projectile = AtkProjectile(CharData.weaponCType, CharData.atkDist);
+        var projectile = AtkProjectile(CharData.weaponCType, CharData.AttackIdentityDistance);
         if (!projectile.HasValue) return;
         var specification = projectile.Value;
         Transform player = CombatNumber.PlayerTransform;
