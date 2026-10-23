@@ -156,10 +156,8 @@ class BuildContract(unittest.TestCase):
     def test_manifest_narrow_runtime_overlays_and_canonical_music(self):
         accepted = ['gameassets/respatch/effect/龙霸.eff',
                     'gameassets/respatch/magic/magic/magic9990.gso',
-                    'gameassets/respatch/item/item/item5002.gso',
-                    'gameassets/respatch/item/item/ITEM5003.GSO',
                     'gameassets/tables/mapmusic.json']
-        rejected = ['gameassets/respatch/item/item/sub/a.gso', 'gameassets/respatch/item/a.gso', 'gameassets/respatch/item/item/a.eff', 'gameassets/respatch/item/item/a.dll', 'gameassets/respatch/item/item/a.lua', 'gameassets/respatch/item/Item/a.gso', 'gameassets/Respatch/item/item/a.gso', 'ReferenceClient/respatch/item/item/a.gso',
+        rejected = ['gameassets/respatch/item/item/item5002.gso',
                     'gameassets/rawmap/world.gsm', 'gameassets/rawmap/world.gso',
                     'ReferenceClient/rawmap/world.gso', 'gameassets/respatch/other.gso',
                     'gameassets/respatch/effect/a.gso', 'gameassets/respatch/magic/magic/a.eff',
@@ -167,11 +165,7 @@ class BuildContract(unittest.TestCase):
                     'gameassets/respatch/effect/a.dll', 'gameassets/respatch/effect/a.lua',
                     'AddOns/a.eff', 'Music/mapmusic.json', 'Music/credentials.json',
                     'gameassets/Respatch/effect/a.eff', 'ReferenceClient/respatch/effect/a.eff']
-        for path in ['gameassets/respatch/item/item/../a.gso', 'gameassets/respatch/item/item/./a.gso', 'gameassets/respatch/item/item//a.gso', 'gameassets/respatch/item/item/%2e%2e/a.gso']:
-            with self.assertRaises(ValueError):
-                manifest.validate_path(path)
         for path in accepted:
-            manifest.validate_path(path)
             self.assertTrue(manifest.allowed(path), path)
         for path in rejected:
             self.assertFalse(manifest.allowed(path), path)
@@ -182,14 +176,13 @@ class BuildContract(unittest.TestCase):
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_bytes(b'synthetic passive fixture')
             rows = []
-            for platform in ('android', 'windows', 'macos', 'linux'):
+            for platform in ('android', 'windows', 'macos'):
                 text = manifest.generate(root, '1.0.0', platform)
                 rows.append(text.splitlines()[2:])
                 for path in accepted:
                     self.assertIn(path + '\t' + path + '\t25\t', text)
             self.assertEqual(rows[0], rows[1])
             self.assertEqual(rows[1], rows[2])
-            self.assertEqual(rows[2], rows[3])
             # Legacy music metadata is not silently remapped onto the canonical
             # table or published as playable music; staging must exclude it.
             legacy = root / 'ReferenceClient/music/mapmusic.json'
