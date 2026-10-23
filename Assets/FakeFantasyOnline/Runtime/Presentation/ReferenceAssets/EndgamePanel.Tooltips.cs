@@ -33,7 +33,7 @@ public sealed partial class EndgamePanel
         if (IsRune(item) || item.SocketCount > 0) Current?.LoadCatalog("runes");
         if (IsRune(item)) return RuneTooltip(item, original);
         if (item.SocketCount > 0 && item.Level > 0) original = ReplaceLevelRequirement(original, item.Level);
-        if (item.UniqueID == 0 && item.FormationID == 0) return original;
+        if (item.UniqueID == 0 && item.FormationID == 0 && item.Legendary == null) return original;
         EndgameFormationView formation = Formation(item.FormationID);
         if (item.FormationID > 0 && formation == null) Current?.LoadFormationForTooltip();
         var lines = new List<string>((original ?? "").Replace("\\n", "\n").Split('\n'));
@@ -133,6 +133,8 @@ public sealed partial class EndgamePanel
             if (runes.Length > 0 && !lines.Contains(composition)) lines.Insert(NativeCompositionAnchor(lines), composition);
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
+        if (item.Legendary != null && item.Legendary.Description.Length > 0)
+            AddDescription(lines, item.Legendary.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
         return string.Join("\n", lines);
     }

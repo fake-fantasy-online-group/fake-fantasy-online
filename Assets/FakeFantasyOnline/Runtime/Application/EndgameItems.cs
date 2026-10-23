@@ -37,6 +37,7 @@ public sealed class EndgameItemView
     public int Tab { get; }
     public int Slot { get; }
     public string Revision { get; }
+    public EndgameLegendaryItemView Legendary { get; }
     public int UniqueID { get; }
     public int UniqueRollBP { get; }
     public string Name { get; }
@@ -54,7 +55,8 @@ public sealed class EndgameItemView
     public bool Locked { get; }
     internal EndgameItemView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "uid", "itemId", "location", "tab", "slot", "revision", "uniqueId", "uniqueRollBp", "name", "description", "trait", "level", "profession", "socketCount", "sockets", "stats", "formationId", "active", "inactiveReason", "bound", "locked");
+        EndgameData.Keys(d, "uid", "itemId", "location", "tab", "slot", "revision", "uniqueId", "uniqueRollBp", "name", "description", "trait", "level", "profession", "socketCount", "sockets", "stats", "formationId", "active", "inactiveReason", "bound", "locked", "legendary");
+        Legendary = EndgameData.Optional(d, "legendary", v => new EndgameLegendaryItemView(EndgameData.Object(v)));
         UID = EndgameData.ID(d, "uid"); ItemID = EndgameData.Int(d, "itemId");
         Location = EndgameData.String(d, "location", 32); Tab = EndgameData.Int(d, "tab"); Slot = EndgameData.Int(d, "slot");
         Revision = EndgameData.ID(d, "revision"); UniqueID = EndgameData.Int(d, "uniqueId"); UniqueRollBP = EndgameData.Int(d, "uniqueRollBp");

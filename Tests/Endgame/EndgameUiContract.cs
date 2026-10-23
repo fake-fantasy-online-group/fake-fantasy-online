@@ -226,6 +226,11 @@ partial class EndgameUiContract
         var unique = TooltipItem("\"itemId\":1001,\"uniqueId\":1,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"飞鹤遗音\",\"description\":\"仙人遗音。\",\"socketCount\":2,\"level\":42");
         string native = "\u0007\u00034旧名字+7\n\u0007(武器)\n\n\u00034仙遗·飞鹤遗音\n基底：旧名字\n\u00034力量 +12\n\u00034暴击时，伤害提高8%\n同名仙遗特性取最高值；不同特性按通道上限叠加。\n仙人遗音。\n\n耐久度: 50/50\n需要等级: 20\n需要职业: 剑客\n\n攻击 20-30\n重量 5\n\n\u00034命中 +5\n\u00034孔数 0/2\n原有描述。";
         string tip = EndgamePanel.OverlayTooltip(unique, native);
+        var legendary = TooltipItem("\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"未知仙遗\",\"legendary\":{\"powerId\":\"FUTURE-999\",\"name\":\"未知新特性\",\"description\":\"再次施法触发，不附加固定延迟。\",\"future\":true}");
+        string legendaryTip = EndgamePanel.OverlayTooltip(legendary, native);
+        Check(legendaryTip.Contains("未知仙遗") && legendaryTip.Contains("再次施法触发，不附加固定延迟。"), "unknown legendary identity uses generic native tooltip");
+        Check(EndgamePanel.OverlayTooltip(legendary, legendaryTip) == legendaryTip, "repeated legendary tooltip has no duplicated effect");
+
         Check(tip.StartsWith("\u0007\u00035飞鹤遗音+7\n\u0007(武器)"), "unique replaces centered title without prepended block and retains refinement");
         Check(!tip.Contains("仙遗·") && !tip.Contains("基底") && !tip.Contains("同名仙遗") && !tip.Contains("宿序") && !tip.Contains("职业要求"), "unique removes redundant header and explanatory overlay");
         Check(Occurrences(tip, "力量 +12") == 1 && Occurrences(tip, "仙人遗音。") == 1 && Occurrences(tip, "孔数") == 1 && Occurrences(tip, "需要职业") == 1, "unique native attributes lore sockets and requirements appear once");

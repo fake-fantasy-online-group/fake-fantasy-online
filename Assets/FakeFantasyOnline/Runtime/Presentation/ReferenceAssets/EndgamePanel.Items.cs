@@ -8,7 +8,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 public sealed partial class EndgamePanel
 {
     private static readonly Color DarkGoldColor = new Color(183f / 255f, 155f / 255f, 98f / 255f);
-    private static bool IsSpecial(EndgameItemView item) => item.UniqueID > 0 || item.FormationID > 0;
+    private static bool IsSpecial(EndgameItemView item) => item.UniqueID > 0 || item.FormationID > 0 || item.Legendary != null;
     private static string DisplayName(EndgameItemView item) => item.FormationID > 0 ? FormationName(Formation(item.FormationID)?.Name ?? item.Name) : item.Name;
     private EndgameItemView Selected()
     {
