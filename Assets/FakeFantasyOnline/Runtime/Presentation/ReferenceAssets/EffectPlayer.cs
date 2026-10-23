@@ -283,6 +283,17 @@ public partial class EffectPlayer : MonoBehaviour
             return template;
         }
 
+        LegendaryEffectAlias alias;
+        if (LegendaryEffectAliases.TryGetValue(effName, out alias))
+        {
+            // Resolve through the same original EFF loader and package precedence.
+            // Do not read a stale LP overlay or mutate its cached source template.
+            template = SelectLegendaryLayers(LoadTemplate(alias.OriginalEffect, quiet),
+                alias.SelectedMagicId);
+            tplCache[effName] = template;
+            return template;
+        }
+
         string swapped;
         string resolvedName = EffFileSwap.TryGetValue(effName, out swapped)
             ? swapped
