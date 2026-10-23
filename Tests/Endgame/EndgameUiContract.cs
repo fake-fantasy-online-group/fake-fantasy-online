@@ -826,6 +826,7 @@ partial class EndgameUiContract
         SocketRecipeContracts();
         EquippedCategoryTooltipContracts(c, p);
         AttributeEffectOrderingContracts(c, p);
+        LegendaryTooltipContracts(c, p);
         ItemizationStatTextContracts(c, p);
         InventoryIdentityContracts(c, p);
         NativeRiftNoticeContracts();

@@ -82,6 +82,25 @@ public sealed partial class EndgamePanel
         for (int i = 1; i < lines.Count; i++)
         {
             string plain = EquipmentAttributeText(PlainLine(lines[i]));
+            // Early legendary payloads inserted a second title and base-material
+            // label inside the attributes. Remove only that known generated pair,
+            // not similar wording in the item's authored story.
+            if (item.Legendary != null && plain == "传奇·" + item.Legendary.Name)
+            {
+                lines.RemoveAt(i);
+                if (i < lines.Count && PlainLine(lines[i]).StartsWith("基底：", StringComparison.Ordinal)) lines.RemoveAt(i);
+                i--;
+                continue;
+            }
+            // A legendary description is an effect, never lore. Reuse the same
+            // orange rows and attribute-ending placement as existing equipment,
+            // including older native payloads that omitted the effect marker.
+            if (item.Legendary != null && DescriptionContainsLine(item.Legendary.Description, plain) && plain.Length > 0)
+            {
+                AddMissingLine(effects, effects, Orange(plain));
+                lines.RemoveAt(i--);
+                continue;
+            }
             bool coloredAttribute = lines[i].StartsWith("\u0003", StringComparison.Ordinal) && !lines[i].StartsWith("\u00030", StringComparison.Ordinal) ||
                 lines[i].StartsWith("\u0001", StringComparison.Ordinal) || lines[i].StartsWith("\u0005", StringComparison.Ordinal);
             bool authored = DescriptionContainsLine(item.Description, plain) || formation != null && DescriptionContainsLine(formation.Description, plain);
@@ -112,6 +131,9 @@ public sealed partial class EndgamePanel
             if (IsAttributeLine(plain)) AddMissingLine(attributes, lines, DarkGold(plain));
             else AddMissingLine(effects, lines, Orange(plain));
         }
+        if (item.Legendary != null)
+            foreach (string part in item.Legendary.Description.Replace("\\n", "\n").Split('\n'))
+                if (part.Length > 0) AddMissingLine(effects, lines, Orange(part));
         if (!nativeStats && !alreadyOverlaid && formation != null)
             // Legacy servers do not include formation attributes in the native
             // description. Negotiated servers already merge all actual extras
@@ -133,8 +155,6 @@ public sealed partial class EndgamePanel
             if (runes.Length > 0 && !lines.Contains(composition)) lines.Insert(NativeCompositionAnchor(lines), composition);
         }
         if (item.Description.Length > 0) AddDescription(lines, item.Description);
-        if (item.Legendary != null && item.Legendary.Description.Length > 0)
-            AddDescription(lines, item.Legendary.Description);
         if (formation != null && formation.Description.Length > 0) AddDescription(lines, formation.Description);
         return string.Join("\n", lines);
     }
