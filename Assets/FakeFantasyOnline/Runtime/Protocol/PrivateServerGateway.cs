@@ -5883,6 +5883,14 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                 effect,
                 cancellationToken);
         }
+        else if (packet.Opcode == ProtocolOpcodes.GroundEffect)
+        {
+            if (!Endgame.GroundFXV1) return;
+            WorldSkillHitEffect effect;
+            if (!PrivateServerWorldStateDecoder.TryDecodeGroundEffect(packet.Payload, out effect))
+                throw new InvalidDataException("The server sent an invalid ground-effect packet.");
+            PublishSkillHitEffect(effect, cancellationToken);
+        }
         else if (packet.Opcode == ProtocolOpcodes.SkillHitEffect)
         {
             WorldSkillHitEffect effect;

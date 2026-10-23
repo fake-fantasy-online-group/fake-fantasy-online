@@ -5,6 +5,7 @@ namespace FakeFantasyOnline.Application
 {
 public sealed partial class EndgameClientState
 {
+    public bool GroundFXV1 { get; private set; }
     public bool RiftPagesV1 { get; private set; }
     public bool RiftPagesAvailable { get; private set; }
     public bool NeedsRiftPageNegotiation { get; private set; }
@@ -24,6 +25,7 @@ public sealed partial class EndgameClientState
     private void ResetRiftPages()
     {
         DiscardRiftPages(); retiredRiftPages.Clear(); retiredRiftPageOrder.Clear();
+        GroundFXV1 = false;
         RiftPagesV1 = RiftPagesAvailable = NeedsRiftPageNegotiation = false;
         riftCapabilitiesRequest = ""; riftCapabilitiesAttempts = 0;
         riftCapabilitiesAwaiting = riftCapabilitiesRetry = false;
@@ -52,10 +54,11 @@ public sealed partial class EndgameClientState
             Error = response.Error; Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             Version++; return false;
         }
-        bool core = false, pages = false;
+        bool core = false, pages = false, ground = false;
         foreach (string capability in response.Capabilities)
-        { core |= capability == "endgame.v1"; pages |= capability == "endgame.rift-pages.v1"; }
+        { core |= capability == "endgame.v1"; pages |= capability == "endgame.rift-pages.v1"; ground |= capability == "endgame.ground-fx.v1"; }
         if (!core || !pages) throw new FormatException("Incomplete rift page capability acknowledgement.");
+        GroundFXV1 = ground;
         RiftPagesV1 = true; riftCapabilitiesAwaiting = riftCapabilitiesRetry = NeedsRiftPageNegotiation = false;
         Error = ""; Version++; return true;
     }

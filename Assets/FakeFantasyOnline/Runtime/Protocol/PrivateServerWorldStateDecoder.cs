@@ -11,6 +11,21 @@ namespace FakeFantasyOnline.Protocol
 /// </summary>
 public static class PrivateServerWorldStateDecoder
 {
+    public static bool TryDecodeGroundEffect(byte[] payload, out WorldSkillHitEffect effect)
+    {
+        effect = null;
+        if (payload == null) return false;
+        try {
+            var reader = new WireReader(payload);
+            int owner = reader.ReadInt32(), map = reader.ReadInt32(), x = reader.ReadInt32(), y = reader.ReadInt32();
+            string key = reader.ReadString(), name = reader.ReadString();
+            int duration = reader.ReadInt32(); byte mode = reader.ReadByte();
+            reader.EnsureFinished();
+            effect = new WorldSkillHitEffect(owner, map, x, y, key, name, duration, mode);
+            return true;
+        } catch (Exception ex) when (ex is ArgumentException || ex is EndOfStreamException || ex is InvalidDataException || ex is OverflowException) { return false; }
+    }
+
     /// <summary>
     /// Decodes the exact 0x8045 CombatWorld.PlayEntityEffect parameter packet.
     /// </summary>

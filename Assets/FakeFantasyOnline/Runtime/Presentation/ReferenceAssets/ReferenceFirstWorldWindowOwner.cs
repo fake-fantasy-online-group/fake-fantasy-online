@@ -4858,7 +4858,8 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
             if (owner != null)
             {
                 owner.ActivateForIndependentRuntime();
-                CombatWorld.PlayEntityEffect(edge.EntityId, edge.Effect);
+                if (edge.IsGround) { if (character != null && edge.MapId == character.MapId) owner.PlayGroundEffect(edge); }
+                else CombatWorld.PlayEntityEffect(edge.EntityId, edge.Effect);
             }
 
             skillHitEffectCursor = edge.Revision;

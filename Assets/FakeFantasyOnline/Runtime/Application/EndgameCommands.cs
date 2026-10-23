@@ -36,7 +36,7 @@ public sealed class EndgameRequest
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
         if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1", "endgame.rift-entrance.v1", "endgame.cube-inputs.v1" });
-        if (op == "capabilities") data.Add("capabilities", new object[] { "endgame.v1", "endgame.rift-pages.v1" });
+        if (op == "capabilities") data.Add("capabilities", new object[] { "endgame.v1", "endgame.rift-pages.v1", "endgame.ground-fx.v1" });
         if (op == "skill.upgrade")
         {
             if (skillID <= 0 || string.IsNullOrEmpty(revision)) throw new ArgumentException("Skill investment requires skillId and expectedRevision.");

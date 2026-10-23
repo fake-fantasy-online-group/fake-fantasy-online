@@ -6,6 +6,7 @@ public partial class CombatWorld
     public static void ClearAll()
     {
         if (I == null) return;
+        I.ClearGroundEffects();
         foreach (MonsterEntity monster in I.monsters.Values)
             if (monster != null) Destroy(monster.gameObject);
         I.monsters.Clear();
@@ -27,6 +28,7 @@ public partial class CombatWorld
 
     internal void ClearForTeardownForIndependentRuntime()
     {
+        ClearGroundEffects();
         if (I == this) ClearAll();
     }
 }

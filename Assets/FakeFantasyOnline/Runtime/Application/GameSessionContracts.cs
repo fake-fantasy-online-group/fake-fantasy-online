@@ -2085,25 +2085,31 @@ public sealed class WorldSkillHitEffect
 {
     public WorldSkillHitEffect(int entityId, string effect, long revision = 0)
     {
-        if (revision < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(revision));
-        }
-
-        EntityId = entityId;
-        Effect = effect;
-        Revision = revision;
+        if (revision < 0) throw new ArgumentOutOfRangeException(nameof(revision));
+        EntityId = entityId; Effect = effect; Revision = revision;
     }
-
+    public WorldSkillHitEffect(int owner, int mapId, int x, int y, string key,
+        string effect, int durationMS, byte mode, long revision = 0) : this(owner, effect, revision)
+    {
+        if (owner == 0 || mapId <= 0 || string.IsNullOrEmpty(key) || System.Text.Encoding.UTF8.GetByteCount(key) > 128 ||
+            mode > 2 || durationMS < 0 || (mode != 2 && string.IsNullOrEmpty(effect)))
+            throw new ArgumentException("Invalid fixed ground effect.");
+        IsGround = true; MapId = mapId; X = x; Y = y; Key = key; DurationMS = durationMS; Mode = mode;
+    }
     public int EntityId { get; }
-
     public string Effect { get; }
-
     public long Revision { get; }
-
+    public bool IsGround { get; }
+    public int MapId { get; }
+    public int X { get; }
+    public int Y { get; }
+    public string Key { get; }
+    public int DurationMS { get; }
+    public byte Mode { get; }
     public WorldSkillHitEffect WithRevision(long revision)
     {
-        return new WorldSkillHitEffect(EntityId, Effect, revision);
+        return IsGround ? new WorldSkillHitEffect(EntityId, MapId, X, Y, Key, Effect, DurationMS, Mode, revision)
+            : new WorldSkillHitEffect(EntityId, Effect, revision);
     }
 }
 
