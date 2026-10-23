@@ -16,6 +16,18 @@ The reused native phase runner is changed only behind child-only flags. Ordinary
 - `python3 Tests/Endgame/run-ground-effect-contract.py`: pass.
 - Server companion tests verify old-cap suppression and mode 1 only on actual landed hits. These are separate from the client tests.
 
+## Original-resource follow-up
+
+Original `ov_skillshow.bin` was subsequently obtained from the user-identified resource archive. Its header is `(0x5566, 1, 100, 350)`. Original row 85 (10319 light bolt) contains fly effect 47 / delay 550 ms and hit effect 47 / delay 0; row 104 (10409 ice arrow) contains fly effect 40 / delay 370 ms and hit effect 40 / delay 0. Both have no attack phase. Original `skillevent.txt` has no custom `Skill10319` or `Skill10409` script.
+
+`prepare-native-child-skill-fixture.py --bin "$ORIGINAL_SKILLSHOW" --script "$ORIGINAL_SKILLEVENT" --output-dir "$PRIVATE_OUTPUT"` validates the binary header/rows and writes a deterministic, private BIN-derived compact fixture and provenance hashes. Phase groups map to native suffixes 40/20/30/50; original position fields 2/3/10 are NOT phase suffixes. This derived fixture is not claimed to be the exact published `skillshow.json`.
+
+Run the existing suite with `FFO_NATIVE_CHILD_FIXTURE="$PRIVATE_OUTPUT/native-child-skillshow-fixture.json"`. This executes 22 additional assertions (89 total) through the actual SkillEffectDB parser and actual gateway/cursor/phase runner: `TFX047_20` then landed-only `TFX047_30`, and `TFX040_20` then landed-only `TFX040_30`. It verifies source/center, cosmetic projectile duration, no duplicate hit, no repeated projectile wait, and once-only dispatch. Both the base 67 and extended 89 assertion runs pass.
+
+The four EFF files and all eight referenced GSO paths were also found in the original archive extraction: light-bolt fly uses magic0047; its hit uses magic0300/magic4009. Ice-arrow fly uses magic0040; its hit uses magic0182/magic0280/magic0281/magic0303. Fixtures, extracted resources and detailed provenance remain private artifacts outside this repository.
+
+Original `ov_sound.bin` contains an ice-arrow row with sing 1304 and fly/hit 1507, but no light-bolt row. This is source evidence only, not verification of the published compact sound-table projection or audible assets; no unverified audio mapping was added to production or fixtures.
+
 ## Not claimed
 
-This is managed surrogate validation, not Unity rendering/play-mode QA. The cloud workspace does not contain original skillshow/skillshow05/skillsound JSON or skillevent.txt. The tests use explicit synthetic table rows to execute the real parsers and routing; they do not claim real asset-table coverage for 10409 ice arrow, 10319 light bolt or arbitrary copied skills. Native-table presence, sprite rendering, sound audibility and any script-only native skill require an asset-equipped runtime check. No Mac access, resource downloads, push, merge, publish or version bump was performed.
+This remains managed surrogate validation, not Unity rendering/play-mode QA. The exact published compact JSON tables, sound audibility, and coverage for arbitrary copied/script-only native skills remain unverified. The original native table and EFF/GSO presence for 10319/10409 are now verified, closing that earlier resource-availability gap. No Mac access, push, merge, publish or version bump was performed.

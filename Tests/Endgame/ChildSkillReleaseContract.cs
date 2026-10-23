@@ -12,6 +12,34 @@ class ChildSkillReleaseContract {
  static int checks;static void Check(bool v,string m){checks++;if(!v)throw new Exception(m);}
  static byte[] Packet(int caster=7,int skill=123,int target=9,int map=2,byte mode=0){var w=new WireWriter();foreach(int x in new[]{caster,skill,target,map,120,240,700,600})w.WriteInt32(x);w.WriteByte(mode);return w.ToArray();}
  static void Receive(PrivateServerGateway g,ushort op,byte[] bytes){typeof(PrivateServerGateway).GetMethod("ProcessWorldPacket",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(g,new object[]{new ProtocolPacket(op,bytes),CancellationToken.None});}
+ static void TestOriginalRows(){
+  string fixture=Environment.GetEnvironmentVariable("FFO_NATIVE_CHILD_FIXTURE");
+  if(string.IsNullOrEmpty(fixture))return;
+  GameTables.NativeFixture=fixture;
+  typeof(SkillEffectDB).GetField("map",BindingFlags.Static|BindingFlags.NonPublic).SetValue(null,null);
+  foreach(int skill in new[]{10319,10409}){
+   int effect=skill==10319?47:40,delay=skill==10319?550:370;
+   var entry=SkillEffectDB.Get(skill);
+   Check(entry!=null&&entry.atk.Count==0&&entry.fly.Count==1&&entry.hit.Count==1,"original row parsed into fly+hit only");
+   Check(entry.fly[0].effect==effect&&entry.fly[0].index==20&&entry.fly[0].delay==delay,"native projectile ID/phase/delay");
+   Check(entry.hit[0].effect==effect&&entry.hit[0].index==30&&entry.hit[0].delay==0,"native impact ID/phase/delay");
+   var g=new PrivateServerGateway(PrivateServerOptions.LocalDefault(),new ChildHost(),()=>0f);
+   var view=new ReferenceFirstWorldWindowOwner{session=g};
+   EffectPlayer.Created.Clear();MonoBehaviour.Yields.Clear();int sounds=SoundManager.Played.Count;
+   Receive(g,ProtocolOpcodes.ChildSkillRelease,Packet(skill:skill));view.Sync();
+   Check(EffectPlayer.Created.Count==1,"original mode0 creates projectile, no synthetic hit");
+   Check(EffectPlayer.Created[0].Name==string.Format("TFX{0:D3}_20",effect)&&EffectPlayer.Created[0].MoveDuration==delay,"native release EFF name and cosmetic travel");
+   Check(Math.Abs(EffectPlayer.Created[0].Position.x+3.8f)<.001&&EffectPlayer.Created[0].Destination.Value.x==2,"original release frozen origin/center");
+   Receive(g,ProtocolOpcodes.ChildSkillRelease,Packet(skill:skill,mode:1));view.Sync();
+   Check(EffectPlayer.Created.Count==2&&EffectPlayer.Created[1].Name==string.Format("TFX{0:D3}_30",effect),"original mode1 creates only native landed hit");
+   Check(EffectPlayer.Created[1].Position.x==2&&EffectPlayer.Created[1].Position.y==-2,"original impact landed center");
+   Check(MonoBehaviour.Yields.Count==0,"original landed hit does not inherit projectile delay");
+   view.Sync(true);Check(EffectPlayer.Created.Count==2,"original native release/impact once each");
+   // No invented audio fixture: original skillsound is not available in this run.
+   Check(SoundManager.Played.Count==sounds,"absent sound row does not invent audio");
+  }
+  Console.WriteLine("PASS 22 original BIN-derived native table assertions: 10319 TFX047_20/30 and 10409 TFX040_20/30; actual parser and mode0/mode1 pipeline. Not published compact JSON, sound assets or Unity rendering.");
+ }
  static void Main(){
   WorldSkillHitEffect e;var bytes=Packet();Check(ProtocolOpcodes.ChildSkillRelease==0x80f2,"opcode");Check(PrivateServerWorldStateDecoder.TryDecodeChildSkillRelease(bytes,out e),"decode");
   Check(e.IsChildRelease&&!e.IsGround&&e.EntityId==7&&e.SkillId==123&&e.TargetEntityId==9&&e.MapId==2&&e.OriginX==120&&e.OriginY==240&&e.X==700&&e.Y==600,"all wire fields");
@@ -49,6 +77,7 @@ class ChildSkillReleaseContract {
   EffectPlayer.Created.Clear();
   typeof(SkillCaster).GetMethod("CastData",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{123,CombatNumber.PlayerTransform,CombatWorld.Monsters[9],100f,null,false});
   Check(EffectPlayer.Created.Count==4,"ordinary native data cast retains release and automatic hit phases");
+  TestOriginalRows();
   Console.WriteLine("PASS child skill release "+checks+" assertions: real gateway/codec/queue/cursor, native phases+sound, frozen origin+center, local/remote/missing actors, malformed, map isolation, once, no cast/CD publication, no automatic hits, legacy cast preserved. Unity rendering not exercised.");
  }
 }

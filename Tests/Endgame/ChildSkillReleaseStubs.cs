@@ -56,7 +56,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class SoundManager {public static List<int> Played=new List<int>();public static void Play(int id,int delay=0){Played.Add(id);} }
  public class ReferenceWorldCombatSound{}
  public static class GameTables {
-  public static string LoadText(string n)=>n.StartsWith("skillshow")?"{\"shows\":[{\"id\":123,\"phy\":1,\"ph\":[{\"s\":10,\"e\":42,\"d\":0},{\"s\":20,\"e\":43,\"d\":120},{\"s\":30,\"e\":44,\"d\":0},{\"s\":50,\"e\":45,\"d\":0}]},{\"id\":124,\"ph\":[{\"s\":10,\"e\":46,\"d\":0}]}]}":"{\"sounds\":[{\"id\":123,\"cast\":100,\"fire\":[101],\"fd\":[0]},{\"id\":124,\"fire\":[102]}]}";
+  public static string NativeFixture;
+  public static string LoadText(string n)=> n.StartsWith("skillshow") && NativeFixture != null ? System.IO.File.ReadAllText(NativeFixture) :n.StartsWith("skillshow")?"{\"shows\":[{\"id\":123,\"phy\":1,\"ph\":[{\"s\":10,\"e\":42,\"d\":0},{\"s\":20,\"e\":43,\"d\":120},{\"s\":30,\"e\":44,\"d\":0},{\"s\":50,\"e\":45,\"d\":0}]},{\"id\":124,\"ph\":[{\"s\":10,\"e\":46,\"d\":0}]}]}":"{\"sounds\":[{\"id\":123,\"cast\":100,\"fire\":[101],\"fd\":[0]},{\"id\":124,\"fire\":[102]}]}";
  }
  public class ResLoader:Object {public static ResLoader I=new ResLoader();public Pkg Pkg=new Pkg();}
  public class Pkg {public byte[] Read(string path)=>System.Text.Encoding.UTF8.GetBytes("function Skill123()\nPlayEffect(999, attackee)\nend");}
