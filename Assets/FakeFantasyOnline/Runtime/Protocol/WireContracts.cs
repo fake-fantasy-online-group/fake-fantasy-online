@@ -352,6 +352,7 @@ internal static class ProtocolOpcodes
     public const ushort EntityOwner = 0x8043;
     public const ushort LocalFaction = 0x8044;
     public const ushort GroundEffect = 0x80F1;
+    public const ushort ChildSkillRelease = 0x80F2;
     public const ushort SkillHitEffect = 0x8045;
     public const ushort TransportList = 0x8049;
     public const ushort NpcSpawn = 0x8046;

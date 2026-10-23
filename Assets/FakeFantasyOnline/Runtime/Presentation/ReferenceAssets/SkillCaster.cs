@@ -10,7 +10,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// <summary>
 /// Recovered official SkillCaster effect-routing owner.
 /// </summary>
-public sealed class SkillCaster : MonoBehaviour
+public sealed partial class SkillCaster : MonoBehaviour
 {
     private enum Op
     {
@@ -40,6 +40,9 @@ public sealed class SkillCaster : MonoBehaviour
     private float ppu;
     private Vector3? groundPos;
     private bool atkToTarget;
+    private bool releaseOnly;
+    private bool impactOnly;
+    private Vector3? releaseOrigin;
 
     internal static int ParsedScriptCountForAudit
     {
@@ -99,15 +102,15 @@ public sealed class SkillCaster : MonoBehaviour
     {
         (int cDir, bool cFlip) = CasterFacing(caster);
         int maximumFlyDelay = 0;
-        foreach (SkillEffectDB.Ph phase in entry.fly)
+        if (!impactOnly) foreach (SkillEffectDB.Ph phase in entry.fly)
         {
             maximumFlyDelay = Math.Max(maximumFlyDelay, phase.delay);
-            if (caster == null)
+            if (caster == null && !releaseOrigin.HasValue)
             {
                 continue;
             }
             EffectPlayer effect = EffectPlayer.PlayNamed(
-                caster.position,
+                releaseOrigin ?? caster.position,
                 EffectName(phase),
                 ppu,
                 1,
@@ -133,11 +136,11 @@ public sealed class SkillCaster : MonoBehaviour
         bool groundAttackAtTarget = groundPos.HasValue && entry.hit.Count == 0;
         List<(int delay, bool whoTarget, int index, int effect)> phases =
             new List<(int, bool, int, int)>();
-        foreach (SkillEffectDB.Ph phase in entry.atk)
+        if (!impactOnly) foreach (SkillEffectDB.Ph phase in entry.atk)
         {
             phases.Add((phase.delay, groundAttackAtTarget || atkToTarget, phase.index, phase.effect));
         }
-        foreach (SkillEffectDB.Ph phase in entry.hit)
+        if (!releaseOnly) foreach (SkillEffectDB.Ph phase in entry.hit)
         {
             phases.Add((
                 maximumFlyDelay + phase.delay,
@@ -178,7 +181,9 @@ public sealed class SkillCaster : MonoBehaviour
             }
             else
             {
-                PlayOn(caster, effectName, ppu, cDir, cFlip);
+                if (releaseOrigin.HasValue)
+                    EffectPlayer.PlayNamed(releaseOrigin.Value, effectName, ppu, 1, cDir, cFlip, false);
+                else PlayOn(caster, effectName, ppu, cDir, cFlip);
             }
         }
 

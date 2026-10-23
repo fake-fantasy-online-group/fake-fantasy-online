@@ -5883,6 +5883,13 @@ public sealed partial class PrivateServerGateway : IGameServerGateway, IWorldRem
                 effect,
                 cancellationToken);
         }
+        else if (packet.Opcode == ProtocolOpcodes.ChildSkillRelease)
+        {
+            WorldSkillHitEffect effect;
+            if (!PrivateServerWorldStateDecoder.TryDecodeChildSkillRelease(packet.Payload, out effect))
+                throw new InvalidDataException("The server sent an invalid child-skill release packet.");
+            PublishSkillHitEffect(effect, cancellationToken);
+        }
         else if (packet.Opcode == ProtocolOpcodes.GroundEffect)
         {
             if (!Endgame.GroundFXV1) return;

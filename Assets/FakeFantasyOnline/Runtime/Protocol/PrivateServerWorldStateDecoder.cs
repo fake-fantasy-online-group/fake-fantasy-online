@@ -11,6 +11,22 @@ namespace FakeFantasyOnline.Protocol
 /// </summary>
 public static class PrivateServerWorldStateDecoder
 {
+    public static bool TryDecodeChildSkillRelease(byte[] payload, out WorldSkillHitEffect effect)
+    {
+        effect = null;
+        if (payload == null || payload.Length != 33) return false;
+        try
+        {
+            var reader = new WireReader(payload);
+            effect = new WorldSkillHitEffect(reader.ReadInt32(), reader.ReadInt32(),
+                reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(),
+                reader.ReadInt32(), reader.ReadInt32(), reader.ReadByte());
+            reader.EnsureFinished();
+            return true;
+        }
+        catch (ArgumentException) { return false; }
+    }
+
     public static bool TryDecodeGroundEffect(byte[] payload, out WorldSkillHitEffect effect)
     {
         effect = null;

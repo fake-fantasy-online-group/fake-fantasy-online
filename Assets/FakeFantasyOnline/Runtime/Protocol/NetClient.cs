@@ -458,8 +458,8 @@ public sealed partial class NetClient : IDisposable
     {
         Send(
             ProtocolOpcodes.ClientCapabilities,
-            // Bit 64 opts into final U16 native-attack-range tails before world entry.
-            payload => payload.I32(31 | 32 | 64));
+            // Bit 64 opts into native attack range; bit 128 into release-only child visuals.
+            payload => payload.I32(31 | 32 | 64 | 128));
     }
 
     public void SetPetView(int mask)

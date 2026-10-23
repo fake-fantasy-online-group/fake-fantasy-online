@@ -2106,6 +2106,21 @@ public sealed class WorldSkillHitEffect
             throw new ArgumentException("Invalid fixed ground effect.");
         IsGround = true; MapId = mapId; X = x; Y = y; Key = key; DurationMS = durationMS; Mode = mode;
     }
+    // Child release/landed-impact visuals share the ordered visual-edge queue, not cast state.
+    public WorldSkillHitEffect(int caster, int skill, int target, int mapId,
+        int originX, int originY, int centerX, int centerY, byte mode = 0, long revision = 0)
+        : this(caster, string.Empty, revision)
+    {
+        if (caster == 0 || skill <= 0 || mapId <= 0 || mode > 1)
+            throw new ArgumentException("Invalid child skill release.");
+        IsChildRelease = true; SkillId = skill; TargetEntityId = target; MapId = mapId; Mode = mode;
+        OriginX = originX; OriginY = originY; X = centerX; Y = centerY;
+    }
+    public bool IsChildRelease { get; }
+    public int SkillId { get; }
+    public int TargetEntityId { get; }
+    public int OriginX { get; }
+    public int OriginY { get; }
     public int EntityId { get; }
     public string Effect { get; }
     public long Revision { get; }
@@ -2118,6 +2133,7 @@ public sealed class WorldSkillHitEffect
     public byte Mode { get; }
     public WorldSkillHitEffect WithRevision(long revision)
     {
+        if (IsChildRelease) return new WorldSkillHitEffect(EntityId, SkillId, TargetEntityId, MapId, OriginX, OriginY, X, Y, Mode, revision);
         return IsGround ? new WorldSkillHitEffect(EntityId, MapId, X, Y, Key, Effect, DurationMS, Mode, revision)
             : new WorldSkillHitEffect(EntityId, Effect, revision);
     }
