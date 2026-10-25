@@ -94,12 +94,18 @@ public partial class TaskDlg
             }
 
             List<TaskDB.Def> right = new List<TaskDB.Def>();
+            var missingDoneTitles = new List<string>();
             if (tab == 3)
             {
                 foreach (int id in TaskClient.Done)
                 {
                     TaskDB.Def def = TaskDB.Get(id);
                     if (def != null) right.Add(def);
+                    else
+                    {
+                        string title = CubeQuestTitles.MissingTitle(id);
+                        if (title != null) missingDoneTitles.Add(title);
+                    }
                 }
                 // Official 06000e96 (TaskDlg+<>c.<OnGUI>b__36_0): Int32.CompareTo on the two
                 // definitions' id fields, with a real null-reference throw when either is null.
@@ -118,7 +124,8 @@ public partial class TaskDlg
             float titlePad = 6f;
             float rowH = 14f;
             float leftH = rows.Count != 0 ? rows.Count * 20f + 26f + 50f + 26f : 122f;
-            float rightH = right.Count != 0 ? right.Count * 20f : 20f;
+            int rightCount = right.Count + missingDoneTitles.Count;
+            float rightH = rightCount != 0 ? rightCount * 20f : 20f;
 
             // Captured by the local function below, exactly like the official
             // <>c__DisplayClass36_0 (titlePad / view / rowH).
@@ -194,11 +201,11 @@ public partial class TaskDlg
             }
 
             string rightTitle = tab == 3
-                ? string.Format("已完成（{0}）", right.Count)
+                ? string.Format("已完成（{0}）", rightCount)
                 : "可接任务（按接近你等级排序，最多30条）";
             y = SectionTitle(y + s * 50f, rightTitle);
 
-            if (right.Count == 0)
+            if (rightCount == 0)
             {
                 if (BitmapFont.Ready)
                 {
@@ -238,6 +245,13 @@ public partial class TaskDlg
                 }
             }
 
+            // Display-only completed titles do not synthesize task definitions or recommendations.
+            foreach (string title in missingDoneTitles)
+            {
+                if (BitmapFont.Ready) BitmapFont.DrawOutline(s * 4f, y + s, title,
+                    new Color(0.72f, 0.88f, 1f, 1f), s);
+                y += s * 20f;
+            }
             GUI.EndScrollView();
             // Third argument is the viewport height (293*s), fourth the content height.
             NativeScroll.BarAt(this, L(187f, 69f, 15f, 291f), 293f * s, (leftH + rightH) * s,

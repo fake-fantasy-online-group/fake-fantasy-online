@@ -66,7 +66,7 @@ public class PlayerTaskTrack : MonoBehaviour
         int count = changed.Count;
         foreach (TaskClient.ActiveTask task in changed)
         {
-            string name = count >= 2 ? TaskDB.Get(task.id)?.name : null;
+            string name = count >= 2 ? (TaskDB.Get(task.id) != null ? TaskDB.Get(task.id).name : CubeQuestTitles.MissingTitle(task.id)) : null;
             foreach (string segment in task.progress.Split(new[] { "  " }, StringSplitOptions.RemoveEmptyEntries))
                 lines.Add(string.IsNullOrEmpty(name) ? segment.Trim() : "【" + name + "】" + segment.Trim());
         }

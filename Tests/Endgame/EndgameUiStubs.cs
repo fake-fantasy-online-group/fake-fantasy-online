@@ -146,9 +146,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     internal static class SysMsgBox
     {
-        public static bool Visible; public static string text; public static Action confirm;
-        public static void Show(string value, Action yes, Action no) { text = value; confirm = yes; Visible = true; }
-        public static void Finish(bool yes) { var action = confirm; Visible = false; confirm = null; if (yes) action?.Invoke(); }
+        public static bool Visible; public static string text; public static Action confirm, cancel;
+        public static void Show(string value, Action yes, Action no) { text = value; confirm = yes; cancel = no; Visible = true; }
+        public static void Finish(bool yes) { var action = yes ? confirm : cancel; Visible = false; confirm = cancel = null; action?.Invoke(); }
     }
     internal static class CraftUI
     {

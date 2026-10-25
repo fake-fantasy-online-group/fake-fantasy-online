@@ -145,7 +145,7 @@ public partial class TaskDlg : MonoBehaviour
         {
             id = id,
             type = 1,
-            name = id == 90001 ? "妖魔结界试炼" : "任务" + id.ToString(),
+            name = CubeQuestTitles.MissingTitle(id) ?? (id == 90001 ? "妖魔结界试炼" : "任务" + id.ToString()),
             desc = "",
             publisher = "",
             place = "",

@@ -23,8 +23,6 @@ public sealed partial class EndgamePanel
     }
     private static readonly Color CubeGold = new Color(1f, .92f, .66f, 1f);
     private const string CubeBackgroundPath = "res/uires/composedlg/composedlg.gsa";
-    private const string CubeMakePath = "res/uires/composedlg/composebtn.gsa";
-    private const string CubeCancelPath = "res/uires/common/cancelbtn.gsa";
     private const string CubeClosePath = "res/uires/common/miniclose.gsa";
     private static Rect CubeCellRect(int cell) => new Rect(116 + cell % CubeColumns * 43, 81 + cell / CubeColumns * 43, 40, 40);
     private static Texture2D CubeTexture(string path, int frame = 0)
@@ -43,10 +41,10 @@ public sealed partial class EndgamePanel
         Texture2D background = CubeTexture(CubeBackgroundPath);
         if (background != null) GUI.DrawTexture(new Rect(0, 0, CubeWindowWidth, CubeWindowHeight), background);
         // Keep the original complete furnace silhouette, title strip, outer borders,
-        // cost strip and native controls. Only replace its recipe/material interior
+        // native close control. Only replace its recipe/material interior
         // using that very panel's own unlabelled surface; never draw a new frame.
         CubePatch(new Rect(97, 73, 258, 342), new Rect(105, 85, 216, 198));
-        CubePatch(new Rect(105, 417, 239, 18), new Rect(105, 85, 216, 18));
+        CubePatch(new Rect(97, 381, 258, 95), new Rect(105, 85, 216, 95));
         CubeText(new Rect(132, 44, 177, 12), "周天鼎", CubeGold);
     }
     private static void DrawCubeCell(Rect rect, bool selected)

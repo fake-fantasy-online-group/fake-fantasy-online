@@ -79,6 +79,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
                 RefreshGrowthSkills();
             }
         }
+        ObserveCubeRequest();
         ObserveRiftPhase();
         RecoverPendingRiftRequest(DateTime.UtcNow);
         UpdateRiftWorldVisuals();

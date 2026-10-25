@@ -16,7 +16,11 @@ public sealed partial class EndgamePanel
     }
     private readonly List<CubeSlot> cubeSlots = new List<CubeSlot>();
     private object cubeInventory;
-    private string cubeQuantity = "1", cubeAwaitingQuote;
+    private string cubeQuantity = "1", cubeAwaitingQuote, cubeAwaitingExecute;
+    private EndgameResponse cubeObservedReceipt;
+    private string cubeTransportNotice;
+    private EndgameClientState cubeExecuteState;
+    private long cubeExecuteGeneration;
     private int cubeEditing = -1, cubeMapID, cubeItemID, cubeItemTab, cubeItemSlot;
     private bool cubeBagOpened;
     private void ClearCubeInputs()
@@ -36,7 +40,17 @@ public sealed partial class EndgamePanel
     private void SyncCubeInputs()
     {
         if (ReferenceEquals(cubeInventory, State.Items)) return;
-        cubeInventory = State.Items; cubeSlots.Clear(); orderedRunes.Clear(); cubeEditing = -1;
+        cubeInventory = State.Items;
+        // A refresh is not a failed conversion: retain still-owned reservations.
+        for (int i = cubeSlots.Count - 1; i >= 0; i--)
+        {
+            var slot = cubeSlots[i];
+            bool valid = slot.UID.Length == 0 && CubeOwnedMaterial(slot.ItemID) >= slot.Count;
+            if (slot.UID.Length > 0) foreach (var item in State.Items)
+                if (item.UID == slot.UID && item.ItemID == slot.ItemID && item.Location == "bag" && !item.Locked && MatchesNative(item)) { valid = true; break; }
+            if (!valid) cubeSlots.RemoveAt(i);
+        }
+        orderedRunes.Clear(); cubeEditing = -1; cubeQuantity = "1";
         ChangedCubeInputs();
     }
     private bool CubeHas(string uid, int itemID)
@@ -93,7 +107,7 @@ public sealed partial class EndgamePanel
         return result;
     }
     private bool CubeQuantitiesReady => cubeEditing < 0 || cubeEditing >= cubeSlots.Count ||
-        cubeQuantity == cubeSlots[cubeEditing].Count.ToString();
+        int.TryParse(cubeQuantity, out int quantity) && quantity > 0 && quantity == cubeSlots[cubeEditing].Count;
     private bool CubeQuoteFresh()
     {
         var quote = State.Quote;
@@ -110,12 +124,22 @@ public sealed partial class EndgamePanel
             // The native prompt can outlive a close, tool loss or map change, inventory update,
             // expiry or a different selection. Never execute its stale captured quote.
             if (!ReferenceEquals(quotedInputs, inputs) || !ReferenceEquals(State?.Quote, quote) || !CubeQuoteFresh()) return;
-            Send(new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID));
-        }, null);
+            var request = new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID);
+            if (Send(request)) { TrackCubeExecution(request); }
+        }, () => { if (ReferenceEquals(quotedInputs, inputs)) ChangedCubeInputs(); });
     }
     private void SubmitCube()
     {
-        if (SysMsgBox.Visible || !CubeEditable || !CubeQuantitiesReady || cubeSlots.Count == 0) return;
+        if (SysMsgBox.Visible || !open || module != EndgameModule.Cube || !CubeSourceCurrent()) return;
+        if (State.Pending)
+        {
+            if (State.PendingRequest.Op == "cube.execute" && State.Error.Length > 0) client.RetryEndgame();
+            return;
+        }
+        if (!State.InventorySnapshotCurrent)
+        { Refresh(); NewbieTipBox.PushText("器物尚未同步，请稍候再试。"); return; }
+        if (!CubeEditable || !CubeQuantitiesReady) return;
+        if (cubeSlots.Count == 0) { NewbieTipBox.PushText("鼎中尚空，请先置入材料。"); return; }
         if (CubeQuoteFresh()) { ConfirmCubeQuote(); return; }
         var request = new EndgameRequest("cube.quote", State.Revision, itemUIDs: orderedRunes.Count > 0 ? orderedRunes : null,
             cubeInputs: CubeInputs());
@@ -128,8 +152,85 @@ public sealed partial class EndgamePanel
         cubeSlots.RemoveAt(cubeEditing); cubeEditing = -1; cubeQuantity = "1";
         orderedRunes.Clear(); ChangedCubeInputs();
     }
+    // Reservations are local only. Clearing a read cancels its intent, not inventory.
+    private void ClearCubeSelection()
+    {
+        if (!open || module != EndgameModule.Cube || State == null || State.Pending || SysMsgBox.Visible) return;
+        ResetCubeSelection();
+    }
+    private void ResetCubeSelection()
+    {
+        cubeSlots.Clear(); cubeEditing = -1; cubeQuantity = "1"; orderedRunes.Clear(); ChangedCubeInputs();
+    }
+    private void SetCubeQuantity(string quantity)
+    {
+        if (!CubeEditable || cubeEditing < 0 || cubeEditing >= cubeSlots.Count || cubeSlots[cubeEditing].UID.Length > 0 || quantity == cubeQuantity) return;
+        cubeQuantity = quantity;
+        if (int.TryParse(quantity, out int count) && count > 0 && count <= CubeOwnedMaterial(cubeSlots[cubeEditing].ItemID))
+            cubeSlots[cubeEditing].Count = count;
+        ChangedCubeInputs();
+    }
+    private void TrackCubeExecution(EndgameRequest request)
+    {
+        cubeAwaitingExecute = request.RequestID; cubeObservedReceipt = null; cubeTransportNotice = null;
+        cubeExecuteState = State; cubeExecuteGeneration = State.Generation;
+    }
+    private void ObserveCubeRequest()
+    {
+        if (State == null || !client.EndgameInWorld) return;
+        if (!ReferenceEquals(cubeExecuteState, State) || cubeExecuteGeneration != State.Generation)
+            cubeAwaitingExecute = null;
+        // Pending mutations outlive the window, including restored journal requests.
+        if (cubeAwaitingExecute == null && State.PendingRequest?.Op == "cube.execute") TrackCubeExecution(State.PendingRequest);
+        if (cubeAwaitingExecute != null)
+        {
+            var response = State.ResponseFor(cubeAwaitingExecute);
+            if (response != null && !ReferenceEquals(response, cubeObservedReceipt))
+            {
+                cubeObservedReceipt = response;
+                if (!response.OK) NewbieTipBox.PushText(response.Message.Length > 0 ? response.Message : EndgameClientState.ErrorText(response.Error));
+                if (!State.Pending)
+                {
+                    cubeAwaitingExecute = null;
+                    if (response.OK && open && module == EndgameModule.Cube) ResetCubeSelection();
+                }
+            }
+            if (response == null && State.Pending && State.PendingRequest.RequestID == cubeAwaitingExecute &&
+                State.Error.Length > 0 && cubeTransportNotice != State.Message)
+            { cubeTransportNotice = State.Message; NewbieTipBox.PushText(State.Message); }
+        }
+        if (!open || module != EndgameModule.Cube || !CubeSourceCurrent() || cubeAwaitingQuote == null || State.QuotePending) return;
+        string requestID = cubeAwaitingQuote; cubeAwaitingQuote = null;
+        var receipt = State.ResponseFor(requestID);
+        if (receipt != null && !receipt.OK)
+            NewbieTipBox.PushText(receipt.Message.Length > 0 ? receipt.Message : EndgameClientState.ErrorText(receipt.Error));
+        else if (receipt != null && CubeQuoteFresh()) ConfirmCubeQuote();
+        else if (State.Error.Length > 0) NewbieTipBox.PushText(State.Message);
+    }
+    // Socket ordering remains a contextual row of item icons, not a recipe/help panel.
+    private void DrawCubeSocketCells(bool editable)
+    {
+        EndgameItemView target = null;
+        foreach (var slot in cubeSlots) foreach (var item in State.Items)
+            if (item.UID == slot.UID && item.SocketCount > 0) target = item;
+        if (target == null) return;
+        foreach (var rune in target.Sockets)
+        {
+            if (rune.UID.Length == 0 || rune.UID == "0" || rune.ItemID == 0 || rune.Index < 0 || rune.Index >= CubeColumns) continue;
+            Rect cell = new Rect(116 + rune.Index * 43, 382, 40, 40);
+            int position = orderedRunes.IndexOf(rune.UID);
+            DrawCubeCell(cell, position >= 0);
+            Texture2D icon = NetClient.LoadItemIcon(rune.ItemID);
+            if (icon != null) GUI.DrawTexture(new Rect(cell.x + 3, cell.y + 3, 30, 30), icon, ScaleMode.ScaleToFit);
+            if (position >= 0) CubeText(new Rect(cell.x + 1, cell.y + 25, 34, 11), (position + 1).ToString(), Gold);
+            if (cell.Contains(Event.current.mousePosition)) ShowPanelTooltip(rune.Name);
+            if (editable && !InventoryDlg.HasHeldAny && CraftUI.Click(cell, Event.current.mousePosition))
+            { if (!orderedRunes.Remove(rune.UID)) orderedRunes.Add(rune.UID); ChangedCubeInputs(); }
+        }
+    }
     private void DrawCube()
     {
+        ObserveCubeRequest();
         SyncCubeInputs();
         if (!cubeBagOpened) { cubeBagOpened = true; if (!InventoryDlg.IsOpen) InventoryDlg.Toggle(); }
         DrawCubeArtwork();
@@ -144,85 +245,42 @@ public sealed partial class EndgamePanel
                 CubeSlot slot = cubeSlots[index];
                 Texture2D icon = NetClient.LoadItemIcon(slot.ItemID);
                 if (icon != null) GUI.DrawTexture(new Rect(cell.x + 3, cell.y + 3, 30, 30), icon, ScaleMode.ScaleToFit);
-                if (slot.Count > 1) CubeText(new Rect(cell.x + 1, cell.y + 25, 34, 11), slot.Count.ToString(), Gold);
+                Rect countRect = new Rect(cell.x + 1, cell.y + 24, 38, 16);
+                bool editingCount = index == cubeEditing && slot.UID.Length == 0;
+                if (editingCount)
+                {
+                    bool enabled = GUI.enabled; GUI.enabled = editable;
+                    string quantity = GUI.TextField(countRect, cubeQuantity, 10, small);
+                    GUI.enabled = enabled;
+                    if (editable) SetCubeQuantity(quantity);
+                }
+                else if (slot.Count > 1) CubeText(countRect, slot.Count.ToString(), Gold);
                 if (cell.Contains(mouse))
                 {
                     string tip = slot.Name + " ×" + slot.Count;
                     if (slot.UID.Length > 0) foreach (var item in State.Items) if (item.UID == slot.UID) { tip = OwnedItemTooltip(item); break; }
-                    ShowPanelTooltip(tip + (MobileClientPresentation.Enabled ? "\n点选后可取回或调整数量" : "\n右键取回" + (slot.UID.Length == 0 ? "；左键调整数量" : "；左键取回")));
-                    if (editable && Event.current.type == EventType.MouseDown && !InventoryDlg.HasHeld)
+                    ShowPanelTooltip(tip);
+                    if (editable && Event.current.type == EventType.MouseDown && !InventoryDlg.HasHeldAny &&
+                        !(editingCount && countRect.Contains(mouse) && Event.current.button == 0))
                     {
-                        if (Event.current.button == 0 && (MobileClientPresentation.Enabled || slot.UID.Length == 0)) { cubeEditing = index; cubeQuantity = slot.Count.ToString(); }
+                        if (Event.current.button == 0 && slot.UID.Length == 0 && cubeEditing != index)
+                        { cubeEditing = index; cubeQuantity = slot.Count.ToString(); }
                         else if (Event.current.button == 1 || Event.current.button == 0)
-                        { cubeSlots.RemoveAt(index); cubeEditing = -1; orderedRunes.Clear(); ChangedCubeInputs(); }
+                        { cubeEditing = index; TakeBackCubeSelection(); }
                         Event.current.Use();
                     }
                 }
             }
-            else if (cell.Contains(mouse))
+            else if (cell.Contains(mouse) && editable && InventoryDlg.HasHeld && Event.current.type == EventType.MouseDown && Event.current.button == 0)
             {
-                ShowPanelTooltip(MobileClientPresentation.Enabled ? "从背包选择物品，再点放入周天鼎。\n确认合成前不会消耗物品。" : "从背包拖入物品；背包右键放入。\n确认合成前不会消耗物品。");
-                if (editable && InventoryDlg.HasHeld && Event.current.type == EventType.MouseDown && Event.current.button == 0)
-                {
-                    if (TryPutCubeBagItem(InventoryDlg.HeldTab, InventoryDlg.HeldBagSlot, cellIndex)) InventoryDlg.ClearHeld();
-                    Event.current.Use(); PlayerController.SuppressWorldClick();
-                }
+                if (TryPutCubeBagItem(InventoryDlg.HeldTab, InventoryDlg.HeldBagSlot, cellIndex)) InventoryDlg.ClearHeld();
+                Event.current.Use(); PlayerController.SuppressWorldClick();
             }
         }
-        DrawCubeFooter(editable);
-        if (MobileClientPresentation.Enabled && cubeEditing >= 0 && cubeEditing < cubeSlots.Count &&
-            ArtworkSkin.Button(new Rect(353, 383, 88, 44), "取回选中", enabled: editable && !InventoryDlg.HasHeldAny))
-            TakeBackCubeSelection();
-        if (CubeNativeButton(new Rect(110, 447, 90, 22), CubeMakePath, "确认合成", editable && CubeQuantitiesReady && cubeSlots.Count > 0)) SubmitCube();
-        if (CubeNativeButton(new Rect(273, 447, 70, 22), CubeCancelPath, "取消", !SysMsgBox.Visible)) Close();
+        DrawCubeSocketCells(editable);
+        if (ArtworkSkin.Button(new Rect(110, 432, 100, 38), "转换", enabled: !SysMsgBox.Visible && !State.QuotePending && CubeQuantitiesReady)) SubmitCube();
+        if (ArtworkSkin.Button(new Rect(239, 432, 100, 38), "清空", enabled: !SysMsgBox.Visible && !State.Pending)) ClearCubeSelection();
         if (CubeNativeButton(new Rect(340, 40, 20, 19), CubeClosePath, "×", !SysMsgBox.Visible)) Close();
-        if (cubeAwaitingQuote != null && !State.QuotePending)
-        {
-            cubeAwaitingQuote = null;
-            if (CubeQuoteFresh()) ConfirmCubeQuote();
-        }
-    }
-    private void DrawCubeFooter(bool editable)
-    {
-        if (cubeEditing >= 0 && cubeEditing < cubeSlots.Count && cubeSlots[cubeEditing].UID.Length == 0)
-        {
-            CubeSlot slot = cubeSlots[cubeEditing];
-            CubeText(new Rect(106, 387, 45, 18), "数量", Gold);
-            bool enabled = GUI.enabled; GUI.enabled = editable;
-            string quantity = GUI.TextField(new Rect(153, 387, 88, 19), cubeQuantity, 10, small);
-            GUI.enabled = enabled;
-            if (editable && quantity != cubeQuantity) { cubeQuantity = quantity; ChangedCubeInputs(); }
-            int owned = CubeOwnedMaterial(slot.ItemID);
-            if (ArtworkSkin.Button(new Rect(247, 387, 94, 20), "确认数量", enabled: editable && int.TryParse(cubeQuantity, out int count) && count > 0 && count <= owned))
-            { slot.Count = int.Parse(cubeQuantity); if (!MobileClientPresentation.Enabled) cubeEditing = -1; ChangedCubeInputs(); }
-        }
-        else DrawCubeSocketOrder(new Rect(105, 385, 239, 22), editable);
-        string status = State.Pending ? "结果确认中，点击查询" : State.QuotePending ? "辨物中…" :
-            State.Error.Length > 0 ? State.Message : State.Quote != null ? "铜币：" + State.Quote.Money :
-            State.SnapshotLoading ? "正在同步背包…" : !State.InventorySnapshotCurrent ? "背包未同步，点击重试" : MobileClientPresentation.Enabled ? "背包放入 · 点选后取回" : "背包放入 · 右键取回";
-        Rect summary = new Rect(105, 417, 239, 18);
-        CubeText(summary, status, State.Error.Length > 0 ? new Color(1f, .6f, .48f) : Gold);
-        if (summary.Contains(Event.current.mousePosition))
-        {
-            ShowPanelTooltip(State.Quote != null ? State.Quote.Description + "\n铜币：" + State.Quote.Money : status);
-            if (!SysMsgBox.Visible && Event.current.type == EventType.MouseDown && Event.current.button == 0)
-            { if (State.Pending) client.RetryEndgame(); else if (!State.InventorySnapshotCurrent) Refresh(); Event.current.Use(); }
-        }
-    }
-    private void DrawCubeSocketOrder(Rect rect, bool editable)
-    {
-        EndgameItemView target = null;
-        foreach (var slot in cubeSlots) foreach (var item in State.Items) if (item.UID == slot.UID && item.SocketCount > 0) target = item;
-        if (target == null) return;
-        foreach (var rune in target.Sockets)
-        {
-            if (rune.UID.Length == 0 || rune.UID == "0" || rune.ItemID == 0) continue;
-            int position = orderedRunes.IndexOf(rune.UID);
-            Rect cell = new Rect(rect.x + rune.Index * 47, rect.y, 44, 22);
-            if (cell.Contains(Event.current.mousePosition)) ShowPanelTooltip("按新顺序点击孔内星篆：" + rune.Name);
-            if (ArtworkSkin.Button(cell, (position < 0 ? "" : (position + 1) + "·") + rune.Name, enabled: editable, selected: position >= 0))
-            { if (!orderedRunes.Remove(rune.UID)) orderedRunes.Add(rune.UID); ChangedCubeInputs(); }
-        }
     }
 }
 }
