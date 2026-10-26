@@ -369,6 +369,14 @@ partial class EndgameUiContract
         string ordinary = "\u0007普通剑\n" + nativeBody.Replace(footer, "旧底材的来历。\n另一段原装叙述。\n" + footer);
         Check(EndgamePanel.BagTooltip(2, InventoryDlg.rows[0], ordinary) == ordinary, "ordinary multiline base prose remains byte-for-byte unchanged through the bag path");
     }
+    static int CubeSlotCount(EndgamePanel p) => ((System.Collections.ICollection)Get(p, "cubeSlots")).Count;
+    static void CubeCellClick(EndgamePanel p, int cell)
+    {
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown,
+            mousePosition = new UnityEngine.Vector2(121 + cell % 5 * 43, 86 + cell / 5 * 43), button = 0 };
+        Call(p, "DrawCube");
+        UnityEngine.Event.current = new UnityEngine.Event();
+    }
     static void SocketRecipeContracts()
     {
         // Random capacity and probability remain authoritative server text.
@@ -382,39 +390,145 @@ partial class EndgameUiContract
             InventoryDlg.rows[7] = new InventoryDlg.Item { id = 1900028301, bagIdx = 7, count = 1, name = "周天鼎" }; InventoryDlg.rowTabs[7] = 1;
             Check(EndgamePanel.TryOpenCubeFromItem(1,7), "owned portable cube opens existing container");
             Draw(p);
+            Check(ArtworkSkin.enableds.Count == 2 && ArtworkSkin.enableds.ContainsKey("转换") && ArtworkSkin.enableds.ContainsKey("清空"), "cube exposes only its two action buttons beside the native frame close");
             var put = typeof(EndgamePanel).GetMethod("PutCubeItem", BindingFlags.NonPublic | BindingFlags.Instance);
             put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
             put.Invoke(p, new object[] { "", 1900028201, "星髓" });
             MobileClientPresentation.Enabled = true;
             int beforeReturn = c.Sent.Count;
-            Draw(p, "取回选中");
-            Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 1 && c.Sent.Count == beforeReturn, "mobile material take-back removes reservation without packet or inventory consumption");
-            Draw(p, "取回选中");
-            Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 1, "repeated take-back cannot remove another cell");
-            Set(p, "cubeEditing", 0); Set(p, "cubeQuantity", "1");
-            InventoryDlg.HasHeld = true; Call(p, "TakeBackCubeSelection"); InventoryDlg.HasHeld = false;
-            Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 1, "held-item admission prevents mobile take-back");
-            Draw(p, "取回选中");
-            Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 0, "mobile equipment take-back uses same reservation invalidation");
+            CubeCellClick(p, 1);
+            Check(CubeSlotCount(p) == 1 && c.Sent.Count == beforeReturn, "mobile material tap removes reservation without packet or inventory consumption");
+            CubeCellClick(p, 1);
+            Check(CubeSlotCount(p) == 1, "repeated empty-cell tap cannot remove another cell");
+            InventoryDlg.HasHeld = true; CubeCellClick(p, 0); InventoryDlg.HasHeld = false;
+            Check(CubeSlotCount(p) == 1, "held-item admission prevents mobile take-back");
+            CubeCellClick(p, 0);
+            Check(CubeSlotCount(p) == 0, "mobile equipment tap removes reservation");
             put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
             put.Invoke(p, new object[] { "", 1900028201, "星髓" });
-            Set(p, "cubeQuantity", "4"); Draw(p, "确认数量");
-            Check((int)typeof(EndgamePanel).GetField("cubeEditing", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p) >= 0, "mobile quantity confirmation retains explicit take-back selection");
+            if (capacity == 1)
+            {
+                foreach (string code in new[] { "no_match", "partial_match", "insufficient_count" })
+                {
+                    int notices = NewbieTipBox.notices.Count;
+                    Call(p, "SubmitCube"); var mismatch = c.Last;
+                    Apply(c, "{\"kind\":\"cube.quote\",\"ok\":false,\"requestId\":\"" + mismatch.RequestID + "\",\"error\":\"" + code + "\",\"message\":\"材料未合：" + code + "\"}");
+                    Call(p, "ObserveCubeRequest"); Call(p, "ObserveCubeRequest");
+                    Check(NewbieTipBox.notices.Count == notices, "server quote receipt does not duplicate native mode 5 notice: " + code);
+                    NewbieTipBox.PushText("材料未合：" + code); // Existing native notice route is delivered separately.
+                    Call(p, "ObserveCubeRequest");
+                    Check(NewbieTipBox.notices.Count == notices + 1, "native quote failure remains one notice after repeated receipt polling");
+                    Check(CubeSlotCount(p) == 2 && c.Endgame.Materials[0].Count == 8 && c.Endgame.Items.Count == 1, "mismatch preserves inputs and authoritative inventory");
+                }
+                Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"same-owned-refresh\",\"chunks\":1,\"revision\":\"1\",\"items\":[" + gear + "],\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":8}]}");
+                Draw(p);
+                Check(CubeSlotCount(p) == 2, "same-owned snapshot refresh preserves failed conversion reservations");
+                Call(p, "SubmitCube"); var staleQuote = c.Last;
+                int sentBeforeClear = c.Sent.Count;
+                Call(p, "ClearCubeSelection");
+                Check(CubeSlotCount(p) == 0 && c.Sent.Count == sentBeforeClear && !c.Endgame.QuotePending, "clear during quote cancels only local reservations");
+                Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + staleQuote.RequestID + "\",\"quote\":{\"quoteId\":\"discarded\",\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"money\":\"0\"}}");
+                Call(p, "ObserveCubeRequest");
+                Check(!SysMsgBox.Visible && c.Sent.Count == sentBeforeClear && c.Endgame.Quote == null, "late quote after clear cannot prompt or transform");
+                int emptyNotices = NewbieTipBox.notices.Count;
+                Call(p, "SubmitCube");
+                Check(c.Sent.Count == sentBeforeClear, "empty conversion never requests or guesses a recipe");
+                Check(NewbieTipBox.notices.Count == emptyNotices + 1, "local empty-selection notice is retained after server dedup");
+                put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
+                put.Invoke(p, new object[] { "", 1900028201, "星髓" });
+            }
+            typeof(EndgamePanel).GetMethod("SetCubeQuantity", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(p, new object[] { "4" });
             MobileClientPresentation.Enabled = false; Call(p, "SubmitCube"); var request = c.Last;
             Check(request.Op == "cube.quote" && request.Json.Contains("cubeInputs") && !request.Json.Contains("npcEntityId") && !request.Json.Contains("recipeId") && request.Json.Contains("9007199254740901"), "container sends only selected identities and quantities");
+            Check(request.Json.Contains("\"count\":4"), "inline cell quantity reserves exact count without a third action button");
             int sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent && !SysMsgBox.Visible, "pending match cannot repeat or execute");
-            Call(p, "TakeBackCubeSelection");
+            CubeCellClick(p, 0);
             Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 2 && c.Sent.Count == sent, "pending cube quote blocks take-back without changing inputs");
             string preview = "随机开出1至" + capacity + "孔，每种孔数概率1/" + capacity + "；已有孔不可重开。";
             Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":0,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\"}}");
             Draw(p); Check(SysMsgBox.Visible && SysMsgBox.text.StartsWith(preview) && SysMsgBox.text.Contains("铜币：5000"), "matched risk and fee remain server-authored");
-            Call(p, "TakeBackCubeSelection");
+            if (capacity == 1 || capacity == 2)
+            {
+                int beforeDismiss = c.Sent.Count;
+                var abandonedConfirm = SysMsgBox.confirm;
+                if (capacity == 1) SysMsgBox.Finish(false);
+                else { Call(p, "Close"); SysMsgBox.Finish(false); }
+                abandonedConfirm();
+                Check(c.Sent.Count == beforeDismiss && !c.Endgame.Pending, "cancel or close invalidates captured confirmation callback");
+                if (capacity == 2)
+                {
+                    Check(EndgamePanel.TryOpenCubeFromItem(1,7), "reopen cube after closing confirmation"); Draw(p);
+                    put.Invoke(p, new object[] { "9007199254740901", 2001, "无孔装备" });
+                    put.Invoke(p, new object[] { "", 1900028201, "星髓" });
+                }
+                Call(p, "SubmitCube"); request = c.Last;
+                Apply(c, "{\"kind\":\"cube.quote\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"quote\":{\"quoteId\":\"socket-quote\",\"recipeId\":0,\"revision\":\"1\",\"expiresAt\":\"2099-01-01T00:00:00Z\",\"description\":\"" + preview + "\",\"money\":\"5000\"}}");
+                Draw(p);
+                Check(SysMsgBox.Visible, "new deliberate conversion obtains its own confirmation");
+            }
+
+            CubeCellClick(p, 0);
             Check(((System.Collections.ICollection)typeof(EndgamePanel).GetField("cubeSlots", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(p)).Count == 2, "active fee confirmation blocks take-back");
             Check(c.Endgame.Items[0].SocketCount == 0 && c.Endgame.Materials[0].Count == 8, "container and match never spend inventory");
             SysMsgBox.Finish(true); var execute = c.Last;
             Check(execute.Op == "cube.execute" && execute.Json.Contains("socket-quote") && !execute.Json.Contains("npcEntityId") && !execute.Json.Contains("cubeInputs") && !execute.Json.Contains("recipeId"), "execute binds authoritative quote without scene NPC identity");
             sent = c.Sent.Count; Call(p, "SubmitCube"); Check(c.Sent.Count == sent, "double click cannot duplicate or reroll");
-            Call(p, "Close"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity"); Receipt(c);
+            Call(p, "ClearCubeSelection"); Check(CubeSlotCount(p) == 2, "clear cannot hide an unconfirmed mutation");
+            if (capacity == 4)
+            {
+                SysMsgBox.Show("无关的原生提示", null, null);
+                Receipt(c); Call(p, "ObserveCubeRequest");
+                Check(CubeSlotCount(p) == 0 && SysMsgBox.Visible, "successful execute clears reservations even while an unrelated modal is visible");
+                SysMsgBox.Finish(false); Call(p, "Close"); continue;
+            }
+            Call(p, "Close"); Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "close retains uncertain request identity");
+            if (capacity <= 3)
+            {
+                if (capacity == 2)
+                {
+                    Check(EndgamePanel.TryOpenCubeFromItem(1,7), "pending execute can reopen its cube window"); Draw(p);
+                    Check(ReferenceEquals(c.Endgame.PendingRequest, execute), "reopen preserves exact unresolved execute identity");
+                }
+                if (capacity == 3)
+                {
+                    // A fresh panel represents a journal-restored request with no local tracker.
+                    p = new EndgamePanel(); p.Bind(c); Call(p, "ObserveCubeRequest");
+                }
+                int transportNotices = NewbieTipBox.notices.Count;
+                c.Endgame.NoteTransportFailure("连接暂断，请查询原请求。", execute);
+                Call(p, "ObserveCubeRequest"); Call(p, "ObserveCubeRequest");
+                Check(NewbieTipBox.notices.Count == transportNotices + 1, "uncertain execute transport error still notifies exactly once");
+                int notices = NewbieTipBox.notices.Count;
+                Apply(c, "{\"kind\":\"cube.execute\",\"ok\":false,\"requestId\":\"" + execute.RequestID + "\",\"error\":\"funds\",\"message\":\"铜钱不足，暂难开鼎。\"}");
+                Call(p, "ObserveCubeRequest"); Call(p, "ObserveCubeRequest");
+                Check(NewbieTipBox.notices.Count == notices, "closed, reopened or restored execute receipt does not duplicate native server notice: " + capacity);
+                NewbieTipBox.PushText("铜钱不足，暂难开鼎。"); // Native 0x8008 mode 5 delivery is independent.
+                Call(p, "ObserveCubeRequest");
+                Check(NewbieTipBox.notices.Count == notices + 1, "native execute failure remains one notice after repeated receipt polling");
+                Check(!c.Endgame.Pending && c.Endgame.Items.Count == 1 && c.Endgame.Materials[0].Count == 8, "closed execute failure resolves request without consuming inventory");
+                Call(p, "Close");
+            }
+            else Receipt(c);
+            if (capacity == 5)
+            {
+                string socketGear = gear.Replace("\"socketCount\":0", "\"socketCount\":2,\"sockets\":[{\"index\":0,\"uid\":\"91\",\"itemId\":1900028001,\"name\":\"角木蛟\"},{\"index\":1,\"uid\":\"92\",\"itemId\":1900028002,\"name\":\"亢金龙\"}]");
+                Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"socket-reorder\",\"chunks\":1,\"revision\":\"2\",\"items\":[" + socketGear + "]}");
+                Check(EndgamePanel.TryOpenCubeFromItem(1,7), "socket reorder opens same cube container"); Draw(p);
+                put.Invoke(p, new object[] { "9007199254740901", 2001, "有孔装备" });
+                foreach (int socket in new[] { 1, 0, 0, 0 })
+                {
+                    UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown,
+                        mousePosition = new UnityEngine.Vector2(121 + socket * 43, 387), button = 0 };
+                    Call(p, "DrawCube");
+                }
+                UnityEngine.Event.current = new UnityEngine.Event(); Draw(p);
+                Check(ArtworkSkin.enableds.Count == 2, "contextual socket icons do not add persistent action buttons");
+                var order = (List<string>)Get(p, "orderedRunes");
+                Check(order.Count == 2 && order[0] == "92" && order[1] == "91", "socket icon taps toggle selection and preserve chosen permutation");
+                Call(p, "SubmitCube");
+                Check(c.Last.Json.Contains("\"itemUids\":[\"92\",\"91\"]"), "socket conversion emits exact selected permutation through existing quote protocol");
+                Call(p, "Close");
+            }
         }
     }
     static void NativeStatTooltipContracts(Client c, EndgamePanel p)
@@ -826,6 +940,7 @@ partial class EndgameUiContract
         SocketRecipeContracts();
         EquippedCategoryTooltipContracts(c, p);
         AttributeEffectOrderingContracts(c, p);
+        LegendaryTooltipContracts(c, p);
         ItemizationStatTextContracts(c, p);
         InventoryIdentityContracts(c, p);
         NativeRiftNoticeContracts();

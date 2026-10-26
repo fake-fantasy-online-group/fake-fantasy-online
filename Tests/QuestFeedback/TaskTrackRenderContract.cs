@@ -17,11 +17,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public class PlayerController {public float ppu=100;}
  public static class UIScale {public static float Factor=1;}
  public static class TaskClient {public class ActiveTask {public int id,step;public string progress;} public static List<ActiveTask> Active=new List<ActiveTask>();}
- public static class TaskDB {public class Entry {public string name="Task";} public static Entry Get(int i)=>new Entry();}
+ public static class TaskDB {public class Entry {public string name="Task";} public static Entry Get(int i)=>i==1900030001||i==1900030002?null:new Entry();}
  public struct DrawCall { public float X,Y,Width;public string Text; }
  public static class BitmapFont {public static bool Ready=true;public static List<DrawCall> Calls=new List<DrawCall>();public static float Measure(string s,float scale)=>s.Length*6*scale;public static void DrawOutline(float x,float y,string s,UnityEngine.Color c,float scale){Calls.Add(new DrawCall{X=x,Y=y,Text=s,Width=Measure(s,scale)});}}
  public class ReferenceWorldBitmapFont { public bool Ready=true; public float Measure(string s,float scale)=>BitmapFont.Measure(s,scale);public void DrawOutline(float x,float y,string s,UnityEngine.Color c,float scale)=>BitmapFont.DrawOutline(x,y,s,c,scale); }
- public class ReferenceWorldNpcTaskFeedback {public string TaskName(int id)=>"Task";}
+ public class ReferenceWorldNpcTaskFeedback {public string TaskName(int id)=>TaskDB.Get(id)?.name;}
  public static class ReferenceWorldLocalPlayerDoll {public const float PixelsPerUnit=100;}
 }
 class TaskTrackRenderContract {
@@ -38,6 +38,13 @@ class TaskTrackRenderContract {
   Check(!track.Draw(float.NaN,1,120,200),"invalid time");Check(!track.Draw(10,0,120,200),"invalid scale");
   track.Observe(State(1,"1/5"),10);track.Observe(State(2,"2/5"),11);Check(track.Lines.Count==1&&track.Lines[0]=="2/5","authoritative change displayed");Check(track.ShowUntil==16,"five second receipt window");
   track.Observe(WorldTaskLogState.Empty,12);Check(track.PreviousSignatureCount==0,"removed signatures cleaned");
+  foreach(int id in new[]{1900030001,1900030002})TaskClient.Active.Add(new TaskClient.ActiveTask{id=id,step=0,progress="旧进度"});
+  Call(live,"Update");foreach(var task in TaskClient.Active){task.step=1;task.progress="新进度";}Call(live,"Update");
+  Check(live.Lines.Count==2&&live.Lines[0]=="【问鼎周天】新进度"&&live.Lines[1]=="【幻翼初展】新进度","live two missing native titles remain readable");
+  Func<int,WorldTaskLogState> pair=step=>new WorldTaskLogState(new[]{new WorldActiveTaskState(1900030001,0,step,5,"","新进度",false,""),new WorldActiveTaskState(1900030002,0,step,5,"","新进度",false,"")},Array.Empty<int>());
+  track.Observe(pair(0),20);track.Observe(pair(1),21);
+  Check(track.Lines.Count==2&&track.Lines[0]=="【问鼎周天】新进度"&&track.Lines[1]=="【幻翼初展】新进度","adapter two missing native titles remain readable");
+  Check(TaskDB.Get(1900030001)==null&&TaskDB.Get(1900030002)==null,"tracker never inserts task definitions");
   Console.WriteLine("PASS actual live and adapter task-track sources: "+checks+" assertions with explicit Unity/font test doubles; no Unity rendering validation");
  }
 }

@@ -40,6 +40,10 @@ contains('Presentation/ReferenceAssets/EndgamePanel.Cube.cs', 'State.Materials',
          'new EndgameRequest("cube.execute", quote.Revision, quoteID: quote.QuoteID)')
 cube_source = (runtime / 'Presentation/ReferenceAssets/EndgamePanel.Cube.cs').read_text(encoding='utf-8')
 assert 'npcEntityID:' not in cube_source and 'cubeNpcEntityID' not in cube_source, 'portable cube quote/execute never carries a scene NPC'
+assert 'DrawCubeFooter' not in cube_source and 'DrawCubeSocketOrder' not in cube_source, 'cube has no explanatory footer or recipe controls'
+assert 'NewbieTipBox.PushText' in cube_source and 'ResponseFor(' in cube_source, 'cube reuses trial notice rendering with correlated receipts'
+assert '"转换"' in cube_source and '"清空"' in cube_source and '"取回选中"' not in cube_source and '"确认数量"' not in cube_source, 'only convert and clear actions remain'
+
 checks += 1
 contains('Presentation/ReferenceAssets/EndgamePanel.Rift.cs', 'DrawRiftTierSelector(rift)', 'DrawRiftActions(rift, selectedTierValid)', 'rift.Claimable', '"reward_pending"',
          '"interrupted"', '"completed"', '"closed"', '"rift.start"', '"rift.claim"', 'DrawRiftMarkers', 'rift.Transitioning', 'RiftDepth')

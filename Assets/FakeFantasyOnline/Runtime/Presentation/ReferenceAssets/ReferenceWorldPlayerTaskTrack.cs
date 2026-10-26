@@ -245,7 +245,7 @@ internal sealed class ReferenceWorldPlayerTaskTrack
         {
             WorldActiveTaskState active = changed[index];
             string taskName = includeTaskName
-                ? taskDefinitions.TaskName(active.TaskId)
+                ? (TaskDB.Get(active.TaskId) != null ? taskDefinitions.TaskName(active.TaskId) : CubeQuestTitles.MissingTitle(active.TaskId))
                 : null;
             string[] progressLines = active.Progress.Split(
                 new[] { ProgressSeparator },

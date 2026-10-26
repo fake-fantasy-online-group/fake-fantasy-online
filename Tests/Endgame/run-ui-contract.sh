@@ -11,7 +11,7 @@ OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/EndgamePanel*.cs \
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/RiftElite*.cs \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/TooltipContent.Get.cs" \
- "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$ROOT/Tests/Endgame/RiftQuietUiContract.cs" "$ROOT/Tests/Endgame/RiftWorldVisualContract.cs" "$ROOT/Tests/Endgame/RiftEliteVisualContract.cs"
+ "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameUiContract.cs" "$ROOT/Tests/Endgame/LegendaryTooltipContract.cs" "$ROOT/Tests/Endgame/RiftHudProgressContract.cs" "$ROOT/Tests/Endgame/RiftQuietUiContract.cs" "$ROOT/Tests/Endgame/RiftWorldVisualContract.cs" "$ROOT/Tests/Endgame/RiftEliteVisualContract.cs"
 FFO_RIFT_WIRE_FIXTURES="${FFO_RIFT_WIRE_FIXTURES:-$ROOT/Tests/Endgame/Fixtures/rift79-quiet-wire.json}" FFO_ENHANCED_TOOLTIP_FIXTURES="${FFO_ENHANCED_TOOLTIP_FIXTURES:-$ROOT/Tests/Endgame/Fixtures/equipment-local-base-colors.json}" "$MONO/bin/mono" "$OUT/EndgameUiContract.exe"
 python3 "$ROOT/Tests/Endgame/source_contract.py"
 python3 "$ROOT/Tests/Endgame/elite_visual_source_contract.py"
