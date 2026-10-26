@@ -33,7 +33,6 @@ internal static class ClientPackageUiContract
         }
     }
     private static bool Desktop => Platform == "windows" || Platform == "macos";
-    private static string HandoffLabel => Platform == "android" ? "验证并准备安装" : Desktop ? "验证并准备桌面更新" : "打开安装包目录";
     private static ClientUpdatePlan Plan(bool required = true, string version = "2.0.0")
     {
         string hash;
@@ -86,13 +85,14 @@ internal static class ClientPackageUiContract
         Set(page,"updatePlan",missingResources); Set(page,"enterRequested",true);
         Check(loop.MoveNext() && !Get<bool>(page,"enterRequested") && ClientResourcePaths.InstalledRoot == null,
             "unmatched exact resource map blocks entry even with a stale ready resource root");
-        Set(page,"updatePlan",plan); Set(page,"ready",false);
-        string caption = HandoffLabel;
-        int prepares = AndroidClientPackageInstaller.Prepares, opens = Application.Opened.Count;
-        Draw(page, caption); iterations = 0;
-        do { if (!loop.MoveNext() || ++iterations > 10000) throw new Exception("real dispatcher handoff did not return to choice"); Thread.Sleep(1); }
-        while (Get<bool>(page, "clientPackageHandoffRequested") || Get<CancellationTokenSource>(page, "remoteCancellation") != null || !Get<bool>(page, "awaitingChoice"));
-        Check(Platform == "android" ? AndroidClientPackageInstaller.Prepares == prepares + 1 : Desktop ? Get<string>(page,"desktopState") == "manual" && Application.Opened.Count == opens : Application.Opened.Count == opens + 1, "real dispatcher routes explicit cached handoff exactly once; absent desktop helper fails safely");
+        Check(Platform == "android" ? AndroidClientPackageInstaller.Prepares > 0 : Desktop ? Get<string>(page,"desktopState") == "manual" : Application.Opened.Count > 0,
+            "real dispatcher automatically hands verified package to platform; missing desktop helper fails safely");
+        Set(page, "updatePlan", Plan(false, "1.0.0")); Set(page, "ready", true);
+        Set(page, "verifiedDispatchUrl", "https://different.test/dispatch.json"); Set(page, "enterRequested", true);
+        Check(loop.MoveNext() && ClientResourcePaths.InstalledRoot == null, "stale verified dispatch cannot activate resource root");
+        Set(page, "verifiedDispatchUrl", Get<string>(page, "dispatchUrl").Trim()); Set(page, "enterRequested", true);
+        Check(!loop.MoveNext() && ClientResourcePaths.InstalledRoot == Path.Combine(root, "resources") && ClientUpdateSession.UnifiedGate,
+            "verified current-client resource entry completes title gate without any GUI interaction or credential submission");
         (loop as IDisposable)?.Dispose();
     }
     private static void TestResourceProgress()
@@ -121,6 +121,115 @@ internal static class ClientPackageUiContract
         Check(Get<string>(rate, "key") == null, "platform package flow still resets its own network rate");
     }
 
+    private static void TestAutomaticSelection(string root)
+    {
+        Application.persistentDataPath = root;
+        foreach (bool required in new[] { true, false })
+        {
+            var page = Page(required);
+            Invoke(page, "QueueAutomaticClientPackage", "1.0.0");
+            Check(Get<bool>(page, "clientPackageRequested"), "newer " + (required ? "required" : "optional") + " client queues automatically without a click");
+        }
+        var original = Page();
+        string identity = (string)Invoke(original, "ArtifactIdentity");
+        ClientUpdateAutomation.RecordAttempt(root, "1.0.0", identity);
+        var restarted = Page();
+        Invoke(restarted, "QueueAutomaticClientPackage", "1.0.0");
+        Check(!Get<bool>(restarted, "clientPackageRequested") && Get<bool>(restarted, "failed"), "old version after failed install or rollback stops instead of reinstall loop");
+        Invoke(restarted, "RequestClientPackageAction");
+        Check(Get<bool>(restarted, "clientPackageRequested"), "explicit user retry can recover a blocked previous attempt");
+        Check(!ClientUpdateAutomation.HasAttempt(root, "1.0.1", identity), "new running version does not inherit old attempt identity");
+        Check(!ClientUpdateAutomation.HasAttempt(root, "1.0.0", identity + "changed"), "different exact artifact gets a distinct attempt identity");
+        File.WriteAllText(Path.Combine(root, "client-update-attempt.txt"), "broken");
+        var corrupt = Page(); Invoke(corrupt, "QueueAutomaticClientPackage", "1.0.0");
+        Check(!Get<bool>(corrupt, "clientPackageRequested") && Get<bool>(corrupt, "failed"), "interrupted attempt receipt fails closed rather than looping");
+        File.WriteAllText(Path.Combine(root, "client-update-attempt.txt"), new string('z', 64));
+        corrupt = Page(); Invoke(corrupt, "QueueAutomaticClientPackage", "1.0.0");
+        Check(!Get<bool>(corrupt, "clientPackageRequested") && Get<bool>(corrupt, "failed"), "invalid full-length attempt receipt fails closed");
+    }
+
+    private static void TestDesktopCommit(string root)
+    {
+        if (!Desktop) return;
+        Directory.CreateDirectory(root);
+        var request = new DesktopUpdateRequest { JobDirectory = root };
+        File.WriteAllText(request.StatusPath, "preparing");
+        var constructor = typeof(DesktopClientPackageInstaller).GetConstructor(Hidden, null,
+            new[] { typeof(DesktopUpdateRequest), typeof(System.Diagnostics.Process) }, null);
+        using (var installer = (DesktopClientPackageInstaller)constructor.Invoke(new object[] { request, System.Diagnostics.Process.GetCurrentProcess() }))
+        {
+            var page = Page(); Set(page, "desktopInstaller", installer); Set(page, "desktopState", "preparing");
+            int quits = Application.Quits;
+            Invoke(page, "PollDesktopUpdate");
+            Check(!File.Exists(request.CommitPath) && Application.Quits == quits, "preparing helper must never be committed early");
+            File.WriteAllText(request.StatusPath, "ready");
+            Invoke(page, "PollDesktopUpdate");
+            Check(File.ReadAllText(request.CommitPath) == "install-after-exit\n" && Application.Quits == quits + 1,
+                "verified desktop helper ready automatically writes existing commit protocol and exits once");
+            Invoke(page, "PollDesktopUpdate"); Invoke(page, "PollDesktopUpdate");
+            Check(Application.Quits == quits + 1 && !Get<bool>(page, "failed"), "repeated helper ready polls cannot commit or quit twice");
+            Invoke(page, "CancelDesktopUpdate");
+            Check(!File.Exists(request.CancelPath), "shutdown cleanup does not cancel a committed replacement");
+        }
+    }
+
+    private static void TestMobileResume()
+    {
+        if (Platform != "android") return;
+        var page = Page(); Set(page, "clientPackageMode", true);
+        var token = new CancellationTokenSource(); Set(page, "remoteCancellation", token);
+        Invoke(page, "OnApplicationPause", true);
+        Check(token.IsCancellationRequested && Get<bool>(page, "resumeAfterPause"), "mobile lifecycle interruption remembers automatic resume");
+        Set(page, "remoteCancellation", null); token.Dispose();
+        Invoke(page, "ResumeInterruptedTransfer");
+        Check(!Get<bool>(page, "clientPackageRequested"), "background mobile cannot restart network work");
+        Invoke(page, "OnApplicationPause", false);
+        Check(Get<bool>(page, "clientPackageRequested") && !Get<bool>(page, "resumeAfterPause"), "foreground resumes package transfer exactly once");
+        page = Page(); token = new CancellationTokenSource(); Set(page, "remoteCancellation", token);
+        Draw(page, "暂停更新"); Invoke(page, "OnApplicationPause", true); Set(page, "remoteCancellation", null); token.Dispose();
+        Invoke(page, "OnApplicationPause", false);
+        Check(!Get<bool>(page, "clientPackageRequested") && !Get<bool>(page, "downloadRequested"), "explicit pause remains paused across background and foreground");
+        page = Page(); Set(page, "androidPackageActive", true);
+        int settings = AndroidClientPackageInstaller.Settings, begins = AndroidClientPackageInstaller.Begins, confirmations = AndroidClientPackageInstaller.Confirmations;
+        Invoke(page, "OnApplicationPause", true);
+        AndroidClientPackageInstaller.State = AndroidClientPackageInstallState.PermissionRequired; Invoke(page, "PollAndroidPackage", true);
+        AndroidClientPackageInstaller.State = AndroidClientPackageInstallState.Ready; Invoke(page, "PollAndroidPackage", true);
+        AndroidClientPackageInstaller.State = AndroidClientPackageInstallState.AwaitingConfirmation; Invoke(page, "PollAndroidPackage", true);
+        Check(AndroidClientPackageInstaller.Settings == settings && AndroidClientPackageInstaller.Begins == begins && AndroidClientPackageInstaller.Confirmations == confirmations,
+            "background polling cannot launch permission, installation or confirmation UI");
+        Invoke(page, "OnApplicationPause", false); Invoke(page, "PollAndroidPackage", false);
+        Check(AndroidClientPackageInstaller.Confirmations == confirmations + 1, "deferred system confirmation opens automatically on foreground");
+        AndroidClientPackageInstaller.State = AndroidClientPackageInstallState.AwaitingConfirmation; Invoke(page, "PollAndroidPackage", true);
+        Check(AndroidClientPackageInstaller.Confirmations == confirmations + 1, "repeated pending confirmation state cannot reopen native UI");
+    }
+
+    private static void TestRetryPolicy()
+    {
+        int calls = 0, delays = 0;
+        int result = ClientUpdateAutomation.WithNetworkRetry(() => {
+            if (++calls < 3) throw new System.Net.WebException("synthetic outage", System.Net.WebExceptionStatus.Timeout);
+            return 7;
+        }, CancellationToken.None, null, (delay, token) => { delays++; Check(delay == (delays == 1 ? 1000 : 3000), "retry uses bounded backoff"); });
+        Check(result == 7 && calls == 3 && delays == 2, "transient transfer resumes automatically within retry budget");
+        calls = delays = 0;
+        try { ClientUpdateAutomation.WithNetworkRetry<int>(() => { calls++; throw new System.Net.WebException("offline", System.Net.WebExceptionStatus.ConnectFailure); },
+            CancellationToken.None, null, (delay, token) => delays++); throw new Exception("expected retry exhaustion"); }
+        catch (System.Net.WebException) { }
+        Check(calls == 3 && delays == 2, "persistent network outage stops after three attempts");
+        calls = 0;
+        try { ClientUpdateAutomation.WithNetworkRetry<int>(() => { calls++; throw new InvalidDataException("SHA-256 mismatch"); }, CancellationToken.None); throw new Exception("expected invalid data"); }
+        catch (InvalidDataException) { }
+        Check(calls == 1, "integrity failure cannot be silently retried as a transient network error");
+        using (var cancellation = new CancellationTokenSource())
+        {
+            calls = 0;
+            try { ClientUpdateAutomation.WithNetworkRetry<int>(() => { calls++; throw new System.Net.WebException("offline", System.Net.WebExceptionStatus.Timeout); },
+                cancellation.Token, null, (delay, token) => cancellation.Cancel()); throw new Exception("expected cancellation"); }
+            catch (OperationCanceledException) { }
+            Check(calls == 1, "user cancellation during backoff prevents another transfer");
+        }
+    }
+
     public static void Main()
     {
         string root=Path.Combine(Path.GetTempPath(),"client-package-ui-"+Guid.NewGuid().ToString("N"));Application.persistentDataPath=root;Application.version="1.0.0";
@@ -131,38 +240,45 @@ internal static class ClientPackageUiContract
             Invoke(new MobileResourceInstaller(), "Awake");
             Check(Application.runInBackground == !Application.isMobilePlatform, "desktop updater enables background execution before game startup; mobile is unchanged");
             TestResourceProgress();
+            TestRetryPolicy();
+            TestAutomaticSelection(Path.Combine(root, "selection"));
+            Application.persistentDataPath = root;
             var page=Page(); Draw(page,"下载客户端");Check(Get<bool>(page,"clientPackageRequested"),"mandatory upgrade queues download");
             Check(Application.Opened.Count==0 && AndroidClientPackageInstaller.Prepares==0,"download does not open URL or start installer");
             Run(page);string path=Get<string>(page,"verifiedClientPackage");
             Check(path!=null&&File.Exists(path),"download produces verified file");
             Check(!Get<bool>(page,"ready")&&!Get<bool>(page,"enterRequested"),"download completion never bypasses required upgrade");
-            Check(AndroidClientPackageInstaller.Prepares==0&&AndroidClientPackageInstaller.Begins==0,"download completion waits for explicit install click");
-            string caption=HandoffLabel;
-            Draw(page,caption);Check(Get<bool>(page,"clientPackageHandoffRequested"),"handoff click queues reverify");Run(page);
             if(Platform=="android")
             {
-                Check(AndroidClientPackageInstaller.Prepares==1&&AndroidClientPackageInstaller.Begins==0,"handoff only prepares identity verification");
+                Check(AndroidClientPackageInstaller.Prepares==1&&AndroidClientPackageInstaller.Begins==0,"download automatically prepares native identity verification without extra click");
                 Check(AndroidClientPackageInstaller.Path==path&&AndroidClientPackageInstaller.Version=="2.0.0","prepare binds exact verified file/version");
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Ready;Invoke(page,"PollAndroidPackage",true);
-                Check(AndroidClientPackageInstaller.Begins==0,"ready state does not automatically begin install");
-                Draw(page,"继续系统安装");Check(AndroidClientPackageInstaller.Begins==1,"explicit begin enters system staging");
-                Draw(page,"继续系统安装");Check(AndroidClientPackageInstaller.Begins==1,"repeated begin cannot replay while staging");
-                Draw(page,"取消安装准备");Check(AndroidClientPackageInstaller.Cancels==1,"cancel invokes system cancellation");
+                Check(AndroidClientPackageInstaller.Begins==1,"verified ready state automatically enters system staging");
+                Invoke(page,"PollAndroidPackage",true);Invoke(page,"PollAndroidPackage",false);
+                Check(AndroidClientPackageInstaller.Begins==1,"repeated staging polls do not replay begin");
+                Draw(page,"取消安装准备");Check(AndroidClientPackageInstaller.Cancels==1,"explicit cancellation remains available");
+                Run(page); // A deliberate new attempt resets one-shot native actions.
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.PermissionRequired;Invoke(page,"PollAndroidPackage",true);
-                Draw(page,"允许安装此来源");Check(AndroidClientPackageInstaller.Settings==1&&AndroidClientPackageInstaller.Begins==1,"permission only opens settings");
+                Check(AndroidClientPackageInstaller.Settings==1&&AndroidClientPackageInstaller.Begins==1,"permission state automatically opens only the native settings page");
+                Invoke(page,"PollAndroidPackage",true);Invoke(page,"PollAndroidPackage",false);
+                Check(AndroidClientPackageInstaller.Settings==1,"permission refusal or unchanged state cannot repeatedly reopen settings");
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Ready;Invoke(page,"PollAndroidPackage",true);
-                Check(AndroidClientPackageInstaller.Begins==1,"permission return never auto installs");
+                Check(AndroidClientPackageInstaller.Begins==2,"permission grant resumes install without app confirmation");
+                AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.PermissionRequired;Invoke(page,"PollAndroidPackage",true);
+                Check(!Get<bool>(page,"androidBeginSent") && AndroidClientPackageInstaller.Settings==1,"permission revoked before native staging resets begin guard without reopening settings");
+                AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Ready;Invoke(page,"PollAndroidPackage",true);
+                Check(AndroidClientPackageInstaller.Begins==3,"grant after begin-time permission race automatically retries native begin");
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.AwaitingConfirmation;Invoke(page,"PollAndroidPackage",true);
-                Check(AndroidClientPackageInstaller.Confirmations==0,"system confirmation is not auto launched");Draw(page,"打开系统安装确认");
-                Check(AndroidClientPackageInstaller.Confirmations==1,"explicit system confirmation launched");
+                Check(AndroidClientPackageInstaller.Confirmations==1,"required native confirmation automatically opens without app confirmation");
+                Invoke(page,"PollAndroidPackage",true);Invoke(page,"PollAndroidPackage",false);
+                Check(AndroidClientPackageInstaller.Confirmations==1,"native confirmation is launched once only");
                 Draw(page,"等待系统安装结果");Draw(page,"配置更新地址");Draw(page,"修复资源");
-                Check(AndroidClientPackageInstaller.Begins==1&&!Get<bool>(page,"configurationOpen")&&!Get<bool>(page,"repairRequested"),"pending result disables replay and reconfiguration");
+                Check(AndroidClientPackageInstaller.Begins==3&&!Get<bool>(page,"configurationOpen")&&!Get<bool>(page,"repairRequested"),"pending result disables replay and reconfiguration");
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Failed;Invoke(page,"PollAndroidPackage",true);Draw(page);
                 Check(Get<bool>(page,"failed")&&!Get<bool>(page,"ready"),"failed system install never declares app ready");
                 Check(GUI.Labels.Exists(x=>x.text.Contains("安装未完成")&&x.color.r==1&&x.color.g<.5f),"install failure uses red safe summary");
                 AndroidClientPackageInstaller.State=AndroidClientPackageInstallState.Succeeded;Invoke(page,"PollAndroidPackage",true);
-                int quits=Application.Quits;Draw(page,"退出后手动重启");
-                Check(Application.Quits==quits+1&&!Get<bool>(page,"ready")&&!Get<bool>(page,"enterRequested"),"reported system success still requires restart, not entry in old process");
+                Check(!Get<bool>(page,"ready")&&!Get<bool>(page,"enterRequested"),"native success never enters game using the old running process");
             }
             else if (Desktop)
             {
@@ -199,6 +315,8 @@ internal static class ClientPackageUiContract
             Set(page,"remoteCancellation",null);int cancelBefore=AndroidClientPackageInstaller.Cancels;Set(page,"androidPackageActive",true);
             Invoke(page,"OnApplicationPause",true);Check(AndroidClientPackageInstaller.Cancels==cancelBefore,"permission/installer activity pause does not cancel platform session");
             TestRealDispatchLoop(Path.Combine(root, "dispatcher"));
+            TestDesktopCommit(Path.Combine(root, "desktop-commit"));
+            TestMobileResume();
 #if UNITY_ANDROID
             Application.persistentDataPath = Path.Combine(root, "android-storage");
             StorageSpaceStub.Reset(); StorageSpaceStub.Available = 0;

@@ -16,10 +16,29 @@ public sealed partial class MobileResourceInstaller
     private DesktopClientPackageInstaller desktopInstaller;
     private string desktopState;
     private double nextDesktopPoll;
-    private bool DesktopInstallBusy => desktopInstaller != null && (desktopState == "preparing" || desktopState == "ready");
+    private bool DesktopInstallBusy => desktopInstaller != null && (desktopState == "preparing" || desktopState == "ready" || desktopState == "committed");
     private double nextAndroidPoll;
+    private bool desktopCommitSent, androidBeginSent, androidPermissionOpened, androidConfirmationOpened;
     private AndroidClientPackageInstallState androidPackageState = AndroidClientPackageInstallState.Idle;
     private string clientPackageNotice = "";
+
+    private void QueueAutomaticClientPackage(string currentVersion)
+    {
+        if (updatePlan == null || !updatePlan.Available) return;
+        clientPackageMode = true;
+        try
+        {
+            if (ClientUpdateAutomation.HasAttempt(UnityEngine.Application.persistentDataPath, currentVersion, ArtifactIdentity()))
+            {
+                RemoteFailure(new InvalidOperationException("Previous native client update did not complete in this app version. Inspect the updater result before retrying."));
+                conciseError = "上次安装未完成，已停止自动重试";
+                clientPackageNotice = "当前客户端和资源保留 · 检查系统提示后可手动重试";
+                return;
+            }
+            clientPackageRequested = true;
+        }
+        catch (Exception exception) { RemoteFailure(exception); }
+    }
 
     private string ArtifactIdentity()
     {
@@ -40,6 +59,7 @@ public sealed partial class MobileResourceInstaller
         androidPackageActive = clientPackageMode = clientPackageRequested = clientPackageHandoffRequested = false;
         verifiedClientPackage = verifiedClientIdentity = null;
         clientPackageNotice = "";
+        desktopCommitSent = androidBeginSent = androidPermissionOpened = androidConfirmationOpened = false;
         androidPackageState = AndroidClientPackageInstallState.Idle;
     }
 
@@ -48,7 +68,7 @@ public sealed partial class MobileResourceInstaller
         if (desktopState == "manual") return "打开安装包目录";
         if (desktopInstaller != null)
         {
-            if (desktopState == "ready") return "退出并安装更新";
+            if (desktopState == "ready" || desktopState == "committed") return "正在安装更新";
             if (desktopState == "preparing") return "取消安装准备";
             return "打开安装包目录";
         }
@@ -81,7 +101,7 @@ public sealed partial class MobileResourceInstaller
         {
             try
             {
-                if (desktopState == "ready") { desktopInstaller.Commit(); UnityEngine.Application.Quit(); return; }
+                if (desktopState == "ready" || desktopState == "committed") return;
                 if (desktopState == "preparing") { CancelDesktopUpdate(); Phase("安装准备已取消", "原有客户端和资源已保留。", 0); return; }
                 OpenClientPackageDirectory(); return;
             }
@@ -127,8 +147,8 @@ public sealed partial class MobileResourceInstaller
         lock (remoteProgressLock) remoteStatus = null;
         remoteCancellation = new CancellationTokenSource();
         CancellationToken cancellation = remoteCancellation.Token;
-        Task<string> operation = Task.Run(() => handoff ? downloader.VerifyCompleted(artifact, cancellation, SetRemoteProgress) :
-            downloader.Download(artifact, cancellation, SetRemoteProgress));
+        Task<string> operation = Task.Run(() => ClientUpdateAutomation.WithNetworkRetry(() => handoff ? downloader.VerifyCompleted(artifact, cancellation, SetRemoteProgress) :
+            downloader.Download(artifact, cancellation, SetRemoteProgress), cancellation, ReportNetworkRetry));
         while (!operation.IsCompleted) { ReadRemoteProgress(); yield return null; }
         ReadRemoteProgress();
         string path = null;
@@ -137,13 +157,17 @@ public sealed partial class MobileResourceInstaller
         catch (Exception exception) { failure = exception; }
         if (cancellation.IsCancellationRequested) failure = new OperationCanceledException("客户端下载已暂停。");
         remoteCancellation.Dispose(); remoteCancellation = null;
-        if (failure != null) { RemoteFailure(failure); yield break; }
+        if (failure != null) { RemoteFailure(failure); ResumeInterruptedTransfer(); yield break; }
         if (selectedIdentity != ArtifactIdentity()) { RemoteFailure(new InvalidDataException("Client update selection changed.")); yield break; }
         verifiedClientPackage = path; verifiedClientIdentity = selectedIdentity;
         Phase("客户端安装包已校验", "长度与 SHA-256 已验证，尚未安装。", 0);
         clientPackageNotice = PlatformKey() == "android" ? "完整性已验证 · 下一步核对包名、版本和签名" :
             "完整性已验证，签名未核验 · 请退出游戏后手动安装";
-        if (!handoff) yield break;
+        // Record before native preparation, so an interrupted/rolled-back attempt never
+        // automatically repeats when the old app is launched again. Manual Retry is allowed.
+        try { ClientUpdateAutomation.RecordAttempt(UnityEngine.Application.persistentDataPath, config.appVersion, selectedIdentity); }
+        catch (Exception exception) { RemoteFailure(exception); yield break; }
+        desktopCommitSent = androidBeginSent = androidPermissionOpened = androidConfirmationOpened = false;
         if (PlatformKey() == "android")
         {
             androidPackageActive = true;
@@ -163,7 +187,7 @@ public sealed partial class MobileResourceInstaller
                 }
                 desktopState = "preparing";
                 Phase("准备桌面更新", "独立更新器正在检查更新包、应用身份和当前发行的签名要求。游戏尚未退出。", 0);
-                clientPackageNotice = "验证通过后需点击退出并安装 · 用户数据和旧版本保留";
+                clientPackageNotice = "验证通过后自动安装并重启 · 用户数据和旧版本保留";
             }
             catch (Exception exception)
             {
@@ -185,7 +209,7 @@ public sealed partial class MobileResourceInstaller
     private void Update()
     {
         if (androidPackageActive && MonotonicSeconds() >= nextAndroidPoll) PollAndroidPackage(false);
-        if (desktopInstaller != null && MonotonicSeconds() >= nextDesktopPoll) PollDesktopUpdate();
+        if (desktopInstaller != null && !desktopCommitSent && MonotonicSeconds() >= nextDesktopPoll) PollDesktopUpdate();
     }
 
     private static bool IsDesktopUpdatePlatform => PlatformKey() == "windows" || PlatformKey() == "macos";
@@ -209,6 +233,7 @@ public sealed partial class MobileResourceInstaller
 
     private void PollDesktopUpdate()
     {
+        if (desktopCommitSent) return;
         nextDesktopPoll = MonotonicSeconds() + .3;
         try
         {
@@ -218,8 +243,12 @@ public sealed partial class MobileResourceInstaller
             if (snapshot == "ready")
             {
                 failed = false;
-                Phase("更新包已准备好", "点击后游戏退出，独立更新器会替换应用并尝试重新打开；系统可能要求确认。", 0);
-                clientPackageNotice = "退出后安装 · 用户设置和资源保留 · 启动失败可恢复旧应用";
+                Phase("正在安装并重新启动", "验证通过，独立更新器将替换应用并重新打开；系统可能要求授权。", 0);
+                clientPackageNotice = "自动安装并重启 · 用户设置和资源保留 · 启动失败可恢复旧应用";
+                desktopInstaller.Commit();
+                desktopCommitSent = true;
+                desktopState = "committed";
+                UnityEngine.Application.Quit();
             }
             else if (snapshot.StartsWith("failed\n", StringComparison.Ordinal))
             {
@@ -238,6 +267,9 @@ public sealed partial class MobileResourceInstaller
         var snapshot = AndroidClientPackageInstaller.Poll();
         bool changed = force || snapshot.State != androidPackageState;
         androidPackageState = snapshot.State;
+        // Permission may be revoked between Ready polling and Begin. Native only
+        // reports this state before staging, so a later grant can safely retry Begin.
+        if (snapshot.State == AndroidClientPackageInstallState.PermissionRequired) androidBeginSent = false;
         if (changed)
         {
             Debug.Log("Android client install state: " + snapshot.State + "; " + snapshot.Message);
@@ -250,17 +282,29 @@ public sealed partial class MobileResourceInstaller
                 case AndroidClientPackageInstallState.Ready: label = "安装包身份验证通过"; break;
                 case AndroidClientPackageInstallState.PermissionRequired: label = "需要允许此应用安装更新"; break;
                 case AndroidClientPackageInstallState.Staging: label = "准备系统安装会话"; break;
-                case AndroidClientPackageInstallState.AwaitingConfirmation: label = "请打开系统界面确认安装"; break;
+                case AndroidClientPackageInstallState.AwaitingConfirmation: label = "请在系统界面确认安装"; break;
                 case AndroidClientPackageInstallState.AwaitingResult: label = "等待系统安装结果"; break;
-                case AndroidClientPackageInstallState.Succeeded: label = "系统确认安装成功，请重启客户端"; break;
+                case AndroidClientPackageInstallState.Succeeded: label = "安装成功，已请求重新打开游戏"; break;
                 case AndroidClientPackageInstallState.Cancelled: label = "安装已取消，可重新准备"; break;
                 case AndroidClientPackageInstallState.Unsupported: label = "当前平台不支持系统安装交接"; break;
                 default: label = "安装未完成，可重新准备"; break;
             }
             Phase(label, snapshot.Message, 0);
-            clientPackageNotice = snapshot.State == AndroidClientPackageInstallState.PermissionRequired ? "仅由你在系统设置中授权，返回后再次确认安装" :
-                snapshot.State == AndroidClientPackageInstallState.Ready ? "包名、递增版本与签名已检查 · 安装仍需系统确认" :
-                "系统安装需要你的确认 · 原有客户端不会被静默替换";
+            clientPackageNotice = snapshot.State == AndroidClientPackageInstallState.Succeeded ? "若系统阻止自动打开，请从桌面启动新版本" :
+                snapshot.State == AndroidClientPackageInstallState.PermissionRequired ? "仅由你在系统设置中授权，返回后自动继续" :
+                snapshot.State == AndroidClientPackageInstallState.Ready ? "包名、递增版本与签名已检查 · 是否确认由系统决定" :
+                "系统决定是否需要授权或确认 · 安装后尝试自动重新打开";
+        }
+        // Launch each native step once, only while foreground. Repeated polling and
+        // returning from denied/cancelled OS UI must not keep reopening that UI.
+        if (!mobilePaused)
+        {
+            if (snapshot.State == AndroidClientPackageInstallState.PermissionRequired && !androidPermissionOpened)
+            { androidPermissionOpened = true; AndroidClientPackageInstaller.OpenPermissionSettings(); }
+            else if (snapshot.State == AndroidClientPackageInstallState.Ready && !androidBeginSent)
+            { androidBeginSent = true; AndroidClientPackageInstaller.Begin(); }
+            else if (snapshot.State == AndroidClientPackageInstallState.AwaitingConfirmation && !androidConfirmationOpened)
+            { androidConfirmationOpened = true; AndroidClientPackageInstaller.OpenSystemConfirmation(); }
         }
         if ((snapshot.State == AndroidClientPackageInstallState.Preparing || snapshot.State == AndroidClientPackageInstallState.Staging) && snapshot.Progress >= 0)
         {
@@ -290,6 +334,8 @@ public sealed partial class MobileResourceInstaller
         if (androidPackageActive) AndroidClientPackageInstaller.Cancel();
         androidPackageActive = clientPackageMode = clientPackageRequested = clientPackageHandoffRequested = false;
         failed = false;
+        skipOptionalClientUpdate = true;
+        downloadRequested = true;
         Phase(ready ? "准备就绪" : "检查并更新", "可以继续当前兼容版本。", 0);
     }
 }

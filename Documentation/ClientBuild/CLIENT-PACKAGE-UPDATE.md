@@ -1,67 +1,77 @@
-# Client package updater: implementation and local acceptance
+# Client package update: automatic startup and acceptance
 
-## Scope
+## Startup contract
 
-The startup page keeps its single `dispatch.json` address. Its platform entry supplies a strictly newer stable application version, a package URL, exact positive byte length and full SHA-256. Package bytes are downloaded into `persistentDataPath/ClientPackages`, never into the running application's files or the game resource root. Resume identity includes platform, URL, version, length and digest. Pausing or losing the process retains bounded partial bytes; retry resumes only the same identity. A full digest and length check precedes atomic publication, and every handoff rehashes the completed file. Hash integrity is relative to the trusted dispatch, not independent proof of publisher identity.
+A configured startup checks `dispatch.json`. A strictly newer platform client is selected **before** downloading resources for the old client, whether the update is mandatory or optional. The normal route has no application confirmation steps:
 
-The download button does not install. After verification, another explicit action starts platform handoff. Progress and speed use actual transfer bytes; local hashing/copying reports progress with no fabricated network speed. Required minimum versions still block game entry even after download or installer submission. Compatible optional updates can return to the existing resource-ready client.
+`check → download/resume → exact length + SHA-256 → platform identity/signature verification → prepare → install → relaunch → verify compatible resources → title/login`
 
-| Platform | Downloaded file types | Handoff |
-| --- | --- | --- |
-| Android | `.apk` | Private copy, package/version/current-signers checks, user-controlled system installer |
-| Windows | `.exe`, `.msi`, `.zip` | Request opening the containing directory; user quits and installs manually |
-| macOS | `.dmg`, `.pkg`, `.zip` | Same manual directory handoff |
-| Linux | `.AppImage`, `.tar.gz`, `.deb`, `.rpm`, `.zip` | Same manual directory handoff |
+This opens the login screen; it never submits credentials. An optional compatible version can still be selected explicitly as recovery. Required versions and missing exact resource mappings never bypass the entry guard. No dispatch schema change, downloaded C# execution, or automatic version bump is introduced.
 
-Desktop handoff does not execute/extract packages, check publisher signatures, replace running files or prove that a file manager opened. Android has no silent-install path and does not grant unknown-source permission. `hotupdateManifestUrl` remains unused; no remote C# DLL is downloaded or executed.
+The UI retains real byte progress, network speed, cancel/pause, configuration and failure recovery. Transient network failures receive at most three attempts with 1 s / 3 s backoff. Integrity, trust, permission, malformed metadata and disk errors do not get automatic retries. Existing identity-bound partial downloads are retained and revalidated. On mobile, a transfer interrupted by backgrounding resumes on returning; an explicit Pause stays paused. Desktop updates run without focus.
 
-## Android safety and integration
+Before native preparation, `persistentDataPath/client-update-attempt.txt` records a hash of the old application version and artifact identity. If a failed, interrupted or rolled-back install returns to that old app, startup stops rather than repeatedly reinstalling/exiting. A deliberate retry is permitted. A different artifact or a genuinely newer running app has a different identity. Existing resource/settings/account data are not deleted.
 
-The project manifest and lock explicitly enable Unity’s built-in `com.unity.modules.androidjni` so the Bootstrap JNI bridge can compile in the actual Android player. The source-owned `.androidlib` adds `REQUEST_INSTALL_PACKAGES` and a non-exported, explicit-result receiver. It has no downloaded binary/plugin dependency. The bridge is compiled out on non-Android players and in the Editor. The real Android PackageInstaller path is available only where the platform supports an interactive install. Policy restrictions remain enforced by Android.
+## Desktop
 
-Before handoff, an independent private copy is length/hash checked. The archive package name must equal the currently installed application; its version name must equal dispatch; its integer version code must be greater than the installed code; and its current signer set must exactly match the installed set. Signer rotation is intentionally rejected by this conservative policy. Neither package IDs nor certificates are hardcoded. The system installer additionally enforces APK validity and signature checks.
+The trusted helper already bundled in the running app performs preparation. When it reports ready, the app writes the existing commit sentinel once and exits; the independent helper waits for that exact process to exit, installs transactionally and attempts to reopen the game. Existing backup/rollback and uncertain-launch recovery are unchanged. Failed preparation never quits the game.
 
-Preparation, settings permission, session staging, system confirmation, pending result and confirmed success are separate states. The app never treats merely downloading or submitting a session as successful installation. Pending confirmation is opened only by an explicit button. Success requires a system success result plus installed package/version/signature readback. Process loss without that evidence remains interrupted. Retry must abandon/reset the interrupted session before preparing again. Cancellation and system refusal retain the currently installed app.
+All existing digest, archive path, install identifier, strictly increasing version and signing checks remain. The established macOS **empty Team pin/ad-hoc lane** retains `codesign --verify --deep --strict`, signing identifier and bundle-version checks. A **nonempty Team pin** remains strict, including matching Team ID and `spctl`; neither a package nor dispatch can downgrade an installed pin. The existing Windows publisher pin policy is unchanged. No quarantine removal, root/UAC bypass, security-policy change or downloaded executable launch is added.
 
-The resource-free development build preserves the current Unity project application identifier and uses default development signing. It never switches package identity merely because assets are delivered remotely. A deliberately separate candidate must use an explicitly selected project identifier; that is a separate installation, not an upgrade of the original package. The project application version is `1.0.0`, Android `versionCode=2`. The verified historical test predecessor is `com.fakefantasyonline.fakefantasyonline`, application `0.1.0`, code 1. The newly produced APK must still be inspected to prove it has the same package and signing certificate; retaining project settings is not an APK-verification result. A matching version label alone does not establish an upgrade path. No signing credentials belong in source, logs or command arguments.
+Supported native automatic desktop updates use the existing verified ZIP/marked-install contract. Unsupported package types, absent helpers, unwritable installs or OS security restrictions stop with recovery guidance instead of pretending success. OS authentication, UAC, Gatekeeper/SmartScreen or managed-device decisions cannot be bypassed.
 
-## Local build entry
+## Android
 
-Use the explicitly approved source revision and an already licensed Unity `6000.4.9f1` installation with Android support. This document does not authorize checking out a different revision, creating a tag, publishing, or executing the resulting APK. Set paths and the non-secret dispatch URL deliberately:
+The source-owned `.androidlib` retains independent private-copy hash/size checks, exact package name, exact target version name, increasing versionCode and exact current signer-set verification. Signer rotation remains conservatively rejected. The OS additionally validates APK installability and signature.
 
-```sh
-export UNITY_EDITOR='/path/to/Unity6000.4.9f1/Unity'
-export FFO_RESOURCE_DISPATCH_URL='https://trusted.example/dispatch.json'
-export FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH="$PWD/Build/Android/client-1.0.0-code2.apk"
-"$UNITY_EDITOR" -batchmode -nographics -quit -projectPath "$PWD" \
-  -executeMethod FakeFantasyOnline.Editor.CiClientBuild.BuildAndroidResourceFree \
-  -logFile "$PWD/LocalMobileBuild/android-code2.log"
-python3 scripts/ci/verify-resource-free-apk.py "$FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH"
-```
+The app automatically starts preparation, opens install-source settings **once if required**, resumes after a grant, and opens a pending OS confirmation **once if required**. Denial, Back, cancellation or a terminal native failure does not cause repeated prompts. Android retains the decision.
 
-The build method consumes the project identifier/version/code without overriding them and logs the resolved identifier. The structural APK checker leaves package identity/signature unverified; use Android SDK tools to check the actual manifest and signing certificate. It uses ARM64/IL2CPP, creates an APK, stages only source-owned startup assets, restores staging/settings on exit, and does not require signing passwords on the command line. Development LAN HTTP is disabled unless separately opted in with `FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP=1`; HTTPS is preferred. The existing offline/bundled entries also read the same project version/code.
+On API 31+, the session requests documented `USER_ACTION_NOT_REQUIRED` with `UPDATE_PACKAGES_WITHOUT_USER_ACTION`; eligible ordinary self-updates may proceed without confirmation. Eligibility depends on Android's rules, target SDK and ownership. The session still handles `STATUS_PENDING_USER_ACTION`. Older/ineligible/managed devices may require an OS install confirmation. No privileged installation, accessibility, overlay or permission bypass is used.
 
-Before any installation, use the local Android SDK `apksigner verify --verbose --print-certs` and `apkanalyzer manifest` commands to compare the new APK with the authorized predecessor. Retain only non-secret version/package/length/hash/certificate-digest evidence. Verify the merged manifest contains the intended permission and non-exported receiver, and verify the `.androidlib` is absent from desktop outputs.
+Confirmed success requires installed versionCode/versionName/current-signers readback, plus the system result or protected `MY_PACKAGE_REPLACED` broadcast. A non-exported replacement receiver handles process loss. A durable token permits **one** ordinary launcher request for that verified update. Android background-activity policy may block it; then opening the app from the launcher is unavoidable. No universal unattended-install/relaunch guarantee is made.
 
-## Acceptance matrix
+References: [Android SessionParams](https://developer.android.com/reference/android/content/pm/PackageInstaller.SessionParams#setRequireUserAction(int)) and [background activity launch policy](https://developer.android.com/guide/components/activities/secure-bal).
 
-Source-only tests are repeatable without Unity or a device:
+## Build and migration handoff
+
+Use the approved public source plus this patch only; do not merge unrelated feature branches. Existing 1.0.3 binaries cannot acquire new behavior merely by republishing metadata. Their first migration still uses the old UI. The automatic UX begins when running a build containing this patch and updating to a strictly newer real build.
+
+The proposed next public version is **1.0.4 / Android code 10**, subject to checking the latest published version and current code before release. Do not repack 1.0.3 under the same version. This patch intentionally does not alter project versions or public metadata. Release/version/tag/signing/publication steps require the authorized release workflow.
+
+On the licensed Unity 6000.4.9f1 build executor:
+
+1. Apply the commit/patch to the approved source in an isolated clean worktree. Verify changed files and source SHA. Apply the approved version/code change as a separately reviewable release step.
+2. Rebuild the native desktop helpers from `Tools/DesktopUpdater/DesktopUpdater.csproj` for `win-x64`, `osx-x64`, `osx-arm64`, self-contained single-file; use the existing reviewed build/signing process. Do not weaken or invent pins. Stage exactly `DesktopUpdater.exe`, `DesktopUpdater-osx-x64`, `DesktopUpdater-osx-arm64` for their respective platforms.
+3. Use `scripts/ci/build-resource-free.sh --help` and the existing platform release lane. The formal wrapper requires nonempty signing pins; it is **not** the existing empty-Team ad-hoc lane. Preserve the approved ad-hoc build/staging/signing process for that lane, not a fabricated Team ID or wrapper bypass. Build Android with its existing package/signing identity and a strictly larger versionCode.
+4. Inspect real outputs: app/executable version, install marker, bootstrap version, helpers, architecture, resource-free contents, APK package/versionCode/targetSdk/current signing digest and merged receivers/permissions. Run `scripts/ci/verify-resource-free-apk.py` and `scripts/ci/package-desktop-update.py --help` as applicable; structural checks are not OS acceptance.
+5. Hash and size the final signed/packaged outputs, not pre-signing files. Prepare reviewable platform descriptors and exact new-version resource mappings. Do not publish until actual acceptance below succeeds and publication is authorized.
+
+## Source checks
 
 ```sh
 source Documentation/tools/activate-dotnet-test-toolchain.sh
 bash Tests/ClientUpdate/run-artifact-download-contract.sh
+bash Tests/ClientUpdate/run-network-recovery-contract.sh
 bash Tests/ClientUpdate/run-package-ui-contract.sh
+bash Tests/DesktopUpdater/run-desktop-updater-contract.sh
 bash Tests/Mobile/run-android-package-contract.sh
+bash Tests/Mobile/run-client-update-contract.sh
+bash Tests/Mobile/run-update-recovery-contract.sh
+bash Tests/Mobile/run-range-resource-contract.sh
+bash Tests/Mobile/run-remote-resource-contract.sh
 python3 -m unittest discover -s Tests/ClientBuild -p 'test_*.py' -v
 ```
 
-An official SDK `android.jar` can be supplied with `ANDROID_JAR=...` for Java API compilation. Pure-source contracts and API compilation do not prove Unity Gradle import, IL2CPP/JNI integration or Android runtime behavior. Before release, perform these separately on an authorized disposable device/test profile:
+The UI tests use synthetic bytes, Unity/JNI stubs and a managed host; native Java contracts use stubs unless `ANDROID_JAR` is supplied. These are not a Unity build, full-game update, real OS trust test, or device acceptance.
 
-1. Build/import with the fixed Unity toolchain, inspect actual APK package/versionCode/signature/manifest, then confirm source-owned startup renders with no downloaded resources.
-2. For in-app upgrade testing, use two authorized test builds with the same package and signing certificate and strictly increasing product version and version code. `1.0.0/code2` cannot test upgrading to itself. Do not publish test fixtures as production metadata.
-3. Download a valid newer fixture; pause/resume; disconnect/retry; change dispatch identity; restart mid-download; corrupt the partial/completed file; use wrong length/hash; exhaust available storage. No invalid package may reach platform handoff. Speed must stop during hashing and when paused.
-4. Deny the install-source permission, return without granting it, grant it deliberately, and confirm that returning never installs automatically. Cancel preparation, session staging, and the system confirmation. Existing app/resources must remain usable; a required upgrade must remain blocked.
-5. Reject same/lower version code, mismatched dispatch version name, different package name and wrong signing key. Confirm no install confirmation is offered for these failures. Exercise malformed APK and device/administrator install restrictions.
-6. Kill/restart around session staging, pending confirmation and result delivery. Missing callbacks must not become success; interrupted sessions must recover via explicit retry. Only an actual successful system result and matching installed metadata can report completion.
-7. After successful update, manually relaunch and verify the new app version, retained configuration/resources, login compatibility and resource gate. App version changes alone do not change the historical wire/auth marker.
-8. On each supported desktop OS, confirm download/hash/retry, opening only the containing directory, truthful manual-install guidance and no running-file replacement. OS file-manager behavior remains platform acceptance, not a source-test guarantee.
+## Required real-game acceptance (private metadata first)
+
+Use **two real full-game builds**, both containing this patch, with matching install/package/signing identity and strictly increasing product versions (and Android versionCode). Keep higher QA versions private, not public metadata. Also verify the one-time migration from the currently published older updater. Do not substitute a fixture for the game.
+
+- Windows and macOS: launch older patched game, leave it alone/unfocused; observe automatic download/hash/prepare, one commit/exit, replacement, automatic reopen and **new version at the real login screen**. Preserve existing settings/resources and compatible login. Test both mandatory and optional descriptors, including no old-version resource mapping.
+- macOS: existing empty-Team ad-hoc lane separately from nonempty strict Team lane. Record actual `codesign`, identifier/version, installed marker and updater result. Windows: preserve Authenticode policy/MOTW, test actual install permissions/OS prompts. System-only authorization is an explicit observed exception, not success by simulation.
+- Interrupt download/network, regain connectivity within the bounded retry window, pause/resume explicitly, background/resume Android, restart mid-download; verify revalidated resume. After budget exhaustion, keep truthful recovery UI without a loop.
+- Corrupt length/hash, change artifact identity, use wrong identifier/version/signers, remove helper, exhaust storage and deny write access: never install/quit on failed verification. Retry is manual after terminal failure.
+- Kill before/after native commit; simulate helper rollback or failed relaunch, start old version again: one-time durable fence must prevent reinstall loops and data loss. Verify recovery from retained old application.
+- Android API 25/30 and API 31+ eligible/ineligible self-update cases: permission already granted, missing permission grant/deny/Back; pending OS confirmation accept/cancel; same/lower code/wrong signer refusal; process death after session commit; repeated callbacks/broadcasts; OS-blocked background launch. Verify actual new APK and login, not merely callback success. Document every OS-only action still needed on each tested device.
+- Confirm no automatic credential submission and no unrelated feature merge. Only then propose publication with exact commit, final artifact hashes/sizes and observed platform limitations.

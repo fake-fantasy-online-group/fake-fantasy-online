@@ -27,7 +27,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** A single, user-initiated, fail-closed self-update. No Unity or downloaded-code dependency. */
+/** A single, fail-closed self-update; Android retains all permission and confirmation decisions. No Unity or downloaded-code dependency. */
 public final class ClientPackageInstaller {
     private static final Object LOCK = new Object();
     private static final ExecutorService WORKER = Executors.newSingleThreadExecutor();
@@ -78,7 +78,7 @@ public final class ClientPackageInstaller {
             boolean installed = isExpectedInstalled();
             synchronized (LOCK) {
                 if (current != generation || observedOutcome != outcomeEpoch || !"AwaitingResult".equals(state)) return;
-                if (installed) finish("Succeeded", "已核实新版本安装成功，请重新启动客户端。");
+                if (installed) finish("Succeeded", "已核实新版本安装成功，继续启动游戏。");
                 else set("Interrupted", "上次安装已中断或结果尚未确认。请取消本次交接后重新校验安装包；不会自动安装。", -1);
             }
         });
@@ -128,8 +128,8 @@ public final class ClientPackageInstaller {
                 prepared = copy; copy = null;
                 code = versionCode(candidate); signers = PackagePolicy.signerIdentity(currentSigners(candidate));
                 set(permissionGranted() ? "Ready" : "PermissionRequired", permissionGranted()
-                        ? "安装包和当前签名已核实。点击继续以交给系统安装。"
-                        : "需要您在系统设置中允许此来源安装应用。返回后仍需再次点击安装。", 1);
+                        ? "安装包和当前签名已核实，正在交给系统安装。"
+                        : "需要您在系统设置中允许此来源安装应用。授权返回后自动继续。", 1);
             }
         } catch (Exception error) { fail(current, error); }
         finally { if (copy != null) copy.delete(); }
@@ -139,7 +139,7 @@ public final class ClientPackageInstaller {
         synchronized (LOCK) {
             initialize(activity);
             if (!("Ready".equals(state) || "PermissionRequired".equals(state)) || prepared == null) return;
-            if (!permissionGranted()) { set("PermissionRequired", "请先点击按钮打开系统设置，由您决定是否允许此来源安装应用。", 1); return; }
+            if (!permissionGranted()) { set("PermissionRequired", "需要系统安装来源授权；是否允许由您决定。", 1); return; }
             final long current = generation;
             final File source = prepared;
             set("Staging", "正在校验并写入系统安装会话…", 0);
@@ -157,7 +157,9 @@ public final class ClientPackageInstaller {
             PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             params.setAppPackageName(app.getPackageName());
             params.setSize(bytes);
-            if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+            // Request the documented ordinary self-update lane. Android decides eligibility
+            // (target SDK, ownership and permission) and may still require user action.
+            if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
             if (Build.VERSION.SDK_INT >= 33) params.setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE);
             created = installer.createSession(params);
             synchronized (LOCK) {
@@ -203,7 +205,7 @@ public final class ClientPackageInstaller {
         synchronized (LOCK) {
             initialize(activity);
             if ("PermissionRequired".equals(state) && prepared != null && permissionGranted())
-                set("Ready", "系统安装权限已开启。请再次点击安装以继续。", 1);
+                set("Ready", "系统安装权限已开启，将自动继续。", 1);
             else if ("Ready".equals(state) && !permissionGranted())
                 set("PermissionRequired", "系统安装权限未开启，请由您在设置中决定是否允许。", 1);
             return new String[] { state, message, Float.toString(progress) };
@@ -223,7 +225,7 @@ public final class ClientPackageInstaller {
                                 ? new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + app.getPackageName()))
                                 : new Intent(Settings.ACTION_SECURITY_SETTINGS);
                         activity.startActivity(intent);
-                        message = "已打开系统设置。是否授权由您决定；返回后再次点击安装。";
+                        message = "已打开系统设置。是否授权由您决定；授权返回后自动继续。";
                     } catch (Exception error) { message = "无法打开系统设置，请手动进入应用的安装未知应用权限页。"; }
                 }
             });
@@ -276,7 +278,7 @@ public final class ClientPackageInstaller {
             if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT);
                 if (confirmation == null) { finish("Failed", "系统未提供安装确认界面，请重新校验后重试。"); return; }
-                set("AwaitingConfirmation", "系统安装确认已就绪。点击按钮后由您确认安装。", -1);
+                set("AwaitingConfirmation", "需要 Android 系统安装确认，正在打开系统界面。", -1);
             } else if (status == PackageInstaller.STATUS_SUCCESS) {
                 if (!app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("successObserved", true).commit()) {
                     finish("Failed", "无法保存系统安装结果，请重新启动并检查实际版本。"); return;
@@ -287,7 +289,7 @@ public final class ClientPackageInstaller {
                     boolean installed = isExpectedInstalled();
                     synchronized (LOCK) {
                         if (current != generation || observedOutcome != outcomeEpoch) return;
-                        if (installed) finish("Succeeded", "已核实新版本安装成功，请重新启动客户端。");
+                        if (installed) { relaunchOnce(); finish("Succeeded", "新版本已安装，已请求打开游戏；若系统阻止，请从桌面打开。"); }
                         else finish("Failed", "系统报告安装完成，但无法核实目标版本。请重新启动客户端检查，不要视为安装成功。");
                     }
                 });
@@ -302,6 +304,39 @@ public final class ClientPackageInstaller {
                         : status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ? "APK 与设备不兼容" : "系统无法完成安装";
                 finish("Failed", reason + "（状态 " + status + "）。未确认安装成功，请检查系统提示后重试。");
             }
+        }
+    }
+
+    /** Called only by the non-exported receiver for Android's protected replacement broadcast. */
+    static void replaced(Context context, Intent intent) {
+        if (intent == null || !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) return;
+        synchronized (LOCK) {
+            initialize(context);
+            if (sessionId < 0 || token == null || token.isEmpty()) return;
+            if ("Failed".equals(state) || "Cancelled".equals(state)) return;
+            // The protected broadcast is independent evidence of replacement, not a guessed
+            // success from a missing session. Verify the recorded exact identity before launch.
+            if (!isExpectedInstalled()) return;
+            relaunchOnce();
+            finish("Succeeded", "已核实系统替换为目标版本；已请求打开游戏。");
+        }
+    }
+
+    private static void relaunchOnce() {
+        // Separate from the session record so success cleanup/duplicate broadcasts cannot
+        // relaunch again. Persist BEFORE attempting; never retry background launches in a loop.
+        SharedPreferences launches = app.getSharedPreferences(PREFS + ".launch", Context.MODE_PRIVATE);
+        if (token == null || token.isEmpty() || token.equals(launches.getString("token", ""))) return;
+        if (!launches.edit().putString("token", token).commit()) return;
+        try {
+            Intent launch = app.getPackageManager().getLaunchIntentForPackage(app.getPackageName());
+            if (launch == null) return;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            app.startActivity(launch);
+        } catch (Exception error) {
+            // Ordinary apps cannot guarantee background launches. No overlay, privileged
+            // permission, alarm or accessibility workaround: the launcher remains recovery.
+            Log.w("FFO.PackageInstaller", "Updated game launch blocked; open game from launcher", error);
         }
     }
 
@@ -344,7 +379,7 @@ public final class ClientPackageInstaller {
         DevicePolicyManager policy = (DevicePolicyManager) app.getSystemService(Context.DEVICE_POLICY_SERVICE);
         if (policy == null || policy.isDeviceOwnerApp(app.getPackageName()) || policy.isProfileOwnerApp(app.getPackageName()) ||
                 app.getPackageManager().checkPermission(Manifest.permission.INSTALL_PACKAGES, app.getPackageName()) == PackageManager.PERMISSION_GRANTED)
-            throw new IOException("当前管理或系统权限无法保证逐次系统安装确认，已拒绝自动交接。");
+            throw new IOException("此更新路径仅支持普通应用权限，不使用管理或系统权限安装。");
     }
 
     private static File ownedFile(String path) throws IOException {

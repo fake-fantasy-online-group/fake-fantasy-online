@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <application>
         <!-- Only an explicit, session-scoped PendingIntent can receive platform results. -->
         <receiver android:name="org.fakefantasyonline.updates.InstallStatusReceiver"
                   android:exported="false" />
+        <!-- Protected OS broadcast; never accepts a caller-supplied package or launch target. -->
+        <receiver android:name="org.fakefantasyonline.updates.PackageReplacedReceiver"
+                  android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
     </application>
 </manifest>

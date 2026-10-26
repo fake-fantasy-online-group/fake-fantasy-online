@@ -146,9 +146,11 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
                         }
                         output.Position = initialBytes;
                     }
-                    long received = CopyBoundedFrom(input, output, maximumBytes, initialBytes, cancellation, progress, hash);
-                    if (exact && (received != maximumBytes || output.Length != maximumBytes))
-                        throw new InvalidDataException("Resource response ended before its declared size.");
+                    long received = CopyBoundedFrom(input, output, maximumBytes, initialBytes, cancellation, progress, hash, networkInput: true);
+                    if (exact && received != maximumBytes)
+                        throw new WebException("Resource response ended before its declared size.", WebExceptionStatus.ReceiveFailure);
+                    if (exact && output.Length != maximumBytes)
+                        throw new InvalidDataException("Resource output length changed during transfer.");
                     output.Flush(true);
                     if (hash != null)
                     {
@@ -221,7 +223,7 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
     }
 
     private static long CopyBoundedFrom(Stream input, Stream output, long maximumBytes, long initialBytes,
-        CancellationToken cancellation, Action<long> progress, HashAlgorithm hash = null)
+        CancellationToken cancellation, Action<long> progress, HashAlgorithm hash = null, bool networkInput = false)
     {
         var buffer = new byte[65536];
         long received = initialBytes;
@@ -229,7 +231,15 @@ public sealed class MobileResourceHttpTransport : IMobileResourceVerifiedTranspo
         while (true)
         {
             cancellation.ThrowIfCancellationRequested();
-            int count = input.Read(buffer, 0, buffer.Length);
+            int count;
+            try { count = input.Read(buffer, 0, buffer.Length); }
+            catch (IOException error) when (networkInput)
+            {
+                // Only response-stream reads are retryable network failures. Local output
+                // writes/flushes, prefix reads and integrity failures keep their original type.
+                cancellation.ThrowIfCancellationRequested();
+                throw new WebException("Resource response was interrupted.", error, WebExceptionStatus.ReceiveFailure, null);
+            }
             cancellation.ThrowIfCancellationRequested();
             if (count == 0) break;
             if (count > maximumBytes - received)

@@ -32,6 +32,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
     private string remoteStatus, remoteDetail;
     private long remoteDone, remoteTotal;
     private bool resourceTransferProgress;
+    private bool mobilePaused, resumeAfterPause, skipOptionalClientUpdate;
     public bool ResourceFree { get { return resourceFree; } }
     public string DispatchUrl { get; private set; }
 
@@ -213,7 +214,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         while (true)
         {
             awaitingChoice = true;
-            while (!downloadRequested && !repairRequested && !enterRequested && !bundledRequested && !clientPackageRequested && !clientPackageHandoffRequested) yield return null;
+            while (mobilePaused || (!downloadRequested && !repairRequested && !enterRequested && !bundledRequested && !clientPackageRequested && !clientPackageHandoffRequested)) yield return null;
             awaitingChoice = false;
             if (bundledRequested)
             {
@@ -258,9 +259,9 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             CancellationToken cancellation = remoteCancellation.Token;
             string temporaryDispatch = Path.Combine(UnityEngine.Application.temporaryCachePath,
                 "dispatch-" + Guid.NewGuid().ToString("N") + ".part");
-            Task<ClientUpdatePlan> dispatchTask = Task.Run(() => ReadDispatch(selectedDispatch, config.appVersion,
-                allowHttp, transport, cancellation, temporaryDispatch));
-            while (!dispatchTask.IsCompleted) yield return null;
+            Task<ClientUpdatePlan> dispatchTask = Task.Run(() => ClientUpdateAutomation.WithNetworkRetry(() => ReadDispatch(selectedDispatch, config.appVersion,
+                allowHttp, transport, cancellation, temporaryDispatch), cancellation, ReportNetworkRetry));
+            while (!dispatchTask.IsCompleted) { ReadRemoteProgress(); yield return null; }
             Exception failure = null;
             ClientUpdatePlan plan = null;
             try { plan = dispatchTask.GetAwaiter().GetResult(); cancellation.ThrowIfCancellationRequested(); }
@@ -271,17 +272,16 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
                 // Persist migration/embedded defaults only after the complete dispatch is validated.
                 try { ClientUpdateAddressStore.Save(addressDirectory, selectedDispatch, allowHttp); }
                 catch (Exception exception) { failure = exception; }
-                if (plan.Required)
-                    Phase("需要更新客户端", "当前 v" + config.appVersion + "，最低要求 v" + plan.Artifact.MinVersion +
-                        "。请下载并校验安装包，再按提示安装和重新启动。", 0);
+                if (plan.Available && (!skipOptionalClientUpdate || plan.Required))
+                    Phase("正在更新客户端", "发现 v" + plan.Artifact.Version + "，将自动下载、校验并安装。", 0);
                 else if (failure == null && !plan.HasCompatibleResources)
                     failure = new InvalidDataException("No compatible resource manifest for " + PlatformKey() + " client v" + config.appVersion + ". Download a compatible client package or correct the dispatch mapping.");
                 else if (failure == null)
                 {
                     lock (remoteProgressLock) { resourceTransferProgress = true; downloadRate.Reset(); }
-                    Task<string> operation = Task.Run(() => installer.Install(plan.ResourceManifestUrl, cancellation,
+                    Task<string> operation = Task.Run(() => ClientUpdateAutomation.WithNetworkRetry(() => installer.Install(plan.ResourceManifestUrl, cancellation,
                         SetRemoteProgress, plan.ResourceManifestSizeBytes, plan.ResourceManifestSha256, repair,
-                        SetResourceNetworkProgress, plan.ResourceArchive));
+                        SetResourceNetworkProgress, plan.ResourceArchive), cancellation, ReportNetworkRetry));
                     while (!operation.IsCompleted) { ReadRemoteProgress(); yield return null; }
                     ReadRemoteProgress();
                     lock (remoteProgressLock) resourceTransferProgress = false;
@@ -291,14 +291,18 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             }
             if (cancellation.IsCancellationRequested) failure = new OperationCanceledException("操作已暂停，可重试继续。");
             remoteCancellation.Dispose(); remoteCancellation = null;
-            if (failure != null) { RemoteFailure(failure); continue; }
+            if (failure != null) { RemoteFailure(failure); ResumeInterruptedTransfer(); continue; }
             verifiedDispatchUrl = selectedDispatch;
-            if (plan.Required) continue;
+            if (plan.Available && (!skipOptionalClientUpdate || plan.Required))
+            {
+                QueueAutomaticClientPackage(config.appVersion);
+                continue;
+            }
             ready = true;
             Phase("准备就绪", plan.Available ? "资源已验证。另有客户端 v" + plan.Artifact.Version + " 可下载，当前版本仍可进入。" :
                 "资源已验证并安全保存，可以进入游戏。", 0);
             // Reuse the same verified entry guard. This only opens the title/login page; it never submits credentials.
-            if (!repair && !configurationOpen && !plan.Available) enterRequested = true;
+            if (!configurationOpen) enterRequested = true;
         }
     }
 
@@ -501,7 +505,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             string metrics = terminalFailure ? "已有资源已保留 · 详细原因见日志" : remoteCancellation != null ? "正在处理，请稍候…" :
                 clientPackageMode && !string.IsNullOrEmpty(clientPackageNotice) ? clientPackageNotice :
                 ready ? "资源已就绪，旅程即将开始" : failed ? "已有资源会保留，可重试或修改配置" :
-                updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 请按更新步骤安装并重启" :
+                updatePlan != null && updatePlan.Required ? "最低客户端 v" + updatePlan.Artifact.MinVersion + " · 正在自动更新" :
                 "检查版本和资源，准备进入游戏";
             if (measurable)
             {
@@ -520,7 +524,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             {
                 if (terminalFailure) UnityEngine.Application.Quit();
                 else if (remoteCancellation != null)
-                { remoteCancellation.Cancel(); downloadBytesPerSecond = null; lock (remoteProgressLock) downloadRate.Reset(); }
+                { resumeAfterPause = false; remoteCancellation.Cancel(); downloadBytesPerSecond = null; lock (remoteProgressLock) downloadRate.Reset(); }
                 else if (requiresClient || clientPackageMode) RequestClientPackageAction();
                 else if (ready) enterRequested = true;
                 else downloadRequested = true;
@@ -575,6 +579,7 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
             dispatchUrl = selected;
             configurationError = ""; configurationRequired = configurationOpen = false;
             ClearClientPackageSelection();
+            skipOptionalClientUpdate = resumeAfterPause = false;
             ready = failed = false; verifiedRoot = null; updatePlan = null;
             downloadRequested = true;
             downloadBytesPerSecond = null;
@@ -627,12 +632,28 @@ public sealed partial class MobileResourceInstaller : MonoBehaviour
         GUI.color = Color.white;
     }
 
+    private void ReportNetworkRetry(int retry)
+    {
+        SetRemoteProgress("网络暂时中断，自动重试 " + retry + "/2", "已下载内容会保留并校验后续传。", 0, 0);
+    }
+
+    private void ResumeInterruptedTransfer()
+    {
+        if (!resumeAfterPause || mobilePaused || remoteCancellation != null) return;
+        resumeAfterPause = false;
+        failed = false;
+        if (clientPackageMode) clientPackageRequested = true;
+        else downloadRequested = true;
+    }
+
     private void OnApplicationPause(bool paused)
     {
-        // Only mobile backgrounding pauses network/disk transfer. Desktop focus loss
-        // must not cancel an update. Do not cancel Android installer
-        // sessions here: the required system permission/confirmation screens also pause Unity.
-        if (!UnityEngine.Application.isMobilePlatform || !paused || remoteCancellation == null) return;
+        if (!UnityEngine.Application.isMobilePlatform) return;
+        mobilePaused = paused;
+        if (!paused) { ResumeInterruptedTransfer(); return; }
+        // Native permission and installer activities must not cancel an OS session.
+        if (remoteCancellation == null || remoteCancellation.IsCancellationRequested) return;
+        resumeAfterPause = true;
         remoteCancellation.Cancel();
         downloadBytesPerSecond = null;
         lock (remoteProgressLock) downloadRate.Reset();

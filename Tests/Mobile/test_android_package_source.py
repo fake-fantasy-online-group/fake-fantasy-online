@@ -51,10 +51,11 @@ class AndroidPackageSourceContract(unittest.TestCase):
     def test_no_provider_or_exported_component(self):
         manifest = ET.parse(PLUGIN / 'src/main/AndroidManifest.xml').getroot()
         android = '{http://schemas.android.com/apk/res/android}'
-        self.assertEqual([x.get(android + 'name') for x in manifest.findall('uses-permission')], ['android.permission.REQUEST_INSTALL_PACKAGES'])
+        self.assertEqual([x.get(android + 'name') for x in manifest.findall('uses-permission')], ['android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION'])
         self.assertFalse(manifest.findall('.//provider'))
         self.assertEqual(manifest.find('.//receiver').get(android + 'exported'), 'false')
-        self.assertFalse(manifest.findall('.//intent-filter'))
+        self.assertTrue(all(x.get(android + 'exported') == 'false' for x in manifest.findall('.//receiver')))
+        self.assertEqual([x.get(android + 'name') for x in manifest.findall('.//intent-filter/action')], ['android.intent.action.MY_PACKAGE_REPLACED'])
     def test_exact_current_signers_and_monotone_version(self):
         self.assertIn('GET_SIGNING_CERTIFICATES', JAVA)
         self.assertIn('GET_SIGNATURES', JAVA)
@@ -76,8 +77,8 @@ class AndroidPackageSourceContract(unittest.TestCase):
         self.assertIn('new Intent(app, InstallStatusReceiver.class)', stage)
         self.assertIn('PendingIntent.FLAG_MUTABLE', stage)
         self.assertNotIn('FLAG_ONE_SHOT', JAVA)
-        self.assertIn('USER_ACTION_REQUIRED', stage)
-        self.assertNotIn('USER_ACTION_NOT_REQUIRED', JAVA)
+        self.assertIn('USER_ACTION_NOT_REQUIRED', stage)
+        self.assertIn('STATUS_PENDING_USER_ACTION', body('receive'))
         self.assertLess(stage.index('record()'), stage.index('session.openWrite'))
         self.assertGreaterEqual(stage.count('record()'), 2)
         self.assertIn('installer.getMySessions()', body('cleanupOrphanedSessions'))
@@ -85,7 +86,7 @@ class AndroidPackageSourceContract(unittest.TestCase):
         self.assertIn('intent.getData()', receive)
         self.assertIn('EXTRA_SESSION_ID', receive)
         self.assertIn('observedOutcome != outcomeEpoch', receive)
-    def test_no_silent_or_background_permission_grant(self):
+    def test_no_privileged_or_background_permission_grant(self):
         self.assertIn('isDeviceOwnerApp', body('requireInteractiveInstaller'))
         self.assertIn('isProfileOwnerApp', body('requireInteractiveInstaller'))
         self.assertIn('Manifest.permission.INSTALL_PACKAGES', body('requireInteractiveInstaller'))
@@ -116,6 +117,14 @@ class AndroidPackageSourceContract(unittest.TestCase):
         self.assertIn('Debug.LogWarning', CS)
         self.assertIn('consumerProguardFiles', (PLUGIN / 'build.gradle').read_text())
         self.assertIn('ClientPackageInstaller { public static *; }', (PLUGIN / 'consumer-rules.pro').read_text())
+    def test_verified_one_shot_relaunch(self):
+        self.assertIn('Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())', body('replaced'))
+        self.assertLess(body('replaced').index('isExpectedInstalled()'), body('replaced').index('relaunchOnce()'))
+        launch = body('relaunchOnce')
+        self.assertLess(launch.index('putString("token", token).commit()'), launch.index('app.startActivity'))
+        self.assertIn('getLaunchIntentForPackage(app.getPackageName())', launch)
+        self.assertNotIn('relaunchOnce()', body('initialize'))
+
     def test_no_newer_java_runtime_helpers(self):
         self.assertNotIn('String.join(', POLICY)
         self.assertNotIn('HexFormat', POLICY)

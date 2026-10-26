@@ -67,8 +67,16 @@ internal static class ClientUpdatePlanContract
             Reject(()=>ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\""+version+"\":"+entry+"}}"),"android","1.0.0",false),"invalid exact version "+version);
         foreach (string bad in new[]{"{}",entry.Replace("\"manifestUrl\":", "\"ManifestUrl\":"),entry.Replace("\"sha256\":", "\"SHA256\":"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123,\"sizeBytes\":123"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":0"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":-1"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123.0"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":1e2"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":null"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":8388609"),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":9223372036854775808"),entry.Replace(",\"sizeBytes\":123", ""),entry.Replace("\"sha256\":\""+new string('B',64)+"\",", ""),entry.Replace(new string('B',64),new string('z',64)),entry.Replace("\"sizeBytes\":123", "\"sizeBytes\":123,\"execute\":true")})
             Reject(()=>ClientUpdatePlan.Parse(MappedPlan("{\"android\":{\"1.0.0\":"+bad+"}}"),"android","1.0.0",false),"invalid mapped entry");
-        foreach (string endpoint in new[]{"http://example.test/a","https://localhost/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
+        foreach (string endpoint in new[]{"http://example.test/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
             Reject(()=>ClientUpdatePlan.Parse(MappedPlan(single.Replace("https://updates.example.test/android/1.0.0/manifest.tsv",endpoint)),"android","1.0.0",true),"unsafe mapped URL");
+        // Canonical loopback is intentionally allowed only for explicit development
+        // builds (Documentation/class-set-aura-visuals.md, private bootstrap policy).
+        foreach (string endpoint in new[] { "https://localhost/a", "http://127.0.0.1/a", "http://[::1]/a" })
+        {
+            string local = MappedPlan(single.Replace("https://updates.example.test/android/1.0.0/manifest.tsv", endpoint));
+            Reject(() => ClientUpdatePlan.Parse(local, "android", "1.0.0", false), "production loopback map");
+            Check(ClientUpdatePlan.Parse(local, "android", "1.0.0", true).HasCompatibleResources, "explicit development loopback map");
+        }
         string lan=MappedPlan(single.Replace("https://updates.example.test/android/1.0.0/manifest.tsv","http://192.168.1.3/a"));
         Reject(()=>ClientUpdatePlan.Parse(lan,"android","1.0.0",false),"mapped LAN HTTP requires opt-in");
         Check(ClientUpdatePlan.Parse(lan,"android","1.0.0",true).HasCompatibleResources,"mapped LAN HTTP opt-in");
@@ -152,8 +160,10 @@ internal static class ClientUpdatePlanContract
             Reject(()=>ReadArchive(archive.Replace("\"format\":\"tar\"","\"format\":\""+format+"\"")),"unsupported archive format "+format);
         foreach (string prefix in new[]{"","Assets/StreamingAssets","assets/StreamingAssets/","/Assets/StreamingAssets/","../","Assets/StreamingAssets/../","Assets/StreamingAssets//","Assets/StreamingAssets/extra/","Assets/StreamingAssets/ "})
             Reject(()=>ReadArchive(archive.Replace("Assets/StreamingAssets/",prefix)),"unsafe or unsupported archive prefix "+prefix);
-        foreach (string endpoint in new[]{"http://example.test/a","https://localhost/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
+        foreach (string endpoint in new[]{"http://example.test/a","https://127.1/a","https://example.test/a?token=x","https://user:pass@example.test/a","https://example.test/a#x","file:///a","https://example.test/"+new string('x',4096)})
             Reject(()=>ReadArchive(Archive(endpoint),http:true),"unsafe archive endpoint");
+        Reject(() => ReadArchive(Archive("https://localhost/a")), "production loopback archive");
+        Check(ReadArchive(Archive("https://localhost/a"), http:true).ResourceArchive != null, "explicit development loopback archive");
         string lan=Archive("http://192.168.1.3/first-install.tar");
         Reject(()=>ReadArchive(lan),"archive LAN HTTP requires explicit development opt-in");
         Check(ReadArchive(lan,http:true).ResourceArchive.Url.StartsWith("http:"),"archive development LAN HTTP opt-in");
@@ -187,8 +197,10 @@ internal static class ClientUpdatePlanContract
         Reject(()=>Read(Plan(extra:",\"resourceManifestSha256\":\""+new string('a',64)+"\"")),"unpaired hash");
         p=Read(Plan(extra:",\"resourceManifestSizeBytes\":100,\"resourceManifestSha256\":\""+new string('a',64)+"\""));
         Check(p.ResourceManifestSizeBytes==100,"paired pins");
-        foreach(string endpoint in new[]{"http://example.test/a","https://localhost./a","https://a.localhost/a","https://127.0.0.1/a","https://example.test:0/a","https://user:pass@example.test/a","https://example.test/a?secret=x","https://example.test/a#frag","file:///tmp/a","https://10.01.1.2/a","https://[fe80::1%25eth0]/a"})
+        foreach(string endpoint in new[]{"http://example.test/a","https://localhost./a","https://a.localhost/a","https://example.test:0/a","https://user:pass@example.test/a","https://example.test/a?secret=x","https://example.test/a#frag","file:///tmp/a","https://10.01.1.2/a","https://[fe80::1%25eth0]/a"})
             Reject(()=>Read(Plan().Replace("https://updates.example.test/mobile-resources.tsv",endpoint),http:true),"unsafe URL");
+        Reject(() => Read(Plan().Replace("https://updates.example.test/mobile-resources.tsv", "https://127.0.0.1/a")), "production loopback legacy resource");
+        Check(Read(Plan().Replace("https://updates.example.test/mobile-resources.tsv", "https://127.0.0.1/a"), http:true).HasCompatibleResources, "explicit development loopback legacy resource");
         p=Read(Plan().Replace("https://updates.example.test/mobile-resources.tsv","http://192.168.1.3/a"),http:true);
         Check(p.ResourceManifestUrl.StartsWith("http:"),"explicit LAN http");
         Reject(()=>Read(Plan().Replace("https://updates.example.test/mobile-resources.tsv","http://192.168.1.3/a")),"production HTTP");

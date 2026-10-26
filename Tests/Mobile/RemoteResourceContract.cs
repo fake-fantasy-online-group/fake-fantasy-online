@@ -86,8 +86,15 @@ internal static class RemoteResourceContract
         config.Validate(true); checks++;
         foreach (string url in new[] { "http://example.com/a", "http://192.168.1.9/a", "https://u:p@example.com/a", "https://example.com/a?token=secret", "https://example.com/a#secret", "file:///etc/passwd", "ftp://example.com/a", "https://127.0.0.1/a", "https://0.0.0.0/a", "https://[::]/a", "https://example.com/a\n", "https://example.com/\ta", "https://example.com\\a" })
             Reject(() => MobileResourceBootstrapConfig.ValidateEndpoint(url, false), "unsafe/non-HTTPS endpoint rejected: " + url);
-        foreach (string url in new[] { "http://example.com/a", "http://8.8.8.8/a", "http://127.0.0.1/a", "http://169.254.169.254/a", "http://172.32.0.1/a" })
+        foreach (string url in new[] { "http://example.com/a", "http://8.8.8.8/a", "http://169.254.169.254/a", "http://172.32.0.1/a" })
             Reject(() => MobileResourceBootstrapConfig.ValidateEndpoint(url, true), "LAN exception is restricted: " + url);
+        // Canonical loopback requires explicit development opt-in; formal builds
+        // retain rejection (see Documentation/class-set-aura-visuals.md).
+        foreach (string url in new[] { "http://127.0.0.1/a", "https://localhost/a", "http://[::1]/a" })
+        {
+            Reject(() => MobileResourceBootstrapConfig.ValidateEndpoint(url, false), "production loopback remains forbidden: " + url);
+            Assert(MobileResourceBootstrapConfig.ValidateEndpoint(url, true).IsLoopback, "explicit development loopback is allowed: " + url);
+        }
         foreach (string url in new[] { "http://10.1.2.3/a", "http://172.16.0.1/a", "http://192.168.1.1/a" })
             Assert(MobileResourceBootstrapConfig.ValidateEndpoint(url, true).Scheme == "http", "explicit private LAN works");
         config.schemaVersion = 9; Reject(() => config.Validate(true), "config schema rejected");
