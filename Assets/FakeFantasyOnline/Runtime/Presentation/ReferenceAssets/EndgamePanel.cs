@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 /// <summary>Shared server binding for independent NPC workbenches and the active-rift HUD.</summary>
-internal enum EndgameModule { Cube, Rift }
+internal enum EndgameModule { Cube, Rift, PowerBook }
 public sealed partial class EndgamePanel : MonoBehaviour
 {
     internal static EndgamePanel Current { get; private set; }
@@ -52,6 +52,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         ClearRiftEntrance();
         ResetRiftTierDropdown();
         ClearCubeInputs();
+        selectedPowerID = ""; powerScroll = Vector2.zero;
         selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null;
         itemScroll = detailScroll = runeScroll = Vector2.zero;
     }
@@ -63,7 +64,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         { ClearRiftWorldVisuals(); if (open || selectedUID.Length > 0) { WinZ.Forget(this); ClearSelection(); } open = false; observedGeneration = -1; return; }
         if (generation != State.Generation)
         {
-            generation = State.Generation; ClearRiftWorldVisuals(); ClearSelection(); WinZ.Forget(this); open = false;
+            generation = State.Generation; observedPowerImprint = ""; ClearRiftWorldVisuals(); ClearSelection(); WinZ.Forget(this); open = false;
             skillBehaviorRefreshRevision = null; skillBehaviorRefreshAttempts = 0; nextSkillBehaviorRefresh = 0;
         }
         RiftEntranceCurrent();
@@ -80,6 +81,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
             }
         }
         ObserveCubeRequest();
+        ObservePowerBookRequest();
         ObserveRiftPhase();
         RecoverPendingRiftRequest(DateTime.UtcNow);
         UpdateRiftWorldVisuals();
@@ -101,6 +103,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
     private void EnsureModuleData()
     {
         if (module == EndgameModule.Cube) LoadCatalog("runes");
+        if (module == EndgameModule.PowerBook && !State.PowerBookLoading && !State.PowerBookCurrent) Send(new EndgameRequest("powerbook.list"));
     }
     private void LoadCatalog(string name)
     {
@@ -119,8 +122,8 @@ public sealed partial class EndgamePanel : MonoBehaviour
         if (client == null || !client.EndgameInWorld) return;
         if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         EnsureStyles();
-        float width = module == EndgameModule.Rift ? RiftWindowWidth : CubeWindowWidth;
-        float height = module == EndgameModule.Rift ? RiftWindowHeight : CubeWindowHeight;
+        float width = module == EndgameModule.PowerBook ? W : module == EndgameModule.Rift ? RiftWindowWidth : CubeWindowWidth;
+        float height = module == EndgameModule.PowerBook ? H : module == EndgameModule.Rift ? RiftWindowHeight : CubeWindowHeight;
         float scale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / width, (Screen.height - 20f) / height)));
         GUI.depth = -15;
         if (!State.Negotiated) return;
@@ -139,6 +142,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
             if (module == EndgameModule.Cube) HandleCubeDrag(window, scale);
             GUI.matrix = Matrix4x4.TRS(new Vector3(window.x, window.y, 0f), Quaternion.identity, new Vector3(scale, scale, 1f));
             if (module == EndgameModule.Cube) DrawCube();
+            else if (module == EndgameModule.PowerBook) DrawPowerBook();
             else
             {
                 DrawRiftWindowArtwork(new Rect(0, 0, width, height));

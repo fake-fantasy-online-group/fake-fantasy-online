@@ -20,6 +20,7 @@ static class MobileFixedActionContract
         foreach (string text in new[] { "生命药水", "超强生命礼包，双击获得药水", "宠物5秒内恢复生命500", "目标瞬间恢复生命500", "瞬间恢复城门和结界石生命值20万点", "装备后5秒内恢复生命500", "5秒内恢复生命上限500", "" })
             Check(!MobilePotionEligibility.Allows(HP, text), "name or unrelated targets cannot auto-select recovery");
 
+        TestNativeInstantPotions();
         NetClient.I = new NetClient(); PlayerController.I = new PlayerController();
         CharData.prefs.Clear(); CharData.PrefSuffix = "character-a";
         Array.Clear(GameHud.hotSkill, 0, 30); Array.Clear(GameHud.hotKind, 0, 30);
@@ -71,6 +72,84 @@ static class MobileFixedActionContract
         MobileClientPresentation.GameplayInputBlocked = true; GameHud.UseMobileFixedAction(MobileFixedAction.Sit);
         Check(PlayerController.I.SittingForIndependentRuntime, "editing cannot toggle sit"); MobileClientPresentation.GameplayInputBlocked = false;
         Console.WriteLine("PASS fixed mobile mount/potion actual binding and dispatch: " + checks + " checks");
+    }
+    static void TestNativeInstantPotions()
+    {
+        // Native ov_item + ov_item_entry + ov_desc at server eeb4956. Expected resources
+        // come from self_use/op_type=1, attr33/35, mode0/1, prob100, value>0, NOT names.
+        // Include the actual weight-prefixed wire description. These IDs are fixtures only.
+        var fixtures = new (int id, string name, string description, bool hp, bool mp)[]
+        {
+            (3009, "馒头", "重量 1\n新出炉的馒头，生命恢复150", true, false),
+            (3032, "秘灵药", "重量 1\n神秘的药瓶，可以瞬间补充生命300点", true, false),
+            (3034, "仙灵药", "重量 1\n神秘的药瓶，可以瞬间补充生命700点", true, false),
+            (3035, "仙魂药", "重量 1\n神秘的药瓶，可以瞬间补充法力700点", false, true),
+            (3036, "神灵药", "重量 1\n神秘的药瓶，可以瞬间补充生命500点", true, false),
+            (3037, "神魂药", "重量 1\n神秘的药瓶，可以瞬间补充法力500点", false, true),
+            (3038, "秘魂药", "重量 1\n神秘的药瓶，可以瞬间补充法力300点", false, true),
+            (3040, "魔法饺子", "重量 1\n带有魔法的饺子，可以瞬间补充生命700点。", true, false),
+            (3042, "春饼", "重量 1\n美味的春饼，可以瞬间补充生命650点。", true, false),
+            (3045, "开心粽子", "重量 1\n端午节粽子，开心果特制，可以瞬间补充生命500点。", true, false),
+            (3074, "九转灵药", "重量 2\n瞬间加血30%；冷却时间为5秒", true, false),
+            (3075, "天心灵药", "重量 2\n瞬间加血50%；冷却时间为5秒", true, false),
+            (3121, "天山雪莲", "重量 2\n瞬间恢复50％生命和50％法力，使用间隔5秒", true, true),
+            (10352, "七彩糖果黄", "使用后立即回复人物血量30%，无冷却时间。", true, false),
+            (10353, "七彩糖果绿", "使用后立即回复人物法力30%，无冷却时间。", false, true),
+            (10437, "哈大娘水饺", "新年娃娃给哈大娘的水饺上添加了魔法，让你食用后体力和魔法瞬间回复30%！", true, true),
+            (10681, "七彩糖果*黄", "使用后立即回复人物血量30%，无冷却时间。", true, false),
+            (10682, "七彩糖果*绿", "使用后立即回复人物法力30%，无冷却时间。", false, true),
+            (11739, "新年糖果", "重量 1\n美味的新年糖果，瞬间补充3000点生命哦", true, false),
+            (12444, "耶诞烧鹅", "圣诞美味的烧鹅。瞬间回血回法30%，无冷却时间。", true, true),
+            (14173, "庆典蛋糕", "幻想生日送出的庆典蛋糕。服用后可以立即恢复30%的生命和法力，无CD。", true, true),
+            (25522, "天琼", "重量 1\n瞬间恢复生命4000点，没有冷却时间", true, false),
+            (25523, "天酿", "重量 1\n瞬间恢复法力4000点，没有冷却时间", false, true),
+        };
+        NetClient.I = new NetClient(); PlayerController.I = new PlayerController();
+        Array.Clear(GameHud.hotSkill, 0, 30); Array.Clear(GameHud.hotKind, 0, 30);
+        GameHud.fixedCooldown = 0;
+        foreach (var fixture in fixtures)
+        {
+            CharData.prefs.Clear(); CharData.PrefSuffix = "native-potion";
+            InventoryDlg.current = new InventoryDlg.Item { id = fixture.id, name = fixture.name,
+                desc = fixture.description, bagIdx = 0, count = 4 };
+            foreach (var action in new[] { HP, MP })
+            {
+                bool expected = action == HP ? fixture.hp : fixture.mp;
+                Check(GameHud.CanBindMobilePotion(action, 0, InventoryDlg.current) == expected,
+                    fixture.name + " native resource eligibility " + action);
+                if (!expected) continue;
+                int uses = NetClient.I.itemUses, writes = NetClient.I.writes;
+                var bag = new InventoryDlg(); bag.Select();
+                GUI.click = action == HP ? "设为红药" : "设为蓝药"; bag.Draw();
+                Check(GameHud.MobileFixedState(action).ItemId == fixture.id && GameHud.MobileFixedState(action).Available,
+                    fixture.name + " real menu assignment and availability " + action);
+                Check(NetClient.I.itemUses == uses && NetClient.I.writes == writes, "assignment never consumes or rewrites shortcuts");
+                // A recreated panel and character switch must read the persisted ID, not selection state.
+                CharData.PrefSuffix = "other-character";
+                Check(GameHud.MobileFixedState(action).ItemId == 0, "binding is character-local");
+                CharData.PrefSuffix = "native-potion";
+                Check(GameHud.MobileFixedState(action).ItemId == fixture.id, "binding survives selection/character reload");
+                GameHud.UseMobileFixedAction(action);
+                Check(NetClient.I.itemUses == uses + 1 && NetClient.I.lastItem == fixture.id &&
+                    NetClient.I.lastTab == 0 && NetClient.I.lastSlot == 0, "one existing use request per tap, even for dual restore");
+            }
+            if (fixture.hp && fixture.mp)
+            {
+                int uses = NetClient.I.itemUses;
+                GameHud.fixedCooldown = .5f;
+                GameHud.UseMobileFixedAction(HP); GameHud.UseMobileFixedAction(MP);
+                Check(NetClient.I.itemUses == uses, "both bindings honor the same existing item cooldown");
+                GameHud.fixedCooldown = 0;
+            }
+        }
+        foreach (string text in new[] {
+            "给守护灵瞬间增加200万生命值", "随机获得瞬间补充生命300点的药品", "宠物瞬间加血30%",
+            "瞬间补充城门生命500", "瞬间补充生命上限500", "瞬间补充生命0点", "瞬间回血回法0%",
+            "复活后立即恢复30%的生命和法力", "生命药水礼包", "每秒恢复3%的生命值，持续120秒。",
+            "每秒恢复2%法力值，持续时间90秒", "使用此卡，15分钟内每秒恢复生命值15点。" })
+            Check(!MobilePotionEligibility.Allows(HP, text) && !MobilePotionEligibility.Allows(MP, text),
+                "unrelated targets, rewards, zero amounts and long buffs remain ineligible");
+        GameHud.fixedCooldownStarts = 0;
     }
     static void TestManualMountBindings()
     {

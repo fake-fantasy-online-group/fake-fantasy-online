@@ -75,7 +75,7 @@ public sealed partial class EndgameClientState
         helloRequestedAt = helloRetryAt = default(DateTime);
         DiscardChunks(); publishedSnapshotID = null; retiredSnapshots.Clear(); retiredSnapshotOrder.Clear();
         inventorySnapshotRequired = nativeSnapshotRefreshPending = false; inventorySnapshotRequiredAt = default(DateTime);
-        ResetCatalogs(); Generation++; Version++;
+        ResetPowerBook(); ResetCatalogs(); Generation++; Version++;
     }
     public bool Begin(EndgameRequest request)
     {
@@ -87,6 +87,8 @@ public sealed partial class EndgameClientState
         // send. Manual refresh remains available; host ticks never retry forever.
         if (request.Op == "snapshot") nativeSnapshotRefreshPending = false;
         if (request.Op.StartsWith("skill.", StringComparison.Ordinal) && !GrowthV5) return false;
+        if (request.Op.StartsWith("powerbook.", StringComparison.Ordinal) && !PowerBookAvailable) return false;
+        if (request.Op == "powerbook.list" && !BeginPowerBookRead(request)) return false;
         if (request.Mutates)
         {
             if (Pending) return false;
@@ -117,6 +119,7 @@ public sealed partial class EndgameClientState
     public void Tick(DateTime now)
     {
         TickRiftPages(now);
+        TickPowerBook(now);
         // A read-only hello can disappear during a map transfer or a dropped
         // send. Release it after a bounded wait, then use the same cooldown as
         // transient server errors. Never retry each host frame indefinitely.
@@ -154,6 +157,7 @@ public sealed partial class EndgameClientState
     private void ReleaseReadRequest(string requestID)
     {
         if (requestID.Length == 0) return;
+        ReleasePowerBookRead(requestID);
         if (requestID == QuoteRequestID) { QuotePending = false; QuoteRequestID = ""; }
         string name = CatalogForRequest(requestID);
         if (name != null) catalogRequests.Remove(name);
@@ -217,6 +221,8 @@ public sealed partial class EndgameClientState
             if (accepted || !Negotiated)
             {
                 bool previousVariants = SkillVariantsV1;
+                PowerBookAvailable = accepted && response.Result.TryGetValue("powerBook", out string powerBook) && powerBook == "1";
+                if (!PowerBookAvailable) ResetPowerBookValues();
                 CubeInputsV1 = accepted && cubeInputs;
                 CubeItemID = 0; CubeNPC = CubeLore = "";
                 if (CubeInputsV1 && response.Result.TryGetValue("cubeItemId", out string cubeID) &&
@@ -248,6 +254,7 @@ public sealed partial class EndgameClientState
         }
         if (!Negotiated) return false;
         if (response.Kind == "capabilities") return ApplyRiftCapabilities(response);
+        if (response.Kind == "powerbook.list") return ApplyPowerBook(response);
         if (PendingRequest != null && response.RequestID == PendingRequest.RequestID && !PendingRequest.MatchesResponse(response))
         { NoteInvalidResponse("服务器回执类型与原请求不符，请查询原请求。"); return false; }
         if (QuoteRequestID.Length > 0 && response.RequestID == QuoteRequestID && response.Kind != "cube.quote")
@@ -279,6 +286,7 @@ public sealed partial class EndgameClientState
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
+            if (response.Kind == "powerbook.imprint" && response.Error == "stale_revision") PowerBookRevision = "";
             RememberResponse(response); Version++; return false;
         }
         if (response.Kind == "skill.ranks" && !ApplySkillRanks(response)) return false;

@@ -21,12 +21,12 @@ public sealed class EndgameRequest
     public string Json { get; }
     public string Catalog { get; }
     public string Cursor { get; }
-    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "cube.recover" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade";
+    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "cube.recover" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade" || Op == "powerbook.imprint";
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
-        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0, int npcEntityID = 0, IReadOnlyList<EndgameCubeInput> cubeInputs = null)
+        IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0, int npcEntityID = 0, IReadOnlyList<EndgameCubeInput> cubeInputs = null, string powerID = "")
     {
-        if (Array.IndexOf(new[] { "skill.ranks", "skill.upgrade", "hello", "capabilities", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "cube.recover", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
+        if (Array.IndexOf(new[] { "powerbook.list", "powerbook.imprint", "skill.ranks", "skill.upgrade", "hello", "capabilities", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "cube.recover", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
         if (RequestID.Length < 16 || RequestID.Length > 64) throw new ArgumentException("Invalid request ID.");
         foreach (char c in RequestID) if (c < 33 || c > 126) throw new ArgumentException("Invalid request ID.");
@@ -48,6 +48,13 @@ public sealed class EndgameRequest
             if (Array.IndexOf(new[] { "uniques", "runes", "formations", "recipes" }, catalog) < 0) throw new ArgumentException("Invalid catalog.");
             data.Add("catalog", catalog); Add(data, "cursor", Cursor);
         }
+        if (op == "powerbook.list") { EndgameData.Identity(Cursor, "cursor"); Add(data, "cursor", Cursor); }
+        if (op == "powerbook.imprint")
+        {
+            if (string.IsNullOrWhiteSpace(powerID) || string.IsNullOrEmpty(revision) || string.IsNullOrEmpty(targetUID) || targetUID == "0") throw new ArgumentException("Imprinting requires a recorded power, target and revision.");
+            Add(data, "powerId", powerID);
+        }
+        else if (powerID.Length != 0) throw new ArgumentException("powerId is only valid for powerbook.imprint.");
         if (op.StartsWith("socket.", StringComparison.Ordinal)) data.Add("socket", socket);
         if (recipeID != 0) data.Add("recipeId", recipeID);
         if (tier != 0) data.Add("tier", tier);
@@ -90,6 +97,7 @@ public sealed class EndgameRequest
     {
         if (response == null || response.RequestID != RequestID) return false;
         if (!response.OK) return response.Kind == Op;
+        if (Op == "powerbook.imprint") return response.Kind == "powerbook.result";
         if (Op == "cube.execute") return response.Kind == "cube.result";
         if (Op == "catalog") return (response.Kind == "catalog." + Catalog || response.Kind == "catalog") && response.Cursor == Cursor;
         return response.Kind == Op;

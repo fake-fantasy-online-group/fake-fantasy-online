@@ -68,7 +68,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
   public static ClientConfig.Srv[] Servers=new ClientConfig.Srv[0];
   public void BindCloseForIndependentRuntime(Action action) { }
   public void BindInstanceForIndependentRuntime(INetClientInstanceBinding binding, FakeFantasyOnline.Presentation.INetClientInstanceHost host, Action pump) { }
-  public void BindTitleLoginForIndependentRuntime(Action<Action<bool>> connect,Action<string,string> login) { }
+  public void BindTitleLoginForIndependentRuntime(Action<Action<bool>> connect,Action<string,string> login,Action cancel) { }
   public void BindTitleEntryForIndependentRuntime(Action<string> entry) { }
   public void BindTitleEntryPrefixForIndependentRuntime(Action clear,Action caps) { }
   public void BindLastDropReasonReaderForIndependentRuntime(Func<string> read) { }

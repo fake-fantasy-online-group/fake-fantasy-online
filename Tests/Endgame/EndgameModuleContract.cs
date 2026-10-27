@@ -24,7 +24,13 @@ class EndgameModuleContract
     static void Set(object panel,string key,object value) => panel.GetType().GetField(key,BindingFlags.NonPublic|BindingFlags.Instance).SetValue(panel,value);
     static object Call(object panel,string key,params object[] args) => panel.GetType().GetMethod(key,BindingFlags.NonPublic|BindingFlags.Instance).Invoke(panel,args);
     static void Draw(object panel,string click=null) { Event.current = new Event { type = EventType.Repaint }; ArtworkSkin.click=click; ArtworkSkin.enableds.Clear();GUI.labels.Clear(); Call(panel,"OnGUI"); }
-    static void Click(object panel,float x,float y,int button=0) { Event.current = new Event { type = EventType.MouseDown, button=button, mousePosition=new Vector2(x,y) }; Call(panel,"DrawCube"); }
+    static void Click(object panel,float x,float y,int button=0)
+    {
+        Event.current = new Event { type = EventType.MouseDown, button=button, mousePosition=new Vector2(x,y) };
+        ArtworkSkin.click = button == 0 && new Rect(110,432,100,38).Contains(Event.current.mousePosition) ? "转换" :
+            button == 0 && new Rect(239,432,100,38).Contains(Event.current.mousePosition) ? "清空" : null;
+        Call(panel,"DrawCube"); ArtworkSkin.click = null;
+    }
     static void Apply(Client c,string json) => c.Endgame.Apply(EndgameResponse.Parse(json));
     static void Snapshot(Client c,string id) => Apply(c,"{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\""+id+"\",\"chunks\":1,\"revision\":\"1\",\"materials\":[{\"itemId\":1900028201,\"name\":\"星髓\",\"count\":100}]}");
     static IList Slots(object panel) => (IList)Get(panel,"cubeSlots");
@@ -111,9 +117,9 @@ class EndgameModuleContract
         Check(!ArtworkSkin.enableds.ContainsKey("炼化方式")&&!ArtworkSkin.enableds.ContainsKey("选择成品星篆"),"no operation or output recipe selection");
         Call(p,"PutCubeItem","",1900028201,"星髓");Check(Slots(p).Count==1&&c.Endgame.Materials[0].Count==100,"put is a visual reservation only");
         Call(p,"PutCubeItem","",1900028201,"星髓");Check(Slots(p).Count==1,"duplicate input cannot be added");
-        Set(p,"cubeQuantity","101");Draw(p);int sent=c.Sent.Count;Click(p,130,455);Check(!ArtworkSkin.enableds["确认数量"]&&c.Sent.Count==sent,"quantity above bag count cannot confirm or submit");
-        Set(p,"cubeQuantity","30");Draw(p);Click(p,130,455);Check(c.Sent.Count==sent,"unconfirmed quantity cannot match");
-        Draw(p,"确认数量");Click(p,130,455);var quote=c.Sent[c.Sent.Count-1];
+        Call(p,"SetCubeQuantity","101");Draw(p);int sent=c.Sent.Count;Click(p,130,455);Check(!ArtworkSkin.enableds.ContainsKey("确认数量")&&!ArtworkSkin.enableds["转换"]&&c.Sent.Count==sent,"invalid inline quantity blocks conversion without removed confirmation button");
+        Call(p,"SetCubeQuantity","30");Draw(p);Click(p,130,455);var quote=c.Sent[c.Sent.Count-1];
+        Check(c.Sent.Count==sent+1,"valid inline quantity directly requests matching without an extra quantity confirmation");
         Check(quote.Json.Contains("cubeInputs")&&quote.Json.Contains("\"count\":30")&&!quote.Json.Contains("recipeId")&&!quote.Json.Contains("npcEntityId"),"only placed quantities identify matching request");
         Click(p,130,455);Check(ReferenceEquals(c.Sent[c.Sent.Count-1],quote),"repeated match disabled");
         Apply(c,"{\"kind\":\"cube.quote\",\"ok\":false,\"requestId\":\""+quote.RequestID+"\",\"error\":\"no_match\",\"message\":\"没有反应\"}");Draw(p);
@@ -130,15 +136,15 @@ class EndgameModuleContract
         Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);
         Check(SysMsgBox.Visible&&SysMsgBox.text.Contains("服务器结果与概率")&&SysMsgBox.text.Contains("5000"),"full server preview and price in native confirmation");
         SysMsgBox.Finish(false);Check(!c.Endgame.Pending&&Slots(p).Count==1,"cancel confirmation keeps reservations");
-        Click(p,130,455);Check(SysMsgBox.Visible,"same fresh quote can be reviewed again");InventoryDlg.rows.Remove(CubeBagSlot);Call(p,"Update");SysMsgBox.Finish(true);
+        Click(p,130,455);var renewed=c.Sent[c.Sent.Count-1];Check(renewed.Op=="cube.quote"&&renewed.RequestID!=quote.RequestID&&!SysMsgBox.Visible,"cancelled quote requests fresh authority rather than reusing its confirmation");Quote(c,renewed);Draw(p);Check(SysMsgBox.Visible,"new authoritative quote can be reviewed");InventoryDlg.rows.Remove(CubeBagSlot);Call(p,"Update");SysMsgBox.Finish(true);
         Check(!c.Endgame.Pending&&Slots(p).Count==0,"portable item loss rejects captured confirmation");
         GiveCube();OpenCube();Draw(p);Call(p,"PutCubeItem","",1900028201,"星髓");Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);
-        Snapshot(c,"two");Draw(p);SysMsgBox.Finish(true);Check(!c.Endgame.Pending&&Slots(p).Count==0,"new authoritative inventory invalidates pending confirmation");
+        Snapshot(c,"two");Draw(p);SysMsgBox.Finish(true);Check(!c.Endgame.Pending&&Slots(p).Count==1,"new authoritative inventory invalidates pending confirmation but preserves still-owned reservations");
         Call(p,"PutCubeItem","",1900028201,"星髓");Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote,"expired","2000-01-01T00:00:00Z");Draw(p);Check(!SysMsgBox.Visible&&!c.Endgame.Pending,"expired quote cannot open commit confirmation");
         Click(p,130,455);quote=c.Sent[c.Sent.Count-1];Quote(c,quote);Draw(p);SysMsgBox.Finish(true);var execute=c.Sent[c.Sent.Count-1];
         Check(execute.Op=="cube.execute"&&!execute.Json.Contains("npcEntityId")&&!execute.Json.Contains("cubeInputs"),"native confirmation commits only captured authoritative quote");
         sent=c.Sent.Count;Click(p,130,455);Click(p,300,355,1);Check(c.Sent.Count==sent&&Slots(p).Count==1,"in-flight execution blocks repeated commit and edits");
-        Click(p,125,425);Check(c.Retries==1&&ReferenceEquals(c.Endgame.PendingRequest,execute),"query retries original uncertain transaction");
+        c.Endgame.NoteTransportFailure("连接未确认",execute); Click(p,130,455);Check(c.Retries==1&&ReferenceEquals(c.Endgame.PendingRequest,execute),"query retries original uncertain transaction");
         Click(p,350,49);Check(Slots(p).Count==0&&ReferenceEquals(c.Endgame.PendingRequest,execute),"close preserves in-flight request identity");
         Apply(c,"{\"kind\":\"cube.execute\",\"ok\":false,\"requestId\":\""+execute.RequestID+"\",\"error\":\"requirements\",\"message\":\"材料已变化\"}");
         OpenCube();Draw(p);Check(Slots(p).Count==0&&!c.Endgame.Pending,"rejected transaction safely reopens empty container");

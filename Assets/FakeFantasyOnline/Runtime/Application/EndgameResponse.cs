@@ -25,6 +25,7 @@ public sealed class EndgameResponse
     internal DateTime RiftPageReceivedUtc { get; set; }
     internal double RiftPageReceivedMS { get; set; }
     public IReadOnlyList<EndgameItemView> Items { get; }
+    public IReadOnlyList<EndgamePowerRecordView> Powers { get; }
     public IReadOnlyList<EndgameRuneView> Runes { get; }
     public IReadOnlyList<EndgameFormationView> Formations { get; }
     public IReadOnlyList<EndgameRecipeView> Recipes { get; }
@@ -40,7 +41,7 @@ public sealed class EndgameResponse
         string messageKind = EndgameData.String(d, "kind", 64);
         // Business rift snapshots allow additive metadata; transport and scene context remain exact.
         if (!messageKind.StartsWith("rift.", StringComparison.Ordinal) || messageKind == "rift.page" || messageKind == "rift.context")
-        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data");
+        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data", "powers");
         Kind = EndgameData.String(d, "kind", 64); RequestID = EndgameData.String(d, "requestId", 64); OK = EndgameData.Bool(d, "ok");
         Error = EndgameData.String(d, "error", 64); Message = EndgameData.String(d, "message"); Revision = EndgameData.ID(d, "revision"); CatalogVersion = EndgameData.String(d, "catalogVersion", 128);
         Capabilities = EndgameData.List(d, "capabilities", 16, v => EndgameData.Text(v, "capabilities", 64));
@@ -56,6 +57,7 @@ public sealed class EndgameResponse
                 throw new FormatException("Invalid rift page envelope.");
         }
         else if (d.ContainsKey("totalBytes") || d.ContainsKey("data")) throw new FormatException("Unexpected rift page fields.");
+        Powers = EndgameData.List(d, "powers", 50, v => new EndgamePowerRecordView(EndgameData.Object(v)));
         Items = EndgameData.List(d, "items", 32, v => new EndgameItemView(EndgameData.Object(v)));
         Runes = EndgameData.List(d, "runes", 32, v => new EndgameRuneView(EndgameData.Object(v)));
         Formations = EndgameData.List(d, "formations", 32, v => new EndgameFormationView(EndgameData.Object(v)));
