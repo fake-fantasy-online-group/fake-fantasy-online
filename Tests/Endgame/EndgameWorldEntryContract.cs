@@ -140,6 +140,29 @@ class EndgameWorldEntryContract
         Check(c.Sent.Count == sent, "reconnect never revives a captured recovery menu");
         p.Unbind(c);
     }
+    static void PowerBookRecoveryContracts()
+    {
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); GameBootstrap.CurMapId = 7;
+        var npc = new WorldNpcState { EntityId = 73, DisplayName = "巧匠左慈", Script = "N611FY" };
+        GameBootstrap.I = new GameBootstrap(); GameBootstrap.I.Window.Current = npc;
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\",\"powerBookItem\":\"1\",\"powerCodexItemId\":\"1900028302\",\"powerScrollItemId\":\"1900028303\",\"powerBookNPC\":\"巧匠左慈\",\"powerBookName\":\"万象秘典\"}}"));
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"recover-codex\",\"chunks\":1,\"revision\":\"42\"}"));
+        var dialog = new DialogUI(); dialog.OpenForTest(npc);
+        Check(dialog.Options.Count == 2 && dialog.Options[1].Label == "寻回万象秘典", "book recovery is configured independently of cube, without replacing native quests");
+        var stale = dialog.Options[1]; int sent = c.Sent.Count;
+        GameBootstrap.CurMapId = 8; stale.Action(); Check(c.Sent.Count == sent, "book recovery rejects departed map");
+        GameBootstrap.CurMapId = 7; GameBootstrap.I.Window.Current = new WorldNpcState { EntityId = 73, DisplayName = npc.DisplayName, Script = npc.Script };
+        stale.Action(); Check(c.Sent.Count == sent, "book recovery rejects replaced NPC with reused identity");
+        GameBootstrap.I.Window.Current = npc; dialog.OpenForTest(npc); dialog.Options[1].Action();
+        var request = c.Endgame.PendingRequest;
+        Check(request != null && request.Op == "powerbook.recover" && request.Json.Contains("\"npcEntityId\":73"), "book recovery carries exact NPC and immutable revision");
+        dialog.OpenForTest(npc); dialog.Options[1].Action();
+        Check(c.Retries == 1 && ReferenceEquals(c.Retried, request), "recovery retry reuses same request, not duplicate grant");
+        c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"powerbook.result\",\"ok\":true,\"requestId\":\"" + request.RequestID + "\",\"revision\":\"43\"}"));
+        Check(!c.Endgame.Pending, "book recovery result clears matching pending request");
+        p.Unbind(c);
+    }
     static void Main()
     {
         Check(!EndgamePanel.WorldEntryAvailable && !EndgamePanel.TryOpenRiftFromWorld() && !EndgamePanel.TryOpenCubeFromItem(1,7), "unbound entry is unavailable");
@@ -181,7 +204,7 @@ class EndgameWorldEntryContract
         UnityEngine.Input.pressed = null;
         p.Unbind(c); before = c.Sent.Count;
         Check(!EndgamePanel.TryOpenRiftFromWorld() && c.Sent.Count == before, "detached row sends nothing");
-        EntranceContracts(); CubeRecoveryContracts();
+        EntranceContracts(); CubeRecoveryContracts(); PowerBookRecoveryContracts();
         Console.WriteLine("PASS " + assertions + " bag/NPC world-entry contracts; actual panel logic, deterministic Unity substitutes.");
     }
 }

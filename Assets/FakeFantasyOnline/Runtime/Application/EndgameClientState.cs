@@ -222,6 +222,15 @@ public sealed partial class EndgameClientState
             {
                 bool previousVariants = SkillVariantsV1;
                 PowerBookAvailable = accepted && response.Result.TryGetValue("powerBook", out string powerBook) && powerBook == "1";
+                PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = "";
+                if (PowerBookAvailable && response.Result.TryGetValue("powerBookItem", out string itemBook) && itemBook == "1")
+                {
+                    if (response.Result.TryGetValue("powerCodexItemId", out string bookID) && int.TryParse(bookID, out int bid) && bid > 0) PowerBookItemID = bid;
+                    if (response.Result.TryGetValue("powerScrollItemId", out string scrollID) && int.TryParse(scrollID, out int sid) && sid > 0) PowerScrollItemID = sid;
+                    if (response.Result.TryGetValue("powerBookNPC", out string bookNPC)) PowerBookNPC = bookNPC;
+                    if (response.Result.TryGetValue("powerBookName", out string bookName) && bookName.Length > 0) PowerBookName = bookName;
+                }
+                PowerBookAvailable = PowerBookAvailable && PowerBookItemID > 0 && PowerScrollItemID > 0;
                 if (!PowerBookAvailable) ResetPowerBookValues();
                 CubeInputsV1 = accepted && cubeInputs;
                 CubeItemID = 0; CubeNPC = CubeLore = "";
@@ -286,7 +295,7 @@ public sealed partial class EndgameClientState
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
-            if (response.Kind == "powerbook.imprint" && response.Error == "stale_revision") PowerBookRevision = "";
+            if ((response.Kind == "powerbook.extract" || response.Kind == "powerbook.apply") && response.Error == "stale_revision") PowerBookRevision = "";
             RememberResponse(response); Version++; return false;
         }
         if (response.Kind == "skill.ranks" && !ApplySkillRanks(response)) return false;

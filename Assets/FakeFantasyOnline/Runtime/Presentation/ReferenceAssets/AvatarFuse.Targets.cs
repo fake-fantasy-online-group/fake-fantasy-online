@@ -10,6 +10,7 @@ internal static partial class AvatarFuse
         Active = false;
         CursorManager.I?.SetAvatarMode(false);
         byte kind = _kind;
+        if (kind == 3) { EndgamePanel.ApplyPowerScroll(tab, slot, "equipped", 0, equipSlot); return; }
         if (hasAvatar && kind == 0)
         {
             SysMsgBox.Show("【" + equipName + "】已有变装, 请先用分离卷轴分离后再融合。", () => { }, null);
@@ -28,6 +29,7 @@ internal static partial class AvatarFuse
         byte kind = _kind;
         Active = false;
         CursorManager.I?.SetAvatarMode(false);
+        if (kind == 3) { EndgamePanel.ApplyPowerScroll(tab, slot, "bag", targetTab, targetBagIdx); return; }
         if (targetTab == tab && targetBagIdx == slot)
         {
             SysMsgBox.Show("不能把道具融合到它自己身上，请选择要融合的目标装备。", () => { }, null);

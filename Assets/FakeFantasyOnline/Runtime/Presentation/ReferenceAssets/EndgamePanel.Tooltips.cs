@@ -30,6 +30,7 @@ public sealed partial class EndgamePanel
     internal static string OverlayTooltip(EndgameItemView item, string original)
     {
         if (item == null || !MatchesNative(item)) return original;
+        if (item.PowerScroll != null) return (original ?? "").Contains(item.PowerScroll.Description) ? original : original + "\n\n" + item.PowerScroll.Description;
         if (IsRune(item) || item.SocketCount > 0) Current?.LoadCatalog("runes");
         if (IsRune(item)) return RuneTooltip(item, original);
         if (item.SocketCount > 0 && item.Level > 0) original = ReplaceLevelRequirement(original, item.Level);

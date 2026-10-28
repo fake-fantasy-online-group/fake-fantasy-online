@@ -226,3 +226,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         internal void UpdateRiftEliteState(RiftEliteVisualAssets assets, bool golden, bool agility, bool clone, double now) { } internal void ClearRiftEliteState() { } }
     public class EffectPlayer : MonoBehaviour { public static readonly List<EffectPlayer> Played = new List<EffectPlayer>(); public static readonly Material AlphaMaterial = new Material(), AdditiveMaterial = new Material(); public static Material BorrowAlphaMaterial() => AlphaMaterial; public static Material BorrowAdditiveMaterial() => AdditiveMaterial; public static float NextScale = 1f; public static Sprite[] MagicFrames; public static Sprite[] GetMagicFramesAll(int id) => MagicFrames; public static Sprite[] GetMagicFrames(int id) => MagicFrames; public static EffectPlayer PlayNamed(Vector3 position, string effect, float ppu) { var result = new EffectPlayer { gameObject = new GameObject(effect) }; result.transform.position = position; Played.Add(result); return result; } }
 }
+namespace FakeFantasyOnline.Presentation.ReferenceAssets
+{
+    internal static class AvatarFuse { public static int BegunKind = -1; public static void Begin(byte tab, int slot, byte kind = 0) { BegunKind = kind; } }
+}

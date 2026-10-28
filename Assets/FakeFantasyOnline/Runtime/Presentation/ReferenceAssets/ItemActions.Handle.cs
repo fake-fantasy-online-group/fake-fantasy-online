@@ -14,6 +14,7 @@ internal static partial class ItemActions
     public static bool Handle(int id, byte tab, int slot, bool bound, bool cosmetic, string name,
         Action onEquipTab = null)
     {
+        if (EndgamePanel.HandlePowerItemForIndependentRuntime(id, tab, slot)) return true;
         if (EndgamePanel.HandleCubeItemForIndependentRuntime(id, tab, slot)) return true;
         bool avatar = SuitFxDB.IsAvatar(id);
         if (cosmetic || avatar)

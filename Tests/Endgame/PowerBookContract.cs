@@ -1,120 +1,116 @@
 using System;
 using System.IO;
-using System.Collections.Generic;
 using FakeFantasyOnline.Foundation;
+using System.Collections.Generic;
 using FakeFantasyOnline.Application;
 using FakeFantasyOnline.Presentation.ReferenceAssets;
 
 partial class EndgameUiContract
 {
-    static string PowerRow(string id, int roll = 9000) => "{\"powerId\":\"" + id + "\",\"name\":\"凝神回路\",\"category\":\"通用\",\"class\":\"术士\",\"description\":\"消耗降低45%［40–55%］。\",\"rollBp\":" + roll + ",\"minRollBp\":7500,\"maxRollBp\":10000,\"minLevel\":20}";
+    static string PowerRow(string id, bool unlocked, string slots = "\"衣服\",\"戒指\"") => "{\"powerId\":\"" + id + "\",\"name\":\"凝神回路\",\"category\":\"通用\",\"class\":\"术士\",\"description\":\"消耗降低45%［40–55%］。\",\"rollBp\":" + (unlocked ? "9000" : "0") + ",\"minRollBp\":7500,\"maxRollBp\":10000,\"minLevel\":20,\"unlocked\":" + (unlocked ? "true" : "false") + ",\"slots\":[" + slots + "]}";
     static void PowerReply(Client c, string request, string revision, string rows, string next = "") => Apply(c,
         "{\"kind\":\"powerbook.list\",\"ok\":true,\"requestId\":\"" + request + "\",\"revision\":\"" + revision + "\",\"nextCursor\":\"" + next + "\",\"powers\":[" + rows + "]}");
-    static void PowerBookWireContracts()
+    static void PowerBookServerWireContracts()
     {
-        string dir = Environment.GetEnvironmentVariable("FFO_POWER_BOOK_FIXTURES");
-        if (string.IsNullOrEmpty(dir)) throw new Exception("Missing generated Go power-book fixtures.");
-        var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
-        c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\"}}");
-        EndgamePanel.TryOpenPowerBookFromWorld(); c.Endgame.NoteTransportFailure("replaced fixture read", c.Last);
-        var list = EndgameResponse.Parse(File.ReadAllText(Path.Combine(dir, "list.json")));
-        c.SendEndgame(new EndgameRequest("powerbook.list", requestID: list.RequestID)); c.Endgame.Apply(list);
-        Check(c.Endgame.Powers.Count == 3 && c.Endgame.PowerBookCurrent, "actual Go list fixture accepted by client state");
-        foreach (var power in c.Endgame.Powers)
+        string directory = Environment.GetEnvironmentVariable("FFO_POWER_BOOK_FIXTURES");
+        if (string.IsNullOrEmpty(directory)) throw new Exception("Missing actual Go power-codex fixtures.");
+        var list = EndgameResponse.Parse(File.ReadAllText(Path.Combine(directory, "list.json")));
+        Check(list.Powers.Count > 0, "actual Go complete-catalog first page decodes");
+        bool locked = false, owned = false;
+        foreach (var power in list.Powers) { locked |= !power.Unlocked; owned |= power.Unlocked; Check(power.Slots.Count > 0, "actual Go catalog carries authoritative slot eligibility"); }
+        Check(locked, "actual Go catalog includes unobtained entries");
+        var scroll = EndgameResponse.Parse(File.ReadAllText(Path.Combine(directory, "scroll-snapshot.json")));
+        Check(scroll.Items.Count == 1 && scroll.Items[0].PowerScroll.RollBP == 8123 && scroll.Items[0].UID == "9007199254740993" && scroll.Items[0].Bound, "actual Go bound scroll preserves exact UID and captured roll");
+        foreach (string filename in new[] { "extract-request.json", "imprint-request.json" })
         {
-            Set(p, "selectedPowerID", power.PowerID); Draw(p);
-            Check(UnityEngine.GUI.labels.Contains(power.Description) && !UnityEngine.GUI.labels.Contains(power.Name + "：" + power.Description), "server-prefixed description draws exactly once: " + power.PowerID);
+            var fields = (IReadOnlyDictionary<string, object>)BoundedJson.Parse(File.ReadAllText(Path.Combine(directory, filename)));
+            string op = (string)fields["op"];
+            var request = new EndgameRequest(op, (string)fields["expectedRevision"], targetUID: fields.ContainsKey("targetUid") ? (string)fields["targetUid"] : "", runeUID: fields.ContainsKey("runeUid") ? (string)fields["runeUid"] : "", powerID: fields.ContainsKey("powerId") ? (string)fields["powerId"] : "", requestID: (string)fields["requestId"]);
+            var encoded = (IReadOnlyDictionary<string, object>)BoundedJson.Parse(request.Json);
+            Check(encoded.Count == fields.Count, "client request matches Go field count: " + op);
+            foreach (var pair in fields) Check(encoded.TryGetValue(pair.Key, out var value) && Equals(value, pair.Value), "client request matches Go exact field: " + pair.Key);
+            var result = EndgameResponse.Parse(File.ReadAllText(Path.Combine(directory, op == "powerbook.extract" ? "extract-success.json" : "imprint-success.json")));
+            Check(request.MatchesResponse(result), "actual Go result settles corresponding extract/apply request");
         }
-        Check(c.Endgame.Powers[2].RollBP == 8123 && c.Endgame.Powers[2].Description.Contains("56%（52%～70%）"), "server's non-round roll displays exact authored integer and range without client rescaling");
-        Check(c.Endgame.Powers[1].RollBP == 0 && c.Endgame.Powers[1].MaxRollBP == 0, "real mechanic fixture has no numeric scale");
-        var requestData = (IReadOnlyDictionary<string, object>)BoundedJson.Parse(File.ReadAllText(Path.Combine(dir, "imprint-request.json")));
-        var request = new EndgameRequest("powerbook.imprint", (string)requestData["expectedRevision"], targetUID: (string)requestData["targetUid"], powerID: (string)requestData["powerId"], requestID: (string)requestData["requestId"]);
-        var encoded = (IReadOnlyDictionary<string, object>)BoundedJson.Parse(request.Json);
-        Check(encoded.Count == requestData.Count, "client imprint schema matches actual Go-decoded request");
-        foreach (var pair in requestData) Check(encoded.TryGetValue(pair.Key, out var value) && Equals(value, pair.Value), "client and server exact request field: " + pair.Key);
-        c.SendEndgame(request); c.Endgame.Apply(EndgameResponse.Parse(File.ReadAllText(Path.Combine(dir, "imprint-success.json"))));
-        Check(!c.Endgame.Pending && c.Endgame.Revision == "1" && c.Endgame.Message == "威能已刻入器物。", "actual authoritative commit receipt completes matching request");
-        var failure = EndgameResponse.Parse(File.ReadAllText(Path.Combine(dir, "imprint-error.json")));
-        c.SendEndgame(new EndgameRequest("powerbook.imprint", "1", targetUID: "42", powerID: "UNKNOWN", requestID: failure.RequestID)); c.Endgame.Apply(failure);
-        Check(!c.Endgame.Pending && c.Endgame.Error == "power_locked" && c.Endgame.Message == "此威能尚未收入威能录", "actual Go mutation error completes failure with player-facing reason");
-        p.Unbind(c);
     }
     static void PowerBookContracts()
     {
-        PowerBookWireContracts();
+        PowerBookServerWireContracts();
         var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
-        c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"]}");
-        Check(!EndgamePanel.TryOpenPowerBookFromWorld() && !c.SendEndgame(new EndgameRequest("powerbook.list")), "legacy server cannot expose or receive power-book operations");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\"}}");
-        Check(EndgamePanel.TryOpenPowerBookFromWorld() && c.Last.Op == "powerbook.list", "inventory opener asks only read data");
-        var first = c.Last;
-        Check(!c.SendEndgame(new EndgameRequest("powerbook.list")), "duplicate concurrent list reads suppressed");
-        PowerReply(c, "wrong-response-id", "1", PowerRow("wrong"));
-        Check(c.Endgame.PowerBookLoading && c.Endgame.Powers.Count == 0, "unsolicited response cannot replace records");
-        PowerReply(c, first.RequestID, "1", PowerRow("SS-U03"), "1");
-        Check(c.Endgame.PowerBookCurrent && c.Endgame.Powers.Count == 1 && c.Endgame.PowerBookNextCursor == "1", "first power page publishes exact server record");
-        Check(c.Endgame.Powers[0].RollBP == 9000 && c.Endgame.Powers[0].Description.Contains("45%［40–55%］"), "actual number and range stay server-authored");
-        Draw(p, "更多威能"); var second = c.Last;
-        Check(second.Cursor == "1", "next page uses returned cursor");
-        PowerReply(c, second.RequestID, "1", PowerRow("SS-U04"));
-        Check(c.Endgame.Powers.Count == 2 && c.Endgame.PowerBookNextCursor == "", "last page appends without losing previous collection");
-        Draw(p); Check(!Enabled("更多威能"), "last page cannot request page zero again");
-        var native = new InventoryDlg.Item { id = 1001, bagIdx = 0, name = "暗金甲" }; InventoryDlg.rows[0] = native; InventoryDlg.rowTabs.Remove(0);
-        string item = "{\"uid\":\"9007199254740993\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":0,\"name\":\"暗金甲\",\"legendary\":{\"powerId\":\"OLD\",\"name\":\"旧威能\",\"description\":\"原有效果\"}}";
-        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"power-inventory\",\"revision\":\"1\",\"chunks\":1,\"items\":[" + item + "]}");
-        Set(p, "selectedUID", "9007199254740993"); Set(p, "selectedPowerID", "SS-U03"); Draw(p);
-        Check(Enabled("刻印威能") && UnityEngine.GUI.labels.Contains("凝神回路：消耗降低45%［40–55%］。"), "valid record and bag target enable imprint with ordinary description");
-        int before = c.Sent.Count; Draw(p, "刻印威能"); var imprint = c.Last;
-        Check(c.Sent.Count == before + 1 && imprint.Mutates && imprint.Json.Contains("\"powerId\":\"SS-U03\"") && imprint.Json.Contains("9007199254740993"), "one click creates one immutable imprint request without lossy UID");
-        Draw(p, "刻印威能"); Check(c.Sent.Count == before + 1, "repeated old-button click cannot duplicate mutation");
-        Draw(p, "查询原请求"); Check(c.Retries == 1 && ReferenceEquals(c.Retried[0], imprint), "retry preserves exact request id and payload");
-        Call(p, "Close"); Check(c.Endgame.Pending && (string)Get(p, "selectedPowerID") == "", "closing clears choice but retains uncertain mutation");
-        EndgamePanel.TryOpenPowerBookFromWorld(); Draw(p, "查询原请求"); Check(c.Retries == 2 && ReferenceEquals(c.Retried[1], imprint), "reopening cannot change uncertain mutation target");
-        Apply(c, "{\"kind\":\"powerbook.imprint\",\"ok\":false,\"requestId\":\"" + imprint.RequestID + "\",\"error\":\"stale_revision\",\"message\":\"背包已变化\"}");
-        Check(!c.Endgame.Pending && c.Endgame.Error == "stale_revision", "terminal stale error releases mutation and shows server message");
-        Set(p, "selectedUID", "9007199254740993"); Set(p, "selectedPowerID", "SS-U03");
-        c.Endgame.NoteNativeInventoryPublished(); Draw(p); Check(!Enabled("刻印威能"), "native inventory changes disable stale target UID");
-        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"power-locked\",\"revision\":\"2\",\"chunks\":1,\"items\":[" + item.Replace("\"name\":\"暗金甲\"", "\"locked\":true,\"name\":\"暗金甲\"") + "]}");
-        Draw(p); Check(!Enabled("刻印威能"), "locked and newer-revision target cannot imprint");
-        Call(p, "RefreshPowerBook"); var refresh = c.Last; PowerReply(c, refresh.RequestID, "1", PowerRow("stale"));
-        Check(c.Endgame.Powers[0].PowerID == "SS-U03" && !c.Endgame.PowerBookCurrent, "stale refresh cannot replace newer revision records");
-        Call(p, "RefreshPowerBook"); refresh = c.Last; PowerReply(c, refresh.RequestID, "2", PowerRow("SS-U03",10000));
-        Check(c.Endgame.Powers.Count == 1 && c.Endgame.Powers[0].RollBP == 10000, "fresh first page replaces collection and shows improved best roll");
-        Draw(p); Check(!Enabled("刻印威能"), "locked target still unavailable with fresh collection");
-        Call(p, "RefreshPowerBook"); var timedOut = c.Last; c.Endgame.Tick(DateTime.UtcNow.AddSeconds(16));
-        Check(!c.Endgame.PowerBookLoading && c.Endgame.Error == "timeout", "lost list request times out for manual retry");
-        Call(p, "RefreshPowerBook"); var afterTimeout = c.Last; PowerReply(c, timedOut.RequestID, "2", PowerRow("late"));
-        Check(c.Endgame.PowerBookLoading, "late old page cannot complete newer read");
-        c.Endgame.NoteTransportFailure("网络中断", afterTimeout); Check(!c.Endgame.PowerBookLoading, "transport failure releases read without automatic endless retry");
-        var result = EndgameResponse.Parse("{\"kind\":\"powerbook.result\",\"ok\":true,\"requestId\":\"" + imprint.RequestID + "\"}");
-        Check(imprint.MatchesResponse(result), "imprint success uses distinct result envelope");
-        var journal = new EndgameRetryJournal(); journal.Remember("character7", imprint); Check(ReferenceEquals(journal.Find("character7"), imprint), "imprint participates in character-scoped retry journal");
-        Call(p, "RefreshPowerBook"); refresh = c.Last;
-        bool malformed = false; try { PowerReply(c, refresh.RequestID, "2", PowerRow("duplicate") + "," + PowerRow("duplicate")); } catch (FormatException) { malformed = true; }
-        Check(malformed && c.Endgame.Powers[0].PowerID == "SS-U03", "duplicate page rejected atomically without corrupting old records");
-        malformed = false; try { EndgameResponse.Parse("{\"kind\":\"powerbook.list\",\"ok\":true,\"powers\":[" + PowerRow("invalid",10001) + "]}"); } catch (FormatException) { malformed = true; }
-        Check(malformed, "roll outside declared range rejected");
-        malformed = false; try { new EndgameRequest("powerbook.imprint", "1", powerID: "SS-U03"); } catch (ArgumentException) { malformed = true; }
-        Check(malformed, "missing target cannot serialize mutation");
-        // A successful write updates the item only through the server snapshot, then refreshes the book once.
-        Call(p, "RefreshPowerBook"); refresh = c.Last; PowerReply(c, refresh.RequestID, "2", PowerRow("SS-U03"), "1");
-        Draw(p, "更多威能"); second = c.Last; PowerReply(c, second.RequestID, "3", PowerRow("changed-page"));
-        Check(!c.Endgame.PowerBookCurrent && c.Endgame.Powers.Count == 1, "page revision change rejects mixed generation collection");
-        Call(p, "RefreshPowerBook"); refresh = c.Last; PowerReply(c, refresh.RequestID, "3", PowerRow("SS-U03"));
-        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"power-success-before\",\"revision\":\"3\",\"chunks\":1,\"items\":[" + item + "]}");
-        Set(p, "selectedUID", "9007199254740993"); Set(p, "selectedPowerID", "SS-U03"); Draw(p, "刻印威能"); imprint = c.Last;
-        Check(c.Endgame.Items[0].Legendary.PowerID == "OLD", "submission never speculatively changes gear");
-        Apply(c, "{\"kind\":\"powerbook.result\",\"ok\":true,\"requestId\":\"" + imprint.RequestID + "\",\"revision\":\"4\"}");
-        Check(!c.Endgame.Pending && !c.Endgame.InventorySnapshotCurrent, "success receipt waits for matching authoritative inventory");
-        int readsBefore = c.Sent.Count; Call(p, "ObservePowerBookRequest"); var successRefresh = c.Last;
-        Check(c.Sent.Count == readsBefore + 2 && successRefresh.Op == "powerbook.list", "successful imprint refreshes snapshot and book once");
-        Call(p, "ObservePowerBookRequest"); Check(c.Sent.Count == readsBefore + 2, "observing same success cannot loop refreshes");
-        PowerReply(c, successRefresh.RequestID, "4", PowerRow("SS-U03"));
-        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"power-success-after\",\"revision\":\"4\",\"chunks\":1,\"items\":[" + item.Replace("\"powerId\":\"OLD\"", "\"powerId\":\"SS-U03\"") + "]}");
-        Check(c.Endgame.InventorySnapshotCurrent && c.Endgame.Items[0].Legendary.PowerID == "SS-U03", "only final snapshot publishes new equipment power");
-        var mechanic = EndgameResponse.Parse("{\"kind\":\"powerbook.list\",\"ok\":true,\"powers\":[{\"powerId\":\"MECHANIC\",\"name\":\"解缚\",\"description\":\"解除控制\",\"rollBp\":0,\"minRollBp\":0,\"maxRollBp\":0}]}");
-        Check(mechanic.Powers[0].RollBP == 0 && mechanic.Powers[0].Description == "解除控制", "pure mechanics carry no fabricated numeric roll");
-        c.Endgame.Reset(); Call(p, "Update"); Check(c.Endgame.Powers.Count == 0 && !c.Endgame.PowerBookAvailable && !(bool)Get(p, "open"), "character/session reset discards private collection and closes UI");
+        Check(!c.Endgame.PowerBookAvailable && !EndgamePanel.TryOpenPowerBookFromWorld(), "legacy direct-imprint server and header shortcut cannot open new book");
+        c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\",\"powerBookItem\":\"1\",\"powerCodexItemId\":\"1900031001\",\"powerScrollItemId\":\"1900031002\",\"powerBookName\":\"万象秘典\"}}");
+        Check(c.Endgame.PowerBookAvailable && c.Endgame.PowerBookItemID == 1900031001, "negotiated item-only book configuration");
+        var request = new EndgameRequest("powerbook.list"); c.SendEndgame(request);
+        PowerReply(c, "wrong-response-id", "1", PowerRow("wrong", true));
+        Check(c.Endgame.PowerBookLoading && c.Endgame.Powers.Count == 0, "unsolicited catalog cannot replace records");
+        PowerReply(c, request.RequestID, "1", PowerRow("SS-U03", true) + "," + PowerRow("SS-U04", false));
+        Check(c.Endgame.Powers.Count == 2 && c.Endgame.PowerBookCurrent, "catalog contains owned and unowned records");
+        var owned = c.Endgame.Powers[0]; var locked = c.Endgame.Powers[1];
+        Check(EndgamePanel.PowerMatches(owned, "术士", "通用", "戒指", true), "class powers can filter a non-head/chest/weapon slot");
+        Check(!EndgamePanel.PowerMatches(owned, "战士", "", "", false), "scope filter");
+        Check(!EndgamePanel.PowerMatches(owned, "", "攻击", "", false), "category filter");
+        Check(!EndgamePanel.PowerMatches(owned, "", "", "鞋", false), "server-authored slot eligibility filter");
+        Check(EndgamePanel.PowerMatches(locked, "", "", "", false) && !EndgamePanel.PowerMatches(locked, "", "", "", true), "hide-unobtained checkbox does not delete locked records");
+        Check(owned.Description.Contains("45%［40–55%］") && locked.RollBP == 0, "actual value/range stays server authored; locked is not falsely maxed");
+        var extract = new EndgameRequest("powerbook.extract", "1", powerID: "SS-U03");
+        Check(extract.Mutates && extract.Json.Contains("\"powerId\":\"SS-U03\""), "extract is immutable mutation with no added cost");
+        c.SendEndgame(extract);
+        Check(!c.SendEndgame(new EndgameRequest("powerbook.extract", "1", powerID: "SS-U03")), "duplicate extraction is blocked while pending");
+        Apply(c, "{\"kind\":\"powerbook.result\",\"ok\":true,\"requestId\":\"" + extract.RequestID + "\",\"revision\":\"2\"}");
+        Check(!c.Endgame.Pending && c.Endgame.Revision == "2", "extraction receipt clears only matching mutation");
+        var apply = new EndgameRequest("powerbook.apply", "2", targetUID: "9007199254740993", runeUID: "9007199254740994");
+        Check(apply.Mutates && apply.Json.Contains("9007199254740993") && apply.Json.Contains("9007199254740994"), "scroll and gear UID remain exact beyond JavaScript precision");
+        bool rejected = false; try { new EndgameRequest("powerbook.imprint", "2", targetUID: "42", powerID: "SS-U03"); } catch (ArgumentException) { rejected = true; }
+        Check(rejected, "old direct-imprint bypass no longer encodable");
+        c.SendEndgame(apply); Apply(c, "{\"kind\":\"powerbook.apply\",\"ok\":false,\"requestId\":\"" + apply.RequestID + "\",\"revision\":\"2\",\"error\":\"requirements\",\"message\":\"此器不可承载\"}");
+        Check(!c.Endgame.Pending && c.Endgame.Message == "此器不可承载", "server apply rejection preserves message and releases pending");
+        InventoryDlg.rows[11] = new InventoryDlg.Item { id = 1900031001, bagIdx = 11, name = "万象秘典", count = 1 };
+        InventoryDlg.rows[12] = new InventoryDlg.Item { id = 1900031002, bagIdx = 12, name = "威能卷轴", count = 1 };
+        InventoryDlg.rows[13] = new InventoryDlg.Item { id = 1001, bagIdx = 13, name = "暗金甲", count = 1 };
+        string bookItem = "{\"uid\":\"101\",\"itemId\":1900031001,\"location\":\"bag\",\"tab\":0,\"slot\":11,\"bound\":true}";
+        string scrollItem = "{\"uid\":\"102\",\"itemId\":1900031002,\"location\":\"bag\",\"tab\":0,\"slot\":12,\"bound\":true,\"powerScroll\":{\"powerId\":\"SS-U03\",\"name\":\"凝神回路\",\"description\":\"消耗降低45%［40–55%］。\",\"rollBp\":9000}}";
+        string gearItem = "{\"uid\":\"103\",\"itemId\":1001,\"location\":\"bag\",\"tab\":2,\"slot\":13,\"legendary\":{\"powerId\":\"OLD\",\"name\":\"旧威能\",\"description\":\"原有效果\"}}";
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"codex-items\",\"revision\":\"2\",\"chunks\":1,\"items\":[" + bookItem + "," + scrollItem + "," + gearItem + "]}");
+        Check(c.Endgame.Items.Count == 3 && c.Endgame.Items[1].PowerScroll.RollBP == 9000, "scroll snapshot carries independent captured value");
+        Check(EndgamePanel.HandlePowerItemForIndependentRuntime(1900031001, 0, 11) && c.Last.Op == "powerbook.list", "right-click owned bound book opens catalog, no consumable request");
+        PowerReply(c, c.Last.RequestID, "2", PowerRow("SS-U03", true) + "," + PowerRow("SS-U04", false));
+        Draw(p);
+        Check(UnityEngine.GUI.labels.Contains("万象秘典") && !UnityEngine.GUI.labels.Contains("选择背包暗金"), "item window has no direct-imprint target picker");
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.Repaint, mousePosition = new UnityEngine.Vector2(20, 12) };
+        Call(p, "DrawPowerBook");
+        Check(UITip.last.Contains("45%［40–55%］"), "hover renders saved effect and range without reformatting");
+        int beforeLockedClick = c.Sent.Count;
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(20, 56), button = 0 };
+        Call(p, "DrawPowerBook");
+        Check(c.Sent.Count == beforeLockedClick, "unobtained list row cannot extract");
+        UnityEngine.Event.current = new UnityEngine.Event { type = UnityEngine.EventType.MouseDown, mousePosition = new UnityEngine.Vector2(20, 12), button = 0 };
+        Call(p, "DrawPowerBook");
+        Check(c.Last.Op == "powerbook.extract" && c.Endgame.Pending, "one click on owned list row extracts without target picker or confirmation");
+        var rowExtract = c.Last;
+        Apply(c, "{\"kind\":\"powerbook.extract\",\"ok\":false,\"requestId\":\"" + rowExtract.RequestID + "\",\"revision\":\"2\",\"error\":\"bag_full\"}");
+        UnityEngine.Event.current = new UnityEngine.Event();
+        Check(EndgamePanel.HandlePowerItemForIndependentRuntime(1900031002, 0, 12) && AvatarFuse.BegunKind == 3, "right-click scroll enters reused appearance targeting mode");
+        Check(!EndgamePanel.ApplyPowerScroll(0, 12, "bag", 0, 12), "scroll cannot target itself");
+        Check(EndgamePanel.ApplyPowerScroll(0, 12, "bag", 2, 13) && c.Last.Op == "powerbook.apply" && c.Last.Json.Contains("\"runeUid\":\"102\""), "appearance selection submits exact scroll identity, not avatar opcode");
+        Check(!EndgamePanel.ApplyPowerScroll(0, 12, "bag", 2, 13), "repeated selection cannot submit while mutation is pending");
+        Apply(c, "{\"kind\":\"powerbook.apply\",\"ok\":false,\"requestId\":\"" + c.Last.RequestID + "\",\"revision\":\"2\",\"error\":\"requirements\"}");
+        // A pristine wing has no Legendary payload; eligibility is decided by server WingRules.
+        string wingItem = "{\"uid\":\"104\",\"itemId\":1002,\"location\":\"bag\",\"tab\":2,\"slot\":14}";
+        InventoryDlg.rows[14] = new InventoryDlg.Item { id = 1002, bagIdx = 14, name = "羽翼", count = 1 };
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"wing-bag\",\"revision\":\"2\",\"chunks\":1,\"items\":[" + scrollItem + "," + wingItem + "]}");
+        Check(EndgamePanel.HandlePowerItemForIndependentRuntime(1900031002, 0, 12), "scroll can be selected again after rejected target");
+        Check(EndgamePanel.ApplyPowerScroll(0, 12, "bag", 2, 14) && c.Last.Json.Contains("\"targetUid\":\"104\""), "pristine bag wing reaches authoritative scroll application");
+        Apply(c, "{\"kind\":\"powerbook.apply\",\"ok\":false,\"requestId\":\"" + c.Last.RequestID + "\",\"revision\":\"2\",\"error\":\"requirements\"}");
+        EquipDlg.Equipped.Add(new EquipDlg.EquippedItem { id = 1002, slot = 14, name = "羽翼" });
+        wingItem = wingItem.Replace("\"location\":\"bag\"", "\"location\":\"equipped\"");
+        Apply(c, "{\"kind\":\"snapshot\",\"ok\":true,\"snapshotId\":\"wing-worn\",\"revision\":\"2\",\"chunks\":1,\"items\":[" + scrollItem + "," + wingItem + "]}");
+        Check(EndgamePanel.HandlePowerItemForIndependentRuntime(1900031002, 0, 12), "scroll targets equipped wing from same owned bag source");
+        Check(!EndgamePanel.ApplyPowerScroll(0, 12, "equipped", 0, 15), "missing equipment target cannot submit");
+        Check(EndgamePanel.ApplyPowerScroll(0, 12, "equipped", 0, 14), "pristine equipped wing reaches authoritative scroll application");
+        EquipDlg.Equipped.RemoveAll(item => item.id == 1002);
+        InventoryDlg.rows.Remove(14);
+        InventoryDlg.rows.Remove(11); InventoryDlg.rows.Remove(12); InventoryDlg.rows.Remove(13);
         p.Unbind(c);
     }
 }

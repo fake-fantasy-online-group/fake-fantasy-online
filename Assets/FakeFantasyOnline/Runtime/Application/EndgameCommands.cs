@@ -21,21 +21,21 @@ public sealed class EndgameRequest
     public string Json { get; }
     public string Catalog { get; }
     public string Cursor { get; }
-    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "cube.recover" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade" || Op == "powerbook.imprint";
+    public bool Mutates => Op == "socket.insert" || Op == "socket.remove" || Op == "cube.execute" || Op == "cube.recover" || Op == "rift.start" || Op == "rift.claim" || Op == "rift.leave" || Op == "rift.advance" || Op == "skill.upgrade" || (Op == "powerbook.extract" || Op == "powerbook.apply" || Op == "powerbook.recover");
     public EndgameRequest(string op, string revision = "", string targetUID = "", string runeUID = "", int socket = 0,
         int recipeID = 0, string quoteID = "", string runID = "", int tier = 0,
         IReadOnlyList<string> itemUIDs = null, string catalog = "", string cursor = "", string requestID = null, int floorIndex = 0, int skillID = 0, int npcEntityID = 0, IReadOnlyList<EndgameCubeInput> cubeInputs = null, string powerID = "")
     {
-        if (Array.IndexOf(new[] { "powerbook.list", "powerbook.imprint", "skill.ranks", "skill.upgrade", "hello", "capabilities", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "cube.recover", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
+        if (Array.IndexOf(new[] { "powerbook.list", "powerbook.recover", "powerbook.extract", "powerbook.apply", "skill.ranks", "skill.upgrade", "hello", "capabilities", "snapshot", "catalog", "socket.insert", "socket.remove", "cube.quote", "cube.execute", "cube.recover", "rift.start", "rift.state", "rift.claim", "rift.leave", "rift.advance" }, op) < 0) throw new ArgumentException("Unknown endgame operation.");
         Op = op; Catalog = catalog; Cursor = cursor ?? ""; RequestID = requestID ?? Guid.NewGuid().ToString("N");
         if (RequestID.Length < 16 || RequestID.Length > 64) throw new ArgumentException("Invalid request ID.");
         foreach (char c in RequestID) if (c < 33 || c > 126) throw new ArgumentException("Invalid request ID.");
         if (socket < 0 || socket > 4 || tier < 0 || tier > 150 || recipeID < 0 || floorIndex < 0) throw new ArgumentException("Command is out of range.");
-        if (op == "cube.recover" && (npcEntityID == 0 || string.IsNullOrEmpty(revision))) throw new ArgumentException("Cube recovery requires the current NPC and revision.");
+        if ((op == "cube.recover" || op == "powerbook.recover") && (npcEntityID == 0 || string.IsNullOrEmpty(revision))) throw new ArgumentException("Recovery requires the current NPC and revision.");
         if (op == "rift.advance" && (string.IsNullOrEmpty(runID) || floorIndex < 1)) throw new ArgumentException("Advancing requires the observed run ID and floor index.");
         var data = new Dictionary<string, object> { { "op", op }, { "requestId", RequestID } };
         Add(data, "expectedRevision", revision); Add(data, "targetUid", targetUID); Add(data, "runeUid", runeUID); Add(data, "quoteId", quoteID); Add(data, "runId", runID);
-        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1", "endgame.rift-entrance.v1", "endgame.cube-inputs.v1" });
+        if (op == "hello") data.Add("capabilities", new object[] { "endgame.v1", "endgame.native-stats.v1", "endgame.growth.v5", "endgame.skill-behavior.v1", "endgame.skill-variants.v1", "endgame.rift-portals.v1", "endgame.rift-entrance.v1", "endgame.cube-inputs.v1", "endgame.power-codex.v1" });
         if (op == "capabilities") data.Add("capabilities", new object[] { "endgame.v1", "endgame.rift-pages.v1", "endgame.ground-fx.v1" });
         if (op == "skill.upgrade")
         {
@@ -49,19 +49,21 @@ public sealed class EndgameRequest
             data.Add("catalog", catalog); Add(data, "cursor", Cursor);
         }
         if (op == "powerbook.list") { EndgameData.Identity(Cursor, "cursor"); Add(data, "cursor", Cursor); }
-        if (op == "powerbook.imprint")
+        if (op == "powerbook.extract")
         {
-            if (string.IsNullOrWhiteSpace(powerID) || string.IsNullOrEmpty(revision) || string.IsNullOrEmpty(targetUID) || targetUID == "0") throw new ArgumentException("Imprinting requires a recorded power, target and revision.");
+            if (string.IsNullOrWhiteSpace(powerID) || string.IsNullOrEmpty(revision) || targetUID.Length != 0 || runeUID.Length != 0) throw new ArgumentException("Extraction requires a recorded power and revision.");
             Add(data, "powerId", powerID);
         }
-        else if (powerID.Length != 0) throw new ArgumentException("powerId is only valid for powerbook.imprint.");
+        else if (powerID.Length != 0) throw new ArgumentException("powerId is only valid for powerbook.extract.");
+        if (op == "powerbook.apply" && (string.IsNullOrEmpty(revision) || string.IsNullOrEmpty(targetUID) || targetUID == "0" || string.IsNullOrEmpty(runeUID) || runeUID == "0" || targetUID == runeUID))
+            throw new ArgumentException("Applying requires distinct scroll and target identities and revision.");
         if (op.StartsWith("socket.", StringComparison.Ordinal)) data.Add("socket", socket);
         if (recipeID != 0) data.Add("recipeId", recipeID);
         if (tier != 0) data.Add("tier", tier);
         if (op == "rift.advance") data.Add("floorIndex", floorIndex);
         if (npcEntityID != 0)
         {
-            if (op != "rift.start" && op != "cube.quote" && op != "cube.execute" && op != "cube.recover") throw new ArgumentException("npcEntityId is not valid for this operation.");
+            if (op != "rift.start" && op != "cube.quote" && op != "cube.execute" && op != "cube.recover" && op != "powerbook.recover") throw new ArgumentException("npcEntityId is not valid for this operation.");
             data.Add("npcEntityId", (long)unchecked((uint)npcEntityID));
         }
         if (itemUIDs != null)
@@ -97,7 +99,7 @@ public sealed class EndgameRequest
     {
         if (response == null || response.RequestID != RequestID) return false;
         if (!response.OK) return response.Kind == Op;
-        if (Op == "powerbook.imprint") return response.Kind == "powerbook.result";
+        if (Op == "powerbook.extract" || Op == "powerbook.apply" || Op == "powerbook.recover") return response.Kind == "powerbook.result";
         if (Op == "cube.execute") return response.Kind == "cube.result";
         if (Op == "catalog") return (response.Kind == "catalog." + Catalog || response.Kind == "catalog") && response.Cursor == Cursor;
         return response.Kind == Op;

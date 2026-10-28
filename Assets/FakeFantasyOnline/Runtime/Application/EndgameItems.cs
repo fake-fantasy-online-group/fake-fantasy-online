@@ -29,6 +29,19 @@ public sealed class EndgameSocketView
         if (Index < 0 || Index > 4 || ItemID < 0) throw new FormatException("Invalid socket.");
     }
 }
+public sealed class EndgamePowerScrollView
+{
+    public string PowerID { get; }
+    public int RollBP { get; }
+    public string Name { get; }
+    public string Description { get; }
+    internal EndgamePowerScrollView(IReadOnlyDictionary<string, object> d)
+    {
+        PowerID = EndgameData.String(d, "powerId"); RollBP = EndgameData.Int(d, "rollBp");
+        Name = EndgameData.String(d, "name"); Description = EndgameData.String(d, "description");
+        if (PowerID.Length == 0 || RollBP < 0 || RollBP > 10000) throw new FormatException("Invalid power scroll.");
+    }
+}
 public sealed class EndgameItemView
 {
     public string UID { get; }
@@ -38,6 +51,7 @@ public sealed class EndgameItemView
     public int Slot { get; }
     public string Revision { get; }
     public EndgameLegendaryItemView Legendary { get; }
+    public EndgamePowerScrollView PowerScroll { get; }
     public int UniqueID { get; }
     public int UniqueRollBP { get; }
     public string Name { get; }
@@ -55,7 +69,8 @@ public sealed class EndgameItemView
     public bool Locked { get; }
     internal EndgameItemView(IReadOnlyDictionary<string, object> d)
     {
-        EndgameData.Keys(d, "uid", "itemId", "location", "tab", "slot", "revision", "uniqueId", "uniqueRollBp", "name", "description", "trait", "level", "profession", "socketCount", "sockets", "stats", "formationId", "active", "inactiveReason", "bound", "locked", "legendary");
+        EndgameData.Keys(d, "uid", "itemId", "location", "tab", "slot", "revision", "uniqueId", "uniqueRollBp", "name", "description", "trait", "level", "profession", "socketCount", "sockets", "stats", "formationId", "active", "inactiveReason", "bound", "locked", "legendary", "powerScroll");
+        PowerScroll = EndgameData.Optional(d, "powerScroll", v => new EndgamePowerScrollView(EndgameData.Object(v)));
         Legendary = EndgameData.Optional(d, "legendary", v => new EndgameLegendaryItemView(EndgameData.Object(v)));
         UID = EndgameData.ID(d, "uid"); ItemID = EndgameData.Int(d, "itemId");
         Location = EndgameData.String(d, "location", 32); Tab = EndgameData.Int(d, "tab"); Slot = EndgameData.Int(d, "slot");

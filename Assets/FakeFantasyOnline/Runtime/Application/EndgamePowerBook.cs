@@ -15,6 +15,8 @@ public sealed class EndgamePowerRecordView
     public int MinRollBP { get; }
     public int MaxRollBP { get; }
     public int MinLevel { get; }
+    public bool Unlocked { get; }
+    public IReadOnlyList<string> Slots { get; }
     internal EndgamePowerRecordView(IReadOnlyDictionary<string, object> d)
     {
         EndgameData.Required(d, "powerId", "name", "description");
@@ -22,13 +24,19 @@ public sealed class EndgamePowerRecordView
         Category = EndgameData.String(d, "category"); Class = EndgameData.String(d, "class");
         Description = EndgameData.String(d, "description"); RollBP = EndgameData.Int(d, "rollBp");
         MinRollBP = EndgameData.Int(d, "minRollBp"); MaxRollBP = EndgameData.Int(d, "maxRollBp"); MinLevel = EndgameData.Int(d, "minLevel");
-        if (string.IsNullOrWhiteSpace(PowerID) || MinRollBP < 0 || MaxRollBP > 10000 || MinRollBP > MaxRollBP || RollBP < MinRollBP || RollBP > MaxRollBP || MinLevel < 0)
+        Unlocked = EndgameData.Bool(d, "unlocked");
+        Slots = EndgameData.List(d, "slots", 32, v => EndgameData.Text(v, "slots", 64));
+        if (string.IsNullOrWhiteSpace(PowerID) || MinRollBP < 0 || MaxRollBP > 10000 || MinRollBP > MaxRollBP || Unlocked && (RollBP < MinRollBP || RollBP > MaxRollBP) || MinLevel < 0)
             throw new FormatException("Invalid power record.");
     }
 }
 public sealed partial class EndgameClientState
 {
     public bool PowerBookAvailable { get; private set; }
+    public int PowerBookItemID { get; private set; }
+    public int PowerScrollItemID { get; private set; }
+    public string PowerBookNPC { get; private set; } = "";
+    public string PowerBookName { get; private set; } = "万象秘典";
     public bool PowerBookLoaded { get; private set; }
     public string PowerBookRevision { get; private set; } = "";
     public string PowerBookNextCursor { get; private set; } = "";
@@ -42,7 +50,7 @@ public sealed partial class EndgameClientState
         PowerBookLoaded = false; PowerBookRevision = PowerBookNextCursor = "";
         Powers = Array.Empty<EndgamePowerRecordView>(); powerBookRead = null;
     }
-    private void ResetPowerBook() { PowerBookAvailable = false; ResetPowerBookValues(); }
+    private void ResetPowerBook() { PowerBookAvailable = false; PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = ""; ResetPowerBookValues(); }
     private bool BeginPowerBookRead(EndgameRequest request)
     {
         if (PowerBookLoading) return false;
@@ -54,7 +62,7 @@ public sealed partial class EndgameClientState
     private void TickPowerBook(DateTime now)
     {
         if (powerBookRead != null && (now - powerBookReadAt).TotalSeconds >= 15)
-        { powerBookRead = null; Error = "timeout"; Message = "威能录暂未响应，请刷新重试。"; Version++; }
+        { powerBookRead = null; Error = "timeout"; Message = "秘典暂未响应，请刷新重试。"; Version++; }
     }
     private bool ApplyPowerBook(EndgameResponse response)
     {
@@ -64,7 +72,7 @@ public sealed partial class EndgameClientState
         { Error = response.Error; Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error); RememberResponse(response); Version++; return false; }
         if (response.Revision.Length == 0 || CompareRevision(response.Revision, Revision) < 0 ||
             request.Cursor.Length > 0 && response.Revision != PowerBookRevision)
-        { PowerBookRevision = ""; Error = "stale_revision"; Message = "威能录已有变化，请刷新重试。"; Version++; return false; }
+        { PowerBookRevision = ""; Error = "stale_revision"; Message = "秘典已有变化，请刷新重试。"; Version++; return false; }
         EndgameData.Identity(response.NextCursor, "nextCursor");
         int offset = 0;
         if (request.Cursor.Length > 0 && !int.TryParse(request.Cursor, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out offset))
