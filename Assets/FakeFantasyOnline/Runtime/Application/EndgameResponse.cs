@@ -25,6 +25,9 @@ public sealed class EndgameResponse
     internal DateTime RiftPageReceivedUtc { get; set; }
     internal double RiftPageReceivedMS { get; set; }
     public IReadOnlyList<EndgameItemView> Items { get; }
+    public IReadOnlyList<EndgameSpiritDefinitionView> Spirits { get; }
+    public IReadOnlyList<int> SpiritAppearanceIDs { get; }
+    public EndgameSpiritView Spirit { get; }
     public IReadOnlyList<EndgamePowerRecordView> Powers { get; }
     public IReadOnlyList<EndgameRuneView> Runes { get; }
     public IReadOnlyList<EndgameFormationView> Formations { get; }
@@ -41,7 +44,7 @@ public sealed class EndgameResponse
         string messageKind = EndgameData.String(d, "kind", 64);
         // Business rift snapshots allow additive metadata; transport and scene context remain exact.
         if (!messageKind.StartsWith("rift.", StringComparison.Ordinal) || messageKind == "rift.page" || messageKind == "rift.context")
-        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data", "powers");
+        EndgameData.Keys(d, "kind", "requestId", "ok", "error", "message", "revision", "catalogVersion", "capabilities", "cursor", "nextCursor", "snapshotId", "chunk", "chunks", "items", "runes", "formations", "recipes", "materials", "quote", "rift", "result", "skillRanks", "combatStats", "riftEntrances", "totalBytes", "data", "powers", "spirits", "spirit", "spiritAppearanceIds");
         Kind = EndgameData.String(d, "kind", 64); RequestID = EndgameData.String(d, "requestId", 64); OK = EndgameData.Bool(d, "ok");
         Error = EndgameData.String(d, "error", 64); Message = EndgameData.String(d, "message"); Revision = EndgameData.ID(d, "revision"); CatalogVersion = EndgameData.String(d, "catalogVersion", 128);
         Capabilities = EndgameData.List(d, "capabilities", 16, v => EndgameData.Text(v, "capabilities", 64));
@@ -57,6 +60,13 @@ public sealed class EndgameResponse
                 throw new FormatException("Invalid rift page envelope.");
         }
         else if (d.ContainsKey("totalBytes") || d.ContainsKey("data")) throw new FormatException("Unexpected rift page fields.");
+        Spirits = EndgameData.List(d, "spirits", 9, v => new EndgameSpiritDefinitionView(EndgameData.Object(v)));
+        SpiritAppearanceIDs = EndgameData.List(d, "spiritAppearanceIds", 128, v => EndgameData.Integer(v, "spiritAppearanceIds"));
+        var spiritKinds = new HashSet<int>();
+        foreach (var row in Spirits) if (!spiritKinds.Add(row.Kind)) throw new FormatException("Duplicate spirit kind.");
+        var appearanceIDs = new HashSet<int>();
+        foreach (int id in SpiritAppearanceIDs) if (id <= 0 || !appearanceIDs.Add(id)) throw new FormatException("Invalid spirit appearance ID.");
+        Spirit = EndgameData.Optional(d, "spirit", v => new EndgameSpiritView(EndgameData.Object(v)));
         Powers = EndgameData.List(d, "powers", 50, v => new EndgamePowerRecordView(EndgameData.Object(v)));
         Items = EndgameData.List(d, "items", 32, v => new EndgameItemView(EndgameData.Object(v)));
         Runes = EndgameData.List(d, "runes", 32, v => new EndgameRuneView(EndgameData.Object(v)));

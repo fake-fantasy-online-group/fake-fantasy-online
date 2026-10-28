@@ -25,11 +25,29 @@ public sealed partial class DialogUI
             ReferenceEquals(state, cubeWorkbenchState) && state.Generation == cubeWorkbenchGeneration &&
             cubeWorkbenchMapID == GameBootstrap.CurMapId && GameBootstrap.I?.Window?.IsNpcStateCurrentForIndependentRuntime(source) == true;
     }
+    private bool PowerBookNpcCurrent(WorldNpcState source)
+    {
+        var state = EndgamePanel.WorldState;
+        return source != null && ReferenceEquals(source, cubeWorkbenchNpc) && source.EntityId != 0 &&
+            state != null && state.PowerBookAvailable && state.PowerBookNPC.Length > 0 && source.DisplayName == state.PowerBookNPC &&
+            ReferenceEquals(state, cubeWorkbenchState) && state.Generation == cubeWorkbenchGeneration &&
+            cubeWorkbenchMapID == GameBootstrap.CurMapId && GameBootstrap.I?.Window?.IsNpcStateCurrentForIndependentRuntime(source) == true;
+    }
+    private void AddPowerBookRecoveryOption(WorldNpcState source)
+    {
+        if (!PowerBookNpcCurrent(source)) return;
+        var state = cubeWorkbenchState;
+        Add(new ReferenceNpcDialogOption(state.PendingRequest?.Op == "powerbook.recover" ? "查询寻回结果" : "寻回" + state.PowerBookName, () =>
+        {
+            if (PowerBookNpcCurrent(source) && EndgamePanel.RecoverPowerBookFromNpc(state, source.EntityId)) Close();
+        }));
+    }
     // Retained compatibility surface: portable cube recipes never use NPC authority.
     internal int CubeWorkbenchEntityForIndependentRuntime(EndgameClientState state) => 0;
     private void AddCubeWorkbenchOption()
     {
         var source = cubeWorkbenchNpc;
+        AddPowerBookRecoveryOption(source);
         if (!CubeWorkbenchCurrent(source)) return;
         var state = cubeWorkbenchState;
         if (state.CubeLore.Length > 0)

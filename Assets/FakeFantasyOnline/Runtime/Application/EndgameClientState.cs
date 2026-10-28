@@ -75,7 +75,7 @@ public sealed partial class EndgameClientState
         helloRequestedAt = helloRetryAt = default(DateTime);
         DiscardChunks(); publishedSnapshotID = null; retiredSnapshots.Clear(); retiredSnapshotOrder.Clear();
         inventorySnapshotRequired = nativeSnapshotRefreshPending = false; inventorySnapshotRequiredAt = default(DateTime);
-        ResetPowerBook(); ResetCatalogs(); Generation++; Version++;
+        ResetSpirit(); ResetPowerBook(); ResetCatalogs(); Generation++; Version++;
     }
     public bool Begin(EndgameRequest request)
     {
@@ -86,6 +86,7 @@ public sealed partial class EndgameClientState
         // A native-only publication gets one coalesced read, including a failed
         // send. Manual refresh remains available; host ticks never retry forever.
         if (request.Op == "snapshot") nativeSnapshotRefreshPending = false;
+        if (request.Op.StartsWith("spirit.", StringComparison.Ordinal) && !BeginSpirit(request)) return false;
         if (request.Op.StartsWith("skill.", StringComparison.Ordinal) && !GrowthV5) return false;
         if (request.Op.StartsWith("powerbook.", StringComparison.Ordinal) && !PowerBookAvailable) return false;
         if (request.Op == "powerbook.list" && !BeginPowerBookRead(request)) return false;
@@ -120,6 +121,7 @@ public sealed partial class EndgameClientState
     {
         TickRiftPages(now);
         TickPowerBook(now);
+        TickSpirit(now);
         // A read-only hello can disappear during a map transfer or a dropped
         // send. Release it after a bounded wait, then use the same cooldown as
         // transient server errors. Never retry each host frame indefinitely.
@@ -158,6 +160,7 @@ public sealed partial class EndgameClientState
     {
         if (requestID.Length == 0) return;
         ReleasePowerBookRead(requestID);
+        ReleaseSpiritRead(requestID);
         if (requestID == QuoteRequestID) { QuotePending = false; QuoteRequestID = ""; }
         string name = CatalogForRequest(requestID);
         if (name != null) catalogRequests.Remove(name);
@@ -222,6 +225,15 @@ public sealed partial class EndgameClientState
             {
                 bool previousVariants = SkillVariantsV1;
                 PowerBookAvailable = accepted && response.Result.TryGetValue("powerBook", out string powerBook) && powerBook == "1";
+                PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = "";
+                if (PowerBookAvailable && response.Result.TryGetValue("powerBookItem", out string itemBook) && itemBook == "1")
+                {
+                    if (response.Result.TryGetValue("powerCodexItemId", out string bookID) && int.TryParse(bookID, out int bid) && bid > 0) PowerBookItemID = bid;
+                    if (response.Result.TryGetValue("powerScrollItemId", out string scrollID) && int.TryParse(scrollID, out int sid) && sid > 0) PowerScrollItemID = sid;
+                    if (response.Result.TryGetValue("powerBookNPC", out string bookNPC)) PowerBookNPC = bookNPC;
+                    if (response.Result.TryGetValue("powerBookName", out string bookName) && bookName.Length > 0) PowerBookName = bookName;
+                }
+                PowerBookAvailable = PowerBookAvailable && PowerBookItemID > 0 && PowerScrollItemID > 0;
                 if (!PowerBookAvailable) ResetPowerBookValues();
                 CubeInputsV1 = accepted && cubeInputs;
                 CubeItemID = 0; CubeNPC = CubeLore = "";
@@ -234,6 +246,7 @@ public sealed partial class EndgameClientState
                 }
                 RiftPortalsV1 = accepted && riftPortals;
                 if (RiftPortalsV1 && !hasRiftSceneContext) RiftContextKnown = false;
+                ApplySpiritHello(response, accepted);
                 Negotiated = accepted; NativeEquipmentStats = accepted && nativeStats; GrowthV5 = accepted && growth;
                 SkillBehaviorV1 = GrowthV5 && skillBehavior; SkillVariantsV1 = SkillBehaviorV1 && skillVariants;
                 if (!GrowthV5 || previousVariants != SkillVariantsV1) ResetSkillRanks();
@@ -254,6 +267,8 @@ public sealed partial class EndgameClientState
         }
         if (!Negotiated) return false;
         if (response.Kind == "capabilities") return ApplyRiftCapabilities(response);
+        if (response.Kind == "spirit.open" || response.Kind == "spirit.preview") return ApplySpiritRead(response);
+        if (response.Kind.StartsWith("spirit.", StringComparison.Ordinal) && (PendingRequest == null || PendingRequest.RequestID != response.RequestID)) return false;
         if (response.Kind == "powerbook.list") return ApplyPowerBook(response);
         if (PendingRequest != null && response.RequestID == PendingRequest.RequestID && !PendingRequest.MatchesResponse(response))
         { NoteInvalidResponse("服务器回执类型与原请求不符，请查询原请求。"); return false; }
@@ -286,11 +301,12 @@ public sealed partial class EndgameClientState
             Message = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
             if (receipt && response.Error != "pending" && response.Error != "storage_unavailable" && response.Error != "storage" && response.Error != "busy") PendingRequest = null;
             if (response.Error == "stale_revision" || response.Error == "quote_expired") InvalidateQuote();
-            if (response.Kind == "powerbook.imprint" && response.Error == "stale_revision") PowerBookRevision = "";
+            if ((response.Kind == "powerbook.extract" || response.Kind == "powerbook.apply") && response.Error == "stale_revision") PowerBookRevision = "";
             RememberResponse(response); Version++; return false;
         }
         if (response.Kind == "skill.ranks" && !ApplySkillRanks(response)) return false;
         if (response.Kind == "combat.stats" && !ApplyCombatStats(response)) return false;
+        if (receipt && response.Kind == "spirit.result") PublishSpiritResult(response);
         if (receipt) { PendingRequest = null; InvalidateQuote(); Error = ""; Message = response.Message.Length > 0 ? response.Message : "服务器已确认。"; }
         if (response.Kind != "snapshot" && response.Revision.Length > 0 && CompareRevision(response.Revision, Revision) >= 0) Revision = response.Revision;
         if (response.CatalogVersion.Length > 0 && response.CatalogVersion != CatalogVersion)

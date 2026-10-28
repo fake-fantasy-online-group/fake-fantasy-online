@@ -30,6 +30,7 @@ public sealed partial class EndgamePanel
     internal static string OverlayTooltip(EndgameItemView item, string original)
     {
         if (item == null || !MatchesNative(item)) return original;
+        if (item.PowerScroll != null) return PowerScrollTooltip(item.PowerScroll, original);
         if (IsRune(item) || item.SocketCount > 0) Current?.LoadCatalog("runes");
         if (IsRune(item)) return RuneTooltip(item, original);
         if (item.SocketCount > 0 && item.Level > 0) original = ReplaceLevelRequirement(original, item.Level);
@@ -265,6 +266,23 @@ public sealed partial class EndgamePanel
         return string.Join("\n", lines);
     }
     internal static string DarkGold(string text) => TooltipContent.QualityName(text, 5);
+    private static string PowerScrollTooltip(EndgamePowerScrollView scroll, string original)
+    {
+        var lines = new List<string>((original ?? "").Replace("\\n", "\n").Split('\n'));
+        foreach (string part in scroll.Description.Replace("\\n", "\n").Split('\n'))
+        {
+            if (part.Length == 0) continue;
+            bool found = false;
+            for (int i = 0; i < lines.Count; i++)
+                if (PlainLine(lines[i]) == part)
+                {
+                    if (!found) { lines[i] = Orange(part); found = true; }
+                    else { lines.RemoveAt(i); i--; }
+                }
+            if (!found) { if (lines.Count > 0 && lines[lines.Count - 1].Length > 0) lines.Add(""); lines.Add(Orange(part)); }
+        }
+        return string.Join("\n", lines);
+    }
     private static string Orange(string text) => "\u0006" + text;
     private static string PlainLine(string line)
     {

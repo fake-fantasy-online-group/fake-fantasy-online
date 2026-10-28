@@ -159,14 +159,53 @@ internal static partial class UITip
         if (string.IsNullOrEmpty(line)) { lines.Add(""); return lines; }
         if (maxW <= 0f || BitmapFont.Measure(line, s) <= maxW) { lines.Add(line); return lines; }
         var current = new StringBuilder();
-        foreach (char c in line)
+        for (int index = 0; index < line.Length;)
         {
-            if (current.Length > 0 && BitmapFont.Measure(current.ToString() + c, s) > maxW)
-            { lines.Add(current.ToString()); current.Clear(); }
-            current.Append(c);
+            int end = TooltipNumericEnd(line, index);
+            string token = line.Substring(index, end - index);
+            if (BitmapFont.Measure(token, s) <= maxW)
+            {
+                if (current.Length > 0 && BitmapFont.Measure(current.ToString() + token, s) > maxW)
+                { lines.Add(current.ToString()); current.Clear(); }
+                current.Append(token);
+            }
+            else // A number wider than the entire tooltip must still make progress.
+                foreach (char c in token)
+                {
+                    if (current.Length > 0 && BitmapFont.Measure(current.ToString() + c, s) > maxW)
+                    { lines.Add(current.ToString()); current.Clear(); }
+                    current.Append(c);
+                }
+            index = end;
         }
         if (current.Length > 0) lines.Add(current.ToString());
         return lines;
+    }
+
+    // Keep measured numbers (and endpoint ranges) together, not arbitrary words.
+    // Layout removes native color/centering markers before this helper is called.
+    private static int TooltipNumberEnd(string text, int start)
+    {
+        int i = start;
+        if (i < text.Length && (text[i] == '+' || text[i] == '-' || text[i] == '−')) i++;
+        int digits = i;
+        while (i < text.Length && text[i] >= '0' && text[i] <= '9') i++;
+        if (i == digits) return start;
+        if (i + 1 < text.Length && text[i] == '.' && text[i + 1] >= '0' && text[i + 1] <= '9')
+        { i++; while (i < text.Length && text[i] >= '0' && text[i] <= '9') i++; }
+        if (i < text.Length && (text[i] == '%' || text[i] == '％')) i++;
+        return i;
+    }
+    private static int TooltipNumericEnd(string text, int start)
+    {
+        int end = TooltipNumberEnd(text, start);
+        if (end == start) return start + 1;
+        if (end < text.Length && (text[end] == '～' || text[end] == '~' || text[end] == '–' || text[end] == '-'))
+        {
+            int second = TooltipNumberEnd(text, end + 1);
+            if (second > end + 1) end = second;
+        }
+        return end;
     }
 
     public static Color32 QualityColor(int q)

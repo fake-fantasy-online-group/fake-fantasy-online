@@ -18,7 +18,7 @@ namespace UnityEngine {
  public enum EventType { Repaint,MouseDown,MouseUp,KeyDown,Used } public enum KeyCode { Space,Return,KeypadEnter,Escape } public enum FocusType { Keyboard }
  public class Event { public static Event current=new Event(); public EventType type; public int button; public Vector2 mousePosition; public KeyCode keyCode; public EventType GetTypeForControl(int id){return type;} public void Use(){type=EventType.Used;} }
  public static class GUIUtility { public static int hotControl,keyboardControl; public static int GetControlID(int hint,FocusType focus,Rect r){return 100+(int)r.x;} }
- public static class GUI {public static GUISkin skin=new GUISkin(); public static string lastLabel; public static void Label(Rect r,GUIContent c,GUIStyle st){lastLabel=c.text;} public static Color color=Color.white; public static bool enabled=true; public static List<Rect> cells=new List<Rect>(); public static Texture2D last; public static Color lastColor; public static void DrawTexture(Rect r,Texture2D t){cells.Add(r);last=t;lastColor=color;} public static void DrawTexture(Rect r,Texture2D t,ScaleMode mode,bool alphaBlend){DrawTexture(r,t);} public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv){if(uv.x < -0.0001||uv.y < -0.0001||uv.xMax>1.0001||uv.yMax>1.0001)throw new Exception("UV outside texture");DrawTexture(r,t);} }
+ public static class GUI {public static GUISkin skin=new GUISkin(); public static string lastLabel; public static void Label(Rect r,GUIContent c,GUIStyle st){lastLabel=c.text;} public static Color color=Color.white; public static bool enabled=true; public static List<Rect> cells=new List<Rect>(); public static List<Color> colors=new List<Color>(); public static Texture2D last; public static Color lastColor; public static void DrawTexture(Rect r,Texture2D t){cells.Add(r);colors.Add(color);last=t;lastColor=color;} public static void DrawTexture(Rect r,Texture2D t,ScaleMode mode,bool alphaBlend){DrawTexture(r,t);} public static void DrawTextureWithTexCoords(Rect r,Texture2D t,Rect uv){if(uv.x < -0.0001||uv.y < -0.0001||uv.xMax>1.0001||uv.yMax>1.0001)throw new Exception("UV outside texture");DrawTexture(r,t);} }
 }
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class NpcChatter { public static UnityEngine.Font CnFont(){return null;} }
@@ -41,6 +41,10 @@ class Test {
   E(UnityEngine.EventType.MouseDown);Assert(!ArtworkSkin.Button(r,"a"),"activation on down");Assert(UnityEngine.GUIUtility.hotControl==100,"mouse capture");E(UnityEngine.EventType.MouseUp);Assert(ArtworkSkin.Button(r,"a"),"activation on release");Assert(UnityEngine.GUIUtility.hotControl==0,"capture release");
   E(UnityEngine.EventType.MouseDown);ArtworkSkin.Button(r,"a");E(UnityEngine.EventType.MouseUp,200,200);Assert(!ArtworkSkin.Button(r,"a")&&UnityEngine.GUIUtility.hotControl==0,"drag outside cancel");
   E(UnityEngine.EventType.MouseDown);ArtworkSkin.Button(r,"a");E(UnityEngine.EventType.MouseUp);Assert(!ArtworkSkin.Button(r,"a",enabled:false)&&UnityEngine.GUIUtility.hotControl==0,"disable mid-click");
+  var hit=new UnityEngine.Rect(0,0,100,44);var face=new UnityEngine.Rect(0,11,100,22);
+  E(UnityEngine.EventType.MouseDown,10,3);Assert(!ArtworkSkin.ButtonWithHitArea(hit,face,"提取卷轴"),"native face touch padding captures without activating");
+  UnityEngine.GUI.cells.Clear();E(UnityEngine.EventType.MouseUp,10,3);Assert(ArtworkSkin.ButtonWithHitArea(hit,face,"提取卷轴"),"native face touch padding releases to activate");
+  foreach(var cell in UnityEngine.GUI.cells)Assert(cell.y>=11&&cell.yMax<=33,"native button artwork remains22px inside44px hit target");
   E(UnityEngine.EventType.MouseDown,b:1);Assert(!ArtworkSkin.Button(r,"a")&&UnityEngine.GUIUtility.hotControl==0,"right click ignored");
   UnityEngine.GUIUtility.keyboardControl=100;E(UnityEngine.EventType.KeyDown,k:UnityEngine.KeyCode.Return);Assert(ArtworkSkin.Button(r,"a")&&UnityEngine.Event.current.type==UnityEngine.EventType.Used,"focused keyboard activation");
   UnityEngine.GUI.enabled=false;E(UnityEngine.EventType.KeyDown);Assert(!ArtworkSkin.Button(r,"a"),"global disabled");UnityEngine.GUI.enabled=true;
@@ -65,6 +69,18 @@ class Test {
   Assert(imageRect.x==r.x&&imageRect.y==r.y&&imageRect.width==r.width&&imageRect.height==r.height,"single artwork hover preserves geometry");
   ArtworkSkin.ButtonFace(new UnityEngine.Rect(0,0,152,33),"申请账号",fontScale:1f);
   Assert(BitmapFont.lastScale==1f,"native title label scale remains unscaled");
+  ResLoader.I=new ResLoader(); UnityEngine.GUI.color=UnityEngine.Color.white;
+  foreach(float scale in new[]{.4f,1f,2f}) {
+   var popup=new UnityEngine.Rect(68,97,158*scale,176*scale);
+   UnityEngine.GUI.cells.Clear(); UnityEngine.GUI.colors.Clear(); ArtworkSkin.Input(popup,scale,focused:true,opaque:true);
+   Assert(UnityEngine.GUI.cells.Count==10,"opaque dropdown adds one backing plus native nine-slice");
+   var fill=UnityEngine.GUI.cells[0]; var color=UnityEngine.GUI.colors[0];
+   Assert(fill.x==popup.x+3*scale&&fill.y==popup.y+3*scale&&fill.width==popup.width-6*scale&&fill.height==popup.height-6*scale,"opaque backing confined inside native3px border");
+   Assert(color.r==0&&color.g==0&&color.b==0&&color.a==1,"native black center fully opaque, no underlying list bleed");
+   Assert(UnityEngine.GUI.last.name=="res/uires/sysdlg/editbk.gsa","popup uses exact input skin, not ornate message frame");
+   UnityEngine.GUI.cells.Clear(); ArtworkSkin.Input(popup,scale);
+   Assert(UnityEngine.GUI.cells.Count==9,"ordinary inputs retain original translucent rendering");
+  }
   Console.WriteLine("PASS "+count+" deterministic artwork/input contract assertions (Unity API stubs; not PlayMode)");
  }
 }

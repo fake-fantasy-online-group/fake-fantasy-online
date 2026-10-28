@@ -125,6 +125,7 @@ internal partial class InventoryDlg
         if (DealDlg.Visible && DealDlg.IsOffered((byte)tab, item.bagIdx)) return "撤回交易";
         if (EquipFuseDlg.Picking || ToolTarget.Active || PetForgeDlg.Picking || AttrWashDlg.Picking || AvatarFuse.Active || RepairDlg.Picking) return "选择此物品";
         if (DealDlg.Visible) return "放入交易";
+        if (!item.pet.HasValue && EndgamePanel.SpiritWorkbenchOpen) return "放入灵加工";
         if (!item.pet.HasValue && EndgamePanel.CubeContainerOpen) return "放入周天鼎";
         if (!item.pet.HasValue && StoreDlg.Visible) return "存入仓库";
         if (!item.pet.HasValue && Win05.IsShowing("magicstoredlg")) return "放入衣橱";

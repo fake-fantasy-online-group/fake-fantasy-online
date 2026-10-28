@@ -9,6 +9,7 @@ internal static class CubeQuestTitles
         {
             case 1900030001: return "问鼎周天";
             case 1900030002: return "幻翼初展";
+            case 1900030100: return "灵元寻踪";
             default: return null;
         }
     }

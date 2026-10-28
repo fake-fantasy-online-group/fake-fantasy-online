@@ -16,7 +16,7 @@ static class TaskDB { public class Def { public int id,type; public string name,
 static class TaskClient { public static HashSet<int> Active=new HashSet<int>(); public static HashSet<int> Done=new HashSet<int>(); public static IEnumerable<TaskDB.Def> Recommended(int n)=>new TaskDB.Def[0]; public static bool IsActive(int id)=>Active.Contains(id); }
 class TaskDlg { BODY }
 static class Test { static void Main() {
-foreach(int id in new[]{1900030001,1900030002}) {
+foreach(int id in new[]{1900030001,1900030002,1900030100}) {
  if(TaskDlg.DisplayDef(id)!=null)throw new Exception("inactive definitions synthesized");
  TaskClient.Active.Add(id);var d=TaskDlg.DisplayDef(id);
  if(d.name!=CubeQuestTitles.MissingTitle(id)||d.publisher!=""||d.desc!=""||TaskDB.Get(id)!=null)throw new Exception("title-only fallback violated");
@@ -30,7 +30,7 @@ TaskDB.Rows.Clear();TaskClient.Done.UnionWith(new[]{1900030001,1900030002,999});
 var titles=TaskDlg.DoneTitles(3);if(titles.Count!=2||!titles.Contains("问鼎周天")||!titles.Contains("幻翼初展"))throw new Exception("completed native title rows missing");
 if(TaskDlg.DoneTitles(0).Count!=0||TaskDB.Rows.Count!=0)throw new Exception("recommendations or definitions changed");
 TaskDB.Rows[1900030001]=new TaskDB.Def{id=1900030001,name="Native"};if(TaskDlg.DoneTitles(3).Count!=1)throw new Exception("completed native row duplicated");
-Console.WriteLine("PASS two-ID title fallback / actual DisplayDef and completed-list assertions including 999 unrelated IDs; no resource or TaskDB mutation.");
+Console.WriteLine("PASS cube/wing/spirit-daily title fallback / actual DisplayDef and completed-list assertions including 999 unrelated IDs; no resource or TaskDB mutation.");
 } } }
 '''.replace('BODY',body)
 mono=Path(os.environ['FFO_MONO_ROOT'])

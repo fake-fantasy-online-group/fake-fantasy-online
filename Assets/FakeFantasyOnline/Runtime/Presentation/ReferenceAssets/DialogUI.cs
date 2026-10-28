@@ -238,6 +238,7 @@ public sealed partial class DialogUI : MonoBehaviour
         CaptureRiftEntrance(npc);
         CaptureRiftExit(npc);
         CaptureCubeWorkbench(npc);
+        CaptureSpiritWorkbench(npc);
         NpcName = (originalReceiver != null ? originalReceiver.npcName : npc.DisplayName) ?? string.Empty;
 
         // DialogUI.Show 06000211 hides the ordinary dialog and returns before task offers.
@@ -741,6 +742,19 @@ public sealed partial class DialogUI : MonoBehaviour
         NetClient.I?.OpenTeleportForIndependentRuntime(curTrans);
     }
 
+    // Sale policy is separate from the nine processing implementations. The
+    // existing ring NPC is included without opting it into any new spirit flow.
+    private static bool IsSpiritMerchant(string name)
+    {
+        switch (name)
+        {
+            case "鞋灵仙子": case "拳灵仙子": case "羽灵仙子": case "衣灵仙子":
+            case "项灵仙子": case "面灵仙子": case "帽灵仙子": case "法宝灵仙子":
+            case "武灵仙子": case "戒灵仙子": return true;
+            default: return false;
+        }
+    }
+
     private void BuildMenu()
     {
         InSubView = false;
@@ -759,7 +773,9 @@ public sealed partial class DialogUI : MonoBehaviour
                     Close();
                     ShopDlg.Open(sellList, false);
                 }));
-            Add(new ReferenceNpcDialogOption(
+            // Spirit merchants retain purchase/task services; none buy player items.
+            if (!IsSpiritMerchant(NpcName))
+                Add(new ReferenceNpcDialogOption(
                 "出售物品",
                 () =>
                 {
@@ -855,6 +871,7 @@ public sealed partial class DialogUI : MonoBehaviour
             AddTrialOption("进入妖魔结界(试炼)", "trial");
         AddRiftEntranceOption();
         AddCubeWorkbenchOption();
+        AddSpiritWorkbenchOptions();
         if (NpcName.Contains("试炼大仙"))
             AddTrialOption("交任务·领取试炼奖励", "trialclaim");
         if (EndgamePanel.WorldEntryAvailable &&

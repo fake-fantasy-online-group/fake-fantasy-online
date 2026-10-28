@@ -4,6 +4,8 @@ internal static partial class ItemActions
 {
     internal static bool HandleWindowPrefixForIndependentRuntime(int id, byte tab, int slot, string name, System.Action<byte> beginRepairSelection)
     {
+        if (EndgamePanel.HandlePowerItemForIndependentRuntime(id, tab, slot)) return true;
+        if (EndgamePanel.HandleSpiritItemForIndependentRuntime(id, tab, slot)) return true;
         if (EndgamePanel.HandleCubeItemForIndependentRuntime(id, tab, slot)) return true;
         if (id == 0x350c)
         {

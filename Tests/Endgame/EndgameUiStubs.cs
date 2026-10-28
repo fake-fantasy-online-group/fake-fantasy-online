@@ -62,6 +62,7 @@ namespace UnityEngine
     public struct Quaternion { public float z; public static Quaternion identity => new Quaternion(); public static Quaternion Euler(float x,float y,float z) => new Quaternion { z=z }; }
     public static class Mathf
     {
+        public static float Clamp(float value, float min, float max) => Math.Max(min, Math.Min(max, value));
         public static float Min(float a, float b) => Math.Min(a, b);
         public static float Max(float a, float b) => Math.Max(a, b);
         public static float Clamp01(float value) => Math.Min(1, Math.Max(0, value));
@@ -101,6 +102,7 @@ namespace UnityEngine
     public class GUIStyleState { public Color textColor; }
     public class GUIStyle
     {
+        public static GUIStyle none = new GUIStyle();
         public GUIStyle() { } public GUIStyle(GUIStyle s) { }
         public Font font; public int fontSize; public bool wordWrap, richText; public RectOffset padding; public FontStyle fontStyle;
         public GUIStyleState normal = new GUIStyleState();
@@ -116,7 +118,9 @@ namespace UnityEngine
         public static string nextText;
         public static void Label(Rect r, string text, GUIStyle style) { labels.Add(text); }
         public static string TextField(Rect r, string text, int n, GUIStyle style) { string value = nextText ?? text; nextText = null; return value; }
+        public static int nativeScrollViews;
         public static Vector2 BeginScrollView(Rect r, Vector2 p, Rect inner) => p;
+        public static Vector2 BeginScrollView(Rect r, Vector2 p, Rect inner, GUIStyle horizontal, GUIStyle vertical) { if (horizontal == GUIStyle.none && vertical == GUIStyle.none) nativeScrollViews++; return p; }
         public static void EndScrollView() { }
         public static List<Tuple<Rect, Texture2D, Rect>> uvTextures = new List<Tuple<Rect, Texture2D, Rect>>();
         public static List<bool> uvAlphaBlends = new List<bool>();
@@ -136,10 +140,12 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static Dictionary<string, bool> enableds = new Dictionary<string, bool>();
         public static bool Button(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1)
         { enableds[text] = enabled; if (respectEventUse && Event.current.type == EventType.Used) return false; if (click == text && enabled) { click = null; return true; } return false; }
+        public static bool Close(Rect r, float scale = 1, bool enabled = true) => Button(r, "×", scale, enabled);
+        public static bool ButtonWithHitArea(Rect hit, Rect face, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1) => Button(hit, text, scale, enabled, selected, fontScale);
         public static bool Tab(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1) => Button(r, text, scale, enabled, selected, fontScale);
         public static void ButtonFace(Rect r, string text, float scale = 1, bool enabled = true, bool selected = false, float fontScale = 1, bool pressed = false) { }
         public static void Panel(Rect r, float scale = 1, bool highlighted = false, float opacity = 1) { }
-        public static void Input(Rect r, float scale = 1, bool focused = false) { }
+        public static void Input(Rect r, float scale = 1, bool focused = false, bool opaque = false) { }
         public static void Row(Rect r, float scale = 1, bool highlighted = false) { }
         public static Dictionary<string, Texture2D[]> frameTextures = new Dictionary<string, Texture2D[]>();
         public static Texture2D[] Frames(string path, int count = 4) => frameTextures.TryGetValue(path, out var value) ? value : null;
@@ -160,7 +166,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     internal static class NativeScroll
     {
-        public static int calls;
+        public static int calls, bars, wheels;
+        public static void Wheel(Rect view, float viewH, float contentH, ref Vector2 scroll, float step) { wheels++; if (Event.current.type == EventType.ScrollWheel && view.Contains(Event.current.mousePosition) && contentH > viewH) { scroll.y = Mathf.Clamp(scroll.y + (Event.current.delta.y >= 0 ? step : -step), 0, contentH - viewH); Event.current.Use(); } }
+        public static void BarAt(object owner, Rect track, float viewH, float contentH, ref Vector2 scroll) { bars++; }
         public static void BarRows(object owner, Rect track, int visible, int total, ref int scroll) { calls++; }
     }
     internal static class NpcChatter { public static Font CnFont() => new Font(); }
@@ -169,7 +177,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static readonly List<string> notices = new List<string>();
         public static void PushText(string text) { notices.Add(text); }
     }
-    internal static class BitmapFont { public static bool Ready => true; public static string Elide(string text, float width, float scale) => text; public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
+    internal static class BitmapFont { public static bool Ready => true; public static List<string> Wrap(string text, float width, float scale) => new List<string>((text ?? "").Split('\n')); public static void DrawOutline(float x, float y, string text, Color color, float scale) { labels.Add(text); GUI.labels.Add(text); } public static string Elide(string text, float width, float scale) => text; public static List<string> labels = new List<string>(); public static void CenterOutline(Rect r, string text, Color c, float scale) { labels.Add(text); } }
     internal static class UIScale { public static float Factor = 1; }
     internal static class WinZ
     {
@@ -225,4 +233,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     public class MonsterEntity { public Transform transform = new Transform(); public int RiftKind, Clears; public string RiftName; public void UpdateRiftIdentity(int kind, string name) { RiftKind = kind; RiftName = name; } public void ClearRiftIdentity() { RiftKind = 0; Clears++; }
         internal void UpdateRiftEliteState(RiftEliteVisualAssets assets, bool golden, bool agility, bool clone, double now) { } internal void ClearRiftEliteState() { } }
     public class EffectPlayer : MonoBehaviour { public static readonly List<EffectPlayer> Played = new List<EffectPlayer>(); public static readonly Material AlphaMaterial = new Material(), AdditiveMaterial = new Material(); public static Material BorrowAlphaMaterial() => AlphaMaterial; public static Material BorrowAdditiveMaterial() => AdditiveMaterial; public static float NextScale = 1f; public static Sprite[] MagicFrames; public static Sprite[] GetMagicFramesAll(int id) => MagicFrames; public static Sprite[] GetMagicFrames(int id) => MagicFrames; public static EffectPlayer PlayNamed(Vector3 position, string effect, float ppu) { var result = new EffectPlayer { gameObject = new GameObject(effect) }; result.transform.position = position; Played.Add(result); return result; } }
+}
+namespace FakeFantasyOnline.Presentation.ReferenceAssets
+{
+    internal static class AvatarFuse { public static int BegunKind = -1; public static void Begin(byte tab, int slot, byte kind = 0) { BegunKind = kind; } }
 }

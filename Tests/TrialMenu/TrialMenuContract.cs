@@ -26,7 +26,11 @@ public static class PetArousalDlg { public static void Open(){} }
 public static class AccountSecDlg { public static void Open(int x){} }
 public static class AccountSec { public static bool HasSecCode; }
 public static class EndgamePanel { public static bool WorldEntryAvailable=true; }
+public class WorldNpcState {}
 public partial class DialogUI {
+ private WorldNpcState spiritNpc = new WorldNpcState();
+ private bool SpiritNpcCurrent(WorldNpcState source) { return GameBootstrap.CurMapId == 7 && IsSpiritMerchant(NpcName) && NpcName != "戒灵仙子"; }
+ private void AddSpiritOption(WorldNpcState source, string label, string mode) { Add(new ReferenceNpcDialogOption(label, () => {})); }
  public string NpcName; public bool Visible,InSubView; public int CurrentSellList; private int curTrans;
  private const string LeaveLabel="离开";
  private List<string> optLabels=new List<string>(); private List<Action> optActs=new List<Action>();
@@ -62,6 +66,23 @@ public static class TrialMenuContract {
   foreach(int map in new[]{0,7,19,40,41,191}) {GameBootstrap.CurMapId=map;var d=new DialogUI();d.Open("试炼小仙");Check(d.Count(Travel)==0,"unsupported map granted travel "+map);}
   GameBootstrap.CurMapId=37;var other=new DialogUI();other.Open("普通村民");Check(other.Count(Travel)==0,"unrelated NPC gained travel");
   GameBootstrap.CurMapId=7;other.Open("试炼大仙");Check(other.Count(Travel)==0&&other.Count("交任务·领取试炼奖励")==1,"city service changed");
+  TaskClient.OfferNpcName="羽灵仙子";TaskClient.Offers.Clear();TaskClient.Offers.Add(new TaskClient.Offer{id=42,state=0,title="羽灵日常"});
+  var wing = new DialogUI { CurrentSellList=500 };wing.Open("羽灵仙子");
+  Check(wing.Count("出售物品")==0 && wing.Count("购买物品")==1,"wing NPC retains purchase but no sell menu");
+  Check(wing.Count("解封")==1 && wing.Count("加工 / 回退")==1 && wing.Count("归元")==1,"wing keeps all three real spirit workbench menu entries");
+  Check(wing.Count("任务：羽灵日常")==1,"wing keeps daily task offers");
+  wing.Refresh("羽灵仙子");Check(wing.Count("出售物品")==0 && wing.Count("购买物品")==1 && wing.Count("解封")==1,"wing offer refresh keeps services without reintroducing sale");
+  foreach(string name in new[]{"鞋灵仙子","拳灵仙子","羽灵仙子","衣灵仙子","项灵仙子","面灵仙子","帽灵仙子","法宝灵仙子","武灵仙子","戒灵仙子"}) {
+   TaskClient.OfferNpcName=name;TaskClient.Offers.Clear();TaskClient.Offers.Add(new TaskClient.Offer{id=43,state=0,title="灵器日常"});
+   var merchant = new DialogUI { CurrentSellList=500 };merchant.Open(name);
+   Check(merchant.Count("出售物品")==0 && merchant.Count("购买物品")==1,"all ten spirit NPCs omit sell but retain purchase: "+name);
+   Check(merchant.Count("任务：灵器日常")==1,"all spirit NPC daily offers retained: "+name);
+   int expected=name=="戒灵仙子"?0:1;
+   Check(merchant.Count("解封")==expected && merchant.Count("加工 / 回退")==expected && merchant.Count("归元")==expected,"nine processing routes preserved, ring not opted in: "+name);
+   merchant.Refresh(name);Check(merchant.Count("出售物品")==0,"offer refresh never reintroduces spirit sale: "+name);
+  }
+  var ordinary = new DialogUI { CurrentSellList=500 };ordinary.Open("普通商人");Check(ordinary.Count("出售物品")==1 && ordinary.Count("购买物品")==1,"ordinary merchant retains buy and sell");
+  var ring = new DialogUI { CurrentSellList=0 };ring.Open("戒灵仙子");Check(ring.Count("出售物品")==0 && ring.Count("购买物品")==0 && ring.Count("解封")==0,"actual ring with no shop keeps original behavior");
   Console.WriteLine("PASS "+checks+" production trial menu assertions; UI/network owners are doubles, not Unity runtime validation.");
  }
 }

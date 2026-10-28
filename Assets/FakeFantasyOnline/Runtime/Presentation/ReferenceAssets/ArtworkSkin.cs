@@ -88,12 +88,15 @@ internal static class ArtworkSkin
         finally { GUI.color = previous; }
     }
 
-    public static void Input(Rect rect, float scale = 1f, bool focused = false)
+    public static void Input(Rect rect, float scale = 1f, bool focused = false, bool opaque = false)
     {
         Ensure();
         Color previous = GUI.color;
         try
         {
+            // editbk has a translucent black center (alpha68); popup lists must occlude content below.
+            if (opaque) Fill(new Rect(rect.x + 3 * scale, rect.y + 3 * scale,
+                Mathf.Max(0, rect.width - 6 * scale), Mathf.Max(0, rect.height - 6 * scale)), new Color(0f, 0f, 0f, 1f));
             if (focused) GUI.color = previous * new Color(1.18f, 1.12f, .90f, 1f);
             if (input != null) Slice(rect, input, 3f, scale);
             else Panel(rect, scale, focused);
@@ -126,12 +129,17 @@ internal static class ArtworkSkin
     /// <summary>Release-to-activate control with IMGUI mouse capture and keyboard focus.</summary>
     public static bool Button(Rect rect, string text, float scale = 1f, bool enabled = true,
         bool selected = false, float fontScale = 1f)
+        => ButtonWithHitArea(rect, rect, text, scale, enabled, selected, fontScale);
+
+    // Keep native 22px artwork proportions while retaining a comfortable touch target.
+    public static bool ButtonWithHitArea(Rect rect, Rect face, string text, float scale = 1f, bool enabled = true,
+        bool selected = false, float fontScale = 1f)
     {
         int id = GUIUtility.GetControlID(ButtonHint, FocusType.Keyboard, rect);
         bool active = enabled && GUI.enabled;
         bool hover = active && rect.Contains(Event.current.mousePosition);
         bool clicked = Click(rect, id, active);
-        ButtonFace(rect, text, scale, active, selected || hover || GUIUtility.keyboardControl == id,
+        ButtonFace(face, text, scale, active, selected || hover || GUIUtility.keyboardControl == id,
             fontScale, active && GUIUtility.hotControl == id && hover);
         return clicked;
     }

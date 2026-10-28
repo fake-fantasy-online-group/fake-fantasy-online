@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 /// <summary>Shared server binding for independent NPC workbenches and the active-rift HUD.</summary>
-internal enum EndgameModule { Cube, Rift, PowerBook }
+internal enum EndgameModule { Cube, Rift, PowerBook, Spirit }
 public sealed partial class EndgamePanel : MonoBehaviour
 {
     internal static EndgamePanel Current { get; private set; }
@@ -46,12 +46,14 @@ public sealed partial class EndgamePanel : MonoBehaviour
         ClearRiftScenePortal(); ClearRiftWorldVisuals(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); client = null; open = false; observedGeneration = -1; ClearSelection();
     }
     private void OnDestroy() { ClearRiftScenePortal(); ClearRiftWorldVisuals(); ReleaseRiftProgressArtwork(); WinZ.Forget(this); if (Current == this) Current = null; }
-    private void OnDisable() { ClearRiftScenePortal(); ClearRiftWorldVisuals(); WinZ.Forget(this); open = false; observedGeneration = -1; }
+    private void OnDisable() { ResetPowerFilterDropdown(); ClearRiftScenePortal(); ClearRiftWorldVisuals(); WinZ.Forget(this); open = false; observedGeneration = -1; }
     private void ClearSelection()
     {
         ClearRiftEntrance();
         ResetRiftTierDropdown();
+        ResetPowerFilterDropdown();
         ClearCubeInputs();
+        ClearSpirit();
         selectedPowerID = ""; powerScroll = Vector2.zero;
         selectedUID = selectedRuneUID = ""; orderedRunes.Clear(); quotedInputs = null;
         itemScroll = detailScroll = runeScroll = Vector2.zero;
@@ -80,6 +82,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
                 RefreshGrowthSkills();
             }
         }
+        ObserveSpiritRequest();
         ObserveCubeRequest();
         ObservePowerBookRequest();
         ObserveRiftPhase();
@@ -88,7 +91,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         if (open && module == EndgameModule.Cube && !CubeSourceCurrent()) Close();
         if (open && Input.GetKeyDown(KeyCode.Escape))
-        { if (riftTierOpen) ResetRiftTierDropdown(); else Close(); }
+        { if (powerFilterOpen >= 0) ResetPowerFilterDropdown(); else if (riftTierOpen) ResetRiftTierDropdown(); else Close(); }
         if (State.Negotiated && State.Rift != null && PollRun(State.Rift) && Time.unscaledTime >= nextRiftRefresh)
         { nextRiftRefresh = Time.unscaledTime + 3f; QueryRift(); }
     }
@@ -122,15 +125,15 @@ public sealed partial class EndgamePanel : MonoBehaviour
         if (client == null || !client.EndgameInWorld) return;
         if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         EnsureStyles();
-        float width = module == EndgameModule.PowerBook ? W : module == EndgameModule.Rift ? RiftWindowWidth : CubeWindowWidth;
-        float height = module == EndgameModule.PowerBook ? H : module == EndgameModule.Rift ? RiftWindowHeight : CubeWindowHeight;
+        float width = module == EndgameModule.Spirit ? SpiritWindowWidth : module == EndgameModule.PowerBook ? W : module == EndgameModule.Rift ? RiftWindowWidth : CubeWindowWidth;
+        float height = module == EndgameModule.Spirit ? SpiritWindowHeight : module == EndgameModule.PowerBook ? H : module == EndgameModule.Rift ? RiftWindowHeight : CubeWindowHeight;
         float scale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / width, (Screen.height - 20f) / height)));
         GUI.depth = -15;
         if (!State.Negotiated) return;
         float hudScale = Mathf.Max(.4f, Mathf.Min(UIScale.Factor, Mathf.Min((Screen.width - 20f) / W, (Screen.height - 20f) / H)));
         DrawRiftHud(hudScale); DrawRiftMarkers(hudScale);
         if (!open) return;
-        Rect window = module == EndgameModule.Cube ? CubeScreenRect(scale) :
+        Rect window = module == EndgameModule.Cube ? CubeScreenRect(scale) : module == EndgameModule.Spirit ? SpiritScreenRect(scale) :
             new Rect((Screen.width - width * scale) * .5f, (Screen.height - height * scale) * .5f, width * scale, height * scale);
         var frame = WinZ.Frame(this, window, 4); GUI.depth = frame.Item1;
         Vector2 oldMouse = Event.current.mousePosition;
@@ -140,9 +143,11 @@ public sealed partial class EndgamePanel : MonoBehaviour
         try
         {
             if (module == EndgameModule.Cube) HandleCubeDrag(window, scale);
+            if (module == EndgameModule.Spirit) HandleSpiritDrag(window, scale);
             GUI.matrix = Matrix4x4.TRS(new Vector3(window.x, window.y, 0f), Quaternion.identity, new Vector3(scale, scale, 1f));
             if (module == EndgameModule.Cube) DrawCube();
             else if (module == EndgameModule.PowerBook) DrawPowerBook();
+            else if (module == EndgameModule.Spirit) DrawSpirit();
             else
             {
                 DrawRiftWindowArtwork(new Rect(0, 0, width, height));

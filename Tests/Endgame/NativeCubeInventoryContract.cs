@@ -24,6 +24,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
   /* ACTUAL_NATIVE_ACTIVATION */
  }
  internal static class EndgamePanel {
+  public static bool SpiritWorkbenchOpen,spiritAccept=true; public static int spiritCalls,spiritEntryCalls; public const int spiritID=24000;
+  public static bool HandlePowerItemForIndependentRuntime(int id,int tab,int slot)=>false;
+  public static bool HandleSpiritItemForIndependentRuntime(int id,int tab,int slot){if(id!=spiritID)return false;spiritEntryCalls++;lastTab=tab;lastSlot=slot;return true;}
+  public static bool TryPutSpiritBagItem(int tab,int slot){spiritCalls++;lastTab=tab;lastSlot=slot;return spiritAccept;}
   public static bool CubeContainerOpen,accept=true,openAccept=true; public static int calls,lastTab,lastSlot,entryCalls,opened,configuredID=1900028301;
   public static bool TryPutCubeBagItem(int tab,int slot){calls++;lastTab=tab;lastSlot=slot;return accept;}
   public static bool HandleCubeItemForIndependentRuntime(int id,int tab,int slot){if(id!=configuredID)return false;entryCalls++;lastTab=tab;lastSlot=slot;if(openAccept)opened++;return true;}
@@ -53,6 +57,10 @@ class NativeCubeInventoryContract {
  // Both production activation owners must intercept the permanent item before any
  // consumable, cosmetic, equipment, portable-shop, or cooldown branch can run.
  int equips=0;
+ Check(ItemActions.Handle(EndgamePanel.spiritID,2,5,true,true,"灵",()=>equips++),"native spirit interception precedes cosmetic/equipment activation");
+ Check(ItemActions.HandleWindowPrefixForIndependentRuntime(EndgamePanel.spiritID,2,5,"灵",null),"hosted native prefix intercepts spirit before consumable dispatch");
+ Check(EndgamePanel.spiritEntryCalls==2&&NetClient.I.uses==0&&equips==0,"spirit item remains unconsumed until authoritative target operation");
+
  foreach(bool canOpen in new[]{true,false}) {
   EndgamePanel.openAccept=canOpen;int opened=EndgamePanel.opened;
   Check(ItemActions.Handle(EndgamePanel.configuredID,2,7,true,true,"周天鼎",()=>equips++),"full native item activation is handled even when opening is blocked");
@@ -64,6 +72,11 @@ class NativeCubeInventoryContract {
  Check(NetClient.I.uses==0&&GameHud.cooldowns==0&&AvatarFuse.calls==0&&equips==0,"portable cube neither consumes item nor starts cooldown or falls through to equip/cosmetic");
  Check(!ItemActions.Handle(1900028201,1,0,false,false,"材料")&&!ItemActions.HandleWindowPrefixForIndependentRuntime(1900028201,1,0,"材料",null),"ordinary materials retain normal native activation");
  var bag=new InventoryDlg();var item=new InventoryDlg.Item{id=1900028201,bagIdx=7,count=8,name="材料"};bool consumed;
+ EndgamePanel.SpiritWorkbenchOpen=EndgamePanel.CubeContainerOpen=true;var se=Right();int priorCube=EndgamePanel.calls;
+ Check(bag.Right(se,item,false,out consumed)&&consumed&&EndgamePanel.spiritCalls==1&&EndgamePanel.calls==priorCube,"spirit workbench wins before cube deposit and consumes right click");
+ EndgamePanel.spiritAccept=false;se=Right();Check(bag.Right(se,item,false,out consumed)&&consumed&&se.type==EventType.Used,"rejected spirit input cannot fall through to item use");
+ InventoryDlg.lockMod=true;int priorSpirit=EndgamePanel.spiritCalls;se=Right();bag.Right(se,item,false,out consumed);Check(EndgamePanel.spiritCalls==priorSpirit,"lock modifier precedes spirit reservation");InventoryDlg.lockMod=false;InventoryDlg.locks=0;
+ EndgamePanel.SpiritWorkbenchOpen=false;
  EndgamePanel.CubeContainerOpen=true;var e=Right();Check(bag.Right(e,item,false,out consumed)&&consumed&&e.type==EventType.Used&&EndgamePanel.lastTab==2&&EndgamePanel.lastSlot==7,"native right click routes exact bag location and consumes activation");
  EndgamePanel.accept=false;e=Right();Check(bag.Right(e,item,false,out consumed)&&consumed&&e.type==EventType.Used,"rejected cube selection cannot fall through to equip/use");EndgamePanel.accept=true;
  int calls=EndgamePanel.calls;InventoryDlg.lockMod=true;e=Right();Check(bag.Right(e,item,false,out consumed)&&consumed&&InventoryDlg.locks==1&&EndgamePanel.calls==calls,"native lock modifier retains priority");InventoryDlg.lockMod=false;

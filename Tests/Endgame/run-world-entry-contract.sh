@@ -12,6 +12,7 @@ OUT="$(mktemp -d)"; trap 'rm -rf "$OUT"' EXIT
  "$ROOT"/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/RiftElite*.cs \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.RiftEntrance.cs" \
  "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.Cube.cs" \
+ "$ROOT/Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.Spirit.cs" \
  "$ROOT/Tests/Endgame/RiftEntranceDialogStubs.cs" \
  "$ROOT/Tests/Endgame/EndgameUiStubs.cs" "$ROOT/Tests/Endgame/EndgameWorldEntryContract.cs"
 "$MONO/bin/mono" "$OUT/EndgameWorldEntryContract.exe"

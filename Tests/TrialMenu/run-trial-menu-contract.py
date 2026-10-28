@@ -4,13 +4,13 @@ from pathlib import Path
 import os, subprocess, tempfile
 root = Path(__file__).resolve().parents[2]
 src = root / 'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets/DialogUI.cs'
-def block(signature):
-    source = src.read_text(); start = source.index(signature)
+def block(signature, path=src):
+    source = path.read_text(); start = source.index(signature)
     end = source.index('{', start) + 1; depth = 1
     while depth:
         depth += (source[end] == '{') - (source[end] == '}'); end += 1
     return source[start:end]
-actual = 'using System; using System.Collections.Generic; public partial class DialogUI {\n' + '\n'.join(block(s) for s in ['private void BuildMenu()', 'private void OnTaskOffers(string npc)', 'private void AddTrialOption']) + '\n}'
+actual = 'using System; using System.Collections.Generic; public partial class DialogUI {\n' + '\n'.join(block(s) for s in ['private static bool IsSpiritMerchant(', 'private void BuildMenu()', 'private void OnTaskOffers(string npc)', 'private void AddTrialOption']) + '\n' + block('private void AddSpiritWorkbenchOptions()', src.with_name('DialogUI.Spirit.cs')) + '\n}'
 framework = Path(os.environ['FFO_FRAMEWORK_DIR']); mono = Path(os.environ['FFO_MONO_ROOT']) / 'bin/mono'
 with tempfile.TemporaryDirectory(prefix='trial-menu-') as tmp:
     tmp = Path(tmp); (tmp/'Actual.cs').write_text(actual); exe = tmp/'TrialMenu.exe'

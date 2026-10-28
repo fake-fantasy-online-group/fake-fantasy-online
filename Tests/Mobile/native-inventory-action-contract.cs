@@ -87,7 +87,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     internal static class RepairDlg
     { public static bool Picking; public static void PickBag(byte tab,int slot){Probe.Call("repair:"+tab+":"+slot);} }
     internal static class EndgamePanel
-    { public static bool CubeContainerOpen,CubeAccepts=true; public static bool TryPutCubeBagItem(int tab,int slot){Probe.Call("cube:"+tab+":"+slot);return CubeAccepts;} }
+    { public static bool SpiritWorkbenchOpen,SpiritAccepts=true; public static bool TryPutSpiritBagItem(int tab,int slot){Probe.Call("spirit:"+tab+":"+slot);return SpiritAccepts;}
+      public static bool CubeContainerOpen,CubeAccepts=true; public static bool TryPutCubeBagItem(int tab,int slot){Probe.Call("cube:"+tab+":"+slot);return CubeAccepts;} }
     internal static class StoreDlg { public static bool Visible; public static byte CurTab=3; }
     internal static class Win05 { public static bool Wardrobe; public static bool IsShowing(string id)=>Wardrobe; }
     internal static class StallConfigDlg { public static bool Active,IsSell=true; }
@@ -162,8 +163,8 @@ internal static class NativeInventoryActionContract
         SocialClient.OtherId=7;
         EquipFuseDlg.Picking=ToolTarget.Active=PetForgeDlg.Picking=AttrWashDlg.Picking=AvatarFuse.Active=RepairDlg.Picking=false;
         ToolTarget.ToolId=0;
-        EndgamePanel.CubeContainerOpen=StoreDlg.Visible=Win05.Wardrobe=StallConfigDlg.Active=false;
-        EndgamePanel.CubeAccepts=StallConfigDlg.IsSell=true;
+        EndgamePanel.SpiritWorkbenchOpen=EndgamePanel.CubeContainerOpen=StoreDlg.Visible=Win05.Wardrobe=StallConfigDlg.Active=false;
+        EndgamePanel.SpiritAccepts=EndgamePanel.CubeAccepts=StallConfigDlg.IsSell=true;
         SysMsgBox.Visible=false;SysMsgBox.Yes=null;SecCodeAskDlg.Submit=null;AccountSec.NeedSecCodeForUnlock=false;
         NetClient.I=new NetClient();ItemActions.Handles=false;GameHud.Cooldown=0;
         HornDialog.InputFocused=GossipDlg.InputFocused=false;
@@ -207,6 +208,10 @@ internal static class NativeInventoryActionContract
         Reset();Trade();live=item;live.fusedDesc="fused";Replace(live);Execute();Idle("fused trade waits for original confirmation");Check(SysMsgBox.Visible,"fused confirmation remains visible");SysMsgBox.Confirm();Only("offer","confirmed fused trade adds once");SysMsgBox.Confirm();Only("offer","repeated confirmation cannot add twice");
         Reset();Trade();live=item;live.fusedDesc="fused";Replace(live);Execute();InventoryDlg.SetItems(1,new List<InventoryDlg.Item>{live});SysMsgBox.Confirm();Idle("receipt invalidates pending fused offer");
 
+        Reset();EndgamePanel.SpiritWorkbenchOpen=EndgamePanel.CubeContainerOpen=StoreDlg.Visible=true;Check(inventory.Label(item)=="放入灵加工","spirit mobile primary uses matching action label");Execute();Only("spirit:1:44","spirit workbench precedes cube and warehouse mobile actions");
+        Reset();EndgamePanel.SpiritWorkbenchOpen=true;EndgamePanel.SpiritAccepts=false;Execute();Only("spirit:1:44","rejected spirit reservation never falls through to use");
+        Reset();Trade();EndgamePanel.SpiritWorkbenchOpen=true;Execute();Only("offer","trade retains priority over spirit reservation");
+        Reset(2);RepairDlg.Picking=true;EndgamePanel.SpiritWorkbenchOpen=true;Execute();Only("repair:2:44","active target picker retains priority over spirit reservation");
         Reset();EndgamePanel.CubeContainerOpen=true;StoreDlg.Visible=true;Win05.Wardrobe=true;Execute();Only("cube:1:44","cube takes original right-click precedence over warehouse/wardrobe");
         Reset();EndgamePanel.CubeContainerOpen=true;EndgamePanel.CubeAccepts=false;Execute();Only("cube:1:44","rejected cube deposit never falls through to item activation");
         Reset();StoreDlg.Visible=true;live=item;live.count=3;Replace(live);Execute();Only("warehouse:1:44:3","warehouse uses live full count");

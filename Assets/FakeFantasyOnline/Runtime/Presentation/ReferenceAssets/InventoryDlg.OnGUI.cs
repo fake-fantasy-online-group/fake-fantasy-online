@@ -142,14 +142,6 @@ internal partial class InventoryDlg
             while (index != 4);
         }
 
-        if (EndgamePanel.WorldState?.PowerBookAvailable == true && !splitOpen)
-        {
-            Rect powerBook = new Rect(X + s * 274f, Y + s * 41f, s * 80f, s * 21f);
-            ArtworkSkin.ButtonFace(powerBook, "威能录", s, GUI.enabled, powerBook.Contains(ev.mousePosition));
-            if (GUI.Button(powerBook, GUIContent.none, GUIStyle.none))
-            { EndgamePanel.TryOpenPowerBookFromWorld(); PlayerController.SuppressWorldClick(); }
-        }
-
         // --- sort button: design (365, 41) sized 48x21 ---
         Rect sort = new Rect(X + s * 365f, Y + s * 41f, s * 48f, s * 21f);
         bool sortHover = sort.Contains(ev.mousePosition);
@@ -411,6 +403,11 @@ internal partial class InventoryDlg
             return true;
         }
 
+        if (!isPet && EndgamePanel.SpiritWorkbenchOpen)
+        {
+            EndgamePanel.TryPutSpiritBagItem(tab, it.bagIdx);
+            ev.Use(); consumed = true; return true;
+        }
         // The live 周天鼎 reserves this bag row locally instead of activating it.
         if (!isPet && EndgamePanel.CubeContainerOpen)
         {

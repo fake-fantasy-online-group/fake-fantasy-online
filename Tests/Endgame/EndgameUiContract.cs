@@ -950,6 +950,7 @@ partial class EndgameUiContract
         GuardianServerWireContracts();
         RiftWorldVisualContracts();
         RiftEliteVisualContracts();
+        SpiritPanelContracts(c, p);
         Console.WriteLine("PASS " + assertions + " real-panel action contracts with Unity/artwork stubs; no rendering or engine launch.");
     }
 }
