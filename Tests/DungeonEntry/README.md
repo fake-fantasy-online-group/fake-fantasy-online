@@ -1,65 +1,83 @@
-# Native dungeon entry presentation contract
+# Native dungeon entry and task-admission contract
 
-Change: existing server-owned dungeon-service lists 101..133 (except 114) appear
-as named NPC main-menu choices rather than a generic TransportUI. Original
-0x1071 / 0x8049 / 0x1072 list/index authority remains unchanged. List 109 is an
-in-instance floor choice and 133 is an exit. Ordinary transport lists remain
-ordinary. List 114 is deliberately retained for owner review because the native
-lookup explicitly excludes its target map 34200.
+Dungeon-service lists 101..133 (except held list 114) render named NPC main-menu
+choices instead of a generic TransportUI. The existing 0x1071 / 0x8049 / 0x1072
+list/index authority, difficulty expansion, prices and unrelated transport stay
+unchanged. List 109 changes a floor; 133 exits. List 114 remains an independent
+review issue: native lookup explicitly excludes its target map 34200.
 
-No server production code, task eligibility, difficulty mapping, SQL or resource
-file is changed. The six existing `dungeonhard` commands remain separate. For
-unbound NPCs the original native table callback is byte-for-byte unchanged.
+## Owner-approved task-only admission
 
-## Run
+| Map | Quest | Allowed saved states |
+|---|---|---|
+| 29200 异龙之巢 | 355 九转（法系） | Active 0 / Deliver 1 |
+| 29400 隐魂之森 | 356 净幢（法系） | Active 0 / Deliver 1 |
+| 29900 月牙塔 | 359 天塔（物理系） | Active 0 / Deliver 1 |
+| 30000 月轮天经塔 | 361 凌霄（物理系） | Active 0 / Deliver 1 |
+
+Missing/abandoned/Finished 2 hides and refuses these four entries. Client
+DungeonQuestAccess uses the existing TaskClient Active/Done receipt, checks on
+render and click, and invalidates stale delegates on state changes. Solo entry
+no longer inherits the old generic client party check. The server independently
+checks each character's persisted log at shared entry, direct transfer and
+ordinary instance login restoration. No once-per-task counter was added.
+
+Quest355 has no usable current publisher definition: 无泪公 is unplaced and the
+existing disabled-task filter removes its definition, **not its saved log**.
+The server now projects only a genuinely saved unfinished355 record into the
+existing 0x8027 with its original task name and saved state/progress. It does not
+create a definition, NPC, offer or reward. The table entry's 老道士 is also
+unplaced. Admission is fixed; the task's acceptance/completion chain is not
+claimed restored. See server docs/task-only-dungeon-admission.md.
+
+Other repeatable reward dungeons are intentionally not gated by associated
+quests. Existing trial233 still requires Active only. Rift server-owned handoff
+and restoration keep their separate authority when reusing map templates.
+
+## Index and lifecycle safety
+
+The server still sends every authoritative row; the client hides ineligible
+rows without renumbering them. Callbacks capture the original wire index. A
+quest-state change cannot shift selection into a different dungeon or hard
+variant. NPC/list/map/generation checks reject stale callbacks, and task detail
+subviews are not forcibly replaced by a state receipt.
+
+The packet has no request nonce. Cross-list/map/closed replies are discarded;
+a same-list reply after re-opening the same configured NPC is indistinguishable
+on the existing protocol. Do not claim per-request nonce correlation.
+
+## Run and coverage
 
 ```sh
 source /workspace/shared/client-toolchains/env.sh
 python3 Tests/DungeonEntry/run-dungeon-entry-contract.py
+python3 Tests/NativeInteractions/run-native-controls-contract.py
 python3 Tests/TrialMenu/run-trial-menu-contract.py
 python3 Tests/Endgame/run-native-entry-sender-contract.py
+python3 Tests/QuestFeedback/run-quest-feedback-contract.py --mono "$FFO_MONO_ROOT/bin/mono" --csc "$FFO_CSC"
+python3 Tests/NativeInteractions/run-classic-interaction-contract.py
 ```
 
-The first command compiles the actual new DialogUI partial, actual menu travel
-segment, actual unchanged table callback, actual lookup and actual transport
-state types. Only Unity, socket and surrounding UI owners are substitutes.
-301 assertions cover all 71 audited list/index choices, 17 hard variants,
-ordinary transport, held list 114, exit wording, price rendering, double click,
-closed dialogue, old NPC reply, map transition, re-opened stale delegate,
-retained task subview and original table-only party gate. Quest states are
-characterized by real server tests, not simulated by string labels in this UI
-harness. TrialMenu has neutral dungeon-helper substitutes because it tests
-unrelated trial services with curTrans=0; this suite owns the actual helpers.
+Validated 2026-10-29: 394 actual entry/policy/state checks; 206 integrated
+DrawHistory/BuildMenu/dispatch checks; 206 trial-menu checks; 46 native sender
+checks; 35 quest-feedback checks; 64 classic-interaction checks. Actual source
+owners are compiled with boundary substitutes, not reimplemented assertions
+against a separate UI policy. State coverage includes missing/Active/Deliver/
+Finished, abandonment/reaccept receipts, stale clicks, mixed hidden rows and
+preserved difficulty indices, unrelated services and solo admission.
 
-`AuthoritativeRouteFixture.cs` was generated from actual server
-`domain.WithDungeonDifficultyChoices` output against the 54 explicit seeded
-rows in service lists 101..133 at server 6f01fdcf. Its 71 row indices, labels,
-map IDs, prices and 17 hard flags were individually checked against the audit
-CSV. It does not contain original resource bytes. In particular, two ordinary
-list-1 SQL rows must never be counted or rendered as dungeon-service routes.
+Full current core (418 files) and Presentation (1237 files) compile against
+verified recovered Unity references. No Unity execution, live PostgreSQL,
+device rendering or live-server smoke is claimed. The server focused race
+suite covers its own authoritative state transitions, full saved-log load,
+login restoration, direct requests, disabled355 projection, ordinary farm
+party carry and existing trial/Rift entry regressions.
 
-Base: client 36aab0ec93b1912905bd1e77165a63c951e50a6c (1.0.6), server
-6f01fdcf0051ff6b204acc60f73ea96de2a25df4. Source references:
+The 71-row fixture remains the output of real server
+`WithDungeonDifficultyChoices` over 54 seeded rows: 17 appended hard variants.
+It covers only lists101..133, not the two ordinary list1 rows. The fixture has
+no original resource bytes and no new eligibility fields.
 
-- server/migrations/000000_init-0.sql:8664–8925: 54 routes + exact NPC bindings.
-- server/internal/domain/dungeon_transport.go:7–58: existing difficulty expansion.
-- server/internal/game/scene/transport.go:10–121: source/NPC/context/price/clear gates.
-- server/internal/game/scene/dungeon.go:26–78,321–374: party/solo/trial gates.
-- server/internal/domain/quest.go:31–37,382+,584+: exact quest state semantics.
-- server/migrations/000000_init-32.sql:51189–51195: four solo quest narratives.
-- server/migrations/000000_init-42.sql:16–23 and init-52.sql:228: trial233, four entrances,12–100.
-- DungeonEntrances.Lookup.cs:10: map34200 explicitly excluded.
-- DialogUI.Travel.cs:50–67: unchanged table callback.
-
-Validation performed: complete current core compilation (418 sources) and
-Presentation compilation (1234 sources) with verified recovered Unity references;
-301 dungeon assertions; 206 adjacent trial-menu assertions; 46 native production
-sender assertions. No Unity execution, device rendering or live-server smoke is
-claimed. Existing native sender harness verifies actual opcode writers; this
-suite verifies the new call sites use those writers, not a local map switch.
-
-The transport packet has no request nonce. Cross-list/cross-map/closed replies
-are discarded, and stale click delegates have a generation guard. A same-list
-reply after re-opening the same configured NPC is indistinguishable on the
-existing protocol; it is safe only because the current authoritative list/index
-configuration is the same. Do not claim per-request nonce correlation.
+Development base for task policy: integrated client95b51f5/server29236d2,
+containing original client36aab0ec/server6f01fdcf. Current main SHAs rechecked
+2026-10-29 04:25 UTC; both unchanged. No release/version/deployment change.

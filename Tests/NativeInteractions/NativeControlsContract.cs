@@ -139,8 +139,17 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     public static class AccountSec { public static bool HasSecCode; }
     public static class EndgamePanel { public static bool WorldEntryAvailable; }
     public static class SysMsgBox { public static void Show(string text,Action ok) { } }
+    public static class DungeonEntrances
+    {
+        public class Dungeon { public int map; }
+        public static IEnumerable<Dungeon> For(string name) => new Dungeon[0]; // Unbound tables have their actual lookup contract.
+    }
     public static class TaskClient
     {
+        public class ActiveTask { public int id; }
+        public static List<ActiveTask> Active=new List<ActiveTask>();
+        public static HashSet<int> Done=new HashSet<int>();
+        public static ActiveTask GetActive(int id)=>Active.Find(t=>t.id==id);
         public class Offer { public int id,state; public string title,desc,award; }
         public static string OfferNpcName;
         public static List<Offer> Offers=new List<Offer>();
@@ -258,6 +267,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             combined.Visible=true;combined.Click(2);combined.Click(2);
             Check(NetClient.I.Choices.Count==sent+1 && NetClient.I.Choices.Last()==(110,0),"bound full-menu dungeon row sends incorrect index or repeats");
             Check(!combined.Visible,"native dungeon choice did not close NPC menu");
+            combined.OpenTransportForTest(110);
+            DialogUI.ConsumeDungeonTransport(new WorldTransportState(110,new[]{new WorldTransportDestinationState("任务",29900,100,200,0),destination}));
+            Check(!combined.Labels.Contains("进入任务")&&combined.Labels.Contains("创建家族"),"task-only filter displaced native family services or showed missing quest");
+            sent=NetClient.I.Choices.Count;combined.Click(2);
+            Check(NetClient.I.Choices.Count==sent+1&&NetClient.I.Choices.Last()==(110,1),"full native ActivateOption shifted authoritative index after hidden task row");
             var travel=new DialogUI{NpcName="传送仙子"};travel.Build();
             Check(travel.Labels.SequenceEqual(new[]{"随机传送","桃源","长乐"}),"real travel-menu early return changed");
             Console.WriteLine("PASS "+checks+" actual DrawHistory/BuildMenu/option-dispatch assertions (boundary stubs; no Unity execution)");

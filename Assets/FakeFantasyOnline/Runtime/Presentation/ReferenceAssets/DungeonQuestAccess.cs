@@ -2,7 +2,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
 // Same explicit task-only bindings as server domain.DungeonEntryQuest.
 // Active includes both unfinished/ready-to-hand-in rows in existing 0x8027;
-// 29200/355 is held until its disabled definition/native receipt path is repaired.
+// Retained 355 records are projected without restoring its disabled definition.
 // Done is completed history. Ordinary reward dungeons are deliberately absent.
 internal static class DungeonQuestAccess
 {
@@ -10,6 +10,7 @@ internal static class DungeonQuestAccess
     {
         switch (map)
         {
+            case 29200: return 355;
             case 29400: return 356;
             case 29900: return 359;
             case 30000: return 361;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compile the actual travel row predicate, lookup, and untouched native entry callback."""
+"""Compile actual entry owners, task-state projection, lookup and approved policy."""
 from pathlib import Path
-import hashlib, os, subprocess, tempfile
+import os, subprocess, tempfile
 ROOT=Path(__file__).resolve().parents[2]
 P=ROOT/'Assets/FakeFantasyOnline/Runtime/Presentation/ReferenceAssets'
 def method(s,signature):

@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix='native-real-controls-') as tmp:
     subprocess.run([mono, os.environ['FFO_CSC'], '-nologo', '-noconfig', '-nostdlib+',
                     '-langversion:9.0', '-out:' + str(exe)] + refs + [str(actual),
                     str(src / 'Win05.History.cs'), str(src / 'DialogUI.Options.cs'),
-                    str(src / 'DialogUI.FamilyCreation.cs'), str(src / 'DialogUI.DungeonTransport.cs'),
+                    str(src / 'DialogUI.FamilyCreation.cs'), str(src / 'DialogUI.DungeonTransport.cs'), str(src / 'DungeonQuestAccess.cs'),
                     str(tmp / 'TransportStates.cs'),
                     str(root / 'Tests/NativeInteractions/NativeControlsContract.cs')], check=True)
     subprocess.run([mono, str(exe)], check=True)

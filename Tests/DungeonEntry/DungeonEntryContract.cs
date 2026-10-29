@@ -52,7 +52,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
    ChatUI.Messages.Clear();var unbound=Open("无服务表入口",0);Check(unbound.options.Count==2,"original table-only entries retained");unbound.options[1].Action();Check(teleports==0&&ChatUI.Messages.Count==1,"unchanged table-only party gate");SocialClient.Party.Add(1);Open("无服务表入口",0,unbound);unbound.options[1].Action();Check(teleports==1,"unchanged table-only callback");
    I=null;Check(ConsumeDungeonTransport(Reply(108,Row("失落神殿",20901))),"closed owner still swallows late dungeon response");
    for(int list=101;list<=133;list++)Check(IsNativeDungeonTransportList(list)==(list!=114),"bounded audited SQL list set");Check(!IsNativeDungeonTransportList(100)&&!IsNativeDungeonTransportList(134),"no inferred future list classification");
-   foreach(var pair in new[]{(map:29400,quest:356),(map:29900,quest:359),(map:30000,quest:361)}) {
+   foreach(var pair in new[]{(map:29200,quest:355),(map:29400,quest:356),(map:29900,quest:359),(map:30000,quest:361)}) {
     SetTable(new DungeonEntrances.Entry{npc="纯任务入口",dungeons=new[]{new DungeonEntrances.Dungeon{name="任务副本",map=pair.map,x=30,y=40}}});
     foreach(int state in new[]{-1,0,1,2}) {
      I=null;TaskClient.SetState(state==0||state==1?new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=pair.quest,ready=(byte)state}}:new List<TaskClient.ActiveTask>(),state==2?new List<int>{pair.quest}:new List<int>());
@@ -73,6 +73,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
     TaskClient.SetState(new List<TaskClient.ActiveTask>(),new List<int>{pair.quest});Check(current.InSubView&&current.builds==builds,"task receipt does not interrupt a task detail subview");current.InSubView=false;current.BuildMenu();Check(current.options.Count==0,"back to menu reflects completed history");
    }
    I=null;TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=355},new TaskClient.ActiveTask{id=356},new TaskClient.ActiveTask{id=359},new TaskClient.ActiveTask{id=361}},new List<int>());
+   Check(DungeonQuestAccess.RequiredQuest(29200)==355&&DungeonQuestAccess.CanEnter(29200),"retained unfinished 355 record admits without restoring disabled definition");
    int catalogRows=0, hardRows=0;
    foreach(var reply in AuthoritativeRoutes()) {
     Check(reply.TransportList>=101&&reply.TransportList<=133,"fixture excludes ordinary transport lists");
