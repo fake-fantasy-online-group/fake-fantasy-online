@@ -7,6 +7,11 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
 internal static partial class UITip
 {
+    // Lower IMGUI depths render above windows. Native popups use -100 and
+    // addon panels use -15, so the former depth 1 put item tips behind them.
+    // Keep the cursor/transition overlays (-1000) above the tooltip.
+    internal const int RenderDepth = -200;
+
     private static Texture2D pUL, pUM, pUR, pLM, pRM, pDL, pDM, pDR;
     private static bool tried;
     private static string reqText, reqCmp;
@@ -54,7 +59,9 @@ internal static partial class UITip
     {
         private void OnGUI()
         {
-            GUI.depth = 1;
+            // Depth belongs to this MonoBehaviour; do not restore the caller's
+            // default depth at the end (that would undo overlay ordering).
+            GUI.depth = RenderDepth;
             if (reqText != null)
             {
                 if (MobileClientPresentation.Enabled) RenderMobileOriginal(reqText, reqCmp, reqS, reqMouse);

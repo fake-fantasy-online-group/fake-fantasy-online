@@ -11,7 +11,6 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         // partial files so the initialization sequence is deterministic and reviewable.
         private float winX = float.NaN;
         private int _wdGen = -1;
-        private int _lastTab = -1;
         private string czChain = "TRON";
         private string czAmount = "10";
         private string czLocalWarn = "";
@@ -107,7 +106,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             if (FittingRoomPreview.I != null) FittingRoomPreview.I.ReleaseForIndependentRuntime();
         }
 
-        // Official 0x06000ab5. Every native tab has its original page consumer.
+        // Original shelf artwork and shopping controls, without the added top navigation.
         private void OnGUI()
         {
             if (!visible)
@@ -123,6 +122,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 winY = (Screen.height - NH * s) * 0.5f;
             }
             (int depth, bool covered) = WinZ.Frame(this, new Rect(winX, winY, NW * s, NH * s), 10);
+            // A purchase confirmation owns the pointer: no hidden shelf hover/click-through.
+            covered = covered || SysMsgBox.Visible;
             Vector2 savedMouse = Event.current.mousePosition;
             Color savedColor = GUI.color;
             int savedDepth = GUI.depth;
@@ -138,51 +139,12 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                     GUI.DrawTexture(L(0f, 0f, NW, NH), Texture2D.whiteTexture);
                     GUI.color = Color.white;
                 }
-                bool hasHolidayGoods = false;
-                foreach (Good good in goods)
-                    if (good.group == 255 && (good.flags & 1) != 0) { hasHolidayGoods = true; break; }
-                bool showHoliday = holidayActive || hasHolidayGoods;
-                if (TopTab(34f, "充值", topCz, 1, mouse)) topTab = 1;
-                if (TopTab(108f, "充值返利", topCzr, 2, mouse)) topTab = 2;
-                if (TopTab(182f, "每日特价", null, 3, mouse)) { topTab = 3; page = 0; }
-                float shopX = 256f;
-                if (showHoliday)
-                {
-                    if (TopTab(256f, "限时抢购", null, 4, mouse)) { topTab = 4; page = 0; }
-                    shopX = 330f;
-                }
-                else if (topTab == 4) topTab = 0;
-                if (TopTab(shopX, "商城", topShop, 0, mouse)) topTab = 0;
-                if (TopTab(shopX + 74f, "试衣间", null, 5, mouse)) topTab = 5;
-                if (refundTabOn)
-                {
-                    if (TopTab(shopX + 148f, "回收", null, 6, mouse))
-                    {
-                        if (topTab != 6) NetClient.I?.RackRefundListForIndependentRuntime();
-                        topTab = 6;
-                        refundScroll = 0;
-                    }
-                }
-                else if (topTab == 6) topTab = 0;
-                if (topTab != _lastTab && ((topTab == 3 || topTab == 4) != (_lastTab == 3 || _lastTab == 4)))
-                {
-                    cart.Clear();
-                    cartOrder.Clear();
-                    qtyEdit.Clear();
-                    cartScroll = 0;
-                }
-                _lastTab = topTab;
-                if (topTab != 5 && FittingRoomPreview.I != null) FittingRoomPreview.I.Hide();
-                switch (topTab)
-                {
-                    case 0: DrawShop(mouse); break;
-                    case 1: DrawRecharge(mouse); break;
-                    case 2: DrawRechargePlaceholder(); break;
-                    case 3: DrawFlagGrid(mouse, 2, "每日特价"); break;
-                    case 4: DrawFlagGrid(mouse, 1, "限时抢购"); break;
-                    case 6: DrawRefund(mouse); break;
-                    default: DrawFittingRoom(mouse); break;
-                }
+                // Restore the shelf itself, without the added recharge/promotion/refund
+                // navigation row. Catalog flags still belong to server-side purchase rules;
+                // the removed pages cannot be reached by retained tab state after reopening.
+                topTab = 0;
+                if (FittingRoomPreview.I != null) FittingRoomPreview.I.Hide();
+                DrawShop(mouse);
                 Rect close = L(812f, 21f, 22f, 23f);
                 if (icoClose != null) GUI.DrawTexture(close, icoClose);
                 if (Click(close, mouse)) visible = false;

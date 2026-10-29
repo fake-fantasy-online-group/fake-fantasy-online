@@ -23,3 +23,22 @@ These are compiled behavioral and source-wiring checks, not a Unity GUI run,
 real-asset decode benchmark, or proof of the reported user's hang cause. Verify
 cold/warm rack opening, paging/filtering, purchases and close input with real
 assets in a client build before claiming the runtime incident is fixed.
+
+## Restored shelf and tooltip foreground
+
+Run `python3 Tests/RackShop/run-native-shelf-tooltip-contract.py --mono <mono> --csc <Roslyn csc.exe>`
+(or source the test toolchain environment). This compiles actual `UITip.cs` and
+`PetInfoTooltip.cs` against deterministic Unity API substitutes. It checks every
+frame/text draw's foreground depth, root GUI coordinates and comparisons at all
+screen corners at 0.75/1/1.5/2 scale, request replacement and repaint clearing.
+The same queue also executes actual `SysMsgBox.Drawing` with two overlapping
+panel primitives in four callback orders; depth-priority sorting keeps tooltip
+submissions last, while subsequent popups/panels set their own depth and tooltip
+frame drawing preserves GUI color. Depth intentionally remains set on the
+renderer component, matching native modal ownership.
+Source assertions verify the removed navigation row, fixed shopping content,
+modal hover suppression and preserved native close/drag controls.
+
+This is not a real Unity UI or asset screenshot run. Validate actual overlapping
+windows/popups, hover, drag, scale, repeated open/close and confirm/cancel in an
+authorized playable client before calling visual behavior verified.

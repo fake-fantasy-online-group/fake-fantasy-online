@@ -29,7 +29,7 @@ internal static partial class PetInfoTooltip
     {
         private void OnGUI()
         {
-            GUI.depth = 1;
+            GUI.depth = UITip.RenderDepth;
             if (has)
             {
                 Draw(reqBrief, reqMouse, reqS, reqHint);
