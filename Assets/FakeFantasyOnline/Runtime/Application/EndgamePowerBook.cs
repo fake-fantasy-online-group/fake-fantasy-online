@@ -53,23 +53,30 @@ public sealed partial class EndgameClientState
     public bool PowerBookLoading => powerBookRead != null;
     public bool PowerBookCurrent => PowerBookLoaded && PowerBookRevision == Revision;
     private long powerBookCharacter = -1;
-    private int powerBookProfession = -2;
+    private int powerBookRoute = -2;
+    private bool powerBookJobCompleted;
+    // -1: absent/untrusted metadata, 0: explicitly no profession, 1..5: employed.
+    public int PowerBookProfession { get; private set; } = -1;
+    public long PowerBookContextVersion { get; private set; }
     // Local presentation context from the existing native identity/job receipts.
     // Dropping the active read also rejects a late page from the previous context.
-    public bool SynchronizePowerBookContext(long character, int profession)
+    public bool SynchronizePowerBookContext(long character, int route, bool jobCompleted)
     {
-        if (powerBookCharacter == character && powerBookProfession == profession) return false;
-        powerBookCharacter = character; powerBookProfession = profession;
+        if (powerBookCharacter == character && powerBookRoute == route && powerBookJobCompleted == jobCompleted) return false;
+        powerBookCharacter = character; powerBookRoute = route; powerBookJobCompleted = jobCompleted;
         ResetPowerBookValues(); Version++; return true;
     }
+    public int PowerBookProfessionForContext(long character, int route, bool jobCompleted) =>
+        character > 0 && character == powerBookCharacter && route == powerBookRoute && jobCompleted == powerBookJobCompleted ? PowerBookProfession : -1;
     private EndgameRequest powerBookRead;
     private DateTime powerBookReadAt;
     private void ResetPowerBookValues()
     {
-        PowerBookLoaded = false; PowerBookRevision = PowerBookNextCursor = "";
+        PowerBookContextVersion++;
+        PowerBookLoaded = false; PowerBookProfession = -1; PowerBookRevision = PowerBookNextCursor = "";
         Powers = Array.Empty<EndgamePowerRecordView>(); powerBookRead = null;
     }
-    private void ResetPowerBook() { powerBookCharacter = -1; powerBookProfession = -2; PowerBookAvailable = false; PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = ""; ResetPowerBookValues(); }
+    private void ResetPowerBook() { powerBookCharacter = -1; powerBookRoute = -2; powerBookJobCompleted = false; PowerBookAvailable = false; PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = ""; ResetPowerBookValues(); }
     private bool BeginPowerBookRead(EndgameRequest request)
     {
         if (PowerBookLoading) return false;
@@ -83,6 +90,10 @@ public sealed partial class EndgameClientState
         if (powerBookRead != null && (now - powerBookReadAt).TotalSeconds >= 15)
         { powerBookRead = null; Error = "timeout"; Message = "秘典暂未响应，请刷新重试。"; Version++; }
     }
+    private bool RejectPowerBookProfession()
+    {
+        ResetPowerBookValues(); Error = "stale_revision"; Message = "职业信息已有变化，请重新翻阅秘典。"; Version++; return false;
+    }
     private bool ApplyPowerBook(EndgameResponse response)
     {
         if (!PowerBookAvailable || powerBookRead == null || response.RequestID != powerBookRead.RequestID) return false;
@@ -92,6 +103,16 @@ public sealed partial class EndgameClientState
         if (response.Revision.Length == 0 || CompareRevision(response.Revision, Revision) < 0 ||
             request.Cursor.Length > 0 && response.Revision != PowerBookRevision)
         { PowerBookRevision = ""; Error = "stale_revision"; Message = "秘典已有变化，请刷新重试。"; Version++; return false; }
+        int profession = -1;
+        if (response.Result.TryGetValue("powerBookProfession", out string value) &&
+            (!int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out profession) ||
+             profession < 0 || profession > 5 || value != profession.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            return RejectPowerBookProfession();
+        // Same-route employment metadata may arrive without any career-task history.
+        // A different native route or a changed profession halfway through pagination
+        // is a stale response, never a reason to infer identity from its power rows.
+        if (profession > 0 && profession != powerBookRoute + 1 || request.Cursor.Length > 0 && profession != PowerBookProfession)
+            return RejectPowerBookProfession();
         EndgameData.Identity(response.NextCursor, "nextCursor");
         int offset = 0;
         if (request.Cursor.Length > 0 && !int.TryParse(request.Cursor, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out offset))
@@ -106,7 +127,8 @@ public sealed partial class EndgameClientState
             if (!ids.Add(p.PowerID)) throw new FormatException("Duplicate power record.");
             rows.Add(p);
         }
-        Powers = rows.AsReadOnly(); PowerBookLoaded = true; PowerBookRevision = response.Revision;
+        if (PowerBookProfession != profession) PowerBookContextVersion++;
+        Powers = rows.AsReadOnly(); PowerBookLoaded = true; PowerBookProfession = profession; PowerBookRevision = response.Revision;
         Revision = response.Revision; PowerBookNextCursor = response.NextCursor;
         Error = ""; Message = ""; RememberResponse(response); Version++; return true;
     }

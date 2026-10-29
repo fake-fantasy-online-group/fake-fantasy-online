@@ -12,7 +12,7 @@ public sealed partial class EndgamePanel
     private Vector2 powerScroll;
     private int powerFilterScroll, powerFilterHighlight;
     private string powerSourceUID = "";
-    private long powerSourceGeneration;
+    private long powerSourceGeneration, observedPowerBookContext = -1;
     private const string OwnPowerScope = "职业限定", CommonPowerScope = "通用";
     private string powerClass = OwnPowerScope, powerCategory = "", powerSlot = "";
     private bool hideUnobtained;
@@ -129,10 +129,9 @@ public sealed partial class EndgamePanel
         power.Unlocked && !string.IsNullOrWhiteSpace(power.CurrentValueText) ? power.CurrentValueText : "—";
     private float PowerBookRowHeight(EndgamePowerRecordView power) =>
         Math.Max(MobileClientPresentation.Enabled ? 44 / panelScale : 32, (BitmapFont.Ready ? BitmapFont.Wrap(power.Name, 280, 1).Count * 16 : label.CalcHeight(new GUIContent(power.Name), 280)) + 12);
-    // race is the character's native route, not proof of employment. Match the
-    // existing skill window's authoritative 0x8027 job-task gate without clamping
-    // unknown routes to Warrior or inferring identity from cached power rows.
-    internal static int CurrentPowerProfession()
+    // Job receipts are an invalidation signal, not proof of unemployment: legacy
+    // employed characters need not have a 400..404 completion in their history.
+    private static bool PowerJobCompleted()
     {
         int quest;
         switch (CharData.race)
@@ -142,18 +141,29 @@ public sealed partial class EndgamePanel
             case 2: quest = 402; break;
             case 3: quest = 400; break;
             case 4: quest = 401; break;
-            default: return -1;
+            default: return false;
         }
-        return CharData.charId > 0 && TaskClient.IsDone(quest) ? CharData.race : -1;
+        return TaskClient.IsDone(quest);
+    }
+    internal static int CurrentPowerProfession()
+    {
+        int profession = Current?.State?.PowerBookProfessionForContext(CharData.charId, CharData.race, PowerJobCompleted()) ?? -1;
+        return profession > 0 ? profession - 1 : -1;
     }
     private void SynchronizePowerBookContext()
     {
-        if (State == null || !State.SynchronizePowerBookContext(CharData.charId, CurrentPowerProfession())) return;
-        selectedPowerID = observedPowerImprint = powerSourceUID = "";
-        pendingPowerTab = -1; powerSourceGeneration = -1;
-        powerClass = OwnPowerScope; powerScroll = Vector2.zero;
+        if (State == null) return;
+        bool changed = State.SynchronizePowerBookContext(CharData.charId, CharData.race, PowerJobCompleted());
+        if (!changed && observedPowerBookContext == State.PowerBookContextVersion) return;
+        observedPowerBookContext = State.PowerBookContextVersion;
+        selectedPowerID = ""; powerScroll = Vector2.zero;
         ResetPowerFilterDropdown();
-        if (open && module == EndgameModule.PowerBook && State.PowerBookAvailable) Send(new EndgameRequest("powerbook.list"));
+        if (changed)
+        {
+            observedPowerImprint = powerSourceUID = "";
+            pendingPowerTab = -1; powerSourceGeneration = -1; powerClass = OwnPowerScope;
+        }
+        if (changed && open && module == EndgameModule.PowerBook && State.PowerBookAvailable) Send(new EndgameRequest("powerbook.list"));
     }
     internal static bool PowerBelongsToCurrentProfession(EndgamePowerRecordView power)
     {

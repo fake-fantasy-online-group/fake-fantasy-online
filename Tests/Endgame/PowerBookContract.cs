@@ -9,7 +9,7 @@ partial class EndgameUiContract
 {
     static string PowerRow(string id, bool unlocked, string slots = "\"衣服\",\"戒指\"") => "{\"powerId\":\"" + id + "\",\"name\":\"凝神回路\",\"category\":\"通用\",\"class\":\"术士\",\"description\":\"消耗降低45%。\",\"rangeText\":\"消耗降低40～55%\",\"rollBp\":" + (unlocked ? "9000" : "0") + ",\"minRollBp\":7500,\"maxRollBp\":10000,\"minLevel\":20,\"unlocked\":" + (unlocked ? "true" : "false") + ",\"slots\":[" + slots + "]}";
     static void PowerReply(Client c, string request, string revision, string rows, string next = "") => Apply(c,
-        "{\"kind\":\"powerbook.list\",\"ok\":true,\"requestId\":\"" + request + "\",\"revision\":\"" + revision + "\",\"nextCursor\":\"" + next + "\",\"powers\":[" + rows + "]}");
+        "{\"kind\":\"powerbook.list\",\"ok\":true,\"requestId\":\"" + request + "\",\"revision\":\"" + revision + "\",\"nextCursor\":\"" + next + "\",\"result\":{\"powerBookProfession\":\"" + (CharData.race >= 0 && CharData.race < 5 ? CharData.race + 1 : 0) + "\"},\"powers\":[" + rows + "]}");
     static void PowerBookServerWireContracts()
     {
         string directory = Environment.GetEnvironmentVariable("FFO_POWER_BOOK_FIXTURES");
@@ -215,13 +215,17 @@ partial class EndgameUiContract
         {
             var scenario = (IReadOnlyDictionary<string, object>)raw;
             int race = Convert.ToInt32(scenario["race"]); bool employed = (bool)scenario["employed"]; string own = (string)scenario["class"];
-            PowerProfessionIdentity(race, employed); Call(p, "SynchronizePowerBookContext");
-            Check(EndgamePanel.CurrentPowerProfession() == (own.Length == 0 ? -1 : race), "native race + job completion resolves current profession only");
+            PowerProfessionIdentity(race, false);
+            var done = new List<int>(); foreach (var id in (IReadOnlyList<object>)scenario["done"]) done.Add(Convert.ToInt32(id));
+            TaskClient.SetState(new List<TaskClient.ActiveTask>(), done);
+            Call(p, "SynchronizePowerBookContext");
+            Check(EndgamePanel.CurrentPowerProfession() == -1, "no power page yet means no inferred profession, even when native job is complete");
             foreach (var page in (IReadOnlyList<object>)scenario["pages"])
             {
                 var response = EndgameResponse.Parse(BoundedJson.Serialize(page));
                 Check(c.SendEndgame(new EndgameRequest("powerbook.list", cursor:response.Cursor, requestID:response.RequestID)), "actual Go filtered cursor accepted by production state");
                 Check(c.Endgame.Apply(response), "actual Go filtered page applied without protocol changes"); pages++; rows += response.Powers.Count;
+                Check(EndgamePanel.CurrentPowerProfession() == (own.Length == 0 ? -1 : race), "explicit authoritative book profession overrides absent legacy career history");
                 foreach (var row in response.Powers)
                 {
                     Check(EndgamePanel.PowerBelongsToCurrentProfession(row), "real Go row belongs to own/common");
@@ -257,7 +261,7 @@ partial class EndgameUiContract
             var mixedRows = new List<string>();
             foreach (string name in names)
                 mixedRows.Add(PowerRow("mixed-" + name, true).Replace("凝神回路", "row-" + name).Replace("\"class\":\"术士\"", "\"class\":\"" + name + "\"").Replace("\"category\":\"通用\"", "\"category\":\"type-" + name + "\""));
-            var mixedRead = new EndgameRequest("powerbook.list"); c.SendEndgame(mixedRead); PowerReply(c,mixedRead.RequestID,"0",string.Join(",",mixedRows));
+            var mixedRead = new EndgameRequest("powerbook.list"); c.SendEndgame(mixedRead); Apply(c, "{\"kind\":\"powerbook.list\",\"ok\":true,\"requestId\":\""+mixedRead.RequestID+"\",\"revision\":\"0\",\"result\":{\"powerBookProfession\":\""+(own.Length > 0 ? race+1 : 0)+"\"},\"powers\":["+string.Join(",",mixedRows)+"]}");
             foreach (string scope in new[]{"职业限定","通用"})
             {
                 Set(p,"powerClass",scope); UnityEngine.GUI.labels.Clear(); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
@@ -267,6 +271,7 @@ partial class EndgameUiContract
             var categories = (List<string>)typeof(EndgamePanel).GetMethod("PowerFilterOptions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(p, new object[]{1});
             foreach(string name in names)
                 Check(categories.Contains("type-" + name) == (name == "全职业" || own.Length > 0 && name == own), "foreign row cannot populate dependent filter options");
+            Check(TaskClient.Done.SetEquals(done), "book reads never fabricate or remove real task receipt history");
             contexts++;
         }
         // Context change between read and response: cancel page, clear selection and
@@ -312,10 +317,73 @@ partial class EndgameUiContract
         PowerProfessionIdentity(4,true,1); p.Unbind(c);
         Console.WriteLine("PASS power profession scope: " + contexts + " identities, " + pages + " real Go pages, " + rows + " rows; " + (assertions-before) + " production UI/state assertions (no engine render).");
     }
+    static bool PowerMetadataReply(Client c, EndgameRequest read, string metadata, string rows, string next = "")
+    {
+        string result = metadata == null ? "" : ",\"result\":{\"powerBookProfession\":" + metadata + "}";
+        return c.Endgame.Apply(EndgameResponse.Parse("{\"kind\":\"powerbook.list\",\"ok\":true,\"requestId\":\"" + read.RequestID + "\",\"revision\":\"1\",\"nextCursor\":\"" + next + "\",\"powers\":[" + rows + "]" + result + "}"));
+    }
+    static void PowerProfessionMetadataContracts()
+    {
+        int before = assertions;
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Call(p,"EnsureStyles"); PowerProfessionHello(c);
+        PowerProfessionIdentity(4,true); Call(p,"SynchronizePowerBookContext");
+        string own = PowerRow("metadata-own",true), common = PowerRow("metadata-common",true).Replace("\"class\":\"术士\"","\"class\":\"全职业\"");
+        foreach (string metadata in new[]{null,"\"0\""})
+        {
+            var read=new EndgameRequest("powerbook.list"); c.SendEndgame(read);
+            Check(PowerMetadataReply(c,read,metadata,own+","+common), "absent/explicit-none metadata is a safe common-only catalog");
+            Check(EndgamePanel.CurrentPowerProfession()==-1 && !EndgamePanel.PowerMatches(c.Endgame.Powers[0],"职业限定","","",false) && EndgamePanel.PowerMatches(c.Endgame.Powers[1],"通用","","",false), "even completed native job cannot guess profession when metadata is absent or zero");
+        }
+        foreach(string metadata in new[]{"\"-1\"","\"6\"","\"01\"","\"+5\"","\"5.0\"","\" 5\"","\"术士\"","\"\"","\"999999999999999999999\"","\"1\""})
+        {
+            var read=new EndgameRequest("powerbook.list"); c.SendEndgame(read); Check(PowerMetadataReply(c,read,"\"5\"",own),"valid metadata restores own profession");
+            Call(p,"SynchronizePowerBookContext"); Set(p,"selectedPowerID","metadata-own"); Set(p,"powerScroll",new UnityEngine.Vector2(0,100)); Set(p,"powerFilterOpen",0);
+            read=new EndgameRequest("powerbook.list");c.SendEndgame(read);
+            Check(!PowerMetadataReply(c,read,metadata,own),"malformed/out-of-range/native-route-conflicting profession rejects the whole response");
+            PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+            Check(c.Endgame.Powers.Count==0 && c.Endgame.PowerBookNextCursor=="" && c.Endgame.PowerBookProfession==-1 && (string)Get(p,"selectedPowerID")=="" && (int)Get(p,"powerFilterOpen")==-1 && ((UnityEngine.Vector2)Get(p,"powerScroll")).y==0,"invalid authority clears book, cursor and stale native selection without fallback");
+        }
+        foreach(string metadata in new[]{"5","true","null","{}","[]"})
+        {
+            var read=new EndgameRequest("powerbook.list"); c.SendEndgame(read);
+            Check(PowerMetadataReply(c,read,"\"5\"",own) && EndgamePanel.CurrentPowerProfession()==4,"wrong-type test begins with valid cached own profession");
+            Call(p,"SynchronizePowerBookContext"); Set(p,"selectedPowerID","metadata-own");
+            read=new EndgameRequest("powerbook.list"); c.SendEndgame(read); bool rejected=false;
+            try {PowerMetadataReply(c,read,metadata,own);} catch(FormatException){rejected=true; c.Endgame.NoteInvalidResponse("服务器星图数据无效，请刷新重试。");}
+            PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+            Check(rejected && EndgamePanel.CurrentPowerProfession()==-1 && c.Endgame.Powers.Count==0 && !c.Endgame.PowerBookLoading && (string)Get(p,"selectedPowerID")=="","actual strict decoder plus gateway invalid-response seam clears previously valid book authority and selection");
+            c.Endgame.Tick(DateTime.UtcNow.AddSeconds(16));
+            Check(!c.Endgame.PowerBookCurrent && c.Endgame.PowerBookProfession==-1,"expired malformed read cannot restore old extraction eligibility");
+        }
+        foreach(string nextProfession in new[]{null,"\"0\"","\"1\""})
+        {
+            var first=new EndgameRequest("powerbook.list"); c.SendEndgame(first); Check(PowerMetadataReply(c,first,"\"5\"",own,"1"),"first authoritative page starts chain");
+            Call(p,"SynchronizePowerBookContext"); Set(p,"selectedPowerID","metadata-own");
+            var next=new EndgameRequest("powerbook.list",cursor:"1"); c.SendEndgame(next);
+            Check(!PowerMetadataReply(c,next,nextProfession,common),"changed/missing authority on continuation cannot splice incompatible pages");
+            PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+            Check(c.Endgame.Powers.Count==0 && c.Endgame.PowerBookNextCursor=="" && (string)Get(p,"selectedPowerID")=="","page-authority mismatch clears selection and cursor");
+        }
+        foreach(long character in new long[]{0,200})
+        {
+            PowerProfessionIdentity(character==0?4:99,false,character); Call(p,"SynchronizePowerBookContext");
+            var read=new EndgameRequest("powerbook.list"); c.SendEndgame(read); bool accepted=PowerMetadataReply(c,read,"\"5\"",own);
+            Check(EndgamePanel.CurrentPowerProfession()==-1 && (!accepted || !EndgamePanel.PowerMatches(c.Endgame.Powers[0],"职业限定","","",false)),"unknown character/route cannot acquire a profession from metadata");
+        }
+        PowerProfessionIdentity(4,false,100); Call(p,"SynchronizePowerBookContext");
+        var oldRead=new EndgameRequest("powerbook.list"); c.SendEndgame(oldRead);
+        PowerProfessionIdentity(4,false,101); Call(p,"SynchronizePowerBookContext");
+        var newRead=new EndgameRequest("powerbook.list"); c.SendEndgame(newRead);
+        Check(!PowerMetadataReply(c,oldRead,"\"5\"",own) && c.Endgame.PowerBookLoading && c.Endgame.PowerBookProfession==-1,"same-route character switch rejects late old-character authority");
+        Check(PowerMetadataReply(c,newRead,"\"5\"",own) && EndgamePanel.CurrentPowerProfession()==4 && !TaskClient.Done.Contains(401),"matching new-character authority supports legacy employment without fabricating career history");
+        PowerProfessionIdentity(4,true,1); p.Unbind(c);
+        Console.WriteLine("PASS " + (assertions-before) + " authoritative profession metadata/late-page boundary assertions.");
+    }
     static void PowerBookContracts()
     {
         PowerBookServerWireContracts();
         PowerProfessionContracts();
+        PowerProfessionMetadataContracts();
         var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Call(p, "SynchronizePowerBookContext");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\"}}");
         Check(!c.Endgame.PowerBookAvailable && !EndgamePanel.TryOpenPowerBookFromWorld(), "legacy direct-imprint server and header shortcut cannot open new book");

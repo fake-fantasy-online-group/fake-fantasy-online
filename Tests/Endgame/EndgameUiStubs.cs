@@ -242,5 +242,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     internal static class CharData { internal static int race = 4; internal static long charId = 1; }
+#if POWERBOOK_TASK_RECEIPTS
+    public static partial class TaskClient { public static bool IsDone(int id) => Done.Contains(id); }
+    public sealed partial class DialogUI { public static DialogUI I; public void ObserveTaskCompletionReceipt() { } }
+#else
     internal static class TaskClient { internal static readonly HashSet<int> Done = new HashSet<int>{401}; public static bool IsDone(int id) => Done.Contains(id); }
+#endif
 }

@@ -116,7 +116,7 @@ public sealed partial class EndgameClientState
         if (request != null && request.Op == "capabilities") RetryRiftCapabilities(DateTime.UtcNow);
         Error = "pending"; Message = message; Version++;
     }
-    public void NoteInvalidResponse(string message) { DiscardChunks(); DiscardRiftPages(); Error = "invalid_response"; Message = message; Version++; }
+    public void NoteInvalidResponse(string message) { DiscardChunks(); DiscardRiftPages(); if (PowerBookLoading) ResetPowerBookValues(); Error = "invalid_response"; Message = message; Version++; }
     public void Tick(DateTime now)
     {
         TickRiftPages(now);
