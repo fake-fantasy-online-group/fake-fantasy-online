@@ -283,6 +283,7 @@ public sealed partial class DialogUI : MonoBehaviour
         CurrentNpcEntityId = npc == null ? 0 : npc.EntityId;
         CurrentSellList = originalReceiver != null ? originalReceiver.sell : npc.SellList;
         CurrentTransportList = originalReceiver != null ? originalReceiver.trans : npc.TransportList;
+        ResetDungeonTransport();
         InSubView = false;
         LastHelpIntent = false;
         LastOfferIntent = null;
@@ -303,6 +304,7 @@ public sealed partial class DialogUI : MonoBehaviour
         // dialog that opened last, and a rebuilt dialog cannot receive one replacement twice.
         // Show forwards the request immediately after this returned menu/state sequence.
         TaskClient.OnOffersChanged = OnTaskOffers;
+        BeginDungeonTransport();
         return true;
     }
 
@@ -783,11 +785,11 @@ public sealed partial class DialogUI : MonoBehaviour
                     ShopDlg.Open(sellList, true);
                 }));
         }
-        if (curTrans > 0)
+        if (curTrans > 0 && !IsNativeDungeonTransportList(curTrans))
         {
             Add(new ReferenceNpcDialogOption("传送", ShowTransferMenu));
         }
-        AddDungeonEntryOptions();
+        if (!TryAddDungeonTransportOptions()) AddDungeonEntryOptions();
         AddFamilyCreationOption();
         // Official callbacks 06000230/231/232: family storage has its own
         // informational row; personal storage toggles the surviving native owner.

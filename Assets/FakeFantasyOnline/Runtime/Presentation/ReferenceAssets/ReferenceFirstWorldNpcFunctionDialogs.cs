@@ -135,6 +135,7 @@ public sealed class ReferenceTransportUI : IDisposable
 
     public bool ApplyState(WorldTransportState next)
     {
+        if (DialogUI.ConsumeDungeonTransport(next)) return true;
         if (next == null || core == null)
         {
             return false;

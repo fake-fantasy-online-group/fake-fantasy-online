@@ -37,6 +37,9 @@ public partial class DialogUI {
  private void Add(ReferenceNpcDialogOption row){optLabels.Add(row.Label);optActs.Add(row.Action);}
  private bool BuildTravelMenu(){return false;}
  private void ShowAscendMenu(){} private void ShowTransferMenu(){} private void AddDungeonEntryOptions(){}
+ // Dungeon transport lives in its separate actual-owner contract; these trial fixtures have curTrans=0.
+ private static bool IsNativeDungeonTransportList(int list)=>false;
+ private bool TryAddDungeonTransportOptions()=>false;
  private void AddHairSalonOptions(){} private void AddActivityOptions(){} private void AddRiftEntranceOption(){}
  private void AddCubeWorkbenchOption(){} private void AddRiftExitOptions(){} private void AddDungeonExitAndHardOptions(){} private void AddTianshenOptions(){}
  private void ShowSay(string s){InSubView=true;} private void Close(){Visible=false;}
