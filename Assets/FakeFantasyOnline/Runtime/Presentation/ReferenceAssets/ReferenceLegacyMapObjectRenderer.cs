@@ -274,6 +274,7 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
         foreach (Texture2D texture in embeddedTextures) DestroyOwned(texture);
         DisposePortalApertures();
         DisposeFootprintStrips();
+        DisposeWalkableDeckStrips();
         embeddedSprites.Clear();
         embeddedTextures.Clear();
         renderers.Clear();
@@ -312,6 +313,14 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
         bool animate = requestedSortingOrder == int.MinValue && image.frames > 1 &&
             ResLoader.I != null;
 
+        if (requestedSortingOrder == int.MinValue && image.clipArr != null && image.clipArr.Length > 1 &&
+            TryPlaceWalkableDeck(receiver, value, parent, pixelsPerUnit, worldWidth,
+                worldHeight, kind, objectIndex, image))
+        {
+            receiver?.NoteMapObjectForIndependentRuntime(value.Id);
+            return;
+        }
+
         if (requestedSortingOrder == int.MinValue && !animate &&
             image.clipArr != null && image.clipArr.Length > 1 && image.clipWidth > 0)
         {
@@ -322,6 +331,14 @@ public sealed partial class ReferenceLegacyMapObjectRenderer : IDisposable
 
         if (requestedSortingOrder == int.MinValue &&
             TryPlacePortalAperture(receiver, value, parent, pixelsPerUnit, worldWidth,
+                worldHeight, kind, objectIndex, image))
+        {
+            receiver?.NoteMapObjectForIndependentRuntime(value.Id);
+            return;
+        }
+
+        if (requestedSortingOrder == int.MinValue &&
+            TryPlaceWalkableDeck(receiver, value, parent, pixelsPerUnit, worldWidth,
                 worldHeight, kind, objectIndex, image))
         {
             receiver?.NoteMapObjectForIndependentRuntime(value.Id);

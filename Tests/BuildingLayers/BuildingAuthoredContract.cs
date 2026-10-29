@@ -1,0 +1,17 @@
+using System;using System.IO;using System.Linq;using System.Web.Script.Serialization;
+using FakeFantasyOnline.Presentation.ReferenceAssets;using UnityEngine;
+static class BuildingAuthoredContract {
+ sealed class Case {public int Id,Width,Height,TextureWidth,TextureHeight,ClipBy,ClipWidth,PivotOffset;public int[] Clips;public string Path;}
+ static int checks;static void Check(bool b,string why){checks++;if(!b)throw new Exception(why);}
+ internal static void Run(string file){var cs=new JavaScriptSerializer().Deserialize<Case[]>(File.ReadAllText(file));foreach(var c in cs)foreach(int scale in new[]{1,2,4}){
+  var l=new ResLoader();ResLoader.I=l;var t=new Texture2D(c.TextureWidth*scale,c.TextureHeight*scale);var im=new ResLoader.ObjSprite{path=c.Path,tex=t,frames=1,hdScale=scale,clipWidth=c.ClipWidth,clipBy=c.ClipBy,clipArr=(int[])c.Clips.Clone()};l.Images[c.Id]=im;var zs=new[]{0,61,-400,0,144,-148};var map=new ReferenceGsmMap{Native=new GsmMap()};for(int i=0;i<zs.Length;i++)map.Native.libObjs.Add(new GsmMap.Obj{id=c.Id,sx=2000+i*1000,sy=3000+i*11,xl=c.Width,yl=c.Height,py=3000+i*11+c.PivotOffset,pz=zs[i]});var owner=new GameBootstrap();var r=new ReferenceLegacyMapObjectRenderer(map,l,new GameObject("AuthoredSupport").transform,objectOwner:owner);r.Build();
+  Check(ReferenceWalkableDeckProfile.TryGetAuthoredDeck(c.Id,c.Path,c.Width,c.Height,im,out var spans),"authored source signature admitted");var native=owner.GetObjectSlicesForIndependentRuntime(c.Id,im,100);int step=ReferenceWalkableDeckProfile.ColumnWidth(c.Id);
+  for(int k=0;k<zs.Length;k++){var orders=new int[t.width*t.height];var seen=new byte[orders.Length];int sy=3000+k*11;
+   for(int j=0;j<r.Rendered.Count;j++){if(r.Placements[j].ObjectIndex!=k)continue;var sr=r.Rendered[j];var s=sr.sprite;Check(s.texture==t&&s.ppu==100*scale,"authored image ownership/scale");Check(s.vertices!=null,"authored support live dispatch reached");for(int q=0;q<s.vertices.Length;q+=4){int x0=(int)s.vertices[q].x,x1=(int)s.vertices[q+1].x,y0=t.height-(int)s.vertices[q+2].y,y1=t.height-(int)s.vertices[q].y;for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++){seen[y*t.width+x]++;orders[y*t.width+x]=sr.sortingOrder;}}}
+   Check(seen.All(n=>n==1),"authored exact source-pixel partition");var expected=new int[orders.Length];foreach(var source in native)for(int y=0;y<t.height;y++)for(int x=(int)source.Item1.rect.x;x<source.Item1.rect.x+source.Item1.rect.width;x++)expected[y*t.width+x]=sy+source.Item3;
+   for(int q=0;q<spans.Length;q+=4){int a=spans[q]*step*scale,b=Math.Min(t.width,a+step*scale);for(int y=spans[q+1]*scale;y<spans[q+2]*scale;y++)for(int x=a;x<b;x++)expected[y*t.width+x]=Math.Min(expected[y*t.width+x],sy+spans[q+3]-zs[k]);}
+   Check(orders.SequenceEqual(expected),"authored original clip ceiling preserved independently per source pixel/PZ");
+  }
+  Check(owner.FadeCalls==zs.Length,"authored fade retains every instance");im.clipArr[0]++;Check(!ReferenceWalkableDeckProfile.TryGetAuthoredDeck(c.Id,c.Path,c.Width,c.Height,im,out _),"authored clip mutation rejects profile");im.clipArr[0]--;im.clipBy++;Check(!ReferenceWalkableDeckProfile.TryGetAuthoredDeck(c.Id,c.Path,c.Width,c.Height,im,out _),"authored anchor mutation rejects profile");im.clipBy--;Check(!ReferenceWalkableDeckProfile.TryGetAuthoredDeck(c.Id,c.Path+"x",c.Width,c.Height,im,out _),"authored wrong path rejected");r.Dispose();
+ }Console.WriteLine("PASS "+checks+" additional authored-surface contracts across "+cs.Length+" signatures with full original clips, HD1/2/4 and six mixed-PZ instances");}
+}

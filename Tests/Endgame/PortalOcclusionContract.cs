@@ -51,25 +51,80 @@ class PortalOcclusionContract {
   int[] synthetic={0,0,10,0,10,10,7,10,7,3,3,3,3,10,0,10};GeometryOracle(synthetic,12,12,4);
   string[] oldNames={"0301","3102","0501","0502"};int[] oldIds={0x182d012d,0x182d0c1e,0x182d01f5,0x182d01f6};for(int i=0;i<4;i++){ReferencePortalApertureProfile.TryGet(oldIds[i],"object/JZ/JZ_DXWG_"+oldNames[i]+".gso",out var p,out int w,out int h);foreach(int scale in new[]{1,2,4})GeometryOracle(p,w-1,h-1,scale,3,7,true);}
  }
+ // Independent recorded corridor anchor oracle for the three live portal
+ // branches; their existing polygon/foreground partition remains authoritative.
+ static int ActorRear(int id,int column){
+  int first;int[] depths;
+  if(id==0x1c2d007d){first=40;depths=new[]{390,390,380,370,360,360,360,350};}
+  else if(id==0x1c2d007e){first=31;depths=new[]{330,320,310,310,300,300,290,290,290,290,300,310};}
+  else if(id==0x1c2d007f){first=15;depths=new[]{300,300,300,300,300};}
+  else return int.MaxValue;
+  return column>=first&&column<first+depths.Length?depths[column-first]:int.MaxValue;
+ }
  static void NewPair(int id,string path,int ox,int oy,int order,int oz,int w,int h,int pid,string pp,int px,int py,int pz,int pw,int ph,int foot){
   var r=new ResLoader();ResLoader.I=r;r.Portal=new ResLoader.ObjSprite{path=pp,tex=new Texture2D(pw-1,ph-1),frames=15,clipBy=foot};var renderer=new ReferenceLegacyMapObjectRenderer(r);var im=new ResLoader.ObjSprite{path=path,tex=new Texture2D(w-1,h-1),frames=1,hdScale=1};var v=new ReferenceGsmObject{Id=id,SourceX=ox,SourceY=oy,PivotY=order,PivotZ=oz,Width=w,Height=h};var g=new GsmMap.Obj{id=pid,sx=px,sy=py,pz=pz,xl=pw,yl=ph};var map=new GsmMap();map.libObjs.Add(g);
-  if(id!=0x172d125d)r.Pkg.Files[path.Replace(".gso",".mask")]=Mask((w+9)/10,((h-65)/10)*10+5);renderer.Prepare(map);Check(renderer.Place(v,im),"new actual world pair is admitted: "+path);int lower=0;foreach(var result in renderer.Results){Check(result.Sprite.texture==im.tex,"new geometry borrows original image");if(id==0x172d125d)Check(result.Order==order||result.Order==Math.Min(order,py+foot-1),"SWS keeps original whole-object foreground pivot depth");if(result.Order<=py+foot-1)lower++;}Check(lower>0,"new rear plane lowered");
+  if(id==0x172d125d){im.clipBy=281;im.clipWidth=16;}
+  if(id!=0x172d125d)r.Pkg.Files[path.Replace(".gso",".mask")]=Mask((w+9)/10,((h-65)/10)*10+5);renderer.Prepare(map);Check(renderer.Place(v,im),"new actual world pair is admitted: "+path);int lower=0;foreach(var result in renderer.Results){Check(result.Sprite.texture==im.tex,"new geometry borrows original image");if(result.Order<=py+foot-1)lower++;}Check(lower>0,"new rear plane lowered");
   var pixels=new byte[(w-1)*(h-1)];ReferencePortalApertureProfile.TryGet(id,path,out var profile);var foreground=ReferencePortalApertureProfile.PreservedFront(profile);
-  foreach(var result in renderer.Results){var mesh=result.Sprite;for(int q=0;q<mesh.vertices.Length;q+=4){int x=(int)mesh.rect.x+(int)mesh.vertices[q].x,a=h-1-(int)mesh.vertices[q].y,b=h-1-(int)mesh.vertices[q+2].y;int original=id==0x172d125d?order:oy+((h-65)/10)*10+10+(x/10/4)*10;for(int y=a;y<b;y++){pixels[y*(w-1)+x]++;if(result.Order>original){bool marked=false;foreach(var f in foreground)if(Inside(f,x+.5,y+.0001))marked=true;Check(marked&&ReferencePortalApertureProfile.ContinuousForeground(id),"only explicit foreground silhouette can move ahead");Check(result.Order==py+foot+1,"foreground promotion limited to paired portal plus one");}else Check(result.Order==original||result.Order==Math.Min(original,py+foot-1),"other source pixels only keep order or lower rear");}}
+  bool hasSupport=ReferenceWalkableDeckProfile.TryGetMaskDeck(id,path,w,h,im,out var supportSpans);
+  bool staticSupport=id==0x172d125d;
+  if(staticSupport){hasSupport=ReferenceWalkableDeckProfile.TryGetStaticDeck(id,path,w,h,im,order-oy,out supportSpans);Check(hasSupport,"SWS recorded static signature reaches actor overlay");}
+  int actorColumnWidth=ReferenceWalkableDeckProfile.ColumnWidth(id);
+  bool frontSupport=hasSupport&&(ReferencePortalApertureProfile.IsSupportSurface(id)||id==0x1c2d007c||staticSupport);
+  var jamb=hasSupport?ReferenceWalkableDeckProfile.PortalJamb(id):null;
+  int Expected(int original,int x,int y,ReferenceGsmObject ev,int effectOrder){
+   bool fore=false;foreach(var f in foreground)if(Inside(f,x+.5,y+.0001))fore=true;
+   if(fore)return ReferencePortalApertureProfile.ContinuousForeground(id)?Math.Max(original,effectOrder+1):original;
+   bool rear=Inside(profile,x+.5,y+.0001);int depth=int.MaxValue;
+   if(hasSupport&&(!staticSupport||ev.PivotY-ev.SourceY==281)&&(rear||frontSupport))for(int n=0;n<supportSpans.Length;n+=4)
+    if(supportSpans[n]==x/actorColumnWidth&&y>=supportSpans[n+1]&&y<supportSpans[n+2]){depth=supportSpans[n+3];break;}
+   if(!rear&&jamb!=null&&Inside(jamb,x+.5,y+.0001))depth=270;
+   int expected=rear?Math.Min(original,effectOrder-1):original;
+   return depth==int.MaxValue?expected:Math.Min(expected,ev.SourceY+depth-ev.PivotZ);
+  }
+  foreach(var result in renderer.Results){var mesh=result.Sprite;for(int q=0;q<mesh.vertices.Length;q+=4){int x=(int)mesh.rect.x+(int)mesh.vertices[q].x,a=h-1-(int)mesh.vertices[q].y,b=h-1-(int)mesh.vertices[q+2].y;int original=id==0x172d125d?order:oy+((h-65)/10)*10+10+(x/10/4)*10;for(int y=a;y<b;y++){pixels[y*(w-1)+x]++;Check(result.Order==Expected(original,x,y,v,py+foot),"exact original/portal/actor per-pixel min oracle including foreground precedence");}}
    // A normal actor in front of every existing foreground band remains in front;
    // a normal actor behind all bands remains behind. No actor order is rewritten.
    int frontActor=Math.Max(oy+h+500,py+foot+500),rearActor=Math.Min(oy-500,py-500);Check(frontActor>result.Order&&rearActor<result.Order,"actor front/back ordering extrema preserved");
   }
   foreach(byte n in pixels)Check(n==1,"three production meshes partition each source pixel exactly once");
-  if(ReferencePortalApertureProfile.IsSupportSurface(id)){
+  // Same source image AND PZ, different admitted portal position/order. Cached
+  // geometry must not retain the first pair's cap or depend on a map number.
+  if(hasSupport){
+   var originalGate=g;var originals=new List<ReferenceLegacyMapObjectRenderer.Placed>(renderer.Results);
+   foreach(int delta in new[]{-1,1}){
+    g=originalGate;g.sy+=delta;map.libObjs[0]=g;renderer.Prepare(map);
+    Check(renderer.Place(v,im),"same texture/PZ different paired context admitted");
+    Check(renderer.Results.Count==originals.Count,"paired context does not alter static source partition");
+    for(int j=0;j<originals.Count;j++){
+     var result=renderer.Results[j];var mesh=result.Sprite;Check(mesh==originals[j].Sprite,"paired contexts share geometry, never cached order");
+     for(int q=0;q<mesh.vertices.Length;q+=4){int x=(int)mesh.rect.x+(int)mesh.vertices[q].x,a=h-1-(int)mesh.vertices[q].y,b=h-1-(int)mesh.vertices[q+2].y;int original=staticSupport?v.PivotY:oy+((h-65)/10)*10+10+(x/10/4)*10;
+      for(int y=a;y<b;y++)Check(result.Order==Expected(original,x,y,v,g.sy+foot),"same texture/PZ context exact per-pixel cap oracle");
+     }
+    }
+   }
+   g=originalGate;map.libObjs[0]=g;renderer.Prepare(map);Check(renderer.Place(v,im),"original paired context restored");
+  }
+  if(ReferencePortalApertureProfile.IsSupportSurface(id)||staticSupport){
    var originals=new List<ReferenceLegacyMapObjectRenderer.Placed>(renderer.Results);var oldV=v;var oldG=g;
    v.SourceX+=137;v.SourceY+=211;v.PivotY+=211;v.PivotZ+=61;g.sx+=137;g.sy+=211;g.pz+=61;map.libObjs[0]=g;renderer.Prepare(map);
    Check(renderer.Place(v,im),"translated support pair with matching elevation remains admitted");Check(renderer.Results.Count==originals.Count,"translated support mesh count stable");
-   for(int j=0;j<originals.Count;j++){Check(renderer.Results[j].Sprite==originals[j].Sprite,"support geometry reuses source texture cache");Check(renderer.Results[j].Order==originals[j].Order+211,"support order follows translation only");}
+   for(int j=0;j<originals.Count;j++){Check(renderer.Results[j].Sprite==originals[j].Sprite,"support geometry reuses source texture cache");var mesh=renderer.Results[j].Sprite;int x=(int)mesh.rect.x+(int)mesh.vertices[0].x,y=h-1-(int)mesh.vertices[0].y;int native=staticSupport?v.PivotY:v.SourceY+((h-65)/10)*10+10+(x/10/4)*10;Check(renderer.Results[j].Order==Expected(native,x,y,v,g.sy+foot),"translated cached support follows exact source/PZ/portal min, not a blanket shift");}
    g.pz+=600;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"displaced support effect cannot borrow an upper face");v=oldV;g=oldG;map.libObjs[0]=g;renderer.Prepare(map);
    im.nLeft=2;Check(!renderer.Place(v,im),"oversize trimmed upper-face image rejected");im.nLeft=0;
    GameBootstrap.UseIsoY=true;Check(!renderer.Place(v,im),"support repair leaves alternate depth mode unchanged");GameBootstrap.UseIsoY=false;
    Check(!renderer.Place(v,im,ReferenceMapObjectKind.Tile),"support repair never rewrites tile layers");
+  }
+  if(staticSupport){
+   Check(renderer.Place(v,im),"restore matching static pair after diagnostic rejection controls");
+   var originalV=v;var meshes=new List<ReferenceLegacyMapObjectRenderer.Placed>(renderer.Results);
+   foreach(int offsetDelta in new[]{1,0,-1,0}){
+    v.PivotY=originalV.PivotY+offsetDelta;Check(renderer.Place(v,im),"static signature mismatch preserves native paired portal path");var seen=new byte[(w-1)*(h-1)];
+    foreach(var result in renderer.Results){var mesh=result.Sprite;for(int q=0;q<mesh.vertices.Length;q+=4){int x=(int)mesh.rect.x+(int)mesh.vertices[q].x,a=h-1-(int)mesh.vertices[q].y,b=h-1-(int)mesh.vertices[q+2].y;for(int y=a;y<b;y++){seen[y*(w-1)+x]++;Check(result.Order==Expected(v.PivotY,x,y,v,g.sy+foot),"matched/nonmatched static signature cache must preserve exact per-pixel native/actor order");}}}
+    foreach(byte n in seen)Check(n==1,"static signature cache retains exact source partition");
+    if(offsetDelta==0){Check(renderer.Results.Count==meshes.Count,"restored static signature mesh count");for(int j=0;j<meshes.Count;j++)Check(renderer.Results[j].Sprite==meshes[j].Sprite,"matched static geometry cache restored without wrong fallback reuse");}
+   }
+   v=originalV;
   }
   r.Portal.path="object/DH/other.gso";renderer.Prepare(map);Check(!renderer.Place(v,im),"portal identity path required");r.Portal.path=pp;r.Portal.clipBy++;renderer.Prepare(map);Check(!renderer.Place(v,im),"actual decoded portal foot required");r.Portal.clipBy=foot;g.xl++;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"portal logical dimensions required");g.xl=pw;g.id=0x01300c1d;map.libObjs[0]=g;renderer.Prepare(map);Check(!renderer.Place(v,im),"decorative or unrelated model excluded");g.id=pid;map.libObjs[0]=g;renderer.Prepare(map);
   v.Width++;Check(!renderer.Place(v,im),"new door width guarded");v.Width=w;v.Height++;Check(!renderer.Place(v,im),"new door height guarded");v.Height=h;im.clipArr=new[]{1};Check(!renderer.Place(v,im),"new profiles do not override authored clips");im.clipArr=null;map.libObjs.Add(g);renderer.Prepare(map);Check(!renderer.Place(v,im),"new pair ambiguity rejected");map.libObjs.Clear();renderer.Prepare(map);Check(!renderer.Place(v,im),"new unpaired doors unchanged");renderer.Clean();
