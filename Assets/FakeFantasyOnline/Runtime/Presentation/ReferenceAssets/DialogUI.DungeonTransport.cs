@@ -15,6 +15,21 @@ public sealed partial class DialogUI
     private int dungeonTransportGeneration;
     private int dungeonTransportMap;
 
+    internal void ObserveDungeonQuestState()
+    {
+        if (!Visible) return;
+        bool hasTaskEntry = false;
+        foreach (DungeonEntrances.Dungeon entry in DungeonEntrances.For(NpcName))
+            if (DungeonQuestAccess.RequiredQuest(entry.map) != 0) hasTaskEntry = true;
+        if (dungeonTransport != null)
+            foreach (WorldTransportDestinationState entry in dungeonTransport.Destinations)
+                if (DungeonQuestAccess.RequiredQuest(entry.MapId) != 0) hasTaskEntry = true;
+        if (!hasTaskEntry) return; // Do not rebuild unrelated NPC service menus.
+        // A task receipt can remove admission while an old option is retained.
+        dungeonTransportGeneration++;
+        if (!InSubView) BuildMenu();
+    }
+
     private void ResetDungeonTransport()
     {
         dungeonTransport = null;
@@ -71,13 +86,15 @@ public sealed partial class DialogUI
         for (int i = 0; i < dungeonTransport.Destinations.Count; i++)
         {
             WorldTransportDestinationState destination = dungeonTransport.Destinations[i];
-            int index = i;
+            int index = i; // Keep the original wire index when another row is hidden.
+            if (!DungeonQuestAccess.CanEnter(destination.MapId)) continue;
             string label = list == 133 ? destination.Name : "进入" + destination.Name;
             if (destination.Price > 0) label += "（" + destination.Price + "铜）";
             Add(new ReferenceNpcDialogOption(label, () =>
             {
                 if (!Visible || curTrans != list || generation != dungeonTransportGeneration ||
-                    GameBootstrap.CurMapId != dungeonTransportMap) return;
+                    GameBootstrap.CurMapId != dungeonTransportMap ||
+                    !DungeonQuestAccess.CanEnter(destination.MapId)) return;
                 Visible = false;
                 dungeonTransport = null;
                 dungeonTransportGeneration++;

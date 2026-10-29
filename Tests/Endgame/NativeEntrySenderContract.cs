@@ -24,6 +24,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public static class NpcChatter { public static string GetLine(object role)=>""; public static object RoleOf(object npc)=>null; }
  public static class SysMsgBox { public static Action Confirm; public static void Show(string text,Action ok,object cancel) { Confirm=ok; } }
  public class ReferenceNpcDialogOption { public string Label;public Action Action;public ReferenceNpcDialogOption(string l,Action a) { Label=l;Action=a; } }
+ public static class DungeonQuestAccess { public static bool CanEnter(int map)=>true; public static int RequiredQuest(int map)=>0; } // Eligibility has its own actual-policy contract.
  public static class DungeonEntrances {
   public class Dungeon { public string name;public int map;public float x,y; }
   public static List<Dungeon> Data=new List<Dungeon>();public static IEnumerable<Dungeon> For(string name)=>Data;

@@ -15,10 +15,10 @@ end=menu.index('        if (!TryAddDungeonTransportOptions()) AddDungeonEntryOpt
 rows=menu[start:end]
 assert rows.count('"传送"')==1 and rows.count('AddDungeonEntryOptions();')==1
 callback=method((P/'DialogUI.Travel.cs').read_text(),'    private void AddDungeonEntryOptions()')
-# Frozen current-main callback, not a golden for future quest-policy work. A changed
-# callback requires an explicit audit update rather than silently widening eligibility.
-assert hashlib.sha256(callback.encode()).hexdigest()=='6ea8abec802151fb8dd84dee75fb5074f5a660a8542b4b95fc097f14ee33e2f4'
-source='using UnityEngine; namespace FakeFantasyOnline.Presentation.ReferenceAssets { public sealed partial class DialogUI { private void BuildTravelRows() {\n'+rows+'\n}\n'+callback+'\n}}'
+# The owner-approved task policy supersedes the old frozen unconditional callback.
+assert callback.count('DungeonQuestAccess.CanEnter(dungeon.map)') == 2
+assert 'DungeonQuestAccess.RequiredQuest(dungeon.map)' in callback
+source='using UnityEngine; namespace FakeFantasyOnline.Presentation.ReferenceAssets { public sealed partial class DialogUI { private void BuildTravelRows() {\n'+rows+'\n}\n'+callback+'\n} public static partial class TaskClient {'+method((P/'TaskClient.Queries.cs').read_text(),'    public static ActiveTask GetActive(int id)')+'}}'
 with tempfile.TemporaryDirectory() as tmp:
     tmp=Path(tmp);(tmp/'Actual.cs').write_text(source);exe=tmp/'Contract.exe'
     contracts=(ROOT/'Assets/FakeFantasyOnline/Runtime/Application/GameSessionContracts.cs').read_text()
@@ -31,5 +31,5 @@ with tempfile.TemporaryDirectory() as tmp:
 
     mono=os.environ.get('FFO_MONO') or str(Path(os.environ['FFO_MONO_ROOT'])/'bin/mono')
     refs=['-r:'+str(Path(os.environ['FFO_FRAMEWORK_DIR'])/n) for n in ('mscorlib.dll','System.dll','System.Core.dll')]
-    subprocess.run([mono,os.environ['FFO_CSC'],'-noconfig','-nostdlib+','-nologo','-langversion:9.0','-out:'+str(exe),*refs,str(tmp/'Actual.cs'),str(tmp/'States.cs'),str(P/'DialogUI.DungeonTransport.cs'),str(P/'DungeonEntrances.Lookup.cs'),str(P/'DungeonEntrances.NestedData.cs'),str(Path(__file__).with_name('DungeonEntryContract.cs')),str(Path(__file__).with_name('AuthoritativeRouteFixture.cs'))],check=True)
+    subprocess.run([mono,os.environ['FFO_CSC'],'-noconfig','-nostdlib+','-nologo','-langversion:9.0','-out:'+str(exe),*refs,str(tmp/'Actual.cs'),str(tmp/'States.cs'),str(P/'DialogUI.DungeonTransport.cs'),str(P/'DungeonQuestAccess.cs'),str(P/'TaskClient.State.cs'),str(P/'DungeonEntrances.Lookup.cs'),str(P/'DungeonEntrances.NestedData.cs'),str(Path(__file__).with_name('DungeonEntryContract.cs')),str(Path(__file__).with_name('AuthoritativeRouteFixture.cs'))],check=True)
     subprocess.run([mono,str(exe)],check=True)

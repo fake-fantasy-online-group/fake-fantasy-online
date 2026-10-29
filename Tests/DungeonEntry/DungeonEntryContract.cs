@@ -15,6 +15,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public sealed class ReferenceNpcDialogOption {public string Label;public Action Action;public ReferenceNpcDialogOption(string label,Action action){Label=label;Action=action;}}
  public sealed partial class DialogUI {
   public static DialogUI I;
+  internal void ObserveTaskCompletionReceipt() {}
   string NpcName;int curTrans;bool Visible=true;bool InSubView;List<ReferenceNpcDialogOption> options=new List<ReferenceNpcDialogOption>();int transportCalls,builds;
   void Add(ReferenceNpcDialogOption o)=>options.Add(o);
   void ShowTransferMenu(){Visible=false;transportCalls++;}
@@ -29,7 +30,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
   static WorldTransportState Reply(int list,params WorldTransportDestinationState[] rows)=>new WorldTransportState(list,rows);
   static WorldTransportDestinationState Row(string name,int map,int price=0)=>new WorldTransportDestinationState(name,map,100,200,price);
   static void Main(){
-   SetTable(new DungeonEntrances.Entry{npc="无服务表入口",dungeons=new[]{new DungeonEntrances.Dungeon{name="甲副本",map=20100,x=10,y=20},new DungeonEntrances.Dungeon{name="单人候选",map=29200,x=30,y=40}}});
+   TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=355},new TaskClient.ActiveTask{id=356},new TaskClient.ActiveTask{id=359},new TaskClient.ActiveTask{id=361}},new List<int>());
+   SetTable(new DungeonEntrances.Entry{npc="无服务表入口",dungeons=new[]{new DungeonEntrances.Dungeon{name="甲副本",map=20100,x=10,y=20},new DungeonEntrances.Dungeon{name="非任务副本",map=29201,x=30,y=40}}});
    { const string state="authoritative server rows";
     var d=Open("仙人元藏几",110);Check(d.options.Count==1&&d.options[0].Label=="读取副本入口",state+": no invented optimistic rows or generic transport");
     Check(ConsumeDungeonTransport(Reply(110,Row("九天蛰眠之龙（普通）",24400),Row("试炼神将（普通）",26800),Row("九天蛰眠之龙（困难）",24400),Row("试炼神将（困难）",26800))),"native server reply consumed");
@@ -50,6 +52,27 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets {
    ChatUI.Messages.Clear();var unbound=Open("无服务表入口",0);Check(unbound.options.Count==2,"original table-only entries retained");unbound.options[1].Action();Check(teleports==0&&ChatUI.Messages.Count==1,"unchanged table-only party gate");SocialClient.Party.Add(1);Open("无服务表入口",0,unbound);unbound.options[1].Action();Check(teleports==1,"unchanged table-only callback");
    I=null;Check(ConsumeDungeonTransport(Reply(108,Row("失落神殿",20901))),"closed owner still swallows late dungeon response");
    for(int list=101;list<=133;list++)Check(IsNativeDungeonTransportList(list)==(list!=114),"bounded audited SQL list set");Check(!IsNativeDungeonTransportList(100)&&!IsNativeDungeonTransportList(134),"no inferred future list classification");
+   foreach(var pair in new[]{(map:29400,quest:356),(map:29900,quest:359),(map:30000,quest:361)}) {
+    SetTable(new DungeonEntrances.Entry{npc="纯任务入口",dungeons=new[]{new DungeonEntrances.Dungeon{name="任务副本",map=pair.map,x=30,y=40}}});
+    foreach(int state in new[]{-1,0,1,2}) {
+     I=null;TaskClient.SetState(state==0||state==1?new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=pair.quest,ready=(byte)state}}:new List<TaskClient.ActiveTask>(),state==2?new List<int>{pair.quest}:new List<int>());
+     bool permitted=state==0||state==1;
+     Check(DungeonQuestAccess.CanEnter(pair.map)==permitted,"exact solo task state policy");
+     var native=Open("纯任务入口",0);Check(native.options.Count==(permitted?1:0),"table entry hidden unless unfinished");
+     if(permitted) {SocialClient.Party.Clear();int count=teleports;native.options[0].Action();Check(teleports==count+1,"solo task native entry does not demand a party");}
+     var mixed=Open("mixed authority",110);var reply=Reply(110,Row("任务",pair.map),Row("普通",24400),Row("任务2",pair.map),Row("普通（困难）",24400));ConsumeDungeonTransport(reply);
+     Check(mixed.options.Count==(permitted?4:2),"only task-only rows filtered");
+     int last=mixed.options.Count-1,countSent=NetClient.I.Choices.Count;mixed.options[last].Action();Check(NetClient.I.Choices.Count==countSent+1&&NetClient.I.Choices[countSent]==(110,3),"hidden rows never renumber hard wire index");
+    }
+    I=null;TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=pair.quest}},new List<int>());
+    var current=Open("task dialogue",111);ConsumeDungeonTransport(Reply(111,Row("任务",pair.map)));var old=current.options[0];
+    TaskClient.SetState(new List<TaskClient.ActiveTask>(),new List<int>{pair.quest});int writes=NetClient.I.Choices.Count;old.Action();Check(current.options.Count==0&&NetClient.I.Choices.Count==writes,"completion receipt hides and invalidates captured task choice");
+    TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=pair.quest,ready=1}},new List<int>());Check(current.options.Count==1,"legitimate unfinished reaccept receipt restores option");
+    old=current.options[0];TaskClient.SetState(new List<TaskClient.ActiveTask>(),new List<int>());old.Action();Check(current.options.Count==0&&NetClient.I.Choices.Count==writes,"abandon hides and refuses stale click");
+    TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=pair.quest}},new List<int>());current.InSubView=true;builds=current.builds;
+    TaskClient.SetState(new List<TaskClient.ActiveTask>(),new List<int>{pair.quest});Check(current.InSubView&&current.builds==builds,"task receipt does not interrupt a task detail subview");current.InSubView=false;current.BuildMenu();Check(current.options.Count==0,"back to menu reflects completed history");
+   }
+   I=null;TaskClient.SetState(new List<TaskClient.ActiveTask>{new TaskClient.ActiveTask{id=355},new TaskClient.ActiveTask{id=356},new TaskClient.ActiveTask{id=359},new TaskClient.ActiveTask{id=361}},new List<int>());
    int catalogRows=0, hardRows=0;
    foreach(var reply in AuthoritativeRoutes()) {
     Check(reply.TransportList>=101&&reply.TransportList<=133,"fixture excludes ordinary transport lists");

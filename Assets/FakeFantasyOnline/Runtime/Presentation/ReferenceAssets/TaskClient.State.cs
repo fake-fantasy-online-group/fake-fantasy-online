@@ -30,6 +30,7 @@ public static partial class TaskClient
         Done.Clear();
         foreach (int id in done) Done.Add(id);
         DialogUI.I?.ObserveTaskCompletionReceipt();
+        DialogUI.I?.ObserveDungeonQuestState();
         OnStateChanged?.Invoke();
     }
 }

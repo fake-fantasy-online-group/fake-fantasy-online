@@ -8,6 +8,7 @@ namespace FakeFantasyOnline.Application {
 namespace FakeFantasyOnline.Presentation.ReferenceAssets {
  public sealed partial class DialogUI {
   public static DialogUI I; public bool Visible,InSubView;
+  internal void ObserveDungeonQuestState() {} // Actual entry refresh is covered by DungeonEntry contract.
   public FakeFantasyOnline.Application.WorldNpcTaskOfferState LastOfferIntent;
   public int CurrentNpcEntityId; public void Close(){Visible=false;} public void ShowSay(string text){Visible=true;LastOfferIntent=null;}
  }

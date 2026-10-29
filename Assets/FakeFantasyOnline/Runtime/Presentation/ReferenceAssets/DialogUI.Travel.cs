@@ -51,11 +51,13 @@ public sealed partial class DialogUI
     {
         foreach (DungeonEntrances.Dungeon dungeon in DungeonEntrances.For(NpcName))
         {
+            if (!DungeonQuestAccess.CanEnter(dungeon.map)) continue;
             Add(new ReferenceNpcDialogOption("进入" + dungeon.name, () =>
             {
+                if (!DungeonQuestAccess.CanEnter(dungeon.map)) return;
                 // Native Close (0600021f) only hides, retaining the NPC/subview state.
                 Visible = false;
-                if (SocialClient.Party.Count == 0)
+                if (DungeonQuestAccess.RequiredQuest(dungeon.map) == 0 && SocialClient.Party.Count == 0)
                 {
                     ChatUI.Add("系统", dungeon.name + "需要组队才能进入。",
                         new Color(1f, 0.47058824f, 0.47058824f, 1f));
