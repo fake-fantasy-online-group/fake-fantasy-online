@@ -26,8 +26,19 @@ assets in a client build before claiming the runtime incident is fixed.
 
 ## Restored shelf and tooltip foreground
 
-Run `python3 Tests/RackShop/run-native-shelf-tooltip-contract.py --mono <mono> --csc <Roslyn csc.exe>`
-(or source the test toolchain environment). This compiles actual `UITip.cs` and
+Run with the repository's standard managed-test profile:
+
+```sh
+source Documentation/tools/activate-dotnet-test-toolchain.sh
+python3 Tests/RackShop/run-native-shelf-tooltip-contract.py
+```
+
+Alternatively, pass `--mono <mono> --csc <Roslyn csc.exe> --framework-dir <framework-api-directory>`.
+Use the verified Unity `unity-4.8-api` reference directory; older Mono `4.7.2-api`
+references lack a `string.Split` overload used by the production modal renderer.
+The runner explicitly references `mscorlib.dll`, `System.dll` and `System.Core.dll`
+from `FFO_FRAMEWORK_DIR` (or `--framework-dir`); it does not depend on the compiler's
+implicit Mono framework discovery. This compiles actual `UITip.cs` and
 `PetInfoTooltip.cs` against deterministic Unity API substitutes. It checks every
 frame/text draw's foreground depth, root GUI coordinates and comparisons at all
 screen corners at 0.75/1/1.5/2 scale, request replacement and repaint clearing.
