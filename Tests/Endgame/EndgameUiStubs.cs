@@ -238,3 +238,9 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 {
     internal static class AvatarFuse { public static int BegunKind = -1; public static void Begin(byte tab, int slot, byte kind = 0) { BegunKind = kind; } }
 }
+
+namespace FakeFantasyOnline.Presentation.ReferenceAssets
+{
+    internal static class CharData { internal static int race = 4; internal static long charId = 1; }
+    internal static class TaskClient { internal static readonly HashSet<int> Done = new HashSet<int>{401}; public static bool IsDone(int id) => Done.Contains(id); }
+}

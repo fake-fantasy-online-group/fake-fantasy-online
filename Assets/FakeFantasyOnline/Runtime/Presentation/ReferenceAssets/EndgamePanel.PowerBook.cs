@@ -13,7 +13,8 @@ public sealed partial class EndgamePanel
     private int powerFilterScroll, powerFilterHighlight;
     private string powerSourceUID = "";
     private long powerSourceGeneration;
-    private string powerClass = "", powerCategory = "", powerSlot = "";
+    private const string OwnPowerScope = "职业限定", CommonPowerScope = "通用";
+    private string powerClass = OwnPowerScope, powerCategory = "", powerSlot = "";
     private bool hideUnobtained;
     private int powerFilterOpen = -1;
     private int pendingPowerTab = -1, pendingPowerSlot, pendingPowerItem;
@@ -23,6 +24,7 @@ public sealed partial class EndgamePanel
     internal static bool HandlePowerItemForIndependentRuntime(int id, int tab, int slot)
     {
         var state = Current?.State;
+        Current?.SynchronizePowerBookContext();
         if (state == null || id <= 0 || (id != state.PowerBookItemID && id != state.PowerScrollItemID)) return false;
         if (!WorldEntryAvailable || !state.PowerBookAvailable || SysMsgBox.Visible || state.Pending ||
             InventoryDlg.ItemAt(tab, slot).id != id || InventoryDlg.IsLocked((byte)tab, slot)) return true;
@@ -74,12 +76,14 @@ public sealed partial class EndgamePanel
     }
     private void ExtractPower(EndgamePowerRecordView power)
     {
-        if (!power.Unlocked || !HasPowerBookItem() || !State.PowerBookCurrent || State.PowerBookLoading || State.Pending) return;
+        SynchronizePowerBookContext();
+        if (!PowerBelongsToCurrentProfession(power) || !power.Unlocked || !HasPowerBookItem() || !State.PowerBookCurrent || State.PowerBookLoading || State.Pending) return;
         var request = new EndgameRequest("powerbook.extract", State.Revision, powerID: power.PowerID);
         if (Send(request)) observedPowerImprint = request.RequestID;
     }
     private void ObservePowerBookRequest()
     {
+        SynchronizePowerBookContext();
         if (pendingPowerTab >= 0)
         {
             if (pendingPowerGeneration != State.Generation) pendingPowerTab = -1;
@@ -125,20 +129,64 @@ public sealed partial class EndgamePanel
         power.Unlocked && !string.IsNullOrWhiteSpace(power.CurrentValueText) ? power.CurrentValueText : "—";
     private float PowerBookRowHeight(EndgamePowerRecordView power) =>
         Math.Max(MobileClientPresentation.Enabled ? 44 / panelScale : 32, (BitmapFont.Ready ? BitmapFont.Wrap(power.Name, 280, 1).Count * 16 : label.CalcHeight(new GUIContent(power.Name), 280)) + 12);
+    // race is the character's native route, not proof of employment. Match the
+    // existing skill window's authoritative 0x8027 job-task gate without clamping
+    // unknown routes to Warrior or inferring identity from cached power rows.
+    internal static int CurrentPowerProfession()
+    {
+        int quest;
+        switch (CharData.race)
+        {
+            case 0: quest = 403; break;
+            case 1: quest = 404; break;
+            case 2: quest = 402; break;
+            case 3: quest = 400; break;
+            case 4: quest = 401; break;
+            default: return -1;
+        }
+        return CharData.charId > 0 && TaskClient.IsDone(quest) ? CharData.race : -1;
+    }
+    private void SynchronizePowerBookContext()
+    {
+        if (State == null || !State.SynchronizePowerBookContext(CharData.charId, CurrentPowerProfession())) return;
+        selectedPowerID = observedPowerImprint = powerSourceUID = "";
+        pendingPowerTab = -1; powerSourceGeneration = -1;
+        powerClass = OwnPowerScope; powerScroll = Vector2.zero;
+        ResetPowerFilterDropdown();
+        if (open && module == EndgameModule.PowerBook && State.PowerBookAvailable) Send(new EndgameRequest("powerbook.list"));
+    }
+    internal static bool PowerBelongsToCurrentProfession(EndgamePowerRecordView power)
+    {
+        if (power == null) return false;
+        if (power.Class == "全职业") return true;
+        switch (CurrentPowerProfession())
+        {
+            case 0: return power.Class == "战士";
+            case 1: return power.Class == "剑客";
+            case 2: return power.Class == "刺客";
+            case 3: return power.Class == "药师";
+            case 4: return power.Class == "术士";
+            default: return false;
+        }
+    }
     internal static bool PowerMatches(EndgamePowerRecordView power, string scope, string type, string slot, bool hide)
     {
-        if (hide && !power.Unlocked || scope.Length > 0 && power.Class != scope || type.Length > 0 && power.Category != type) return false;
+        if (!PowerBelongsToCurrentProfession(power) || hide && !power.Unlocked ||
+            scope == OwnPowerScope && power.Class == "全职业" || scope == CommonPowerScope && power.Class != "全职业" ||
+            scope != OwnPowerScope && scope != CommonPowerScope || type.Length > 0 && power.Category != type) return false;
         if (slot.Length == 0) return true;
         foreach (string allowed in power.Slots) if (allowed == slot) return true;
         return false;
     }
     private List<string> PowerFilterOptions(int filter)
     {
+        if (filter == 0) return new List<string> { OwnPowerScope, CommonPowerScope };
         var options = new List<string> { "" };
         foreach (var power in State.Powers)
         {
+            if (!PowerBelongsToCurrentProfession(power)) continue;
             if (filter == 2) { foreach (string slot in power.Slots) if (!options.Contains(slot)) options.Add(slot); }
-            else { string value = filter == 0 ? power.Class : power.Category; if (value.Length > 0 && !options.Contains(value)) options.Add(value); }
+            else { string value = power.Category; if (value.Length > 0 && !options.Contains(value)) options.Add(value); }
         }
         return options;
     }
@@ -157,6 +205,7 @@ public sealed partial class EndgamePanel
     }
     private void DrawPowerBook()
     {
+        SynchronizePowerBookContext();
         if (Event.current.type != EventType.Repaint) DrawPowerFilterDropdown();
         DrawRiftWindowArtwork(new Rect(0, 0, W, H));
         PowerText(new Rect(24, 15, W - 80, 32), State.PowerBookName, heading);

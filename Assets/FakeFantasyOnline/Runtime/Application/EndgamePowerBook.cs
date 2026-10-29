@@ -52,6 +52,16 @@ public sealed partial class EndgameClientState
     public IReadOnlyList<EndgamePowerRecordView> Powers { get; private set; } = Array.Empty<EndgamePowerRecordView>();
     public bool PowerBookLoading => powerBookRead != null;
     public bool PowerBookCurrent => PowerBookLoaded && PowerBookRevision == Revision;
+    private long powerBookCharacter = -1;
+    private int powerBookProfession = -2;
+    // Local presentation context from the existing native identity/job receipts.
+    // Dropping the active read also rejects a late page from the previous context.
+    public bool SynchronizePowerBookContext(long character, int profession)
+    {
+        if (powerBookCharacter == character && powerBookProfession == profession) return false;
+        powerBookCharacter = character; powerBookProfession = profession;
+        ResetPowerBookValues(); Version++; return true;
+    }
     private EndgameRequest powerBookRead;
     private DateTime powerBookReadAt;
     private void ResetPowerBookValues()
@@ -59,7 +69,7 @@ public sealed partial class EndgameClientState
         PowerBookLoaded = false; PowerBookRevision = PowerBookNextCursor = "";
         Powers = Array.Empty<EndgamePowerRecordView>(); powerBookRead = null;
     }
-    private void ResetPowerBook() { PowerBookAvailable = false; PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = ""; ResetPowerBookValues(); }
+    private void ResetPowerBook() { powerBookCharacter = -1; powerBookProfession = -2; PowerBookAvailable = false; PowerBookItemID = PowerScrollItemID = 0; PowerBookNPC = ""; ResetPowerBookValues(); }
     private bool BeginPowerBookRead(EndgameRequest request)
     {
         if (PowerBookLoading) return false;

@@ -120,7 +120,7 @@ partial class EndgameUiContract
             Check(field.x == 68 + filter * 216 && field.xMax == 226 + filter * 216, "label and native field fit separate nonoverlapping group rectangles");
             PowerFilterEvent(p, UnityEngine.EventType.MouseDown, 84 + filter * 216, 78);
             Check((int)Get(p, "powerFilterOpen") == filter, "each native input opens its option list without cycling: " + filter);
-            Check((string)Get(p, filter == 0 ? "powerClass" : filter == 1 ? "powerCategory" : "powerSlot") == "", "opening does not change filter value");
+            Check((string)Get(p, filter == 0 ? "powerClass" : filter == 1 ? "powerCategory" : "powerSlot") == (filter == 0 ? "职业限定" : ""), "opening does not change filter value");
             PowerFilterEvent(p, UnityEngine.EventType.Repaint);
             Check(UnityEngine.GUI.labels.Contains("全部"), "open popup paints actual options");
             Check(UnityEngine.GUI.labels.Contains(filter == 0 ? "范围：" : filter == 1 ? "类型：" : "部位：") && !UnityEngine.GUI.labels.Contains("范围：全部"), "label paints separately and input displays value only");
@@ -130,7 +130,7 @@ partial class EndgameUiContract
 
             PowerFilterEvent(p, UnityEngine.EventType.MouseDown, 90 + filter * 216, 135);
             Check((int)Get(p, "powerFilterOpen") == -1 && UnityEngine.Event.current.type == UnityEngine.EventType.Used, "select closes popup and consumes click");
-            Check((string)Get(p, filter == 0 ? "powerClass" : filter == 1 ? "powerCategory" : "powerSlot") == (filter == 0 ? "术士" : filter == 1 ? "通用" : "衣服"), "selected option updates only intended filter");
+            Check((string)Get(p, filter == 0 ? "powerClass" : filter == 1 ? "powerCategory" : "powerSlot") == (filter == 0 ? "通用" : filter == 1 ? "通用" : "衣服"), "selected option updates only intended filter");
             PowerFilterEvent(p, UnityEngine.EventType.MouseDown, 84 + filter * 216, 78);
             PowerFilterEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.Home);
             PowerFilterEvent(p, UnityEngine.EventType.KeyDown, key: UnityEngine.KeyCode.Return);
@@ -190,14 +190,133 @@ partial class EndgameUiContract
         Check(((UnityEngine.Vector2)Get(p, "powerScroll")).y == 40 * 32 - 442, "list overflow clamps to final viewport without blank overscroll");
         Set(p, "powerClass", "no matching class"); PowerFilterEvent(p, UnityEngine.EventType.Repaint);
         Check(((UnityEngine.Vector2)Get(p, "powerScroll")).y == 0, "filtering to empty list resets native scroll bounds");
-        Set(p, "powerClass", "");
+        Set(p, "powerClass", "职业限定");
         request = new EndgameRequest("powerbook.list"); c.SendEndgame(request); PowerReply(c, request.RequestID, "2", original);
         UnityEngine.Event.current = new UnityEngine.Event();
+    }
+    static void PowerProfessionIdentity(int race, bool employed, long character = 100)
+    {
+        CharData.race = race; CharData.charId = character; TaskClient.Done.Clear();
+        int[] jobs = {403, 404, 402, 400, 401};
+        if (employed && race >= 0 && race < jobs.Length) TaskClient.Done.Add(jobs[race]);
+    }
+    static void PowerProfessionHello(Client c)
+    {
+        c.Endgame.Begin(new EndgameRequest("hello"));
+        Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\",\"powerBookItem\":\"1\",\"powerCodexItemId\":\"1900031001\",\"powerScrollItemId\":\"1900031002\"}}");
+    }
+    static void PowerProfessionContracts()
+    {
+        int before = assertions, contexts = 0, pages = 0, rows = 0;
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Call(p, "EnsureStyles"); PowerProfessionHello(c);
+        string directory = Environment.GetEnvironmentVariable("FFO_POWER_BOOK_FIXTURES");
+        var scenarios = (IReadOnlyList<object>)BoundedJson.Parse(File.ReadAllText(Path.Combine(directory, "profession-pages.json")));
+        foreach (var raw in scenarios)
+        {
+            var scenario = (IReadOnlyDictionary<string, object>)raw;
+            int race = Convert.ToInt32(scenario["race"]); bool employed = (bool)scenario["employed"]; string own = (string)scenario["class"];
+            PowerProfessionIdentity(race, employed); Call(p, "SynchronizePowerBookContext");
+            Check(EndgamePanel.CurrentPowerProfession() == (own.Length == 0 ? -1 : race), "native race + job completion resolves current profession only");
+            foreach (var page in (IReadOnlyList<object>)scenario["pages"])
+            {
+                var response = EndgameResponse.Parse(BoundedJson.Serialize(page));
+                Check(c.SendEndgame(new EndgameRequest("powerbook.list", cursor:response.Cursor, requestID:response.RequestID)), "actual Go filtered cursor accepted by production state");
+                Check(c.Endgame.Apply(response), "actual Go filtered page applied without protocol changes"); pages++; rows += response.Powers.Count;
+                foreach (var row in response.Powers)
+                {
+                    Check(EndgamePanel.PowerBelongsToCurrentProfession(row), "real Go row belongs to own/common");
+                    Check(EndgamePanel.PowerMatches(row, "职业限定", "", "", false) == (row.Class == own && own.Length > 0), "own scope uses authoritative identity, not row-derived profession");
+                    Check(EndgamePanel.PowerMatches(row, "通用", "", "", false) == (row.Class == "全职业"), "common scope maps all-class wire label, not category");
+                    Check(EndgamePanel.PowerMatches(row, row.Class == "全职业" ? "通用" : "职业限定", row.Category, row.Slots[0], true) == row.Unlocked, "hide/category/slot compose without dropping unlocked records");
+                }
+            }
+            Check(c.Endgame.Powers.Count == (own.Length == 0 ? 80 : 130) && c.Endgame.PowerBookNextCursor == "", "all own/common pages aggregate exactly to terminal cursor");
+            var options = (List<string>)typeof(EndgamePanel).GetMethod("PowerFilterOptions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(p, new object[]{0});
+            Check(options.Count == 2 && options[0] == "职业限定" && options[1] == "通用", "exact two range choices, never 全部 or class names");
+            // Inject an old/unfiltered server response: UI must still fail closed for
+            // every other profession, including unlocked rows and novel type/slot values.
+            string[] names = {"战士", "剑客", "刺客", "药师", "术士", "全职业", "未知职业", ""};
+            foreach (string name in names)
+            foreach (bool unlocked in new[]{false,true})
+            {
+                string rowJson = PowerRow("injected", unlocked).Replace("\"class\":\"术士\"", "\"class\":\"" + name + "\"");
+                var row = EndgameResponse.Parse("{\"kind\":\"powerbook.list\",\"ok\":true,\"powers\":[" + rowJson + "]}").Powers[0];
+                bool allowed = name == "全职业" || own.Length > 0 && name == own;
+                Check(EndgamePanel.PowerBelongsToCurrentProfession(row) == allowed, "mixed cached response cannot introduce another class");
+                foreach (string scope in new[]{"职业限定","通用","",name})
+                foreach (bool hide in new[]{false,true})
+                    if (!allowed) Check(!EndgamePanel.PowerMatches(row, scope, "通用", "戒指", hide), "all filter combinations suppress foreign rows");
+            }
+            foreach (string scope in new[]{"职业限定","通用"})
+            {
+                Set(p,"powerClass",scope); UnityEngine.GUI.labels.Clear(); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+                Check(UnityEngine.GUI.labels.Contains(scope), "production DrawPowerBook paints scope label");
+                foreach(var row in c.Endgame.Powers)
+                    Check(UnityEngine.GUI.labels.Contains(row.Name) == (scope == "通用" ? row.Class == "全职业" : row.Class == own && own.Length > 0), "production table draws only selected own/common rows");
+            }
+            var mixedRows = new List<string>();
+            foreach (string name in names)
+                mixedRows.Add(PowerRow("mixed-" + name, true).Replace("凝神回路", "row-" + name).Replace("\"class\":\"术士\"", "\"class\":\"" + name + "\"").Replace("\"category\":\"通用\"", "\"category\":\"type-" + name + "\""));
+            var mixedRead = new EndgameRequest("powerbook.list"); c.SendEndgame(mixedRead); PowerReply(c,mixedRead.RequestID,"0",string.Join(",",mixedRows));
+            foreach (string scope in new[]{"职业限定","通用"})
+            {
+                Set(p,"powerClass",scope); UnityEngine.GUI.labels.Clear(); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+                foreach(string name in names)
+                    Check(UnityEngine.GUI.labels.Contains("row-" + name) == (scope == "通用" ? name == "全职业" : own.Length > 0 && name == own), "actual draw suppresses injected foreign rows even when recorded");
+            }
+            var categories = (List<string>)typeof(EndgamePanel).GetMethod("PowerFilterOptions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(p, new object[]{1});
+            foreach(string name in names)
+                Check(categories.Contains("type-" + name) == (name == "全职业" || own.Length > 0 && name == own), "foreign row cannot populate dependent filter options");
+            contexts++;
+        }
+        // Context change between read and response: cancel page, clear selection and
+        // native scroll before first repaint; a late old page can never reappear.
+        PowerProfessionIdentity(4,true); Call(p,"SynchronizePowerBookContext");
+        var read = new EndgameRequest("powerbook.list"); c.SendEndgame(read);
+        PowerReply(c,read.RequestID,"1",PowerRow("old-warlock",true),"1");
+        var oldRow=c.Endgame.Powers[0]; var continuation=new EndgameRequest("powerbook.list",cursor:"1"); c.SendEndgame(continuation);
+        Set(p,"selectedPowerID","old-warlock"); Set(p,"powerScroll",new UnityEngine.Vector2(0,300)); Set(p,"powerFilterOpen",0);
+        Set(p,"powerCategory","通用"); Set(p,"powerSlot","戒指"); Set(p,"hideUnobtained",true);
+        PowerProfessionIdentity(0,true); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+        Check(c.Endgame.Powers.Count==0 && !c.Endgame.PowerBookLoading && !c.Endgame.PowerBookCurrent && c.Endgame.PowerBookNextCursor=="", "profession change discards old page/cache/cursor before repaint");
+        Check((string)Get(p,"selectedPowerID")=="" && ((UnityEngine.Vector2)Get(p,"powerScroll")).y==0 && (int)Get(p,"powerFilterOpen")==-1, "profession change resets stale native selection/scroll/popup");
+        Check((string)Get(p,"powerCategory")=="通用" && (string)Get(p,"powerSlot")=="戒指" && (bool)Get(p,"hideUnobtained"), "unrelated filters remain unchanged across profession switch");
+        PowerReply(c,continuation.RequestID,"1",PowerRow("late-warlock",true));
+        Check(c.Endgame.Powers.Count==0 && !UnityEngine.GUI.labels.Contains(oldRow.Name), "late response cannot restore old profession or flash it");
+        int sent=c.Sent.Count; typeof(EndgamePanel).GetMethod("ExtractPower",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(p,new object[]{oldRow});
+        Check(c.Sent.Count==sent, "stale foreign extraction callback cannot send");
+        foreach(string change in new[]{"character","session","novice","unknown"})
+        {
+            PowerProfessionIdentity(4,true); Call(p,"SynchronizePowerBookContext");
+            read=new EndgameRequest("powerbook.list"); c.SendEndgame(read); PowerReply(c,read.RequestID,"1",PowerRow("old",true),"1");
+            Set(p,"selectedPowerID","old");
+            if(change=="character") CharData.charId++;
+            if(change=="session") {c.Endgame.Reset();PowerProfessionHello(c);}
+            if(change=="novice") TaskClient.Done.Clear();
+            if(change=="unknown") CharData.race=99;
+            PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+            Check(c.Endgame.Powers.Count==0 && c.Endgame.PowerBookNextCursor=="" && (string)Get(p,"selectedPowerID")=="", change+" invalidates stale book and selection");
+        }
+        Set(p,"open",true); Set(p,"module",EndgameModule.PowerBook);
+        PowerProfessionIdentity(4,true); Call(p,"SynchronizePowerBookContext");
+        var activeRead=c.Last; PowerReply(c,activeRead.RequestID,"1",PowerRow("old-open",true),"1");
+        var activePage=new EndgameRequest("powerbook.list",cursor:"1"); c.SendEndgame(activePage);
+        PowerProfessionIdentity(0,true); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+        var newRead=c.Last;
+        Check(newRead.Op=="powerbook.list" && newRead.Cursor=="" && newRead.RequestID!=activePage.RequestID && c.Endgame.Powers.Count==0, "open-book profession change starts fresh first page rather than old continuation");
+        PowerReply(c,activePage.RequestID,"1",PowerRow("late-open",true));
+        Check(c.Endgame.PowerBookLoading && c.Endgame.Powers.Count==0, "late previous-profession page cannot settle replacement first-page request");
+        Apply(c,"{\"kind\":\"powerbook.list\",\"ok\":false,\"requestId\":\""+newRead.RequestID+"\",\"error\":\"storage\"}");
+        sent=c.Sent.Count; PowerFilterEvent(p,UnityEngine.EventType.Repaint); PowerFilterEvent(p,UnityEngine.EventType.Repaint);
+        Check(c.Sent.Count==sent, "unchanged context does not introduce automatic error retry loop");
+        PowerProfessionIdentity(4,true,1); p.Unbind(c);
+        Console.WriteLine("PASS power profession scope: " + contexts + " identities, " + pages + " real Go pages, " + rows + " rows; " + (assertions-before) + " production UI/state assertions (no engine render).");
     }
     static void PowerBookContracts()
     {
         PowerBookServerWireContracts();
-        var c = new Client(); var p = new EndgamePanel(); p.Bind(c);
+        PowerProfessionContracts();
+        var c = new Client(); var p = new EndgamePanel(); p.Bind(c); Call(p, "SynchronizePowerBookContext");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\"}}");
         Check(!c.Endgame.PowerBookAvailable && !EndgamePanel.TryOpenPowerBookFromWorld(), "legacy direct-imprint server and header shortcut cannot open new book");
         c.Endgame.Begin(new EndgameRequest("hello")); Apply(c, "{\"kind\":\"hello\",\"ok\":true,\"capabilities\":[\"endgame.v1\"],\"result\":{\"powerBook\":\"1\",\"powerBookItem\":\"1\",\"powerCodexItemId\":\"1900031001\",\"powerScrollItemId\":\"1900031002\",\"powerBookName\":\"万象秘典\"}}");
@@ -208,11 +327,11 @@ partial class EndgameUiContract
         PowerReply(c, request.RequestID, "1", PowerRow("SS-U03", true) + "," + PowerRow("SS-U04", false));
         Check(c.Endgame.Powers.Count == 2 && c.Endgame.PowerBookCurrent, "catalog contains owned and unowned records");
         var owned = c.Endgame.Powers[0]; var locked = c.Endgame.Powers[1];
-        Check(EndgamePanel.PowerMatches(owned, "术士", "通用", "戒指", true), "class powers can filter a non-head/chest/weapon slot");
+        Check(EndgamePanel.PowerMatches(owned, "职业限定", "通用", "戒指", true), "class powers can filter a non-head/chest/weapon slot");
         Check(!EndgamePanel.PowerMatches(owned, "战士", "", "", false), "scope filter");
-        Check(!EndgamePanel.PowerMatches(owned, "", "攻击", "", false), "category filter");
-        Check(!EndgamePanel.PowerMatches(owned, "", "", "鞋", false), "server-authored slot eligibility filter");
-        Check(EndgamePanel.PowerMatches(locked, "", "", "", false) && !EndgamePanel.PowerMatches(locked, "", "", "", true), "hide-unobtained checkbox does not delete locked records");
+        Check(!EndgamePanel.PowerMatches(owned, "职业限定", "攻击", "", false), "category filter");
+        Check(!EndgamePanel.PowerMatches(owned, "职业限定", "", "鞋", false), "server-authored slot eligibility filter");
+        Check(EndgamePanel.PowerMatches(locked, "职业限定", "", "", false) && !EndgamePanel.PowerMatches(locked, "职业限定", "", "", true), "hide-unobtained checkbox does not delete locked records");
         Check(owned.Description == "消耗降低45%。" && owned.RangeText == "消耗降低40～55%" && locked.RollBP == 0, "current effect and legal bounds are separate server-authored fields; locked is not falsely maxed");
         Check(EndgamePanel.PowerRangeText(owned) == "40～55%", "range column uses actual parameter bounds, not generic roll percent");
         Check(EndgamePanel.PowerCurrentValueText(owned) == "—", "older server missing currentValueText never triggers local numerical inference");
@@ -285,6 +404,10 @@ partial class EndgameUiContract
         Call(p, "DrawPowerBook");
         Check(c.Sent.Count == beforeLockedClick, "owned row hover/click never extracts accidentally");
         UnityEngine.Event.current = new UnityEngine.Event();
+        var foreignOwned = EndgameResponse.Parse("{\"kind\":\"powerbook.list\",\"ok\":true,\"powers\":[" + PowerRow("foreign-owned",true).Replace("\"class\":\"术士\"","\"class\":\"战士\"") + "]}").Powers[0];
+        int beforeForeign=c.Sent.Count;
+        typeof(EndgamePanel).GetMethod("ExtractPower",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(p,new object[]{foreignOwned});
+        Check(c.Sent.Count==beforeForeign && c.Endgame.PowerBookCurrent && c.Endgame.InventorySnapshotCurrent, "foreign extraction callback rejected even with current book, inventory and unlocked record");
         ArtworkSkin.click = "提取卷轴"; Call(p, "DrawPowerBook");
         Check(c.Last.Op == "powerbook.extract" && c.Endgame.Pending, "explicit owned-row extraction button submits without target picker or confirmation");
         var rowExtract = c.Last;
