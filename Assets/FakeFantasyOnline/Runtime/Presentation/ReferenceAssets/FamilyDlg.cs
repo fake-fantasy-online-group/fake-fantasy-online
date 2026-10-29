@@ -196,7 +196,7 @@ public sealed partial class FamilyDlg : MonoBehaviour
 
             if (rows.Count < 1)
             {
-                Lbl(180f, 160f, "暂无家族, 点【创建】建立一个", Gray);
+                Lbl(180f, 160f, "暂无家族，可向主城首领申请创建", Gray);
             }
             else
             {
@@ -229,11 +229,6 @@ public sealed partial class FamilyDlg : MonoBehaviour
                 sel >= 0 && sel < rows.Count && NetClient.I != null)
             {
                 NetClient.I.FamilyApplyForIndependentRuntime(rows[sel].Item1);
-            }
-            if (Btn(new Rect(winX + 200f * s, winY + 296f * s, 90f * s, 22f * s),
-                    null, "创建", mouse))
-            {
-                FamilyCreateDlg.Toggle();
             }
             if (RefreshBtn(new Rect(winX + 378f * s, winY + 296f * s, 90f * s, 22f * s), mouse))
             {

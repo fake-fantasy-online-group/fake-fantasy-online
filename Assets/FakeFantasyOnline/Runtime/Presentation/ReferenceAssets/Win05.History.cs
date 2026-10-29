@@ -89,9 +89,8 @@ public partial class Win05
         GUI.color = new Color(1f, .85f, .3f, 1f);
         GUI.DrawTexture(L(chatTab * 50 + 17, 62f, 50f, 2f), Texture2D.whiteTexture);
         GUI.color = tabColor;
-        if (chatTab == 1) { DrawGmFeedback(L, d, ev); return; }
-        if (chatTab == 2) { DrawVote(L, d, ev); return; }
-        if (chatTab == 9) { DrawNoticeTab(L, d, ev); return; }
+        // GM is the original chat-history channel, not a feedback form.
+        if (ChatTabs[chatTab].Item2 == "公告") { DrawNoticeTab(L, d, ev); return; }
 
         string want = ChatTabs[chatTab].Item2;
         Rect view = L(22f, 70f, 490f, 418f);

@@ -142,12 +142,11 @@ internal partial class InventoryDlg
             while (index != 4);
         }
 
-        // --- sort button: design (365, 41) sized 48x21 ---
-        Rect sort = new Rect(X + s * 365f, Y + s * 41f, s * 48f, s * 21f);
+        // The complete native 24px face and hit area end at y64, before the bag.
+        Rect sort = new Rect(X + s * 365f, Y + s * 40f,
+            s * NativeSortButtonArtwork.Width, s * NativeSortButtonArtwork.Height);
         bool sortHover = sort.Contains(ev.mousePosition);
-        // Keep the native hit box and click timing; only the blank artwork is nine-sliced.
-        ArtworkSkin.ButtonFace(sort, "整理", s, GUI.enabled, sortHover,
-            pressed: sortHover && Input.GetMouseButton(0));
+        NativeSortButtonArtwork.Draw(sort, s, sortHover, sortHover && Input.GetMouseButton(0));
         if (GUI.Button(sort, GUIContent.none, GUIStyle.none))
         {
             // Native clears all three carried indices even when no client is available.

@@ -10,7 +10,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// docs/contracts/VERSION_UPGRADE_1_5_8_FAMILY_CREATE_DLG_VERIFICATION_X86_V1.json.
 /// Logical window 262x390, five official .gsa assets, one 16-character family-name field, one
 /// 200-character declaration area, a 选择 button, 确定/取消 and a close icon. The window is opened
-/// by FamilyDlg's 创建 button and closes after NetClient.FamilyCreate(name, declaration).
+/// by a main-city leader’s 创建家族 option and closes after NetClient.FamilyCreate(name, declaration).
 /// </summary>
 public sealed class FamilyCreateDlg : MonoBehaviour
 {

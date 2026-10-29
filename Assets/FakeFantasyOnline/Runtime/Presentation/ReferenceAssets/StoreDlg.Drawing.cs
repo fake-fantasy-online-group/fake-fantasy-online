@@ -60,10 +60,9 @@ internal sealed partial class StoreDlg
                 }
                 if (WhUI.Click(r, mouse)) tab = i;
             }
-            Rect sort = L(363, 38, 48, 21);
+            Rect sort = L(363, 38, NativeSortButtonArtwork.Width, NativeSortButtonArtwork.Height);
             bool sortHover = sort.Contains(mouse);
-            ArtworkSkin.ButtonFace(sort, "整理", s, GUI.enabled, sortHover,
-                pressed: sortHover && Input.GetMouseButton(0));
+            NativeSortButtonArtwork.Draw(sort, s, sortHover, sortHover && Input.GetMouseButton(0));
             if (WhUI.Click(sort, mouse))
             {
                 InventoryDlg.ClearHeld();

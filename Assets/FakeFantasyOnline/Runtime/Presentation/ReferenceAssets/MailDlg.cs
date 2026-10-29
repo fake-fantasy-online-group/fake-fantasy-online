@@ -328,9 +328,6 @@ public partial class MailDlg : MonoBehaviour
             _ = commands.ActionAsync(1, mails[selected].id, CancellationToken.None);
         if (Btn(L(79, 297, 90, 22), Texture("delallbtn"), "全部删除", pointer) && NetClient.I != null)
             _ = commands.ActionAsync(3, 0, CancellationToken.None);
-        // Writing and returning mail have no matching baked-word artwork. Keep their current
-        // labels on the shared blank skin instead of borrowing the unrelated send/team buttons.
-        if (Btn(L(175, 297, 70, 22), null, "写  信", pointer)) StartCompose(0, string.Empty, string.Empty);
         if (Btn(L(342, 297, 70, 22), Texture("cancelbtn"), "关闭", pointer)) { visible = false; Typing = false; }
         if (Btn(L(233, 266, 90, 22), Texture("mailresistbtn"), "拒收列表", pointer)) MailResistDlg.Toggle();
         if (Btn(L(323, 266, 90, 22), Texture("configbtn"), "邮箱设置", pointer)) MailConfigDlg.Toggle();

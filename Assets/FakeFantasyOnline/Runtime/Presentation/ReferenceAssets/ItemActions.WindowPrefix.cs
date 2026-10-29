@@ -7,6 +7,7 @@ internal static partial class ItemActions
         if (EndgamePanel.HandlePowerItemForIndependentRuntime(id, tab, slot)) return true;
         if (EndgamePanel.HandleSpiritItemForIndependentRuntime(id, tab, slot)) return true;
         if (EndgamePanel.HandleCubeItemForIndependentRuntime(id, tab, slot)) return true;
+        if (HandleMailPaper(id, tab, slot)) return true;
         if (id == 0x350c)
         {
             SysMsgBox.Show("【魔法衣橱提取凭证】不能直接双击。\n请打开魔法衣橱, 在要取出的外形上【右键】, 即可取出(每次消耗1个)。", () => { }, null);

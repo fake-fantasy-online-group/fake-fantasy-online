@@ -100,7 +100,7 @@ public partial class Win05
         (212f, 80f), (212f, 120f), (212f, 160f), (212f, 200f), (213f, 252f), (116f, 250f)
     };
 
-    private static int chatTab = 7;
+    private static int chatTab = 6;
 
     private static int _histSig = -1;
 
@@ -120,38 +120,16 @@ public partial class Win05
 
     private static readonly (string, string)[] ChatTabs =
     {
-        ("systemtab", "系统"), ("gmtab", "GM"), ("", "投票"),
+        ("systemtab", "系统"), ("gmtab", "GM"),
         ("teamtab", "队伍"), ("broadtab", "广播"), ("uniontab", "家族"),
         ("whispertab", "私聊"), ("nearbytab", "附近"), ("worldtab", "世界"), ("", "公告")
     };
-
-    private static string voteInput = "";
-
-    private static int voteCacheVer = -1;
-
-    private static float voteCacheS = -1f;
-
-    private static readonly List<(int, List<string>, int, int, byte, float)> voteRows =
-        new List<(int, List<string>, int, int, byte, float)>();
 
     private static readonly List<(string, bool)> _ntBlocks = new List<(string, bool)>();
 
     private static int _ntStamp = -1;
 
     private static float _ntW = -1f;
-
-    private static string fbInput = "";
-
-    private static int gmTypeFrame = -10;
-
-    private static readonly List<(string, int, List<string>, List<string>, float)> fbRows =
-        new List<(string, int, List<string>, List<string>, float)>();
-
-    private static int fbCacheVer = -1;
-
-    private static float fbCacheS = -1f;
-
-    private static int fbCacheSub = -1;
 
     // Original 0600105d: keep the six cache allocations and intervening winX store
     // in native order. The compiler still calls MonoBehaviour..ctor after field initializers.

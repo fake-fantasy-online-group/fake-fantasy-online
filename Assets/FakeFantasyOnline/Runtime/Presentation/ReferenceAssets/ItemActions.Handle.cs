@@ -16,6 +16,7 @@ internal static partial class ItemActions
     {
         if (EndgamePanel.HandlePowerItemForIndependentRuntime(id, tab, slot)) return true;
         if (EndgamePanel.HandleCubeItemForIndependentRuntime(id, tab, slot)) return true;
+        if (HandleMailPaper(id, tab, slot)) return true;
         if (EndgamePanel.HandleSpiritItemForIndependentRuntime(id, tab, slot)) return true;
         bool avatar = SuitFxDB.IsAvatar(id);
         if (cosmetic || avatar)

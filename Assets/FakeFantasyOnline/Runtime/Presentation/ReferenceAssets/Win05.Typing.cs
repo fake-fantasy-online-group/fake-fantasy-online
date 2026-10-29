@@ -5,7 +5,8 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 
 public partial class Win05
 {
-    public static bool GmTyping => Time.frameCount - gmTypeFrame < 3;
+    // Kept for existing input-routing consumers; the added feedback/vote editors are gone.
+    public static bool GmTyping => false;
 }
 
 }

@@ -788,6 +788,7 @@ public sealed partial class DialogUI : MonoBehaviour
             Add(new ReferenceNpcDialogOption("传送", ShowTransferMenu));
         }
         AddDungeonEntryOptions();
+        AddFamilyCreationOption();
         // Official callbacks 06000230/231/232: family storage has its own
         // informational row; personal storage toggles the surviving native owner.
         if (NpcName.Contains("家族仓库"))
