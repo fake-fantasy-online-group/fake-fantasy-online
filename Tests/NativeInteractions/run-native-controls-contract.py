@@ -30,10 +30,13 @@ methods = '\n'.join(block(menu, signature) for signature in (
 methods += '\n' + block((src / 'DialogUI.Travel.cs').read_text(), 'private bool BuildTravelMenu()')
 options = (src / 'ReferenceFirstWorldNpcDialog.cs').read_text()
 options = options[options.index('public sealed class ReferenceNpcDialogOption'):options.rfind('\n}')]
+contracts = (root / 'Assets/FakeFantasyOnline/Runtime/Application/GameSessionContracts.cs').read_text()
+states = 'using System; using System.Collections.Generic; using System.Collections.ObjectModel; namespace FakeFantasyOnline.Application {' + block(contracts, 'public sealed class WorldTransportDestinationState') + block(contracts, 'public sealed class WorldTransportState') + '}'
 header = 'using System; using System.Collections.Generic; using UnityEngine; using FakeFantasyOnline.Application; using Random = UnityEngine.Random;\nnamespace FakeFantasyOnline.Presentation.ReferenceAssets {\n'
 with tempfile.TemporaryDirectory(prefix='native-real-controls-') as tmp:
     tmp = Path(tmp)
     actual = tmp / 'ActualBodies.cs'
+    (tmp / 'TransportStates.cs').write_text(states)
     actual.write_text(header + 'public partial class Win05 {\n' + state + '\n}\n' +
                       'public sealed partial class DialogUI {\n' + methods + '\n}\n' + options + '\n}\n')
     exe = tmp / 'Contract.exe'
@@ -43,6 +46,7 @@ with tempfile.TemporaryDirectory(prefix='native-real-controls-') as tmp:
     subprocess.run([mono, os.environ['FFO_CSC'], '-nologo', '-noconfig', '-nostdlib+',
                     '-langversion:9.0', '-out:' + str(exe)] + refs + [str(actual),
                     str(src / 'Win05.History.cs'), str(src / 'DialogUI.Options.cs'),
-                    str(src / 'DialogUI.FamilyCreation.cs'),
+                    str(src / 'DialogUI.FamilyCreation.cs'), str(src / 'DialogUI.DungeonTransport.cs'),
+                    str(tmp / 'TransportStates.cs'),
                     str(root / 'Tests/NativeInteractions/NativeControlsContract.cs')], check=True)
     subprocess.run([mono, str(exe)], check=True)

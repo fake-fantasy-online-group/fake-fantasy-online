@@ -36,7 +36,8 @@ public partial class DialogUI {
  private List<string> optLabels=new List<string>(); private List<Action> optActs=new List<Action>();
  private void Add(ReferenceNpcDialogOption row){optLabels.Add(row.Label);optActs.Add(row.Action);}
  private bool BuildTravelMenu(){return false;}
- private void ShowAscendMenu(){} private void ShowTransferMenu(){} private void AddDungeonEntryOptions(){}
+ private void ShowAscendMenu(){} private void ShowTransferMenu(){} private void AddFamilyCreationOption() { } // Real family routing is covered by NativeInteractions.
+  void AddDungeonEntryOptions(){}
  // Dungeon transport lives in its separate actual-owner contract; these trial fixtures have curTrans=0.
  private static bool IsNativeDungeonTransportList(int list)=>false;
  private bool TryAddDungeonTransportOptions()=>false;

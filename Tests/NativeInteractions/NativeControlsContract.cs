@@ -116,7 +116,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         public static void OpenLifeLearn() { }
     }
     public static class GameBootstrap { public static int CurMapId; public static Action<int,int,int> DoTeleport; }
-    public class NetClient { public static NetClient I=new NetClient(); public void BuyWarehouseForIndependentRuntime() { } }
+    public class NetClient
+    {
+        public static NetClient I=new NetClient();
+        public readonly List<(int,int)> Choices=new List<(int,int)>();
+        public void BuyWarehouseForIndependentRuntime() { }
+        public void OpenTeleportForIndependentRuntime(int list) { }
+        public void TeleportForIndependentRuntime(int list,int index) => Choices.Add((list,index));
+    }
     public static class FamilyCreateDlg
     {
         public static bool Visible; public static int Toggles;
@@ -141,6 +148,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
     }
     public sealed partial class DialogUI
     {
+        public static DialogUI I;
         public string NpcName; public bool Visible,InSubView; public string Greeting;
         public int CurrentSellList; private int curTrans;
         private readonly List<string> optLabels=new List<string>();
@@ -150,6 +158,10 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         private ReferenceNpcTaskMutationIntent LastTaskMutationIntent;
         public string[] Labels => optLabels.ToArray();
         public void Build() => BuildMenu();
+        public void OpenTransportForTest(int list)
+        {
+            I=this; curTrans=list; ResetDungeonTransport(); BuildMenu(); Visible=true; BeginDungeonTransport();
+        }
         public bool Click(int index) => ActivateOption(index);
         public Action Captured(int index) => optActs[index];
         // Unrelated services are boundary substitutes; the tested production menu
@@ -230,6 +242,22 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
                 Check(!FamilyCreateDlg.Visible,"captured native action opened after map change");
                 GameBootstrap.CurMapId=maps[i];dialog.NpcName="普通居民";stale();Check(!FamilyCreateDlg.Visible,"captured native action opened after NPC change");
             }
+            // Synthetic composition fixture, not a claim that this leader has
+            // list110 in native SQL: both independently-added menu paths must
+            // coexist in the actual full BuildMenu after integration.
+            GameBootstrap.CurMapId=7;FamilyCreateDlg.Visible=false;
+            TaskClient.OfferNpcName=names[0];
+            var combined=new DialogUI{NpcName=names[0],CurrentSellList=123};
+            combined.OpenTransportForTest(110);
+            Check(combined.Labels.SequenceEqual(new[]{"购买物品","出售物品","读取副本入口","创建家族","任务：original task","离开"}),"integrated full menu lost family while awaiting dungeon reply");
+            var destination=new WorldTransportDestinationState("副本（普通）",24400,100,200,0);
+            Check(DialogUI.ConsumeDungeonTransport(new WorldTransportState(110,new[]{destination})),"integrated transport reply not consumed");
+            Check(combined.Labels.SequenceEqual(new[]{"购买物品","出售物品","进入副本（普通）","创建家族","任务：original task","离开"}),"actual dungeon rebuild displaced family/task/leave rows");
+            int sent=NetClient.I.Choices.Count;
+            combined.Click(3);Check(FamilyCreateDlg.Visible && NetClient.I.Choices.Count==sent,"family option incorrectly selected dungeon");
+            combined.Visible=true;combined.Click(2);combined.Click(2);
+            Check(NetClient.I.Choices.Count==sent+1 && NetClient.I.Choices.Last()==(110,0),"bound full-menu dungeon row sends incorrect index or repeats");
+            Check(!combined.Visible,"native dungeon choice did not close NPC menu");
             var travel=new DialogUI{NpcName="传送仙子"};travel.Build();
             Check(travel.Labels.SequenceEqual(new[]{"随机传送","桃源","长乐"}),"real travel-menu early return changed");
             Console.WriteLine("PASS "+checks+" actual DrawHistory/BuildMenu/option-dispatch assertions (boundary stubs; no Unity execution)");
