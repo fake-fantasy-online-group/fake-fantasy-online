@@ -614,5 +614,85 @@
     "Height": 305,
     "TextureWidth": 402,
     "TextureHeight": 304
+  },
+  {
+    "Id": 103612518,
+    "Path": "object/jz/jz_dfyw_0102.gso",
+    "Width": 727,
+    "Height": 582,
+    "TextureWidth": 726,
+    "TextureHeight": 581
+  },
+  {
+    "Id": 539820934,
+    "Path": "object/jz/jz_hyyhs_0902.gso",
+    "Width": 671,
+    "Height": 580,
+    "TextureWidth": 670,
+    "TextureHeight": 579
+  },
+  {
+    "Id": 221053329,
+    "Path": "object/jz/jz_smyw_0401.gso",
+    "Width": 679,
+    "Height": 484,
+    "TextureWidth": 678,
+    "TextureHeight": 483
+  },
+  {
+    "Id": 221053331,
+    "Path": "object/jz/jz_smyw_0403.gso",
+    "Width": 871,
+    "Height": 600,
+    "TextureWidth": 870,
+    "TextureHeight": 599
+  },
+  {
+    "Id": 53283770,
+    "Path": "object/jz/jz_td_3002.gso",
+    "Width": 605,
+    "Height": 595,
+    "TextureWidth": 604,
+    "TextureHeight": 594
+  },
+  {
+    "Id": 53283771,
+    "Path": "object/jz/jz_td_3003.gso",
+    "Width": 647,
+    "Height": 595,
+    "TextureWidth": 646,
+    "TextureHeight": 594
+  },
+  {
+    "Id": 455934353,
+    "Path": "object/jz/jz_tjj_0401.gso",
+    "Width": 709,
+    "Height": 400,
+    "TextureWidth": 708,
+    "TextureHeight": 399
+  },
+  {
+    "Id": 455935053,
+    "Path": "object/jz/jz_tjj_1101.gso",
+    "Width": 771,
+    "Height": 796,
+    "TextureWidth": 770,
+    "TextureHeight": 795
+  },
+  {
+    "Id": 455935653,
+    "Path": "object/jz/jz_tjj_1701.gso",
+    "Width": 429,
+    "Height": 381,
+    "TextureWidth": 428,
+    "TextureHeight": 380
+  },
+  {
+    "Id": 455936053,
+    "Path": "object/jz/jz_tjj_2101.gso",
+    "Width": 531,
+    "Height": 402,
+    "TextureWidth": 530,
+    "TextureHeight": 401
   }
 ]

@@ -10,7 +10,7 @@ internal static partial class ReferenceWalkableDeckProfile
 {
     // These narrowly reviewed components meet diagonal awnings, props or rails;
     // 10px bins would either swallow foreground or leave artificial body cuts.
-    internal static int ColumnWidth(int id) => id == 221053330 ? 1 : id == 53283369 ? 1 : id == 523043617 ? 1 : id == 523044617 ? 1 : id == 455936354 ? 1 : id == 674038465 ? 1 : id == 674038462 ? 1 : id == 674038464 ? 1 : id == 103613517 ? 1 : id == 36505853 ? 1 : id == 36506153 ? 1 : id == 36506954 ? 1 : id == 388829789 ? 1 : id == 19726838 ? 1 : 10;
+    internal static int ColumnWidth(int id) => id == 221053330 ? 1 : id == 53283369 ? 1 : id == 523043617 ? 1 : id == 523044617 ? 1 : id == 455936354 ? 1 : id == 674038465 ? 1 : id == 674038462 ? 1 : id == 674038464 ? 1 : id == 103613517 ? 1 : id == 36505853 ? 1 : id == 36506153 ? 1 : id == 36506954 ? 1 : id == 388829789 ? 1 : id == 19726838 ? 1 : id == 103612518 ? 1 : id == 539820934 ? 1 : id == 221053329 ? 1 : id == 221053331 ? 1 : id == 53283770 ? 1 : id == 53283771 ? 1 : id == 455934353 ? 1 : id == 455935053 ? 1 : id == 455935653 ? 1 : id == 455936053 ? 1 : 10;
 
     // Independently reviewed inner jambs only. The strict source signature is
     // checked before these are used; outside cliff and foreground bowls stay native.
