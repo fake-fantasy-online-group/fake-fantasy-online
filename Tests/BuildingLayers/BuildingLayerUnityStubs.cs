@@ -17,7 +17,7 @@ namespace UnityEngine {
 namespace FakeFantasyOnline.Presentation.ReferenceAssets{
  using UnityEngine;
  public class GsmMap{public struct Obj{public int id,sx,sy,xl,yl,py,pz;} public bool objsOk=true;public List<Obj>tileObjs=new List<Obj>(),libObjs=new List<Obj>();}
- public class ReferenceGsmMap{public GsmMap Native;public bool Ok=true,HasCover;public int MapWidth=14464,MapHeight=7232;}
+ public class ReferenceGsmMap{public GsmMap Native;public bool Ok=true,HasCover;public int MapWidth=1024,MapHeight=768;}
  public struct ReferenceGsmObject{public int Id,SourceX,SourceY,Width,Height,PivotY,PivotZ;public ReferenceGsmObject(int id,int sx,int sy,int w,int h,int py,int pz){Id=id;SourceX=sx;SourceY=sy;Width=w;Height=h;PivotY=py;PivotZ=pz;}}
  public class FakePkg{public Dictionary<string,byte[]>Files=new Dictionary<string,byte[]>(StringComparer.OrdinalIgnoreCase);public byte[] Read(string p)=>Files.TryGetValue(p,out var b)?b:null;}
  public class ResLoader{public static ResLoader I;public FakePkg Pkg=new FakePkg();public Dictionary<int,ObjSprite>Images=new Dictionary<int,ObjSprite>();public struct ObjSprite{public Texture2D tex;public string path;public int frames,clipWidth,clipBy,nLeft,nTop,hdScale;public int[]clipArr;}
@@ -26,7 +26,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets{
  public class FrameAnimator:Component{public float frameMs;public bool loop;public Func<(Sprite[],Vector3[])>loader;}
  public static class LoadTrace{public static bool On=false;public static long Now=>0;public static float Ms(long s)=>0;}
  public partial class GameBootstrap{
-  public string mapName="qw0038";public static bool UseIsoY=false;public Transform WorldRootForMapConstructionForIndependentRuntime;
+  public string mapName="synthetic-test-map";public static bool UseIsoY=false;public Transform WorldRootForMapConstructionForIndependentRuntime;
   public static int ObjN,ObjSliceN,ObjAnimN,ObjPlainN;public static float ObjLoadMs,ObjSliceMs,ObjSpawnMs,ObjFadeMs;
   private Dictionary<int,Sprite>objCache=new Dictionary<int,Sprite>();private Dictionary<int,List<(Sprite,int,int)>>sliceCache=new Dictionary<int,List<(Sprite,int,int)>>();
   public static Material IsoYObjMat()=>null;public static void ResetMapObjectPlacementMetricsForIndependentRuntime(){}public void RegisterMapObjectOccludersForIndependentRuntime(Transform p){}public void TouchMapObjectForIndependentRuntime(int id){}public void NoteMapObjectForIndependentRuntime(int id){}
