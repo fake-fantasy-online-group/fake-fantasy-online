@@ -50,6 +50,11 @@ public sealed partial class PluginGameApi
         internal bool PendingSettled;
         internal CancellationTokenSource Cancellation;
         internal Dictionary<string, bool> PriorWindows;
+        // mail/rack/family: server text receipt correlation after the gateway write succeeds.
+        internal string ReceiptKind;
+        internal long ReceiptAfter;
+        internal bool ReceiptWaiting;
+        internal bool LogoutCharacterSelection;
     }
 
     private static double ActionNow => System.Diagnostics.Stopwatch.GetTimestamp() /
@@ -113,12 +118,14 @@ public sealed partial class PluginGameApi
             ActionDefinition("ui.close", "Close a named native window previously opened or observed.", world, worldReason, "window:string"),
             ActionDefinition("transport.choose", "Confirm an observed destination in the open native transport window. Sent reports the Teleport write; map change remains a later snapshot.", world && TransportUI.VisibleS, "The native transport window is not open.",
                 "index:integer", "expectedName:string"),
-            ActionDefinition("mail.send", "Open the official letter-paper composer, fill recipient/title/body, and dispatch native DoSend. Completion is the server send receipt.", world && NetClient.I != null, worldReason,
+            ActionDefinition("mail.send", "Open the official letter-paper composer, fill recipient/title/body, and dispatch native DoSend. Completed only on the server send receipt (the composer is then closed); a server refusal is Rejected with code mail.failed and the server reason.", world && NetClient.I != null, worldReason,
                 "to:string", "title:string", "body:string", "paper:integer"),
-            ActionDefinition("rack.buy", "Buy an observed catalog good through the official BuyRack command and wait for the server receipt.", world && NetClient.I != null, worldReason,
+            ActionDefinition("rack.buy", "Buy an observed catalog good through the official BuyRack command. Completed only on the server purchase receipt; a server refusal is Rejected with code rack.failed and the server reason.", world && NetClient.I != null, worldReason,
                 "itemId:integer", "count?:integer", "source?:integer"),
-            ActionDefinition("family.create", "Submit a family name and declaration through the official FamilyCreateDlg confirmation write and wait for the server receipt.", world && NetClient.I != null, worldReason,
+            ActionDefinition("family.create", "Submit a family name and declaration through the official FamilyCreateDlg confirmation write. Completed only on the server creation receipt; a server refusal is Rejected with code family.failed and the server reason.", world && NetClient.I != null, worldReason,
                 "name:string", "declaration?:string"),
+            ActionDefinition("session.logout", "Leave the world through the official SysOption flow (选择角色 when characterSelection is true or omitted, otherwise 选择服务器). Completion is the native session reaching character or server selection. Credentials are never touched.", world && GameBootstrap.I != null, worldReason,
+                "characterSelection?:boolean"),
             ActionDefinition("chat.send", "Send text through the native session chat owner: channel 0 nearby, 1 party, 2 family, 3 world. Sent confirms only a write, never delivery. Commands and item shares are not accepted.", world, worldReason,
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
@@ -261,6 +268,10 @@ public sealed partial class PluginGameApi
         RefreshScene();
         TickActions();
         PluginAction entry;
+        string mappedId;
+        // Accept either the receipt actionId or the caller's retained requestId.
+        if (actionId != null && !actions.ContainsKey(actionId) && actionRequests.TryGetValue(actionId, out mappedId) &&
+            actions.TryGetValue(mappedId, out entry)) return entry.Receipt;
         return actionId != null && actions.TryGetValue(actionId, out entry) ? entry.Receipt :
             new GameActionReceipt(actionId, null, "unknown", GameActionState.Unknown, "action.not_found",
                 "The action is unknown or outside the 1024-record retention window.");
@@ -481,6 +492,8 @@ public sealed partial class PluginGameApi
                 DispatchRackBuy(entry); break;
             case "family.create":
                 DispatchFamilyCreate(entry); break;
+            case "session.logout":
+                DispatchLogout(entry); break;
             default: throw new ActionFailure("action.unavailable", "The action has no native adapter.");
         }
     }
@@ -545,6 +558,8 @@ public sealed partial class PluginGameApi
         if (entry.TitleOwner != null) { PollTitle(entry); return; }
         if (entry.EndgameRequest != null) { PollEndgame(entry); return; }
         if (entry.Kind == "dialogue") { PollDialogueOutcome(entry); return; }
+        if (entry.Kind == "logout") { PollLogout(entry); return; }
+        if (entry.ReceiptWaiting) { PollServerReceipt(entry); return; }
         if (!ActionActive(entry) && (entry.Pending == null || entry.PendingSettled)) return;
         // Observe a native queued pickup/skill's actual gateway task before scene/cancel checks.
         // Sending may already have happened, in which case it cannot be revoked.
@@ -565,6 +580,13 @@ public sealed partial class PluginGameApi
                 ActionSet(entry, GameActionState.Unknown, "send.exception", "The native gateway task faulted. Whether a request reached the server is unknown.");
             }
             else if (!entry.Pending.Result.IsSuccess) ActionSet(entry, GameActionState.Rejected, entry.Pending.Result.Error.Code, entry.Pending.Result.Error.Message);
+            else if (entry.ReceiptKind != null)
+            {
+                entry.ReceiptWaiting = true;
+                entry.Deadline = ActionNow + 15d;
+                ActionSet(entry, GameActionState.Running, "receipt.waiting", "The native write succeeded; waiting for the matching server receipt.");
+                PollServerReceipt(entry);
+            }
             else ActionSet(entry, GameActionState.Sent, "request.sent", "The native gateway reported a successful write. Server acceptance and gameplay completion are unconfirmed.");
             return;
         }
