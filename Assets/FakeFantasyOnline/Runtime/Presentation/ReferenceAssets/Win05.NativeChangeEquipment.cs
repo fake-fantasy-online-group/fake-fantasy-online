@@ -10,12 +10,25 @@ public partial class Win05
     private static Def ChangeEquipmentDefinition => Defs["changeequipdlg"];
 
     // Original 0600104e: ARM64 0x3bce44 / x86_64 0x3d0b10.
+    // Mobile has no right button: tap a filled cell, then its 取回 button (desktop: right-click).
+    internal static int MobileChangeSetSelected = -1;
+    internal static Rect MobileChangeSetTakeRect(Rect cell, int index, float scale)
+    {
+        float w = 44f * scale, h = 24f * scale;
+        if (index == 10) return new Rect(cell.center.x - w * .5f, cell.y - h - 4f * scale, w, h);
+        return index < 5 ? new Rect(cell.xMax + 4f * scale, cell.center.y - h * .5f, w, h)
+            : new Rect(cell.x - w - 4f * scale, cell.center.y - h * .5f, w, h);
+    }
+
     private void DrawChangeEquip(Func<float, float, float, float, Rect> L, Def d, Event ev)
     {
         if (changeEquipmentCorner != null)
             GUI.DrawTexture(L(3f, 3f, 30f, 30f), changeEquipmentCorner);
         bool held = InventoryDlg.HasHeld;
         var pending = MobileClientPresentation.Enabled ? MobilePendingChangeSet : null;
+        bool mobileTake = MobileClientPresentation.Enabled && !pending.HasValue;
+        if (!mobileTake) MobileChangeSetSelected = -1;
+        Rect takeRect = default; int takePart = -1;
         int hoverCell = -1;
         string hoverName = null, hoverDesc = null;
         byte hoverQuality = 0, hoverBlocked = 0;
@@ -57,6 +70,18 @@ public partial class Win05
                 ev.Use();
             }
             else if (pending.HasValue && ev.type == EventType.Repaint) Edge(r, new Color(1f, .9f, .4f, .8f));
+            if (mobileTake && entry.HasValue && ev.type == EventType.MouseDown && ev.button == 0 &&
+                r.Contains(ev.mousePosition))
+            {
+                MobileChangeSetSelected = MobileChangeSetSelected == part ? -1 : part;
+                PlayerController.SuppressWorldClick();
+                ev.Use();
+            }
+            if (mobileTake && entry.HasValue && MobileChangeSetSelected == part)
+            {
+                takeRect = MobileChangeSetTakeRect(r, i, s); takePart = part;
+                if (ev.type == EventType.Repaint) Edge(r, new Color(1f, .9f, .4f, 1f));
+            }
             if (ev.type == EventType.MouseDown && ev.button == 1 && entry.HasValue &&
                 r.Contains(ev.mousePosition))
             {
@@ -65,10 +90,21 @@ public partial class Win05
                 ev.Use();
             }
         }
+        if (mobileTake && takePart < 0) MobileChangeSetSelected = -1;
+        if (mobileTake && takePart >= 0 && MobileChangeSetSelected == takePart)
+        {
+            if (ArtworkSkin.Button(takeRect, "取回", s))
+            {
+                MobileChangeSetSelected = -1;
+                if (NetClient.I != null) NetClient.I.ChangeSetTakeForIndependentRuntime(takePart);
+                PlayerController.SuppressWorldClick();
+            }
+            else if (ev.type == EventType.MouseDown && ev.button == 0) MobileChangeSetSelected = -1;
+        }
         if (hoverCell >= 0)
             UITip.Show(TooltipContent.Fmt(TooltipContent.QualityName(hoverName, hoverQuality), hoverDesc) +
                 (hoverBlocked != 0 ? "\n★当前穿不上(等级/职业/属性不足), 换装时会被拒绝" : "") +
-                "\n右键取回背包", s);
+                (MobileClientPresentation.Enabled ? "\n点格子后点【取回】放回背包" : "\n右键取回背包"), s);
 
         Texture2D set = ResLoader.I != null ? ResLoader.I.LoadGsa2021First(
             "res/uires/equipdlg/setchgwearbtn.gsa") : null;
