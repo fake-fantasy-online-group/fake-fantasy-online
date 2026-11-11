@@ -80,6 +80,9 @@ class FormalBuildContract(unittest.TestCase):
             def fake_unity(command, cwd, env):
                 captured.update(env)
                 output.write_bytes(b'inert synthetic fixture, never executed')
+                managed = output.parent / 'candidate_Data/Managed'
+                managed.mkdir(parents=True)
+                (managed / 'FakeFantasyOnline.Protocol.dll').write_bytes(b'inert synthetic assembly fixture')
                 return type('Result', (), {'returncode': 0})()
             args = ['--platform', 'windows', '--version', '1.0.6', '--configuration', 'development',
                     '--dispatch-url', 'https://current.example.test/d', '--updater-directory', temporary,
@@ -91,7 +94,10 @@ class FormalBuildContract(unittest.TestCase):
                 self.assertEqual(build.main(args), 0)
             self.assertEqual(captured['FFO_RESOURCE_DISPATCH_URL'], 'https://current.example.test/d')
             self.assertEqual(captured['FFO_RESOURCE_LEGACY_DISPATCH_URLS'], 'https://old.example.test/d')
-            self.assertFalse(json.loads(Path(str(output) + '.local-build.json').read_text())['productionReady'])
+            self.assertEqual(captured['FFO_BUILD_DEBUG_SERVER_SWITCH'], '0')
+            receipt = json.loads(Path(str(output) + '.local-build.json').read_text())
+            self.assertFalse(receipt['productionReady'])
+            self.assertFalse(receipt['debugServerSwitch'])
 
     def test_source_tag_release_gate_fails_before_editor(self):
         with self.assertRaisesRegex(ValueError, 'requires --configuration formal'):

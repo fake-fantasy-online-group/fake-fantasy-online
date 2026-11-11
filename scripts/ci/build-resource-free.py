@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from urllib.parse import urlsplit
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -72,6 +73,40 @@ def legacy_dispatches(args):
     return validate_legacy_dispatches(values, args.dispatch_url, args.development_http)
 
 
+# Type names that exist only when FFO_DEBUG_SERVER_SWITCH is compiled in.
+DEBUG_SERVER_SWITCH_MARKERS = (b'DebugServerSwitchStore', b'DebugServerSwitchBindings')
+
+
+def artifact_code_blobs(output, platform):
+    """Yield compiled game code from a Player: Mono assemblies (desktop) or IL2CPP metadata (Android)."""
+    output = Path(output)
+    if platform == 'android':
+        with zipfile.ZipFile(output) as apk:
+            for name in apk.namelist():
+                if name.endswith('global-metadata.dat') or name.endswith('.dll'):
+                    yield name, apk.read(name)
+        return
+    managed = (output / 'Contents/Resources/Data/Managed' if platform == 'macos'
+               else output.parent / (output.stem + '_Data') / 'Managed')
+    found = False
+    for assembly in sorted(managed.glob('FakeFantasyOnline.*.dll')):
+        found = True
+        yield str(assembly), assembly.read_bytes()
+    if not found:
+        raise ValueError('No FakeFantasyOnline assemblies found under ' + str(managed))
+
+
+def verify_debug_server_switch(output, platform, enabled):
+    """The debug server switch must be compiled in exactly when requested."""
+    present = [name for name, data in artifact_code_blobs(output, platform)
+               if any(marker in data for marker in DEBUG_SERVER_SWITCH_MARKERS)]
+    if enabled and not present:
+        raise ValueError('--debug-server-switch was requested but the switch types are missing from the artifact')
+    if not enabled and present:
+        raise ValueError('Debug server switch types found in a build without --debug-server-switch: ' + ', '.join(present))
+    return present
+
+
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument('--platform', required=True, choices=('android', 'windows', 'macos'))
@@ -80,6 +115,7 @@ def parser():
     result.add_argument('--legacy-dispatch-url', action='append', help='Retired default to migrate to --dispatch-url; repeat for each. Defaults to newline-delimited FFO_RESOURCE_LEGACY_DISPATCH_URLS')
     result.add_argument('--configuration', choices=('formal', 'development'), default='formal')
     result.add_argument('--development-http', action='store_true')
+    result.add_argument('--debug-server-switch', action='store_true', help='Development only: compile in the login-page local/online server switch (FFO_DEBUG_SERVER_SWITCH)')
     result.add_argument('--output', type=Path)
     result.add_argument('--updater-directory', type=Path, help='Desktop only: exact self-contained updater binaries, no local config')
     result.add_argument('--mac-team-id', help='Existing public Developer ID Team ID, not a signing credential')
@@ -93,6 +129,8 @@ def main(argv=None):
     args = parser().parse_args(argv)
     if args.development_http and args.configuration != 'development':
         raise ValueError('HTTP opt-in is available only for explicit development builds')
+    if args.debug_server_switch and (args.configuration != 'development' or args.release):
+        raise ValueError('--debug-server-switch is available only for development builds, never formal or --release')
     validate_dispatch(args.dispatch_url, args.development_http)
     legacy = legacy_dispatches(args)
     settings = (ROOT / 'ProjectSettings/ProjectSettings.asset').read_text()
@@ -133,7 +171,8 @@ def main(argv=None):
         raise ValueError('Use a fresh output location; an earlier artifact must not be mistaken for this build')
     env = dict(os.environ, FFO_BUILD_PLATFORM=args.platform, FFO_BUILD_VERSION=args.version,
                FFO_RESOURCE_DISPATCH_URL=args.dispatch_url, FFO_RESOURCE_LEGACY_DISPATCH_URLS='\n'.join(legacy), FFO_BUILD_CONFIGURATION=args.configuration,
-               FFO_BUILD_DEVELOPMENT_HTTP='1' if args.development_http else '0', FFO_BUILD_OUTPUT=str(output))
+               FFO_BUILD_DEVELOPMENT_HTTP='1' if args.development_http else '0',
+               FFO_BUILD_DEBUG_SERVER_SWITCH='1' if args.debug_server_switch else '0', FFO_BUILD_OUTPUT=str(output))
     if args.platform == 'android':
         env['FAKE_FANTASY_ONLINE_ANDROID_BUILD_PATH'] = str(output)
     if args.updater_directory:
@@ -156,8 +195,10 @@ def main(argv=None):
         check = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(check)
         check.verify(output, configuration=args.configuration, expected_dispatch=args.dispatch_url, source_commit=head, expected_legacy_dispatches=legacy)
+    verify_debug_server_switch(output, args.platform, args.debug_server_switch)
     receipt = {'schemaVersion': 1, 'status': 'local-build-candidate', 'appVersion': args.version,
                'platform': args.platform, 'configuration': args.configuration, 'sourceCommit': head,
+               'debugServerSwitch': args.debug_server_switch,
                'sourceDirty': bool(dirty),
                'verifiedSourceTag': args.source_tag, 'dispatchUrl': args.dispatch_url,
                'signingVerified': False, 'runtimeAccepted': False, 'productionReady': False}

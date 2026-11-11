@@ -88,6 +88,9 @@ public sealed class ClientBootstrap : MonoBehaviour
 
     private void InitializeClient(PrivateServerOptions options, MobileResourceInstaller startup = null)
     {
+#if FFO_DEBUG_SERVER_SWITCH
+        BindDebugServerSwitch(options);
+#endif
         NoticeBoard.ConfigureEndpointForIndependentRuntime(options.NoticeUri?.AbsoluteUri);
         // Before title creation the native test-world path still has its original
         // unbound session. SetupNet transfers this graph to its first actual owner.
@@ -158,6 +161,23 @@ public sealed class ClientBootstrap : MonoBehaviour
         _unboundNetwork?.ReleaseUnbound();
         _unboundNetwork = null;
     }
+
+#if FFO_DEBUG_SERVER_SWITCH
+    // Debug builds only (--debug-server-switch). The login-page choice is persisted as the
+    // existing server.json override and applies on the next start.
+    private static void BindDebugServerSwitch(PrivateServerOptions options)
+    {
+        string persistent = UnityEngine.Application.persistentDataPath;
+        string streaming = UnityEngine.Application.streamingAssetsPath;
+        DebugServerSwitchBindings.Running = DebugServerSwitchStore.Describe(options);
+        DebugServerSwitchBindings.DefaultLocalHost = DebugServerSwitchStore.DefaultLocalHost;
+        DebugServerSwitchBindings.DefaultLocalPort = DebugServerSwitchStore.DefaultLocalPort;
+        DebugServerSwitchBindings.DescribeNext = () => DebugServerSwitchStore.DescribeNext(persistent, streaming);
+        DebugServerSwitchBindings.SelectLocal = (host, port) => DebugServerSwitchStore.SelectLocal(persistent, host, port);
+        DebugServerSwitchBindings.SelectOnline = () => DebugServerSwitchStore.SelectOnline(persistent);
+        Debug.Log("FFO_DEBUG_SERVER_SWITCH running=" + DebugServerSwitchBindings.Running);
+    }
+#endif
 
     private void RequestTerminalQuit(int exitCode)
     {

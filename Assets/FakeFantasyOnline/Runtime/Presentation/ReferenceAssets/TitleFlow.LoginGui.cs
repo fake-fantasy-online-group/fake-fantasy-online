@@ -380,6 +380,10 @@ internal sealed partial class TitleFlow
         // Keep actionable connection/error feedback, but leave the approved idle screen clear.
         string hint = loggingIn ? "登录中…" : netMsg;
         if (!string.IsNullOrEmpty(hint)) DrawHintBox(400f, 520f, hint, 560f);
+#if FFO_DEBUG_SERVER_SWITCH
+        // Debug builds only (--debug-server-switch); absent from every other build.
+        DrawDebugServerSwitch();
+#endif
 
         // The update gate is a compatibility requirement, independent of removed notice UI.
         if (RecoveredTitleLoginSurface.NeedUpdate)

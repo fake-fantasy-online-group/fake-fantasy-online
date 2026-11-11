@@ -39,6 +39,8 @@ The update page runs on desktop and Android before game resources or the title i
 
 For a local build only, set `FFO_RESOURCE_DISPATCH_URL` to a credential-free HTTPS dispatch URL. `FFO_RESOURCE_MANIFEST_URL` is no longer consumed by the build entry. Query strings, user-info, fragments, loopback, and invalid endpoints are rejected by the runtime configuration validator. Do not put passwords, signed URLs, or other secrets in an APK. For explicit private-LAN testing, `FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP=1` additionally enables the restricted development HTTP path. This is not enabled in CI.
 
+Debug server switch: `build-resource-free.py --configuration development --debug-server-switch` (environment `FFO_BUILD_DEBUG_SERVER_SWITCH=1`) compiles the login-page local/online server switch into that build only, through `BuildPlayerOptions.extraScriptingDefines` = `FFO_DEBUG_SERVER_SWITCH`; ProjectSettings is never changed. The flag is rejected for formal and `--release` builds, and the build fails if the switch types are present without the flag or missing with it. The switch writes or deletes the existing `persistentDataPath/server.json` override (default local `127.0.0.1:19000`, other hosts typed at runtime) and applies on the next start. Builds without the switch still honor a manually placed `server.json`.
+
 Create a remote resource manifest separately, on a machine holding the passive game resources:
 
 ```sh

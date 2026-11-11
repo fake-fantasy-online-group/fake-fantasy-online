@@ -90,6 +90,27 @@ public static class ResourceFreeBuildProfileContract
         environment["FFO_BUILD_CONFIGURATION"] = "formal";
         environment["FFO_BUILD_DEVELOPMENT_HTTP"] = "0";
         environment["FFO_RESOURCE_DISPATCH_URL"] = "https://example.com/dispatch.json";
+        // Debug server switch: off by default, development only, defines only this build.
+        foreach (string platform in new[] { "android", "windows", "macos" })
+        {
+            var plain = new ResourceFreeBuildProfile(platform, "1.0.0", get);
+            Check(!plain.DebugServerSwitch && plain.ExtraScriptingDefines.Length == 0);
+            environment["FFO_BUILD_DEBUG_SERVER_SWITCH"] = "1";
+            Reject(() => new ResourceFreeBuildProfile(platform, "1.0.0", get));
+            environment["FFO_BUILD_CONFIGURATION"] = "development";
+            var debug = new ResourceFreeBuildProfile(platform, "1.0.0", get);
+            Check(debug.DebugServerSwitch && debug.ExtraScriptingDefines.Length == 1 &&
+                debug.ExtraScriptingDefines[0] == "FFO_DEBUG_SERVER_SWITCH");
+            environment["FFO_BUILD_DEBUG_SERVER_SWITCH"] = "0";
+            Check(new ResourceFreeBuildProfile(platform, "1.0.0", get).ExtraScriptingDefines.Length == 0);
+            foreach (string bad in new[] { "true", "yes", " 1", "2" })
+            {
+                environment["FFO_BUILD_DEBUG_SERVER_SWITCH"] = bad;
+                Reject(() => new ResourceFreeBuildProfile(platform, "1.0.0", get));
+            }
+            environment.Remove("FFO_BUILD_DEBUG_SERVER_SWITCH");
+            environment["FFO_BUILD_CONFIGURATION"] = "formal";
+        }
         var formal = new ResourceFreeBuildProfile("android", "1.0.0", get);
         string temp = Path.Combine(Path.GetTempPath(), "ffo-build-profile-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);

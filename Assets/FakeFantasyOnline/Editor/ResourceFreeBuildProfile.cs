@@ -11,6 +11,9 @@ public sealed class ResourceFreeBuildProfile
     public readonly string Platform;
     public readonly bool Development;
     public readonly MobileResourceBootstrapConfig Bootstrap;
+    // Debug-only login-page server switch. Compiled in only through this build's extra define.
+    public const string DebugServerSwitchDefine = "FFO_DEBUG_SERVER_SWITCH";
+    public readonly bool DebugServerSwitch;
 
     public ResourceFreeBuildProfile(string platform, string projectVersion, Func<string, string> environment,
         string defaultConfiguration = "formal")
@@ -33,6 +36,12 @@ public sealed class ResourceFreeBuildProfile
             environment("FAKE_FANTASY_ONLINE_ANDROID_DEVELOPMENT_HTTP");
         if (!string.IsNullOrEmpty(http) && http != "0" && http != "1")
             throw new ArgumentException("Development HTTP must be 0 or 1.");
+        string debugSwitch = environment("FFO_BUILD_DEBUG_SERVER_SWITCH");
+        if (!string.IsNullOrEmpty(debugSwitch) && debugSwitch != "0" && debugSwitch != "1")
+            throw new ArgumentException("Debug server switch must be 0 or 1.");
+        DebugServerSwitch = debugSwitch == "1";
+        if (DebugServerSwitch && !Development)
+            throw new InvalidOperationException("The debug server switch is restricted to development builds.");
         Bootstrap = new MobileResourceBootstrapConfig
         {
             schemaVersion = 1,
@@ -45,6 +54,12 @@ public sealed class ResourceFreeBuildProfile
         if (!Development && string.IsNullOrWhiteSpace(Bootstrap.dispatchUrl))
             throw new InvalidOperationException("Formal resource-free builds require an explicit public FFO_RESOURCE_DISPATCH_URL.");
         Bootstrap.Validate(Development);
+    }
+
+    /// <summary>Per-build scripting defines; ProjectSettings is never changed.</summary>
+    public string[] ExtraScriptingDefines
+    {
+        get { return DebugServerSwitch ? new[] { DebugServerSwitchDefine } : new string[0]; }
     }
 
     private static string[] ParseLegacyDispatchUrls(string value)

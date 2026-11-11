@@ -105,7 +105,8 @@ public static class MobileClientBuild
                 scenes = new[] { "Assets/FakeFantasyOnline/Scenes/Client.unity" },
                 locationPathName = output,
                 target = BuildTarget.Android,
-                options = development ? BuildOptions.Development : BuildOptions.None
+                options = development ? BuildOptions.Development : BuildOptions.None,
+                extraScriptingDefines = profile != null ? profile.ExtraScriptingDefines : new string[0]
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Android build failed: " + report.summary.result);

@@ -67,7 +67,8 @@ public static class DesktopResourceFreeBuild
                 scenes = new[] { "Assets/FakeFantasyOnline/Scenes/Client.unity" },
                 locationPathName = output,
                 target = target,
-                options = profile.Development ? BuildOptions.Development : BuildOptions.None
+                options = profile.Development ? BuildOptions.Development : BuildOptions.None,
+                extraScriptingDefines = profile.ExtraScriptingDefines
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Resource-free desktop build failed: " + report.summary.result);
