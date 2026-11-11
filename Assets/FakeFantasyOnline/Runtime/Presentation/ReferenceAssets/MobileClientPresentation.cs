@@ -73,13 +73,15 @@ public static partial class MobileClientPresentation
     }
     private static float MenuAvailableWidth => Mathf.Max(56f*Scale,
         MenuToggleRect.x-8f*Scale-(SafeAreaGui.x+183f*Scale));
-    public static int MenuColumns => MenuColumnsForWidth(MenuAvailableWidth,Scale,
-        GameHud.ControlButtonCountForIndependentRuntime);
+    // Desktop-only hotkeys (D, X, Z, Insert, F12) get labelled entries after the nine.
+    internal const int MoreMenuEntryCount = 5;
+    internal static int MenuEntryCount => GameHud.ControlButtonCountForIndependentRuntime + MoreMenuEntryCount;
+    public static int MenuColumns => MenuColumnsForWidth(MenuAvailableWidth,Scale,MenuEntryCount);
     public static Rect MenuRect
     {
         get
         {
-            int count=GameHud.ControlButtonCountForIndependentRuntime;
+            int count=MenuEntryCount;
             int columns=MenuColumns;
             int rows=(count+columns-1)/columns;
             float width=(columns*64f-8f)*Scale;

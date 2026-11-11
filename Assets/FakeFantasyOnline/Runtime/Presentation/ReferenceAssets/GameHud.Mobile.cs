@@ -103,6 +103,7 @@ public partial class GameHud
                         hovered && Input.GetMouseButton(0));
                     if (GUI.Button(rect,GUIContent.none,GUIStyle.none)) ActivateControlButtonForIndependentRuntime(index);
                 }
+                DrawMobileMoreToggles(scale);
             }
         }
         if (mobileFinger!=-1 && mobilePressed<6)
