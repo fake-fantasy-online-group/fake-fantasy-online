@@ -110,6 +110,9 @@ public sealed partial class EndgamePanel
             if (material) CubeText(new Rect(rect.x, rect.yMax - 12, rect.width, 12), native.count.ToString(), Gold);
             if (rect.Contains(Event.current.mousePosition)) ShowPanelTooltip(BagTooltip(selection.Tab, native, TooltipContent.Fmt(native.name, native.desc)));
         }
+        if (SpiritEditable && selection != null && MobileClientPresentation.Enabled &&
+            ArtworkSkin.Button(MobileSpiritTakeBackRect(rect), "取回", 1f))
+        { ClearSpiritSlot(material); PlayerController.SuppressWorldClick(); return; }
         if (!SpiritEditable || !rect.Contains(Event.current.mousePosition)) return;
         if (InventoryDlg.HasHeld && Event.current.type == EventType.MouseDown && Event.current.button == 0)
         {
@@ -120,8 +123,13 @@ public sealed partial class EndgamePanel
         else if (!material && selection != null && Event.current.type == EventType.MouseDown && Event.current.button == 0)
         { State.InvalidateSpiritPreview(); spiritPreviewRevision = ""; PreviewSpirit(); Event.current.Use(); }
         else if (Event.current.type == EventType.MouseDown && Event.current.button == 1)
-        { if (material) spiritMaterial = null; else { spiritSelection = null; State.InvalidateSpiritPreview(); } Event.current.Use(); }
+        { ClearSpiritSlot(material); Event.current.Use(); }
     }
+    // Right-click body, shared with the mobile 取回 button.
+    private void ClearSpiritSlot(bool material)
+    { if (material) spiritMaterial = null; else { spiritSelection = null; State.InvalidateSpiritPreview(); } }
+    // Left of the 36x36 slot, in the panel's design space.
+    internal static Rect MobileSpiritTakeBackRect(Rect slot) => new Rect(slot.x - 36f, slot.y + 6f, 34f, 24f);
     internal static bool HandleSpiritItemForIndependentRuntime(int id, int tab, int slot)
     {
         if (!WorldEntryAvailable || !Current.State.SpiritAvailable) return false;

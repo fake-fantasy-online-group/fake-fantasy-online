@@ -289,6 +289,26 @@ public class WorldMapDlg : MonoBehaviour
             selfWidth, selfHeight), playerIcon);
     }
 
+    // Right-click step shared by the mobile 返回 button: area -> its land, land -> overview.
+    private void MobileBackStep()
+    {
+        if (view == 5) view = backLand;
+        else if (view > 0) view = 0;
+    }
+
+    private bool MobileBackVisible => MobileClientPresentation.Enabled && view > 0;
+
+    // The 800x600 map can be taller than a phone screen, so keep the button inside both
+    // the window and the safe area.
+    internal static Rect MobileBackRect(Rect window)
+    {
+        Rect safe = MobileClientPresentation.SafeAreaGui;
+        float scale = MobileClientPresentation.Scale;
+        float x = Mathf.Max(window.x, safe.x) + 8f * scale;
+        float y = Mathf.Max(window.y, safe.y) + 8f * scale;
+        return new Rect(x, y, 88f * scale, 40f * scale);
+    }
+
     // 0x0600109A OnGUI.
     private void OnGUI()
     {
@@ -318,8 +338,15 @@ public class WorldMapDlg : MonoBehaviour
         }
         if (ev.type == EventType.MouseDown && ev.button == 1 && window.Contains(ev.mousePosition))
         {
-            if (view == 5) view = backLand;
-            else if (view > 0) view = 0;
+            MobileBackStep();
+            ev.Use();
+        }
+        // Mobile has no right button: a visible 返回 performs the same step before the
+        // map art below can consume the tap.
+        if (MobileBackVisible && ev.type == EventType.MouseDown && ev.button == 0 &&
+            MobileBackRect(window).Contains(ev.mousePosition))
+        {
+            MobileBackStep();
             ev.Use();
         }
 
@@ -488,6 +515,8 @@ public class WorldMapDlg : MonoBehaviour
         }
 
         if (ImgBtn(580f, 20f, "res/uires/common/closebtn.gsa")) visible = false;
+        if (MobileBackVisible && ev.type == EventType.Repaint)
+            ArtworkSkin.ButtonFace(MobileBackRect(window), "返回", MobileClientPresentation.Scale);
         GUI.color = prev;
         if (ev.type == EventType.MouseDown && window.Contains(ev.mousePosition)) ev.Use();
     }
