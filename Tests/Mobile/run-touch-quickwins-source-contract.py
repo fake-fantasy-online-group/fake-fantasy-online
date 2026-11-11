@@ -72,4 +72,20 @@ spirit = src('EndgamePanel.Spirit.cs')
 check('MobileClientPresentation.Enabled &&\n            ArtworkSkin.Button(MobileSpiritTakeBackRect(rect)' in spirit and 'ClearSpiritSlot(material); Event.current.Use();' in spirit, 'spirit take-back shares the right-click body')
 wm = src('WorldMapDlg.cs')
 check('private bool MobileBackVisible => MobileClientPresentation.Enabled && view > 0;' in wm and wm.count('MobileBackStep();') == 2, 'world map back shares the right-click step')
+# Tap-vs-drag row selection: desktop keeps press-to-select, mobile selects on a drag-free release.
+check('if (!MobileClientPresentation.Enabled) return e.type == EventType.MouseDown;' in md, 'desktop rows still select on press')
+check('return e.type == EventType.MouseUp && !GestureDragged;' in md, 'mobile rows select on a drag-free release')
+check('gestureMoved || LastDragFrame >= gestureBeganFrame' in md, 'a scroll drag or finger travel cancels the tap')
+for name, count in [('HelpWinDlg.cs', 1), ('MailDlg.cs', 1), ('ComposeDlg.Content.cs', 1), ('HairSalonDlg.cs', 1), ('JobRightDlg.cs', 1),
+                    ('PetForgeDlg.Content.cs', 1), ('StallConfigDlg.Window.cs', 1), ('TaskDlg.Window.cs', 2), ('TransportUI.cs', 1)]:
+    check(src(name).count('MobileDragScroll.RowSelect(Event.current) && ') == count, name + ' list rows use RowSelect')
+# World map fits the safe area on mobile only.
+check('if (MobileClientPresentation.Enabled)\n        {\n            // The 800x600 map' in wm and 's = MobileFitScale(s, safe);' in wm, 'world map fit is mobile only')
+check('Mathf.Min(factor, Mathf.Min(safe.width / NW, safe.height / NH))' in wm, 'world map never grows beyond the UI factor')
+check('winX = Mathf.Round((Screen.width - NW * s) * 0.5f);\n        winY = Mathf.Round((Screen.height - NH * s) * 0.5f);' in wm, 'desktop world map placement unchanged')
+# Change-set take-out by touch reuses the right-click request.
+check('bool mobileTake = MobileClientPresentation.Enabled && !pending.HasValue;' in chg, 'change-set take-out is mobile only')
+check(chg.count('NetClient.I.ChangeSetTakeForIndependentRuntime(') == 2 and 'ev.type == EventType.MouseDown && ev.button == 1 && entry.HasValue' in chg, 'touch take-out reuses the right-click request; right-click kept')
+check(chg.find('MobileChangeSetSelected = MobileChangeSetSelected == part ? -1 : part;') < chg.find('takeRect = MobileChangeSetTakeRect(r, i, s); takePart = part;'), 'cell tap selection is applied before the take button is laid out in the same event')
+check('ArtworkSkin.Button(takeRect, "\u53d6\u56de", s)' in chg, 'explicit \u53d6\u56de button')
 print('PASS mobile touch quick-wins source contract: %d checks' % checks)
