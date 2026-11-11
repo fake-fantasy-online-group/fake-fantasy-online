@@ -261,3 +261,25 @@ A changed `combat.stats` push refreshes this observation without requiring an
 inventory change. Inventory chunk0 may also supply the view, but it publishes
 only with the complete snapshot and cannot overwrite a newer runtime push.
 Legacy snapshots may omit it; missing data is reported as null.
+
+## Spirit workbench (灵加工)
+
+Observe `endgame.spirit` for the negotiated definitions (fairy NPC name/script/map,
+spirit, essence and separator item IDs, process money), the last plugin-submitted
+fairy and mode, the authoritative preview and revision, and the last correlated
+server result and error code. `endgame.items` rows also carry `spirit`,
+`fusedSpirit` and `spiritAppearanceItemId`.
+
+| Action | Arguments |
+| --- | --- |
+| `endgame.spirit.preview` | `npcEntityId`, `itemTab`, `itemSlot`, `itemId`, `itemUid?`, `expectedRevision?` |
+| `endgame.spirit.unseal` / `process` / `rollback` / `reset` | `expectedRevision`, `npcEntityId`, `itemTab`, `itemSlot`, `itemId`, `itemUid?`, `materialTab`, `materialSlot`, `materialItemId` |
+| `endgame.spirit.fuse` / `separate` / `appearance` | `expectedRevision`, `targetUid`, `itemTab`, `itemSlot`, `itemId`, `itemUid?` |
+
+Selectors are the native bag address (tab, page slot, itemId, optional uid), the
+same selection the native spirit panel submits. Only stale selections and a stale
+`expectedRevision` are refused locally; part, essence, money, distance and
+CanUnseal/CanProcess/CanRollback/CanReset are decided by the server. The receipt
+stays `sent` only until the correlated server reply arrives, then becomes
+`completed` (`endgame.confirmed`) or `rejected` (`endgame.server.<error>`) with
+`serverMessage` and the resulting `spirit` view.

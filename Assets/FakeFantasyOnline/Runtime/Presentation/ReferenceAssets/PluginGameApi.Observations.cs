@@ -20,6 +20,7 @@ public sealed partial class PluginGameApi
             QueryDefinition("endgame.items", "Server UID-bearing equipment/runes, exact locations, sockets, rolls and stats. offset pages matching rows.", "uid:string", "location:string", "tab:integer", "itemId:integer", "name:string", "offset:integer"),
             QueryDefinition("endgame.catalog", "Loaded native catalog rows and server page cursor. catalog is required: uniques, runes or formations. No network request is implicit.", "catalog:string", "offset:integer"),
             QueryDefinition("endgame.skills", "Authoritative V5 skill hard/granted/soft/effective ranks, contributions, current/next effects and investment eligibility. Rank strings preserve all digits.", "skillId:integer", "offset:integer"),
+            QueryDefinition("endgame.spirit", "Spirit workbench: negotiated definitions, last plugin fairy/mode, authoritative preview and revision, last correlated server result and error code. No network request is implicit."),
             QueryDefinition("endgame.rift", "Authoritative rift difficulty tier, seeded floor, exit, phase, eligibility, members, elite affixes, map-pixel globes and danger telegraphs. offset/limit page auras, globes and telegraphs independently.", "offset:integer"),
             QueryDefinition("title", "Native pregame page, loading, sanitized result, server and character rows. Credentials are never returned; exact title instance and revision guard actions.", "offset:integer"),
             QueryDefinition("world", "Connection, scene/map identity, readiness and map-pixel coordinate system."),
@@ -98,7 +99,7 @@ public sealed partial class PluginGameApi
             {
                 switch (domain)
                 {
-                    case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": data = ObserveEndgame(domain, args); break;
+                    case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": case "endgame.spirit": data = ObserveEndgame(domain, args); break;
                     case "title": data = ObserveTitle(args); break;
                     case "world": data = ObserveWorld(s); break;
                     case "player": data = ObservePlayer(s); break;

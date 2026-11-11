@@ -149,6 +149,7 @@ public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, I
         TrackObservation("endgame.catalog", endgameToken);
         TrackObservation("endgame.rift", endgameToken);
         TrackObservation("endgame.skills", endgameToken);
+        TrackObservation("endgame.spirit", Token(endgameToken, lastSpiritRequest?.RequestID));
         TrackObservation("world", Token(s?.State, s?.Connected, GameBootstrap.CurMapId, frame?.Built));
         TrackObservation("dialogue", CurrentDialogueRevision().ToString(CultureInfo.InvariantCulture));
         // Static receipt roots use the native versions. No collection is walked or copied here.

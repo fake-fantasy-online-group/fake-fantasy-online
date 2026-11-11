@@ -71,6 +71,7 @@ public sealed partial class PluginGameApi
                 if (catalog == "formations") { total = state.Formations.Count; EndgamePageRows(rows, state.Formations, args, ObserveEndgameFormation); }
                 EndgamePage(data, "rows", rows, total, args); break;
             case "endgame.rift": data["rift"] = ObserveEndgameRift(state, args, true); break;
+            case "endgame.spirit": foreach (var pair in ObserveSpirit(state)) data[pair.Key] = pair.Value; break;
             case "endgame.skills":
                 data["available"] = state.GrowthV5 && state.HasSkillRanks;
                 data["skillRanksRevision"] = state.SkillRanksRevision; data["formulaVersion"] = state.SkillFormulaVersion;
@@ -119,7 +120,8 @@ public sealed partial class PluginGameApi
         "uniqueId", row.UniqueID, "uniqueRollBp", row.UniqueRollBP, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),
         "trait", BoundText(row.Trait, 4096), "level", row.Level, "profession", row.Profession, "socketCount", row.SocketCount,
         "sockets", EndgameRows(row.Sockets, ObserveEndgameSocket), "stats", EndgameRows(row.Stats, ObserveEndgameStat),
-        "formationId", row.FormationID, "active", row.Active, "inactiveReason", BoundText(row.InactiveReason), "bound", row.Bound, "locked", row.Locked);
+        "formationId", row.FormationID, "active", row.Active, "inactiveReason", BoundText(row.InactiveReason), "bound", row.Bound, "locked", row.Locked,
+        "spirit", SpiritViewData(row.Spirit), "fusedSpirit", SpiritViewData(row.FusedSpirit), "spiritAppearanceItemId", row.SpiritAppearanceItemID);
     private Dictionary<string, object> ObserveEndgameRune(EndgameRuneView row) => Values("itemId", row.ItemID, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),
         "minLevel", row.MinLevel, "quadrant", BoundText(row.Quadrant), "mansion", BoundText(row.Mansion), "stats", EndgameRows(row.Stats, ObserveEndgameStat));
     private Dictionary<string, object> ObserveEndgameFormation(EndgameFormationView row) => Values("id", row.ID, "name", BoundText(row.Name), "description", BoundText(row.Description, 4096),

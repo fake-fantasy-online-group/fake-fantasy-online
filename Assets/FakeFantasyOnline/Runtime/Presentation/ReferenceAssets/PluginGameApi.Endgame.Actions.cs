@@ -36,6 +36,17 @@ public sealed partial class PluginGameApi
         definitions.Add(EndgameDefinition("endgame.retry", "Explicitly query/resend the exact immutable uncertain native request. expectedRequestId is pendingRequest.requestId (the server ID), not a new operation.", ready && state.Pending, "No uncertain native endgame request is available.", "expectedRequestId:string"));
         definitions.Add(EndgameDefinition("endgame.equipment.equip", "Equip the UID-guarded native bag item. allowBind=true is required for an unbound item; sent never proves equipment changed.", writable, mutation, "expectedRevision:string", "targetUid:string", "allowBind?:boolean"));
         definitions.Add(EndgameDefinition("endgame.equipment.unequip", "Unequip the UID-guarded native equipped item, including slots 14–25. Observe a later inventory snapshot for outcome.", writable, mutation, "expectedRevision:string", "targetUid:string"));
+        bool spiritReady = ready && state.SpiritAvailable && !state.Pending && !state.SpiritLoading;
+        bool spiritWritable = writable && state.SpiritAvailable && !state.SpiritLoading;
+        const string spiritUnavailable = "The server must negotiate endgame.spirit.v1, with a current inventory snapshot and no pending endgame or spirit request.";
+        const string spiritSelector = "Selectors are the native bag address from the inventory/endgame.items observation (tab, page slot, itemId, optional uid), exactly as the native spirit panel submits them. Rule checks (part, essence, cost, CanUnseal/CanProcess...) are left to the server; only stale selections are refused locally.";
+        definitions.Add(EndgameDefinition("endgame.spirit.preview", "Read the authoritative spirit view of a bag spirit at the observed spirit fairy (no cost, no randomness). " + spiritSelector, spiritReady, spiritUnavailable, "npcEntityId:string", "itemTab:integer", "itemSlot:integer", "itemId:integer", "itemUid?:string", "expectedRevision?:string"));
+        foreach (string op in new[] { "unseal", "process", "rollback", "reset" })
+            definitions.Add(EndgameDefinition("endgame.spirit." + op, "Spirit workbench " + op + " at the observed spirit fairy, consuming the selected essence stack (and money for process) only if the server commits. Completion/rejection is the correlated server receipt. " + spiritSelector, spiritWritable, spiritUnavailable,
+                "expectedRevision:string", "npcEntityId:string", "itemTab:integer", "itemSlot:integer", "itemId:integer", "itemUid?:string", "materialTab:integer", "materialSlot:integer", "materialItemId:integer"));
+        foreach (string op in new[] { "fuse", "separate", "appearance" })
+            definitions.Add(EndgameDefinition("endgame.spirit." + op, "Use the selected bag spirit / separator / appearance item on the UID-guarded bag or equipped target (no NPC). Completion/rejection is the correlated server receipt. " + spiritSelector, spiritWritable, spiritUnavailable,
+                "expectedRevision:string", "targetUid:string", "itemTab:integer", "itemSlot:integer", "itemId:integer", "itemUid?:string"));
     }
 
     private static bool ExistingEndgameRift(EndgameRiftView rift) => rift != null &&
@@ -58,6 +69,10 @@ public sealed partial class PluginGameApi
             if (key == "skillId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
             if (key == "catalog") schema["enum"] = new object[] { "uniques", "runes", "formations" };
             if (key == "confirmLeave") schema["const"] = true;
+            if (key == "itemTab" || key == "materialTab") { schema["minimum"] = 0; schema["maximum"] = 3; }
+            if (key == "itemSlot" || key == "materialSlot") { schema["minimum"] = 0; schema["maximum"] = 99; }
+            if (key == "itemId" || key == "materialItemId") { schema["minimum"] = 1; schema["maximum"] = int.MaxValue; }
+            if (key == "itemUid") { schema["pattern"] = "^[1-9][0-9]{0,18}$"; schema["maxLength"] = 19; }
             if (key == "itemUids")
             {
                 schema["maxItems"] = 5; schema["uniqueItems"] = true;
@@ -184,6 +199,7 @@ public sealed partial class PluginGameApi
                 throw new ActionFailure("endgame.native_rejected", "The native equipment owner rejected the current item or session.");
             ActionSet(entry, GameActionState.Sent, "endgame.equipment_sent", "The native equipment command was submitted. Observe authoritative inventory/equipment; this is not server completion."); return;
         }
+        if (op.StartsWith("spirit.", StringComparison.Ordinal)) { DispatchSpirit(entry, owner, state, op, revision); return; }
         switch (op)
         {
             case "refresh": op = "snapshot"; break;
@@ -316,6 +332,7 @@ public sealed partial class PluginGameApi
             var data = EndgameReceiptData(entry); data["serverOutcomeKnown"] = true; data["serverRevision"] = response.Revision;
             data["serverKind"] = response.Kind; data["serverError"] = response.Error;
             var result = new Dictionary<string, object>(); foreach (var pair in response.Result) result.Add(pair.Key, pair.Value); data["result"] = result;
+            if (entry.EndgameRequest.Op.StartsWith("spirit.", StringComparison.Ordinal)) { data["serverMessage"] = response.Message; data["spirit"] = SpiritViewData(response.Spirit); }
             ActionSet(entry, response.OK ? GameActionState.Completed : GameActionState.Rejected,
                 response.OK ? "endgame.confirmed" : "endgame.server." + response.Error,
                 response.Message.Length > 0 ? response.Message : response.OK ? "The server confirmed this request; refresh relevant observations." : "The server rejected this request.", data); return;
@@ -336,6 +353,72 @@ public sealed partial class PluginGameApi
             }
             ActionSet(entry, GameActionState.Unknown, "endgame.receipt_unconfirmed", "No final correlated receipt arrived within 30 seconds. Re-observe and reconcile; elapsed time is not rejection.", EndgameReceiptData(entry));
         }
+    }
+    // Last plugin-submitted spirit request; drives the endgame.spirit observation.
+    private EndgameRequest lastSpiritRequest;
+    private string lastSpiritNpc = "", lastSpiritNpcName = "", lastSpiritMode = "";
+    private static EndgameSpiritSelection SpiritArgument(IReadOnlyDictionary<string, object> args, string prefix)
+    {
+        int tab = ActionInt(args, prefix + "Tab", 0, 3), slot = ActionInt(args, prefix + "Slot", 0, 99);
+        int item = ActionInt(args, prefix == "item" ? "itemId" : prefix + "ItemId", 1);
+        EndgameSpiritSelection now = EndgamePanel.SpiritBagSelectionForIndependentRuntime(tab, slot);
+        if (now == null || now.ItemID != item)
+            throw new ActionFailure("endgame.spirit_selection_stale", "The selected bag address no longer holds that unlocked item in the current native snapshot.");
+        if (prefix == "item" && args.ContainsKey("itemUid") && EndgameIdentity(ActionString(args, "itemUid"), "itemUid") != now.UID)
+            throw new ActionFailure("endgame.spirit_selection_stale", "The selected item instance changed; observe its current uid.");
+        return now;
+    }
+    private void DispatchSpirit(PluginAction entry, IEndgameClient owner, EndgameClientState state, string op, string revision)
+    {
+        var args = entry.Request.Arguments;
+        if (!state.SpiritAvailable) throw new ActionFailure("endgame.spirit_unavailable", "The server did not negotiate endgame.spirit.v1.");
+        bool read = op == "spirit.preview";
+        bool workbench = read || op == "spirit.unseal" || op == "spirit.process" || op == "spirit.rollback" || op == "spirit.reset";
+        if (!workbench && op != "spirit.fuse" && op != "spirit.separate" && op != "spirit.appearance") throw new ArgumentException("Unknown spirit operation.");
+        if (!state.InventorySnapshotCurrent) throw new ActionFailure("endgame.item_stale", "Wait for or refresh the complete authoritative item snapshot.");
+        if (!read && revision.Length == 0) throw new ArgumentException("expectedRevision is required for spirit mutations.");
+        if (read && revision.Length == 0) revision = state.Revision;
+        int npc = 0; string npcRef = "", npcName = "";
+        if (workbench)
+        {
+            npcRef = EndgameString(args, "npcEntityId"); ReferenceWorldNpcActor actor = ActionNpc(npcRef);
+            if (actor.State == null) throw new ActionFailure("npc.gone", "The observed NPC has no native state.");
+            npc = actor.State.EntityId; npcName = actor.State.DisplayName ?? "";
+        }
+        EndgameSpiritSelection item = SpiritArgument(args, "item");
+        EndgameSpiritSelection material = workbench && !read ? SpiritArgument(args, "material") : null;
+        string target = workbench ? "" : EndgameItem(ActionString(args, "targetUid")).UID;
+        var command = new EndgameRequest(op, revision, targetUID: target, requestID: EndgameWireID(entry.Request.RequestId), npcEntityID: npc, spiritItem: item, spiritMaterial: material);
+        lastSpiritRequest = command; lastSpiritNpc = npcRef; lastSpiritNpcName = npcName; lastSpiritMode = op.Substring("spirit.".Length);
+        TrackEndgame(entry, owner, command);
+        bool submitted = owner.SendEndgame(command);
+        if (!submitted && !ReferenceEquals(state.PendingRequest, command))
+        {
+            entry.EndgameWaiting = false;
+            ActionSet(entry, GameActionState.Unknown, "endgame.send_unconfirmed", "The native request did not report a successful submission; observe before deciding whether to retry.", EndgameReceiptData(entry));
+        }
+        else ActionSet(entry, submitted ? GameActionState.Sent : GameActionState.Unknown, submitted ? "endgame.sent" : "endgame.uncertain", "Awaiting the matching authoritative server receipt. No gameplay success is inferred.", EndgameReceiptData(entry));
+    }
+    private static Dictionary<string, object> SpiritViewData(EndgameSpiritView v) => v == null ? null : Values(
+        "kind", v.Kind, "itemId", v.ItemID, "sealed", v.Sealed, "level", v.Level,
+        "attrs", EndgameRows(v.Attrs, a => Values("attr", a.Attr, "value", a.Value, "permanent", a.Permanent, "level", a.Level, "perfectLevel", a.PerfectLevel, "last", a.Last)),
+        "canUnseal", v.CanUnseal, "canProcess", v.CanProcess, "canRollback", v.CanRollback, "canReset", v.CanReset,
+        "unsealEssence", v.UnsealEssence, "processEssence", v.ProcessEssence, "rollbackEssence", v.RollbackEssence, "resetEssence", v.ResetEssence, "processMoney", v.ProcessMoney);
+    private Dictionary<string, object> ObserveSpirit(EndgameClientState state)
+    {
+        EndgameResponse last = lastSpiritRequest == null ? null : state.ResponseFor(lastSpiritRequest.RequestID);
+        if (last != null && !lastSpiritRequest.MatchesResponse(last)) last = null;
+        var appearance = new List<object>(); foreach (int id in state.SpiritAppearanceIDs) appearance.Add(id);
+        return Values("spiritAvailable", state.SpiritAvailable, "nativeWorkbenchOpen", EndgamePanel.SpiritWorkbenchOpen,
+            "fairy", lastSpiritNpc.Length == 0 ? null : Values("entityId", lastSpiritNpc, "name", BoundText(lastSpiritNpcName)), "mode", lastSpiritMode,
+            "revision", state.Revision, "loading", state.SpiritLoading, "pending", state.Pending,
+            "previewCurrent", state.SpiritCurrent, "previewRevision", state.SpiritRevision, "preview", SpiritViewData(state.SpiritView),
+            "lastRequest", lastSpiritRequest == null ? null : Values("serverRequestId", lastSpiritRequest.RequestID, "op", lastSpiritRequest.Op),
+            "lastResult", last == null ? null : Values("ok", last.OK, "kind", last.Kind, "revision", last.Revision, "message", BoundText(last.Message), "spirit", SpiritViewData(last.Spirit)),
+            "lastErrorCode", last == null || last.OK ? "" : last.Error,
+            "definitions", EndgameRows(state.Spirits, d => Values("kind", d.Kind, "name", d.Name, "itemId", d.ItemID, "essenceId", d.EssenceID, "separatorId", d.SeparatorID,
+                "npcId", d.NpcID, "mapId", d.MapID, "npcName", d.NpcName, "npcScript", d.NpcScript, "slot", d.Slot, "uiKey", d.UIKey, "processMoney", d.ProcessMoney)),
+            "appearanceItemIds", appearance);
     }
     private static string EndgameCatalogName(string name)
     {

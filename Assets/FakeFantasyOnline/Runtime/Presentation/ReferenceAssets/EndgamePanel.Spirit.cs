@@ -35,6 +35,7 @@ public sealed partial class EndgamePanel
     internal static bool SpiritWorkbenchOpen => WorldEntryAvailable && Current.open && Current.module == EndgameModule.Spirit && Current.SpiritSourceCurrent();
     private bool SpiritEditable => SpiritWorkbenchOpen && State.InventorySnapshotCurrent && !State.Pending;
     private void ClearSpiritItems() { spiritSelection = spiritMaterial = null; spiritPreviewRevision = spiritRebindRevision = ""; State?.InvalidateSpiritPreview(); }
+    internal static EndgameSpiritSelection SpiritBagSelectionForIndependentRuntime(int tab, int slot) => SpiritBagSelection(tab, slot);
     private void ClearSpirit() { ClearSpiritItems(); spiritDefinition = null; spiritSourceCurrent = null; spiritEntity = spiritMap = 0; spiritBagOpened = false; }
     private static EndgameSpiritSelection SpiritBagSelection(int tab, int slot)
     {
