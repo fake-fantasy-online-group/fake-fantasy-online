@@ -155,6 +155,12 @@ public sealed partial class PluginGameApi
         byte source = 0;
         if (entry.Request.Arguments != null && entry.Request.Arguments.ContainsKey("source"))
             source = (byte)ActionInt(entry.Request.Arguments, "source", 0, 255);
+        if (!RackShopDlg.CatalogLoadedForPlugins)
+            throw new ActionFailure("rack.catalog_not_loaded", RackShopDlg.Visible
+                ? "The rack catalog is still loading. Observe ui, then retry rack.buy."
+                : "The rack catalog is not loaded. Run ui.open {\"window\":\"rack\"}, wait for it to load, then retry rack.buy.");
+        if (!RackShopDlg.HasGoodForPlugins(itemId))
+            throw new ActionFailure("rack.item_not_found", "itemId " + itemId + " is not in the loaded rack catalog.");
         string error;
         entry.ReceiptKind = "rack";
         entry.ReceiptAfter = ServerTextMark();
@@ -262,8 +268,26 @@ public sealed partial class PluginGameApi
     // Same call as SysOptionDlg 选择角色 / 选择服务器: GameBootstrap.ReturnToTitle.
     private void DispatchLogout(PluginAction entry)
     {
-        bool characterSelection = !entry.Request.Arguments.ContainsKey("characterSelection") ||
-            ActionBool(entry.Request.Arguments, "characterSelection", true);
+        var args = entry.Request.Arguments;
+        string target = args != null && args.ContainsKey("target") ? ActionString(args, "target") :
+            args != null && args.ContainsKey("characterSelection") && !ActionBool(args, "characterSelection", true) ? "server" : "character";
+        if (target != "character" && target != "server" && target != "login")
+            throw new ActionFailure("session.invalid_target", "target must be character, server or login.");
+        bool characterSelection = target == "character";
+        entry.LogoutTarget = target;
+        ClientSessionState? current = Session?.State;
+        if (current != ClientSessionState.InWorld)
+        {
+            // Already on a title page: only the account switch (native server-page return to login) applies.
+            if (target != "login" || !TitleReturnableToLogin)
+                throw new ActionFailure("session.unavailable", "An active world session is required, or use target login from the server or character selection page.");
+            entry.Kind = "logout";
+            entry.Deadline = ActionNow + 20d;
+            entry.LogoutLoginRequested = true;
+            Session.ReturnToLogin();
+            ActionSet(entry, GameActionState.Running, "session.returning", "The native return to the login page started.");
+            return;
+        }
         if (GameBootstrap.I == null) throw new ActionFailure("session.unavailable", "The native world bootstrap is unavailable.");
         if (SysMsgBox.Visible) throw new ActionFailure("session.modal_open", "A native confirmation box is open; resolve it before leaving the world.");
         entry.Kind = "logout";
@@ -274,11 +298,36 @@ public sealed partial class PluginGameApi
         ActionSet(entry, GameActionState.Running, "session.returning", "The official return-to-title flow started.");
     }
 
+    private bool TitleReturnableToLogin
+    {
+        get
+        {
+            ClientSessionState? state = Session?.State;
+            var title = TitleBridge?.ReadState();
+            return (state == ClientSessionState.ServerSelection || state == ClientSessionState.CharacterSelection) &&
+                title != null && !title.LoginLoading && !title.Entering && !title.ModalOpen && !titleSubmissionInProgress;
+        }
+    }
+
     private void PollLogout(PluginAction entry)
     {
         if (!ActionActive(entry)) return;
         ClientSessionState? state = Session?.State;
-        bool done = entry.LogoutCharacterSelection
+        if (entry.LogoutTarget == "login")
+        {
+            if (!entry.LogoutLoginRequested && state == ClientSessionState.ServerSelection && TitleBridge?.ReadState()?.Page == "ServerSelection")
+            {
+                entry.LogoutLoginRequested = true;
+                Session.ReturnToLogin();
+            }
+            if (state == ClientSessionState.Offline && TitleBridge?.ReadState()?.Page == "Login")
+            {
+                ActionSet(entry, GameActionState.Completed, "session.returned", "The native session reached the login page.",
+                    new Dictionary<string, object> { { "sessionState", state.ToString() }, { "titlePage", "Login" }, { "completionScope", "title" } });
+                return;
+            }
+        }
+        bool done = entry.LogoutTarget != "login" && entry.LogoutCharacterSelection
             ? state == ClientSessionState.CharacterSelection
             : state == ClientSessionState.ServerSelection || state == ClientSessionState.Offline;
         if (done)

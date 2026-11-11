@@ -104,6 +104,14 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
         }
 
         // Plugin path: the same BuyRack write as the official confirmation / cart checkout.
+        internal static bool CatalogLoadedForPlugins => goods.Count > 0;
+
+        internal static bool HasGoodForPlugins(int itemId)
+        {
+            foreach (Good good in goods) if (good.id == itemId) return true;
+            return false;
+        }
+
         internal static bool TryBuyForPlugins(int itemId, int count, byte source, out string error)
         {
             error = null;

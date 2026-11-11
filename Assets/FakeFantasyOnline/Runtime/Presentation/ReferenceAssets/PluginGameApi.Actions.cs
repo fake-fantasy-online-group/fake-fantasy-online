@@ -55,6 +55,8 @@ public sealed partial class PluginGameApi
         internal long ReceiptAfter;
         internal bool ReceiptWaiting;
         internal bool LogoutCharacterSelection;
+        internal string LogoutTarget;
+        internal bool LogoutLoginRequested;
     }
 
     private static double ActionNow => System.Diagnostics.Stopwatch.GetTimestamp() /
@@ -120,12 +122,13 @@ public sealed partial class PluginGameApi
                 "index:integer", "expectedName:string"),
             ActionDefinition("mail.send", "Open the official letter-paper composer, fill recipient/title/body, and dispatch native DoSend. Completed only on the server send receipt (the composer is then closed); a server refusal is Rejected with code mail.failed and the server reason.", world && NetClient.I != null, worldReason,
                 "to:string", "title:string", "body:string", "paper:integer"),
-            ActionDefinition("rack.buy", "Buy an observed catalog good through the official BuyRack command. Completed only on the server purchase receipt; a server refusal is Rejected with code rack.failed and the server reason.", world && NetClient.I != null, worldReason,
+            ActionDefinition("rack.buy", "Buy an observed catalog good through the official BuyRack command. Completed only on the server purchase receipt; a server refusal is Rejected with code rack.failed and the server reason. Requires the rack catalog to be loaded (ui.open rack); otherwise rejected with rack.catalog_not_loaded, and an unknown itemId with rack.item_not_found.", world && NetClient.I != null, worldReason,
                 "itemId:integer", "count?:integer", "source?:integer"),
             ActionDefinition("family.create", "Submit a family name and declaration through the official FamilyCreateDlg confirmation write. Completed only on the server creation receipt; a server refusal is Rejected with code family.failed and the server reason.", world && NetClient.I != null, worldReason,
                 "name:string", "declaration?:string"),
-            ActionDefinition("session.logout", "Leave the world through the official SysOption flow (选择角色 when characterSelection is true or omitted, otherwise 选择服务器). Completion is the native session reaching character or server selection. Credentials are never touched.", world && GameBootstrap.I != null, worldReason,
-                "characterSelection?:boolean"),
+            ActionDefinition("session.logout", "Leave through the official flows. target \"character\" (default; SysOption 选择角色), \"server\" (选择服务器) or \"login\" (选择服务器, then the server page's native return to login, for switching accounts). Legacy characterSelection:false equals target server. target login is also accepted from the server or character selection page. Completion is the native session reaching the requested page. Credentials are never touched.",
+                (world && GameBootstrap.I != null) || TitleReturnableToLogin, worldReason,
+                "target?:string", "characterSelection?:boolean"),
             ActionDefinition("chat.send", "Send text through the native session chat owner: channel 0 nearby, 1 party, 2 family, 3 world. Sent confirms only a write, never delivery. Commands and item shares are not accepted.", world, worldReason,
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,

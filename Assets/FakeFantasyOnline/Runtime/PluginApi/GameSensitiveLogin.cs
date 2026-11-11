@@ -7,6 +7,12 @@ namespace FakeFantasyOnline.PluginApi
             string expectedTitleInstanceId, string expectedTitleRevision);
     }
 
+    /// <summary>Optional live readiness for sensitive login (native title is on the Login page and idle).</summary>
+    public interface IGameSensitiveLoginState
+    {
+        bool SensitiveLoginReady { get; }
+    }
+
     public sealed class GameSensitiveLoginResult
     {
         public GameSensitiveLoginResult(bool submitted, string code) { Submitted = submitted; Code = code; }

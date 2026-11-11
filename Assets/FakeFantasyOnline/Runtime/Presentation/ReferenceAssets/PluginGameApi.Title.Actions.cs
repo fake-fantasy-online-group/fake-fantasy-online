@@ -205,6 +205,16 @@ public sealed partial class PluginGameApi
         }
     }
 
+    public bool SensitiveLoginReady
+    {
+        get
+        {
+            var state = TitleBridge?.ReadState();
+            return state != null && state.Page == "Login" && !state.NeedsUpdate && !state.LoginLoading && !state.Entering &&
+                !state.ModalOpen && !titleSubmissionInProgress && Session != null && Session.State != ClientSessionState.InWorld;
+        }
+    }
+
     // Dedicated ephemeral transport only. No PluginAction, request ID, event or retained
     // request contains these parameters. Native code does not persist the supplied values.
     public GameSensitiveLoginResult SubmitLogin(string account, string password, string expectedTitleInstanceId, string expectedTitleRevision)

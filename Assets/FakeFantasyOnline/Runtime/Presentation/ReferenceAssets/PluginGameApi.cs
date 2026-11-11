@@ -12,7 +12,7 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
 /// Main-thread, transport-neutral view of the native game. Observations never acknowledge
 /// gameplay queues. Each consumer keeps its own event cursor; all returned values are copies.
 /// </summary>
-public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IGameSensitiveLogin, IDisposable
+public sealed partial class PluginGameApi : IGameApi, IGameObservationCatalog, IGameSensitiveLogin, IGameSensitiveLoginState, IDisposable
 {
     private readonly string apiInstanceId = Guid.NewGuid().ToString("N");
     private const int EventCapacity = 1024;
