@@ -90,6 +90,16 @@ public partial class Win05
         return true;
     }
 
+    // Mobile long-press 放入套装: the bag item waits until a change-set cell is tapped.
+    internal static (byte tab, int slot, int id)? MobilePendingChangeSet;
+    internal static bool BeginMobileChangeSet(byte bagTab, int bagSlot, int itemId)
+    {
+        if (I == null || I.cur != "changeequipdlg") return false;
+        MobilePendingChangeSet = (bagTab, bagSlot, itemId);
+        ChatUI.Add("系统", "点击【换装】窗里的方案格放入该装备", new Color(180f / 255f, 220f / 255f, 1f, 1f));
+        return true;
+    }
+
     // Original 0600103b: MouseOver reads Input, while itemId and mouse are unused.
     public static bool TryDropWardrobe(byte bagTab, int bagSlot, int itemId, Vector2 mouse)
     {

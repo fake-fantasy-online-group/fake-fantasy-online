@@ -15,6 +15,7 @@ public partial class Win05
         if (changeEquipmentCorner != null)
             GUI.DrawTexture(L(3f, 3f, 30f, 30f), changeEquipmentCorner);
         bool held = InventoryDlg.HasHeld;
+        var pending = MobileClientPresentation.Enabled ? MobilePendingChangeSet : null;
         int hoverCell = -1;
         string hoverName = null, hoverDesc = null;
         byte hoverQuality = 0, hoverBlocked = 0;
@@ -47,6 +48,15 @@ public partial class Win05
             }
             else if (held && r.Contains(ev.mousePosition))
                 Edge(r, new Color(1f, .9f, .4f, .8f));
+            if (pending.HasValue && ev.type == EventType.MouseDown && ev.button == 0 && r.Contains(ev.mousePosition))
+            {
+                var p = pending.Value; MobilePendingChangeSet = null; pending = null;
+                if (InventoryDlg.ItemAt(p.tab, p.slot).id == p.id && NetClient.I != null)
+                    NetClient.I.ChangeSetPutForIndependentRuntime(p.tab, p.slot, part);
+                PlayerController.SuppressWorldClick();
+                ev.Use();
+            }
+            else if (pending.HasValue && ev.type == EventType.Repaint) Edge(r, new Color(1f, .9f, .4f, .8f));
             if (ev.type == EventType.MouseDown && ev.button == 1 && entry.HasValue &&
                 r.Contains(ev.mousePosition))
             {

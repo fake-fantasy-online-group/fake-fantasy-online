@@ -66,13 +66,21 @@ internal partial class ComposeDlg : MonoBehaviour
         float y = float.IsNaN(I.winX) ? (Screen.height - NH * scale) * 0.5f : I.winY;
         return new Rect(x, y, NW * scale, NH * scale).Contains(mp);
     }
-    public static bool TryDropRefine(byte tab, int bagSlot, Vector2 mp)
+    private static Rect RefineDropRect()
     {
-        if (!Visible || I.modtype != 1 || tab != 2) return false;
         float scale = UIScale.Factor;
         float x = float.IsNaN(I.winX) ? (Screen.width - NW * scale) * 0.5f : I.winX;
         float y = float.IsNaN(I.winX) ? (Screen.height - NH * scale) * 0.5f : I.winY;
-        if (!new Rect(x + 103f * scale, y + 78f * scale, 220f * scale, 215f * scale).Contains(mp)) return false;
+        return new Rect(x + 103f * scale, y + 78f * scale, 220f * scale, 215f * scale);
+    }
+    // Mobile long-press 精炼: the same admission as dropping on the furnace centre.
+    internal static bool RefineOpenForMobile => Visible && I.modtype == 1;
+    internal static bool TryMobileRefine(byte tab, int bagSlot) =>
+        RefineOpenForMobile && TryDropRefine(tab, bagSlot, RefineDropRect().center);
+    public static bool TryDropRefine(byte tab, int bagSlot, Vector2 mp)
+    {
+        if (!Visible || I.modtype != 1 || tab != 2) return false;
+        if (!RefineDropRect().Contains(mp)) return false;
         foreach (var item in InventoryDlg.Items[2])
             if (item.bagIdx == bagSlot) { CraftUpgradeUI.LoadBagItem(2, bagSlot, item.id, item.name, item.icon); break; }
         return true;

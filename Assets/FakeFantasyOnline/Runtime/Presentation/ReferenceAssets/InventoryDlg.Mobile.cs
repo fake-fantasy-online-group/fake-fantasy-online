@@ -114,7 +114,8 @@ internal partial class InventoryDlg
         if (MobilePanelLayout.Action(box, 3, "分享", scale, available)) ExecuteMobileAction(item, 3);
         if (MobilePanelLayout.Action(box, 4, "放入快捷栏", scale, bindable))
         { mobileBinding = true; mobileBindingPage = 0; }
-        int cancelRow = DrawMobileFixedPotionBindings(box, scale, item, bindingAllowed);
+        int cancelRow = DrawMobileFixedPotionBindings(box, scale, item, bindingAllowed,
+            DrawMobileDestinations(box, scale, item, available, 5));
         if (MobilePanelLayout.Action(box, cancelRow, "取消", scale)) ClearMobileSelection();
         }
         if (box.Contains(ev.mousePosition) && (ev.type == EventType.MouseDown || ev.type == EventType.MouseUp || ev.type == EventType.MouseDrag)) ev.Use();

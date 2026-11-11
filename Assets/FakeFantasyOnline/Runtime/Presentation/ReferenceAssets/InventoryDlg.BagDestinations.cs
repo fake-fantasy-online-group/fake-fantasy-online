@@ -69,36 +69,42 @@ internal partial class InventoryDlg
             DropBagReferenceForIndependentRuntime(); ev.Use(); return;
         }
         (int x, int y) = MouseWorld();
-        byte bagTab = (byte)HeldTab;
-        int bagSlot = heldSlot, itemId = heldId;
-        string name = heldName;
+        DropBagItemWithConfirmation((byte)HeldTab, heldSlot, heldId, heldName, heldBound, x, y, false);
+        DropBagReferenceForIndependentRuntime(); ev.Use();
+    }
+
+    // Original 0527 discard tail, shared with the mobile long-press 丢弃 entry. Desktop passes
+    // alwaysConfirm=false and keeps its exact prompt rules and request flag; mobile always asks.
+    internal static void DropBagItemWithConfirmation(byte bagTab, int bagSlot, int itemId, string name, bool bound,
+        int x, int y, bool alwaysConfirm)
+    {
         Item item = ItemAt(bagTab, bagSlot);
         string fused = FusedGuard.What(item);
         // Quality 6 is the two-affix light-blue presentation, not a rarity above gold.
         bool preciousQuality = item.quality > 2 && item.quality != 6;
-        if (heldBound || fused.Length > 0 || preciousQuality || item.count > 1)
+        if (alwaysConfirm || bound || fused.Length > 0 || preciousQuality || item.count > 1)
         {
             var text = new StringBuilder();
             text.Append('【').Append(name).Append('】');
             if (item.count > 1) text.Append('×').Append(item.count);
-            if (fused.Length > 0) text.Append(" 上融合着 ").Append(fused).Append(heldBound ? "; 且" : ", ");
+            if (fused.Length > 0) text.Append(" 上融合着 ").Append(fused).Append(bound ? "; 且" : ", ");
             else text.Append(item.count > 1 ? "\n" : "");
-            text.Append(heldBound ? "已绑定, 直接丢弃将销毁(无法捡回)" : "丢弃后掉在地上, 别人也能捡走");
+            text.Append(bound ? "已绑定, 直接丢弃将销毁(无法捡回)" : "丢弃后掉在地上, 别人也能捡走");
             if (item.count > 1) text.Append("。\n★这一格会【一次全部丢出去】, 不能只丢一部分。");
-            if (preciousQuality && !heldBound)
+            if (preciousQuality && !bound)
                 text.Append("。\n★这是").Append(item.quality == 3 ? "【紫色】" : "【金色】")
                     .Append("装备, 落地后 30 秒内就可能被路过的人捡走, 捡走了要不回来。");
             if (fused.Length > 0)
                 text.Append("\n融合的部分会一起失去, 不会退回背包。\n(想留下它: 先用分离卷轴取下来, 神奇货架 5 彩玉)");
             text.Append("\n\n确定要丢弃吗？");
             // Original 0549 captures the location and item identity before the held state is cleared.
+            bool confirmed = bound || fused.Length > 0 || preciousQuality || item.count > 1;
             SysMsgBox.Show(text.ToString(), () =>
             {
-                if (NetClient.I != null) NetClient.I.DropItemForIndependentRuntime(bagTab, bagSlot, x, y, itemId, true);
+                if (NetClient.I != null) NetClient.I.DropItemForIndependentRuntime(bagTab, bagSlot, x, y, itemId, confirmed);
             }, null);
         }
         else if (NetClient.I != null) NetClient.I.DropItemForIndependentRuntime(bagTab, bagSlot, x, y, itemId, false);
-        DropBagReferenceForIndependentRuntime(); ev.Use();
     }
 }
 }
