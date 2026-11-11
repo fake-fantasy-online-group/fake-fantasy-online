@@ -49,10 +49,7 @@ public sealed class FamilyCreateDlg : MonoBehaviour
         I.visible = !I.visible;
     }
 
-    public static bool get_Visible()
-    {
-        return I != null && I.visible;
-    }
+    public static bool Visible => I != null && I.visible;
 
     /// <summary>Window-level hit test used by adjacent dialogs (official MouseOver): true when the
     /// window exists, is visible and the real mouse is inside the 262x390 scaled rect. A NaN winX

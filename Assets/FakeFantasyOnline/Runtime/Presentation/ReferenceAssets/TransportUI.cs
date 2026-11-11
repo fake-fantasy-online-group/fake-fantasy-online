@@ -336,7 +336,26 @@ public class TransportUI : MonoBehaviour
     // even though NetClient derives from UnityEngine.MonoBehaviour in official 1.5.8 as well, so
     // the write below uses ReferenceEquals and stays a bare reference test rather than becoming a
     // Unity Object null test, whose behaviour differs for a destroyed instance.
-    private void DoTeleport()
+    internal int DestinationCountForPlugins => dests == null ? 0 : dests.Count;
+    internal bool TryGetDestinationForPlugins(int index, out string name, out int map)
+    {
+        name = null; map = 0;
+        if (dests == null || index < 0 || index >= dests.Count || dests[index] == null) return false;
+        name = dests[index].name ?? "";
+        map = dests[index].map;
+        return true;
+    }
+    internal bool TryChooseDestinationForPlugins(int index, string expectedName)
+    {
+        string name; int map;
+        if (!show || !TryGetDestinationForPlugins(index, out name, out map)) return false;
+        if (!string.Equals(name, expectedName, System.StringComparison.Ordinal)) return false;
+        sel = index;
+        DoTeleport();
+        return true;
+    }
+
+        private void DoTeleport()
     {
         if (sel < 0 || sel >= dests.Count)
         {

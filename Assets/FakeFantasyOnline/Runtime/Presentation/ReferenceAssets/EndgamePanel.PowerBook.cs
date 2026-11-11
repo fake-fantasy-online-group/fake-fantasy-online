@@ -20,7 +20,22 @@ public sealed partial class EndgamePanel
     private int pendingPowerTab = -1, pendingPowerSlot, pendingPowerItem;
     private long pendingPowerGeneration;
     // There is deliberately no inventory-header or world shortcut: the permanent item is the entry.
-    internal static bool TryOpenPowerBookFromWorld() => false;
+    internal static bool PowerBookViewVisible => Current != null && Current.open && Current.module == EndgameModule.PowerBook;
+    internal static bool TryClosePowerBookForPlugins()
+    {
+        if (Current == null) return true;
+        if (!PowerBookViewVisible) return true;
+        Current.Close();
+        return !PowerBookViewVisible;
+    }
+    // Plugin/ui.open may open the catalog when the bound 秘典 is in the bag.
+    // This is not a world-header shortcut.
+    internal static bool TryOpenPowerBookFromWorld()
+    {
+        EndgamePanel panel = Current;
+        if (panel == null || !panel.HasPowerBookItem() || !WorldEntryAvailable) return false;
+        return TryOpenWorldView(EndgameModule.PowerBook);
+    }
     internal static bool HandlePowerItemForIndependentRuntime(int id, int tab, int slot)
     {
         var state = Current?.State;

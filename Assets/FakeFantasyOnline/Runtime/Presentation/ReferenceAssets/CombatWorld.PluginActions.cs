@@ -12,6 +12,15 @@ public partial class CombatWorld
     internal static long CurrentAttackIntentRevisionForPlugins => I == null ? 0 : I.pluginAttackIntentRevision;
     internal static long CurrentSkillIntentRevisionForPlugins => I == null ? 0 : I.pluginSkillIntentRevision;
 
+    // InWorld plugin actions need the official CombatWorld singleton. Some world
+    // entries never called Bind, which made combat.attack look like the player was missing.
+    internal static CombatWorld OwnerForPlugins()
+    {
+        if (I == null && PlayerController.I != null) Ensure();
+        else if (I != null) I.ActivateForIndependentRuntime();
+        return I;
+    }
+
     private void ResumeQueuedSkillForPlugins(int skill, float range)
     {
         pluginResumingQueuedSkill = true;

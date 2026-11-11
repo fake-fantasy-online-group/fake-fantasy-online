@@ -515,7 +515,12 @@ public sealed partial class PluginGameApi
             "npcDialogue", DialogUI.VisibleS,
             "playerMenu", window?.PlayerActionMenu?.Visible ?? false,
             "store", window?.StoreDialog?.Visible ?? false,
-            "transport", window?.TransportDialog?.Visible ?? false);
+            "transport", window?.TransportDialog?.Visible ?? false || TransportUI.VisibleS,
+            "mail", MailDlg.Visible,
+            "family", FamilyDlg.Visible,
+            "familyCreate", FamilyCreateDlg.Visible,
+            "rack", RackShopDlg.Visible,
+            "powerBook", EndgamePanel.PowerBookViewVisible);
         data["nativeWidgetTreeAvailable"] = false;
         data["nativeWidgetTreeUnavailableReason"] = "The native immediate-mode UI has no complete retained widget tree. Named window states and NPC choices are exposed.";
         return data;

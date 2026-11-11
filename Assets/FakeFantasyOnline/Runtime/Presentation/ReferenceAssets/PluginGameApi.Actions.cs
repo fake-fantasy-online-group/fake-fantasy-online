@@ -64,6 +64,7 @@ public sealed partial class PluginGameApi
         var frame = ActionFrame;
         var player = frame?.Player?.SourceControllerForIndependentRuntime;
         bool world = session != null && session.State == ClientSessionState.InWorld && frame != null;
+        if (world && player != null) CombatWorld.OwnerForPlugins();
         bool alive = world && player != null && !player.IsDead;
         bool mobile = alive && player.CanNavigateForPlugins;
         bool native = alive && NetClient.I != null && ActionCombat != null;
@@ -100,13 +101,17 @@ public sealed partial class PluginGameApi
                 "index:integer", "expectedLabel:string", "expectedNpcId:string", "expectedDialogueRevision:integer"),
             ActionDefinition("dialogue.close", "Close the native NPC dialogue locally.", dialog, "There is no visible NPC dialogue."),
             ActionDefinition("quest.request_offers", "Request current offers for an observed NPC via the native session owner.", world, worldReason, "entityId:string"),
-            ActionDefinition("quest.accept", "Send acceptance of a currently observed NPC offer. Sent does not imply acceptance.", world && session.NpcTaskOffersState != null, worldReason, "questId:integer", "expectedOffersRevision:integer"),
+            ActionDefinition("quest.accept", "Send acceptance of a currently observed NPC offer. Sent does not imply acceptance.", world && session.NpcTaskOffersState != null,
+                world ? "An NPC offer snapshot is required. Interact with a quest NPC and observe quests first." : worldReason, "questId:integer", "expectedOffersRevision:integer"),
             ActionDefinition("quest.complete", "Send completion of a currently active quest. The server decides advancement and reward.", world, worldReason, "questId:integer", "expectedQuestRevision:integer"),
             ActionDefinition("quest.abandon", "Send abandonment of a currently active quest; no local optimistic removal.", world, worldReason, "questId:integer", "expectedQuestRevision:integer"),
             ActionDefinition("player.revive", "Send an available server-authored revive option; only a later life snapshot revives the player.", world && session.LocalPlayerLifeState != null && !session.LocalPlayerLifeState.Alive,
                 "The player is not in a server-authored death state.", "option:integer"),
             ActionDefinition("inventory.move", "Move inventory items between slots.", false, "The plugin adapter does not expose the native inventory placement command yet."),
-            ActionDefinition("ui.open", "Open a native game window by identifier.", false, "Only addon-owned UI is exposed through IPluginUi; the native window catalog is not adapted."),
+            ActionDefinition("ui.open", "Open a named native window: mail, family, familyCreate, rack, powerBook, or inventory.", world, worldReason, "window:string"),
+            ActionDefinition("ui.close", "Close a named native window previously opened or observed.", world, worldReason, "window:string"),
+            ActionDefinition("transport.choose", "Confirm an observed destination in the open native transport window. Sent reports the Teleport write; map change remains a later snapshot.", world && TransportUI.VisibleS, "The native transport window is not open.",
+                "index:integer", "expectedName:string"),
             ActionDefinition("chat.send", "Send text through the native session chat owner: channel 0 nearby, 1 party, 2 family, 3 world. Sent confirms only a write, never delivery. Commands and item shares are not accepted.", world, worldReason,
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
@@ -411,7 +416,12 @@ public sealed partial class PluginGameApi
                 if (index >= options.Count || options[index].Label != ActionString(args, "expectedLabel"))
                     throw new ActionFailure("dialogue.stale", "The requested option is no longer at this index with this label.");
                 if (!DialogUI.I.ActivateOption(options[index])) throw new ActionFailure("dialogue.unavailable", "The native option was unavailable.");
-                ActionLocal(entry, "dialogue.dispatched", "The current native dialogue option callback ran. Any server outcome remains unconfirmed."); break;
+                entry.Kind = "dialogue";
+                entry.NativeId = GameBootstrap.CurMapId;
+                entry.Deadline = ActionNow + 4d;
+                var immediate = PluginWindowSnapshot(entry.NativeId);
+                immediate["option"] = ActionString(args, "expectedLabel");
+                ActionSet(entry, GameActionState.Running, "dialogue.dispatched", "The native option callback ran. Waiting briefly for a server-visible map, window, or position change.", immediate); break;
             case "dialogue.close":
                 DialogUI.I.Close(); ActionLocal(entry, "dialogue.closed", "The local NPC dialogue was closed."); break;
             case "quest.request_offers":
@@ -452,6 +462,11 @@ public sealed partial class PluginGameApi
                     chat = WorldChatSendRequest.ForWhisper(remote.SourceIdentityForIndependentRuntime.SelName, chatText, null);
                 }
                 ActionSend(entry, token => session.SendWorldChatAsync(chat, token)); break;
+            case "ui.open":
+            case "ui.close":
+                DispatchWindow(entry, entry.Request.Name == "ui.close"); break;
+            case "transport.choose":
+                DispatchTransportChoose(entry); break;
             default: throw new ActionFailure("action.unavailable", "The action has no native adapter.");
         }
     }
@@ -515,6 +530,7 @@ public sealed partial class PluginGameApi
     {
         if (entry.TitleOwner != null) { PollTitle(entry); return; }
         if (entry.EndgameRequest != null) { PollEndgame(entry); return; }
+        if (entry.Kind == "dialogue") { PollDialogueOutcome(entry); return; }
         if (!ActionActive(entry) && (entry.Pending == null || entry.PendingSettled)) return;
         // Observe a native queued pickup/skill's actual gateway task before scene/cancel checks.
         // Sending may already have happened, in which case it cannot be revoked.
