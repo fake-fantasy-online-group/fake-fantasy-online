@@ -195,6 +195,19 @@ internal sealed partial class TitleFlow : IPluginTitleBridge
         return _page == TitlePage.CharacterSelection || _page == TitlePage.Login ? null : "server_confirmation_failed";
     }
 
+    // Same effect as the native server page 「返回上层」 button: title page and session return to login together.
+    public string ReturnToLoginFromServerPage()
+    {
+        string error = GuardPluginTitle(TitlePage.ServerSelection);
+        if (error != null) return error;
+        if (returnFromServerPage == null) return "title_unavailable";
+        pluginTitleRevision++;
+        _page = TitlePage.Login;
+        returnFromServerPage();
+        setMessage?.Invoke(string.Empty);
+        return null;
+    }
+
     public string SelectCharacter(string characterId)
     {
         string error = GuardPluginTitle(TitlePage.CharacterSelection);

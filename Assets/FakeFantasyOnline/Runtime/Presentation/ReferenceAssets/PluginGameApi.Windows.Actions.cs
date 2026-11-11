@@ -284,7 +284,8 @@ public sealed partial class PluginGameApi
             entry.Kind = "logout";
             entry.Deadline = ActionNow + 20d;
             entry.LogoutLoginRequested = true;
-            Session.ReturnToLogin();
+            string returnError = TitleBridge.ReturnToLoginFromServerPage();
+            if (returnError != null) throw new ActionFailure("session.unavailable", "The native title could not return to login: " + returnError);
             ActionSet(entry, GameActionState.Running, "session.returning", "The native return to the login page started.");
             return;
         }
@@ -304,8 +305,8 @@ public sealed partial class PluginGameApi
         {
             ClientSessionState? state = Session?.State;
             var title = TitleBridge?.ReadState();
-            return (state == ClientSessionState.ServerSelection || state == ClientSessionState.CharacterSelection) &&
-                title != null && !title.LoginLoading && !title.Entering && !title.ModalOpen && !titleSubmissionInProgress;
+            // Only the server page has the native return-to-login button.
+            return state == ClientSessionState.ServerSelection && title != null && title.Page == "ServerSelection" && !title.LoginLoading && !title.Entering && !title.ModalOpen && !titleSubmissionInProgress;
         }
     }
 
@@ -317,8 +318,8 @@ public sealed partial class PluginGameApi
         {
             if (!entry.LogoutLoginRequested && state == ClientSessionState.ServerSelection && TitleBridge?.ReadState()?.Page == "ServerSelection")
             {
-                entry.LogoutLoginRequested = true;
-                Session.ReturnToLogin();
+                // Rejected attempts are retried on the next poll until the deadline (e.g. title briefly busy).
+                if (TitleBridge.ReturnToLoginFromServerPage() == null) entry.LogoutLoginRequested = true;
             }
             if (state == ClientSessionState.Offline && TitleBridge?.ReadState()?.Page == "Login")
             {
@@ -327,7 +328,7 @@ public sealed partial class PluginGameApi
                 return;
             }
         }
-        bool done = entry.LogoutTarget != "login" && entry.LogoutCharacterSelection
+        bool done = entry.LogoutTarget == "login" ? false : entry.LogoutCharacterSelection
             ? state == ClientSessionState.CharacterSelection
             : state == ClientSessionState.ServerSelection || state == ClientSessionState.Offline;
         if (done)

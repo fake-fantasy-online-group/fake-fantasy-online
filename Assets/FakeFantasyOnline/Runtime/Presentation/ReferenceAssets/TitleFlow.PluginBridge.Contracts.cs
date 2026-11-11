@@ -9,6 +9,7 @@ internal interface IPluginTitleBridge
     string SubmitCredentials(string account, string password);
     string SelectServer(int directoryIndex);
     string ConfirmSelectedServer();
+    string ReturnToLoginFromServerPage();
     string SelectCharacter(string characterId);
     string EnterWorld();
 }
