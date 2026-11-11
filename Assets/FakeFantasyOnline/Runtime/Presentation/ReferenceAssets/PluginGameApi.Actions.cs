@@ -49,6 +49,7 @@ public sealed partial class PluginGameApi
         internal Task<Result> Pending;
         internal bool PendingSettled;
         internal CancellationTokenSource Cancellation;
+        internal Dictionary<string, bool> PriorWindows;
     }
 
     private static double ActionNow => System.Diagnostics.Stopwatch.GetTimestamp() /
@@ -112,6 +113,12 @@ public sealed partial class PluginGameApi
             ActionDefinition("ui.close", "Close a named native window previously opened or observed.", world, worldReason, "window:string"),
             ActionDefinition("transport.choose", "Confirm an observed destination in the open native transport window. Sent reports the Teleport write; map change remains a later snapshot.", world && TransportUI.VisibleS, "The native transport window is not open.",
                 "index:integer", "expectedName:string"),
+            ActionDefinition("mail.send", "Open the official letter-paper composer, fill recipient/title/body, and dispatch native DoSend. Completion is the server send receipt.", world && NetClient.I != null, worldReason,
+                "to:string", "title:string", "body:string", "paper:integer"),
+            ActionDefinition("rack.buy", "Buy an observed catalog good through the official BuyRack command and wait for the server receipt.", world && NetClient.I != null, worldReason,
+                "itemId:integer", "count?:integer", "source?:integer"),
+            ActionDefinition("family.create", "Submit a family name and declaration through the official FamilyCreateDlg confirmation write and wait for the server receipt.", world && NetClient.I != null, worldReason,
+                "name:string", "declaration?:string"),
             ActionDefinition("chat.send", "Send text through the native session chat owner: channel 0 nearby, 1 party, 2 family, 3 world. Sent confirms only a write, never delivery. Commands and item shares are not accepted.", world, worldReason,
                 "channel:integer", "text:string"),
             ActionDefinition("chat.whisper", "Send text to the current name of an observed player through the native session chat owner. Sent does not prove delivery.", world, worldReason,
@@ -415,6 +422,7 @@ public sealed partial class PluginGameApi
                 var options = DialogUI.I.Options;
                 if (index >= options.Count || options[index].Label != ActionString(args, "expectedLabel"))
                     throw new ActionFailure("dialogue.stale", "The requested option is no longer at this index with this label.");
+                entry.PriorWindows = PriorWindowFlags(PluginWindowSnapshot(GameBootstrap.CurMapId));
                 if (!DialogUI.I.ActivateOption(options[index])) throw new ActionFailure("dialogue.unavailable", "The native option was unavailable.");
                 entry.Kind = "dialogue";
                 entry.NativeId = GameBootstrap.CurMapId;
@@ -467,6 +475,12 @@ public sealed partial class PluginGameApi
                 DispatchWindow(entry, entry.Request.Name == "ui.close"); break;
             case "transport.choose":
                 DispatchTransportChoose(entry); break;
+            case "mail.send":
+                DispatchMailSend(entry); break;
+            case "rack.buy":
+                DispatchRackBuy(entry); break;
+            case "family.create":
+                DispatchFamilyCreate(entry); break;
             default: throw new ActionFailure("action.unavailable", "The action has no native adapter.");
         }
     }

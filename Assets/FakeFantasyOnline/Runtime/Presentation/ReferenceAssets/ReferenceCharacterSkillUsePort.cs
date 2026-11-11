@@ -309,7 +309,8 @@ public sealed class ReferenceCharacterSkillUsePort : ICharacterSkillUsePort, IDi
             ids => ObserveSideEffectWrite(this.session.RequestRackFittingDescriptionsAsync(ids, CancellationToken.None)));
         core.BindRackCommandsForIndependentRuntime(
             () => ObserveSideEffectWrite(this.session.RequestRackOpenAsync(CancellationToken.None)),
-            (itemId, source, count) => ObserveSideEffectWrite(this.session.RequestRackBuyAsync(itemId, source, count, CancellationToken.None)),
+            (itemId, source, count) => ObserveSideEffectWrite(core.ObserveWriteForPlugins("rack", itemId,
+                this.session.RequestRackBuyAsync(itemId, source, count, CancellationToken.None))),
             (chain, amount) => ObserveSideEffectWrite(this.session.RequestRackDepositAsync(chain, amount, CancellationToken.None)),
             () => ObserveSideEffectWrite(this.session.RequestRackRefundListAsync(CancellationToken.None)),
             (itemId, unitPrice, bundle, day, shares) => ObserveSideEffectWrite(this.session.RequestRackRefundAsync(itemId, unitPrice, bundle, day, shares, CancellationToken.None)));
@@ -324,8 +325,8 @@ public sealed class ReferenceCharacterSkillUsePort : ICharacterSkillUsePort, IDi
             (id, name) => ObserveSideEffectWrite(this.session.RequestFamilyPositionNameAsync(id, name, CancellationToken.None)),
             (title, body) => ObserveSideEffectWrite(this.session.RequestFamilyMailAsync(title, body, CancellationToken.None)));
         core.BindFamilyCreateForIndependentRuntime(
-            (name, proclaim) => ObserveSideEffectWrite(
-                this.session.RequestFamilyCreateAsync(name, proclaim, CancellationToken.None)));
+            (name, proclaim) => ObserveSideEffectWrite(core.ObserveWriteForPlugins("family", 0,
+                this.session.RequestFamilyCreateAsync(name, proclaim, CancellationToken.None))));
         core.BindFamilyStashCommandsForIndependentRuntime(
             (op, bagTab, bagSlot, index) => ObserveSideEffectWrite(
                 this.session.RequestFamilyStashAsync(op, bagTab, bagSlot, index, CancellationToken.None)),

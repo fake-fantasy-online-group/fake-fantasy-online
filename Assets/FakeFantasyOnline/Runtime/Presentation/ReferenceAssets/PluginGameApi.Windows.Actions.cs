@@ -79,6 +79,7 @@ public sealed partial class PluginGameApi
         int index = ActionInt(entry.Request.Arguments, "index", 0, int.MaxValue);
         string expected = ActionString(entry.Request.Arguments, "expectedName");
         int startMap = GameBootstrap.CurMapId;
+        entry.PriorWindows = PriorWindowFlags(PluginWindowSnapshot(startMap));
         if (!TransportUI.I.TryChooseDestinationForPlugins(index, expected))
             throw new ActionFailure("transport.stale", "The requested destination is not at this index with this name.");
         entry.Kind = "dialogue";
@@ -94,8 +95,12 @@ public sealed partial class PluginGameApi
     {
         var now = PluginWindowSnapshot(GameBootstrap.CurMapId);
         bool mapChanged = GameBootstrap.CurMapId != entry.NativeId && GameBootstrap.CurMapId != 0;
-        bool windowOpened = IsTrue(now, "transport") || IsTrue(now, "store") || IsTrue(now, "familyCreate") ||
-            IsTrue(now, "mail") || IsTrue(now, "rack") || IsTrue(now, "powerBook");
+        bool windowOpened = WindowNewlyOpened(entry.PriorWindows, now, "transport") ||
+            WindowNewlyOpened(entry.PriorWindows, now, "store") ||
+            WindowNewlyOpened(entry.PriorWindows, now, "familyCreate") ||
+            WindowNewlyOpened(entry.PriorWindows, now, "mail") ||
+            WindowNewlyOpened(entry.PriorWindows, now, "rack") ||
+            WindowNewlyOpened(entry.PriorWindows, now, "powerBook");
         if (mapChanged || (windowOpened && ActionNow + 0.2d < entry.Deadline) || ActionNow >= entry.Deadline)
         {
             now["serverOutcomeKnown"] = mapChanged;
@@ -112,5 +117,65 @@ public sealed partial class PluginGameApi
 
     private static bool IsTrue(Dictionary<string, object> data, string key) =>
         data.TryGetValue(key, out object value) && value is bool && (bool)value;
+
+    private static Dictionary<string, bool> PriorWindowFlags(Dictionary<string, object> snapshot)
+    {
+        var flags = new Dictionary<string, bool>(StringComparer.Ordinal);
+        if (snapshot == null) return flags;
+        foreach (var pair in snapshot)
+            if (pair.Value is bool) flags[pair.Key] = (bool)pair.Value;
+        return flags;
+    }
+
+    private static bool WindowNewlyOpened(Dictionary<string, bool> prior, Dictionary<string, object> now, string key) =>
+        IsTrue(now, key) && (prior == null || !prior.TryGetValue(key, out bool wasOpen) || !wasOpen);
+
+    private void DispatchMailSend(PluginAction entry)
+    {
+        string to = ActionString(entry.Request.Arguments, "to");
+        string title = ActionString(entry.Request.Arguments, "title");
+        string body = ActionString(entry.Request.Arguments, "body");
+        int paper = ActionInt(entry.Request.Arguments, "paper", 1, int.MaxValue);
+        System.Threading.Tasks.Task<FakeFantasyOnline.Foundation.Result> pending;
+        string error;
+        if (!MailDlg.TrySendForPlugins(to, title, body, paper, out error, out pending))
+            throw new ActionFailure("mail.send_failed", error ?? "The native mail composer could not send.");
+        entry.Pending = pending;
+        ActionSet(entry, GameActionState.Queued, "send.pending", "Native DoSend is pending; no successful write is asserted yet.");
+    }
+
+    private void DispatchRackBuy(PluginAction entry)
+    {
+        int itemId = ActionInt(entry.Request.Arguments, "itemId", 1, int.MaxValue);
+        int count = 1;
+        if (entry.Request.Arguments != null && entry.Request.Arguments.ContainsKey("count"))
+            count = ActionInt(entry.Request.Arguments, "count", 1, 999);
+        byte source = 0;
+        if (entry.Request.Arguments != null && entry.Request.Arguments.ContainsKey("source"))
+            source = (byte)ActionInt(entry.Request.Arguments, "source", 0, 255);
+        string error;
+        if (!RackShopDlg.TryBuyForPlugins(itemId, count, source, out error))
+            throw new ActionFailure("rack.buy_failed", error ?? "The native rack purchase could not start.");
+        AttachNativeWrite(entry, "rack", itemId, "The official BuyRack command did not produce an observed gateway task.");
+    }
+
+    private void DispatchFamilyCreate(PluginAction entry)
+    {
+        string name = ActionString(entry.Request.Arguments, "name");
+        string declaration = ActionString(entry.Request.Arguments, "declaration", false);
+        string error;
+        if (!FamilyCreateDlg.TryCreateForPlugins(name, declaration, out error))
+            throw new ActionFailure("family.create_failed", error ?? "The native family creation could not start.");
+        AttachNativeWrite(entry, "family", 0, "The official FamilyCreate command did not produce an observed gateway task.");
+    }
+
+    private void AttachNativeWrite(PluginAction entry, string kind, int id, string missing)
+    {
+        var write = entry.Native != null ? entry.Native.ReadWriteForPlugins(kind, id) : null;
+        if (write == null || write.Sequence <= entry.WriteSequence || write.Pending == null)
+            throw new ActionFailure(kind + ".write_unobserved", missing);
+        entry.Pending = write.Pending;
+        ActionSet(entry, GameActionState.Queued, "send.pending", "The official native command is pending; no successful write is asserted yet.");
+    }
 }
 }

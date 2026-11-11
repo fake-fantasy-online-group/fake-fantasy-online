@@ -521,8 +521,25 @@ public sealed partial class PluginGameApi
             "familyCreate", FamilyCreateDlg.Visible,
             "rack", RackShopDlg.Visible,
             "powerBook", EndgamePanel.PowerBookViewVisible);
+        var destinations = new List<object>();
+        int destTotal = 0;
+        if (TransportUI.VisibleS && TransportUI.I != null)
+        {
+            destTotal = TransportUI.I.DestinationCountForPlugins;
+            int destLimit = Math.Min(args.Limit, destTotal);
+            for (int i = 0; i < destLimit; i++)
+            {
+                string name;
+                int map;
+                if (!TransportUI.I.TryGetDestinationForPlugins(i, out name, out map)) continue;
+                destinations.Add(Values("index", i, "name", BoundText(name, 1024), "mapId", map));
+            }
+        }
+        data["destinations"] = ListResult("items", destinations, destTotal, args.Limit)["items"];
+        data["destinationCount"] = destTotal;
+        data["destinationsTruncated"] = destTotal > destinations.Count;
         data["nativeWidgetTreeAvailable"] = false;
-        data["nativeWidgetTreeUnavailableReason"] = "The native immediate-mode UI has no complete retained widget tree. Named window states and NPC choices are exposed.";
+        data["nativeWidgetTreeUnavailableReason"] = "The native immediate-mode UI has no complete retained widget tree. Named window states, NPC choices and transport destinations are exposed.";
         return data;
     }
 

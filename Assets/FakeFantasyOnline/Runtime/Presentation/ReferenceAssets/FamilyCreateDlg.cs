@@ -51,6 +51,32 @@ public sealed class FamilyCreateDlg : MonoBehaviour
 
     public static bool Visible => I != null && I.visible;
 
+    // Plugin path: same field limits and NetClient write as the official 确定 button.
+    internal static bool TryCreateForPlugins(string name, string declaration, out string error)
+    {
+        error = null;
+        string trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+        {
+            error = "A family name is required.";
+            return false;
+        }
+        if (trimmed.Length > 16) trimmed = trimmed.Substring(0, 16);
+        string proclaim = declaration ?? string.Empty;
+        if (proclaim.Length > 200) proclaim = proclaim.Substring(0, 200);
+        Ensure();
+        I.nameField = trimmed;
+        I.declaration = proclaim;
+        if (NetClient.I == null)
+        {
+            error = "The native network owner is unavailable.";
+            return false;
+        }
+        NetClient.I.FamilyCreateForIndependentRuntime(trimmed, proclaim);
+        I.visible = false;
+        return true;
+    }
+
     /// <summary>Window-level hit test used by adjacent dialogs (official MouseOver): true when the
     /// window exists, is visible and the real mouse is inside the 262x390 scaled rect. A NaN winX
     /// means the window has not been placed yet, so the centred rect is used for both axes.</summary>

@@ -102,5 +102,33 @@ namespace FakeFantasyOnline.Presentation.ReferenceAssets
             qtyEdit.Clear();
             NetClient.I.OpenRackForIndependentRuntime();
         }
+
+        // Plugin path: the same BuyRack write as the official confirmation / cart checkout.
+        internal static bool TryBuyForPlugins(int itemId, int count, byte source, out string error)
+        {
+            error = null;
+            if (itemId <= 0)
+            {
+                error = "itemId is required.";
+                return false;
+            }
+            if (count < 1) count = 1;
+            bool found = false;
+            foreach (Good good in goods)
+                if (good.id == itemId) { found = true; break; }
+            if (!found)
+            {
+                error = "The requested good is not in the loaded rack catalog.";
+                return false;
+            }
+            if (NetClient.I == null)
+            {
+                error = "The native network owner is unavailable.";
+                return false;
+            }
+            if (source == 0) NetClient.I.BuyRackForIndependentRuntime(itemId, 0, count);
+            else for (int i = 0; i < count; i++) NetClient.I.BuyRackForIndependentRuntime(itemId, source, 1);
+            return true;
+        }
     }
 }
