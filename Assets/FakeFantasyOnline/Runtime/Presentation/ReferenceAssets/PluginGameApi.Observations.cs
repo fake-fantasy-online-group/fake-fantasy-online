@@ -617,7 +617,7 @@ public sealed partial class PluginGameApi
             case "title": case "world": case "player": case "entities": case "npcs": case "loot":
             case "inventory": case "equipment": case "skills": case "buffs": case "target":
             case "party": case "quests": case "dialogue": case "ui":
-            case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": return true;
+            case "endgame": case "endgame.items": case "endgame.catalog": case "endgame.rift": case "endgame.skills": case "endgame.spirit": return true;
             default: return false;
         }
     }
