@@ -309,6 +309,9 @@ public class WorldMapDlg : MonoBehaviour
         return new Rect(x, y, 88f * scale, 40f * scale);
     }
 
+    internal static float MobileFitScale(float factor, Rect safe) =>
+        Mathf.Max(0.1f, Mathf.Min(factor, Mathf.Min(safe.width / NW, safe.height / NH)));
+
     // 0x0600109A OnGUI.
     private void OnGUI()
     {
@@ -319,6 +322,15 @@ public class WorldMapDlg : MonoBehaviour
         s = UIScale.Factor;
         winX = Mathf.Round((Screen.width - NW * s) * 0.5f);
         winY = Mathf.Round((Screen.height - NH * s) * 0.5f);
+        if (MobileClientPresentation.Enabled)
+        {
+            // The 800x600 map at the UI factor can exceed a phone's height, pushing the
+            // native close (580,20) off screen; fit it inside the safe area instead.
+            Rect safe = MobileClientPresentation.SafeAreaGui;
+            s = MobileFitScale(s, safe);
+            winX = Mathf.Round(safe.x + (safe.width - NW * s) * 0.5f);
+            winY = Mathf.Round(safe.y + (safe.height - NH * s) * 0.5f);
+        }
         GUI.depth = 3;
         if (Event.current.type == EventType.Repaint) alpha = Mathf.Min(alpha + 0.05f, 1f);
         Color prev = GUI.color;
