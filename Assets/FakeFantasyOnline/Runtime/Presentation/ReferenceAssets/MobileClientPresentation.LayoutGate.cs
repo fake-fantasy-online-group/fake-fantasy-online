@@ -11,7 +11,7 @@ public static partial class MobileClientPresentation
                 InventoryDlg.IsOpen || (EquipDlg.I!=null && EquipDlg.I.IsOpen) ||
                 (Win05.I!=null && Win05.I.IsOpen) || (UIManager.I!=null && UIManager.I.MobileWindowOpen) ||
                 TeamDlg.Visible || TradeDlg.Visible || StoreDlg.Visible || TaskDlg.Visible ||
-                FigureDlg.Visible || MailDlg.Visible || ShopDlg.Visible || FamilyDlg.get_Visible() ||
+                FigureDlg.Visible || MailDlg.Visible || ShopDlg.Visible || FamilyDlg.Visible ||
                 SysOptionDlg.Visible || SysConfigDlg.Visible || WinZ.AnyLayoutBlockingWindow) return true;
             foreach (var pair in panels)
             {

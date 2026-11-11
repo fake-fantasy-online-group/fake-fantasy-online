@@ -78,7 +78,7 @@ public sealed partial class FamilyDlg : MonoBehaviour
     // GUI-space, explicit physical-pointer hit testing; independent of Input.mousePosition.
     internal static bool MobileContainsPointer(Vector2 point)
     {
-        if (!get_Visible()) return false;
+        if (!Visible) return false;
         float scale = UIScale.Factor;
         float width = 494f, height = 325f;
         bool centered = float.IsNaN(I.winX) || I._wdGen != WinDrag.Gen;

@@ -187,7 +187,7 @@ public static partial class MobileClientPresentation
         EquipFuseDlg.Visible ||
         ExEquipDlg.IsOpen ||
         FaceDlg.Visible ||
-        FamilyCreateDlg.get_Visible() ||
+        FamilyCreateDlg.Visible ||
         FamilyDetailDlg.get_Visible() ||
         FamilyMailDlg.get_Visible() ||
         FamilyRelationDlg.get_Visible() ||

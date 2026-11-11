@@ -310,14 +310,14 @@ public static class UiEsc
         }
 
         // Original slot 44: close; 0x3a8c78.
-        if (FamilyDlg.get_Visible())
+        if (FamilyDlg.Visible)
         {
             FamilyDlg.Toggle();
             return Handled(ReferenceFirstWorldEscapeAction.FamilyDialog);
         }
 
         // Original slot 45: close; 0x3a8ca0.
-        if (FamilyCreateDlg.get_Visible())
+        if (FamilyCreateDlg.Visible)
         {
             FamilyCreateDlg.Toggle();
             return Handled(ReferenceFirstWorldEscapeAction.FamilyCreateDialog);

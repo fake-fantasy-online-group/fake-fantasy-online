@@ -1628,13 +1628,13 @@ public sealed partial class ReferenceFirstWorldWindowOwner : IDisposable
             NativePlayerActionMenu.Visible ||
             JobOfferDlg.get_Visible() ||
             FamilyRelationDlg.get_Visible() ||
-            FamilyCreateDlg.get_Visible() ||
+            FamilyCreateDlg.Visible ||
             FamilyMailDlg.get_Visible() ||
             JobCustomDlg.get_Visible() ||
             JobRightDlg.get_Visible() ||
             TransportUI.VisibleS ||
             FamilyDetailDlg.get_Visible() ||
-            FamilyDlg.get_Visible() ||
+            FamilyDlg.Visible ||
             GossipDlg.Visible ||
             TaskDlg.Visible ||
             RackShopDlg.Visible ||
