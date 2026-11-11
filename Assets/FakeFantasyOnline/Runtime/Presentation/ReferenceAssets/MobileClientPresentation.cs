@@ -166,9 +166,11 @@ public static partial class MobileClientPresentation
         }
     }
     public static Vector2 GuiPoint(Vector2 screenPoint) => new Vector2(screenPoint.x,Screen.height-screenPoint.y);
-    // Unported legacy dialogs retain conservative modal ownership. Migrated normal
-    // panels own only their rectangles, independently for each physical pointer.
-    public static bool ModalOpen =>
+    // True modal dialogs own all world input. Migrated normal panels and the legacy
+    // windows below own only their rectangles, independently for each physical pointer.
+    public static bool ModalOpen => TrueModalOpen || (!LegacyWindowsOwnOnlyTheirRect && LegacyWindowOpen);
+    // Confirmations, trades, text forms, pickers and full-screen maps keep global ownership.
+    public static bool TrueModalOpen =>
         AccountSecDlg.Visible ||
         InventoryDlg.SplitOpen ||
         MailDlg.ComposeVisible ||
@@ -176,31 +178,23 @@ public static partial class MobileClientPresentation
         ArenaDeathDlg.Visible ||
         ArenaDraftDlg.Visible ||
         ArenaEscDlg.Visible ||
-        AttrWashDlg.Visible ||
         ChatCopyOverlay.Visible ||
         ColorDlg.Visible ||
-        ComposeDlg.Visible ||
         DealDlg.Visible ||
         DialogUI.VisibleS ||
         DifficultyBox.Visible ||
         DuelDlg.Visible ||
-        EquipFuseDlg.Visible ||
         ExEquipDlg.IsOpen ||
         FaceDlg.Visible ||
         FamilyCreateDlg.Visible ||
-        FamilyDetailDlg.get_Visible() ||
         FamilyMailDlg.get_Visible() ||
         FamilyRelationDlg.get_Visible() ||
-        FamilyStashDlg.Visible ||
         FindModeDlg.Visible ||
         FriendConfigDlg.Visible ||
         FriendInfoDlg.Visible ||
         GarageDlg.Visible ||
-        GossipDlg.Visible ||
         GroceryConfigDlg.Visible ||
         GroceryDetailDlg.Visible ||
-        GroceryStatusDlg.Visible ||
-        HelpWinDlg.Visible ||
         HornDialog.Visible ||
         JobCustomDlg.get_Visible() ||
         JobOfferDlg.get_Visible() ||
@@ -208,27 +202,40 @@ public static partial class MobileClientPresentation
         MailConfigDlg.Visible ||
         MailResistDlg.Visible ||
         MasterInfoDlg.Visible ||
-        MasterListDlg.Visible ||
         MoneyInputDlg.Visible ||
         PasswdDlg.Visible ||
-        PetArousalDlg.Visible ||
-        PetForgeDlg.Visible ||
         PlayerActionMenu.Visible ||
         QueryDlg.Visible ||
-        RackShopDlg.Visible ||
         RenameDlg.Visible ||
         RepairDlg.Visible ||
         ReportDlg.Visible ||
         ReviveDlg.Visible ||
-        SculpDlg.Visible ||
         SecCodeAskDlg.Visible ||
         SelectPopupDlg.Visible ||
-        StallDlg.Visible ||
         SysMsgBox.Visible ||
         TeamConfigDlg.Visible ||
         TransportUI.VisibleS ||
-        VoiceSetDlg.Visible ||
         WorldMapDlg.Visible;
+    // Legacy windows that register their live rectangle with WinZ every frame. On
+    // mobile they own only that rectangle (IsPanelPointer -> WinZ.AnyWindowAt), so
+    // movement and skills keep working beside them.
+    internal static bool LegacyWindowsOwnOnlyTheirRect => Enabled;
+    public static bool LegacyWindowOpen =>
+        AttrWashDlg.Visible ||
+        ComposeDlg.Visible ||
+        EquipFuseDlg.Visible ||
+        FamilyDetailDlg.get_Visible() ||
+        FamilyStashDlg.Visible ||
+        GossipDlg.Visible ||
+        GroceryStatusDlg.Visible ||
+        HelpWinDlg.Visible ||
+        MasterListDlg.Visible ||
+        PetArousalDlg.Visible ||
+        PetForgeDlg.Visible ||
+        RackShopDlg.Visible ||
+        SculpDlg.Visible ||
+        StallDlg.Visible ||
+        VoiceSetDlg.Visible;
     public static bool IsJoystickRegion(Vector2 screenPoint)
     {
         if (ModalOpen || GameplayInputBlocked || IsPanelPointer(screenPoint)) return false;

@@ -97,13 +97,20 @@ foreach(var type in ordinary){
  visibility.SetValue(null,false);
  Check(!MobileClientPresentation.IsPanelPointer(new Vector2(480,540-200)),"Closed ordinary window releases rectangle "+type.Name);
 }
+var legacyRect=new[]{"AttrWashDlg","ComposeDlg","EquipFuseDlg","FamilyDetailDlg","FamilyStashDlg","GossipDlg","GroceryStatusDlg","HelpWinDlg","MasterListDlg","PetArousalDlg","PetForgeDlg","RackShopDlg","SculpDlg","StallDlg","VoiceSetDlg"};
 foreach(var type in typeof(MobileClientPresentation).Assembly.GetTypes())
 if(type.Namespace=="FakeFantasyOnline.Presentation.ReferenceAssets" && type.IsAbstract && type.IsSealed && type!=typeof(MobileClientPresentation))
 foreach(var field in type.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static))
 if(field.FieldType==typeof(bool)){
  if(Array.IndexOf(ordinary,type)>=0 && (field.Name=="Visible" || field.Name=="Value")) continue; // Covered above with inside/outside/close assertions.
  if(type==typeof(ShopDlg) && field.Name=="Picking") ShopDlg.Visible=true;
- field.SetValue(null,true);Check(MobileClientPresentation.ModalOpen,"Modal coverage "+type.Name+"."+field.Name);field.SetValue(null,false);
+ field.SetValue(null,true);
+ if(Array.IndexOf(legacyRect,type.Name)>=0){
+  // Legacy WinZ windows own only their rectangle on mobile, but stay modal on desktop.
+  Check(!MobileClientPresentation.ModalOpen && MobileClientPresentation.LegacyWindowOpen,"Legacy rect ownership "+type.Name+"."+field.Name);
+  MobileClientPresentation.Simulate=false;Check(MobileClientPresentation.ModalOpen,"Legacy desktop modal "+type.Name+"."+field.Name);MobileClientPresentation.Simulate=true;
+ } else Check(MobileClientPresentation.ModalOpen,"Modal coverage "+type.Name+"."+field.Name);
+ field.SetValue(null,false);
  if(type==typeof(ShopDlg)) ShopDlg.Visible=false;
 }
 InventoryDlg.SplitOpen=true;Check(MobileClientPresentation.ModalOpen,"Standalone warehouse quantity modal");InventoryDlg.SplitOpen=false;

@@ -32,7 +32,7 @@ public static class DuelDlg {public static bool Visible;}
 public static class EquipFuseDlg {public static bool Visible;}
 public static class ExEquipDlg {public static bool IsOpen;}
 public static class FaceDlg {public static bool Visible;}
-public static class FamilyCreateDlg {public static bool Value;public static bool get_Visible()=>Value;}
+public static class FamilyCreateDlg {public static bool Value;public static bool Visible=>Value;}
 public static class FamilyDetailDlg {public static bool Value;public static bool get_Visible()=>Value;}
 public static class FamilyDlg {public static UnityEngine.Rect Bounds;public static bool MobileContainsPointer(UnityEngine.Vector2 point)=>Value && Bounds.Contains(point);public static bool Value;public static bool get_Visible()=>Value;}
 public static class FamilyMailDlg {public static bool Value;public static bool get_Visible()=>Value;}
