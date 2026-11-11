@@ -36,6 +36,19 @@ public sealed partial class EndgamePanel
     private bool SpiritEditable => SpiritWorkbenchOpen && State.InventorySnapshotCurrent && !State.Pending;
     private void ClearSpiritItems() { spiritSelection = spiritMaterial = null; spiritPreviewRevision = spiritRebindRevision = ""; State?.InvalidateSpiritPreview(); }
     internal static EndgameSpiritSelection SpiritBagSelectionForIndependentRuntime(int tab, int slot) => SpiritBagSelection(tab, slot);
+    /// <summary>Read-only view of the open native workbench (fairy, mode, put-in items) for observers.</summary>
+    internal sealed class NativeSpiritWorkbenchView
+    {
+        public int Entity; public string NpcName = "", Mode = "", PreviewRevision = "";
+        public EndgameSpiritSelection Item, Material;
+    }
+    internal static NativeSpiritWorkbenchView NativeSpiritWorkbenchForIndependentRuntime()
+    {
+        if (!SpiritWorkbenchOpen) return null;
+        var c = Current;
+        return new NativeSpiritWorkbenchView { Entity = c.spiritEntity, NpcName = c.spiritDefinition.NpcName ?? "", Mode = c.spiritMode ?? "",
+            PreviewRevision = c.spiritPreviewRevision ?? "", Item = c.spiritSelection, Material = c.spiritMaterial };
+    }
     private void ClearSpirit() { ClearSpiritItems(); spiritDefinition = null; spiritSourceCurrent = null; spiritEntity = spiritMap = 0; spiritBagOpened = false; }
     private static EndgameSpiritSelection SpiritBagSelection(int tab, int slot)
     {

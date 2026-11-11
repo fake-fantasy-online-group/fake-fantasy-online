@@ -404,15 +404,27 @@ public sealed partial class PluginGameApi
         "attrs", EndgameRows(v.Attrs, a => Values("attr", a.Attr, "value", a.Value, "permanent", a.Permanent, "level", a.Level, "perfectLevel", a.PerfectLevel, "last", a.Last)),
         "canUnseal", v.CanUnseal, "canProcess", v.CanProcess, "canRollback", v.CanRollback, "canReset", v.CanReset,
         "unsealEssence", v.UnsealEssence, "processEssence", v.ProcessEssence, "rollbackEssence", v.RollbackEssence, "resetEssence", v.ResetEssence, "processMoney", v.ProcessMoney);
+    private static Dictionary<string, object> SpiritSelectionData(EndgameSpiritSelection s) => s == null ? null :
+        Values("tab", s.Tab, "slot", s.Slot, "itemId", s.ItemID, "uid", s.UID);
     private Dictionary<string, object> ObserveSpirit(EndgameClientState state)
     {
         EndgameResponse last = lastSpiritRequest == null ? null : state.ResponseFor(lastSpiritRequest.RequestID);
         if (last != null && !lastSpiritRequest.MatchesResponse(last)) last = null;
         var appearance = new List<object>(); foreach (int id in state.SpiritAppearanceIDs) appearance.Add(id);
-        return Values("spiritAvailable", state.SpiritAvailable, "nativeWorkbenchOpen", EndgamePanel.SpiritWorkbenchOpen,
-            "fairy", lastSpiritNpc.Length == 0 ? null : Values("entityId", lastSpiritNpc, "name", BoundText(lastSpiritNpcName)), "mode", lastSpiritMode,
+        // The open native workbench is authoritative for fairy/mode/preview; the
+        // plugin's last request is only a fallback when no panel is open.
+        var native = EndgamePanel.NativeSpiritWorkbenchForIndependentRuntime();
+        string source = native != null ? "native" : lastSpiritRequest != null ? "plugin" : "none";
+        object fairy = native != null ? Values("entityId", EntityReference("npc", native.Entity), "name", BoundText(native.NpcName)) :
+            lastSpiritNpc.Length == 0 ? null : Values("entityId", lastSpiritNpc, "name", BoundText(lastSpiritNpcName));
+        bool nativePreview = native != null && native.Item != null && native.PreviewRevision.Length > 0 && native.PreviewRevision == state.SpiritRevision;
+        bool previewCurrent = native != null ? nativePreview && state.SpiritCurrent : state.SpiritCurrent;
+        return Values("spiritAvailable", state.SpiritAvailable, "nativeWorkbenchOpen", native != null, "source", source,
+            "fairy", fairy, "mode", native != null ? native.Mode : lastSpiritMode,
+            "nativeSelection", native == null ? null : Values("item", SpiritSelectionData(native.Item), "material", SpiritSelectionData(native.Material)),
             "revision", state.Revision, "loading", state.SpiritLoading, "pending", state.Pending,
-            "previewCurrent", state.SpiritCurrent, "previewRevision", state.SpiritRevision, "preview", SpiritViewData(state.SpiritView),
+            "previewCurrent", previewCurrent, "previewRevision", native != null ? native.PreviewRevision : state.SpiritRevision,
+            "preview", native != null && !nativePreview ? null : SpiritViewData(state.SpiritView),
             "lastRequest", lastSpiritRequest == null ? null : Values("serverRequestId", lastSpiritRequest.RequestID, "op", lastSpiritRequest.Op),
             "lastResult", last == null ? null : Values("ok", last.OK, "kind", last.Kind, "revision", last.Revision, "message", BoundText(last.Message), "spirit", SpiritViewData(last.Spirit)),
             "lastErrorCode", last == null || last.OK ? "" : last.Error,

@@ -265,9 +265,11 @@ Legacy snapshots may omit it; missing data is reported as null.
 ## Spirit workbench (灵加工)
 
 Observe `endgame.spirit` for the negotiated definitions (fairy NPC name/script/map,
-spirit, essence and separator item IDs, process money), the last plugin-submitted
-fairy and mode, the authoritative preview and revision, and the last correlated
-server result and error code. `endgame.items` rows also carry `spirit`,
+spirit, essence and separator item IDs, process money), the current fairy and mode,
+the authoritative preview and revision, and the last correlated server result and
+error code. While the native workbench is open, `fairy`, `mode`, `nativeSelection`
+and `preview` follow that panel (`source: "native"`); otherwise they fall back to the
+last plugin-submitted request (`source: "plugin"`, or `"none"` before any). `endgame.items` rows also carry `spirit`,
 `fusedSpirit` and `spiritAppearanceItemId`.
 
 | Action | Arguments |
