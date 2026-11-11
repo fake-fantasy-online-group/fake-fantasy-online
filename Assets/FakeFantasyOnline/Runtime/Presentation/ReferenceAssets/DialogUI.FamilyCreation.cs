@@ -30,7 +30,7 @@ public sealed partial class DialogUI
             Close();
             // Reopening an NPC option must not toggle an already-open form closed.
             // Only the existing form's 确定 sends FamilyCreate; cancel is unchanged.
-            if (!FamilyCreateDlg.get_Visible()) FamilyCreateDlg.Toggle();
+            if (!FamilyCreateDlg.Visible) FamilyCreateDlg.Toggle();
         }));
     }
 }
