@@ -42,6 +42,7 @@ public static class NativeScroll
         float step)
     {
         Event e = Event.current;
+        if (MobileClientPresentation.Enabled) MobileDragScroll.PairView(view);
         if (e.type != EventType.ScrollWheel ||
             !view.Contains(e.mousePosition))
         {
@@ -74,6 +75,7 @@ public static class NativeScroll
     {
         float s = UIScale.Factor;
         Rect track = TrackRect(view, s);
+        if (MobileClientPresentation.Enabled) MobileDragScroll.PairView(view);
         BarAt(owner, track, view.height, contentH, ref scroll);
     }
 
@@ -102,6 +104,15 @@ public static class NativeScroll
             thumbHeight);
     }
 
+    // Mobile widens the thumb's touch target to 44 presentation points without moving its art.
+    // The track keeps its native width so list rows beside it never lose taps.
+    internal static Rect TouchHit(Rect r)
+    {
+        if (!MobileClientPresentation.Enabled) return r;
+        float pad = Mathf.Max(0f, (44f * MobileClientPresentation.Scale - r.width) * .5f);
+        return new Rect(r.x - pad, r.y, r.width + pad * 2f, r.height);
+    }
+
     public static void BarRows(
         object owner,
         Rect track,
@@ -117,6 +128,9 @@ public static class NativeScroll
 
         float thumbH = UIScale.Factor * 20f;
         float travel = track.height - thumbH;
+        if (MobileClientPresentation.Enabled && !(_drag && ReferenceEquals(_cur, owner)))
+            scroll = MobileDragScroll.DragRows(owner, MobileDragScroll.RegionLeftOf(owner, track),
+                scroll, maximum, track.height / Mathf.Max(1, visibleRows));
         Rect thumbRect = ThumbRect(track, maximum, scroll, thumbH);
         Texture2D texture = Thumb();
         if (texture != null)
@@ -133,7 +147,8 @@ public static class NativeScroll
 
         Event e = Event.current;
         Vector2 mouse = e.mousePosition;
-        if (thumbRect.Contains(mouse) && e.type == EventType.MouseDown)
+        Rect thumbHit = TouchHit(thumbRect), trackHit = track;
+        if (thumbHit.Contains(mouse) && e.type == EventType.MouseDown)
         {
             _drag = true;
             _cur = owner;
@@ -141,7 +156,7 @@ public static class NativeScroll
             _grab = mouse.y - thumbRect.y;
             e.Use();
         }
-        else if (track.Contains(mouse) && e.type == EventType.MouseDown && travel > 0f)
+        else if (trackHit.Contains(mouse) && e.type == EventType.MouseDown && travel > 0f)
         {
             scroll = Mathf.RoundToInt(
                 Mathf.Clamp01((mouse.y - track.y - thumbH * 0.5f) / travel) *
@@ -179,6 +194,12 @@ public static class NativeScroll
         float thumbH = UIScale.Factor * 20f;
         float maximum = contentH - viewH;
         float travel = track.height - thumbH;
+        if (MobileClientPresentation.Enabled && !(_drag && ReferenceEquals(_cur, owner)))
+        {
+            Rect region = MobileDragScroll.TakePairedView(track, out Rect paired) ?
+                new Rect(paired.x, paired.y, track.xMax - paired.x, paired.height) : MobileDragScroll.RegionLeftOf(owner, track);
+            scroll.y = MobileDragScroll.Drag(owner, region, scroll.y, maximum);
+        }
         Rect thumbRect = ThumbRect(track, maximum, scroll.y, thumbH);
         Texture2D texture = Thumb();
         if (texture != null)
@@ -195,7 +216,8 @@ public static class NativeScroll
 
         Event e = Event.current;
         Vector2 mouse = e.mousePosition;
-        if (thumbRect.Contains(mouse) && e.type == EventType.MouseDown)
+        Rect thumbHit = TouchHit(thumbRect), trackHit = track;
+        if (thumbHit.Contains(mouse) && e.type == EventType.MouseDown)
         {
             _drag = true;
             _cur = owner;
@@ -203,7 +225,7 @@ public static class NativeScroll
             _grab = mouse.y - thumbRect.y;
             e.Use();
         }
-        else if (track.Contains(mouse) && e.type == EventType.MouseDown && travel > 0f)
+        else if (trackHit.Contains(mouse) && e.type == EventType.MouseDown && travel > 0f)
         {
             scroll.y = maximum * Mathf.Clamp01(
                 (mouse.y - track.y - thumbH * 0.5f) / travel);

@@ -274,6 +274,8 @@ public partial class MailDlg : MonoBehaviour
             listScroll = Mathf.Clamp(listScroll + Event.current.delta.y * 18f, 0, Mathf.Max(0, totalHeight - viewport.height));
             Event.current.Use();
         }
+        if (MobileClientPresentation.Enabled)
+            listScroll = MobileDragScroll.Drag(this, viewport, listScroll, Mathf.Max(0, totalHeight - viewport.height));
         listScroll = Mathf.Clamp(listScroll, 0, Mathf.Max(0, totalHeight - viewport.height));
         GUI.BeginGroup(viewport);
         // 官方 MailDlg.DrawList 0600059a（arm64 0x47104c / x86_64 0x4882d0；冻结导出
