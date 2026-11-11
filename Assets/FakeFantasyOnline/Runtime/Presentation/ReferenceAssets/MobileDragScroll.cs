@@ -21,6 +21,40 @@ internal static class MobileDragScroll
     private static EventType pairedEvent;
     internal static int LastDragFrame { get; private set; } = -10;
 
+    // Row selection gesture. Desktop keeps the original press-to-select contract;
+    // on mobile a row selects on release, and only when that touch never became a
+    // drag (list drag-scroll or finger travel beyond the drag threshold).
+    private static int gestureFrame = -1, gestureBeganFrame = -10;
+    private static Vector2 gestureStart;
+    private static bool gestureMoved;
+    internal static bool GestureDragged { get { UpdateGesture(); return gestureMoved || LastDragFrame >= gestureBeganFrame; } }
+    internal static bool RowSelect(Event e)
+    {
+        if (e == null) return false;
+        if (!MobileClientPresentation.Enabled) return e.type == EventType.MouseDown;
+        UpdateGesture();
+        return e.type == EventType.MouseUp && !GestureDragged;
+    }
+    private static void UpdateGesture()
+    {
+        if (gestureFrame == Time.frameCount) return;
+        gestureFrame = Time.frameCount;
+        bool began; Vector2 point;
+        if (Input.touchCount > 0)
+        {
+            Touch touch = Input.GetTouch(0);
+            began = touch.phase == TouchPhase.Began; point = touch.position;
+            if (Input.touchCount > 1) gestureMoved = true;
+        }
+        else if (!UnityEngine.Application.isMobilePlatform && (Input.GetMouseButton(0) || Input.GetMouseButtonUp(0)))
+        {
+            began = Input.GetMouseButtonDown(0); point = Input.mousePosition;
+        }
+        else return;
+        if (began) { gestureBeganFrame = Time.frameCount; gestureStart = point; gestureMoved = false; }
+        else if ((point - gestureStart).sqrMagnitude > Threshold * Threshold) gestureMoved = true;
+    }
+
     internal static float Threshold => 10f * Mathf.Max(1f, MobileClientPresentation.Scale);
 
     // NativeScroll.Wheel has no owner; its view pairs with the immediately following bar.

@@ -227,7 +227,7 @@ public class TransportUI : MonoBehaviour
                 }
             }
 
-            if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
+            if (MobileDragScroll.RowSelect(Event.current) && rowRect.Contains(Event.current.mousePosition))
             {
                 bool doubleClick = i == lastClickIdx && Time.unscaledTime - lastClickT < 0.35f;
                 sel = i;

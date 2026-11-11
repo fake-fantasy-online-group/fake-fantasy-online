@@ -163,7 +163,7 @@ internal sealed class HairSalonDlg : MonoBehaviour
                 if (BitmapFont.Ready) BitmapFont.DrawOutline(64f * s, y + 15f * s, "×1", Color.white, s);
             }
             DrawCoins(R_LIST.width * s - 104f * s, y + 14f * s, mode == 0 ? DyeMoney[index] : StyleMoney);
-            if (hover && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+            if (MobileDragScroll.RowSelect(Event.current) && hover && Event.current.button == 0)
             {
                 tentSel = id;
                 Event.current.Use();

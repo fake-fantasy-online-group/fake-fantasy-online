@@ -39,7 +39,7 @@ internal partial class ComposeDlg
                         enough ? new Color(0.7f, 0.85f, 0.7f, 1f) : new Color(1f, 0.45f, 0.45f, 1f), s);
                 }
             }
-            if (row.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+            if (MobileDragScroll.RowSelect(Event.current) && row.Contains(Event.current.mousePosition) && Event.current.button == 0)
             { sel = i; Event.current.Use(); }
         }
         GUI.EndScrollView();

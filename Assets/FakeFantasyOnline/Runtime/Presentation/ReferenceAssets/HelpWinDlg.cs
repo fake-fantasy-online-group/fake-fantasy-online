@@ -182,7 +182,7 @@ internal sealed class HelpWinDlg : MonoBehaviour
                 float dim = hover || isSel ? 1f : .8f;
                 row.normal.textColor = new Color(dim, isSel ? .85f : dim, isSel ? .3f : dim, 1f);
                 GUI.Label(new Rect(s + 6f * s, rowY, rowW - 8f * s, rowH), Topics[hits[i]].Item1, row);
-                if (hover && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                if (MobileDragScroll.RowSelect(Event.current) && hover && Event.current.button == 0)
                 {
                     sel = i;
                     contentScroll = 0f;

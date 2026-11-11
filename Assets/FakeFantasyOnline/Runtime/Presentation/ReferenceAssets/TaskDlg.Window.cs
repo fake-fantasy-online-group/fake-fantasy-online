@@ -187,8 +187,8 @@ public partial class TaskDlg
 
                     // The row hit test re-reads Event.current.mousePosition, so it sees the
                     // -9999 sentinel the drag guard installed above.
-                    if (new Rect(0f, y, view.width, rowPx).Contains(Event.current.mousePosition)
-                        && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                    if (MobileDragScroll.RowSelect(Event.current) && new Rect(0f, y, view.width, rowPx).Contains(Event.current.mousePosition)
+                        && Event.current.button == 0)
                     {
                         selId = t.id;
                         selIsRec = false;
@@ -232,8 +232,8 @@ public partial class TaskDlg
                         BitmapFont.DrawOutline(s * 4f, y + s, def.name + suffix,
                             new Color(0.72f, 0.88f, 1f, 1f), s);
 
-                    if (new Rect(0f, y, view.width, rowPx).Contains(Event.current.mousePosition)
-                        && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                    if (MobileDragScroll.RowSelect(Event.current) && new Rect(0f, y, view.width, rowPx).Contains(Event.current.mousePosition)
+                        && Event.current.button == 0)
                     {
                         selId = def.id;
                         selIsRec = true;

@@ -62,7 +62,7 @@ public partial class StallConfigDlg
                 bool hover = remove.Contains(Event.current.mousePosition);
                 ArtworkSkin.ButtonFace(remove, "下架", s, GUI.enabled, hover,
                     pressed: hover && Input.GetMouseButton(0));
-                if (hover && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                if (MobileDragScroll.RowSelect(Event.current) && hover && Event.current.button == 0)
                 {
                     staged.RemoveAt(i); SaveTemplate(); Event.current.Use();
                     // No tooltip may borrow the removed row (including the former last row).

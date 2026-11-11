@@ -245,7 +245,7 @@ public sealed class JobRightDlg : MonoBehaviour
                         i == sel ? JobUI.GOLD : FamUI.Light, s);
                 }
 
-                if (hover && Event.current.type == EventType.MouseDown &&
+                if (MobileDragScroll.RowSelect(Event.current) && hover &&
                     Event.current.button == 0)
                 {
                     sel = i;

@@ -311,8 +311,8 @@ public partial class MailDlg : MonoBehaviour
                     if (mail.caiyu > 0) BitmapFont.DrawOutline(375f * s, textY, mail.caiyu.ToString(), new Color(.7f, .9f, 1f), s);
                 }
                 // Consume the selection event only after its immediate mail action returns.
-                if (row.Contains(localPointer) && !SysMsgBox.Visible &&
-                    Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                if (MobileDragScroll.RowSelect(Event.current) && row.Contains(localPointer) && !SysMsgBox.Visible &&
+                    Event.current.button == 0)
                 {
                     SelectMail(i);
                     Event.current.Use();

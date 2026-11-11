@@ -65,8 +65,8 @@ internal partial class PetForgeDlg
                     BitmapFont.DrawOutline(r.x + 205f * s, rowY + 4f * s,
                         string.Format("Lv.{0}/{1}", row.Item4, row.Item5), new Color(0.86f, 0.86f, 0.86f, 1f), s);
                 }
-                if (selectable && r.Contains(localMouse) && !SysMsgBox.Visible &&
-                    Event.current.type == EventType.MouseDown && Event.current.button == 0)
+                if (MobileDragScroll.RowSelect(Event.current) && selectable && r.Contains(localMouse) && !SysMsgBox.Visible &&
+                    Event.current.button == 0)
                 {
                     selSkill = selSkill == row.Item1 ? 0 : row.Item1;
                     Query();
