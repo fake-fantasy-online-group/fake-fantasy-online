@@ -22,7 +22,11 @@ public sealed partial class PrivateServerGateway : IEndgameClient
     public void TickEndgameForIndependentRuntime()
     {
         if (!_host.IsHostThread || !EndgameInWorld || _worldEntryAdmission != null) return;
+        EndgameRequest pendingBefore = Endgame.PendingRequest;
         Endgame.Tick(DateTime.UtcNow);
+        // A timed-out mutation was released as uncertain and resynchronized; a
+        // reconnect must not restore it and block the player again.
+        if (pendingBefore != null && Endgame.PendingRequest == null) endgameRetryJournal.Complete(EndgameScope, pendingBefore.RequestID);
         if (!Endgame.HelloSent) SendEndgame(new EndgameRequest("hello"));
         if (Endgame.NeedsRiftPageNegotiation) SendEndgame(new EndgameRequest("capabilities"));
         // Native lock/warehouse/appearance receipts need not include a sidecar.
@@ -42,7 +46,7 @@ public sealed partial class PrivateServerGateway : IEndgameClient
     public bool RetryEndgame()
     {
         if (!_host.IsHostThread || !EndgameInWorld || _worldEntryAdmission != null || Endgame.PendingRequest == null) return false;
-        try { _netClient.SendEndgame(Endgame.PendingRequest); return true; }
+        try { _netClient.SendEndgame(Endgame.PendingRequest); Endgame.NoteRetrySent(); return true; }
         catch (Exception error) when (IsWireFailure(error))
         { Endgame.NoteTransportFailure("连接尚未确认，请稍后重试。"); return false; }
     }

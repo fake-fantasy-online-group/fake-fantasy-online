@@ -22,6 +22,18 @@ public sealed partial class EndgameClientState
     public bool Pending => PendingRequest != null;
     public EndgameRequest PendingRequest { get; private set; }
     public DateTime PendingSinceUtc { get; private set; }
+    // A mutation waits for its exact receipt, but never forever. Server replies
+    // normally arrive well under a second (storage commit included); transient
+    // "pending"/"storage"/"busy" errors are replies and keep the request. Only
+    // total silence for twice the 15 s read bound releases it, as uncertain.
+    public const double PendingMutationTimeoutSeconds = 30;
+    public const string PendingTimeoutMessage = "服务器未响应，该操作可能已生效也可能未生效；已重新同步，请核对后再操作。";
+    /// <summary>Player-facing notices raised off the request path (timeouts, late receipts).</summary>
+    public long NoticeSerial { get; private set; }
+    public string Notice { get; private set; } = "";
+    private bool pendingAwaitingReply;
+    private readonly HashSet<string> timedOutMutations = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Queue<string> timedOutOrder = new Queue<string>();
     public EndgameQuoteView Quote { get; private set; }
     public bool QuotePending { get; private set; }
     public string QuoteRequestID { get; private set; } = "";
@@ -68,7 +80,8 @@ public sealed partial class EndgameClientState
         responses.Clear(); responseOrder.Clear(); ResetRiftPages(); RiftHazards.Reset(); ResetRiftHazardContext();
         CombatStats = null; CombatStatsReceivedUtc = default(DateTime); CombatStatsRevision = "0"; CombatStatsVersion++;
         CubeItemID = 0; CubeNPC = CubeLore = "";
-        PendingRequest = null; Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
+        PendingRequest = null; pendingAwaitingReply = false; timedOutMutations.Clear(); timedOutOrder.Clear();
+        Quote = null; QuotePending = false; QuoteRequestID = ""; Rift = null; CubeInputsV1 = RiftPortalsV1 = RiftInInstance = RiftContextKnown = hasRiftSceneContext = helloServerKnown = false;
         RiftEntrances = Array.Empty<EndgameRiftEntranceView>();
         Items = Array.Empty<EndgameItemView>(); Materials = Array.Empty<EndgameMaterialView>(); ActiveFormations = Array.Empty<EndgameFormationView>();
         helloAttempts = 0; helloRequestID = ""; helloRetryScheduled = helloAwaitingResponse = false;
@@ -93,7 +106,7 @@ public sealed partial class EndgameClientState
         if (request.Mutates)
         {
             if (Pending) return false;
-            PendingRequest = request; PendingSinceUtc = DateTime.UtcNow; Error = ""; Message = "正在等待服务器确认…";
+            PendingRequest = request; PendingSinceUtc = DateTime.UtcNow; pendingAwaitingReply = true; Error = ""; Message = "正在等待服务器确认…";
         }
         if (request.Op == "cube.quote")
         {
@@ -106,7 +119,41 @@ public sealed partial class EndgameClientState
     public void RestoreUncertainRequest(EndgameRequest request)
     {
         if (!Negotiated || Pending || request == null || !request.Mutates) return;
-        PendingRequest = request; PendingSinceUtc = DateTime.UtcNow; Error = "pending"; Message = "上次操作尚未确认，请查询原请求。"; Version++;
+        // Restored, not resent: the player queries it explicitly (NoteRetrySent).
+        PendingRequest = request; PendingSinceUtc = DateTime.UtcNow; pendingAwaitingReply = false; Error = "pending"; Message = "上次操作尚未确认，请查询原请求。"; Version++;
+    }
+    /// <summary>The exact pending request was sent again; its bounded wait restarts.</summary>
+    public void NoteRetrySent()
+    {
+        if (PendingRequest == null) return;
+        PendingSinceUtc = DateTime.UtcNow; pendingAwaitingReply = true;
+    }
+    // In-instance rift receipts own a same-nonce reconciliation loop (EndgamePanel.Rift).
+    private bool RiftReconcilesPending => PendingRequest != null && PendingRequest.Op.StartsWith("rift.", StringComparison.Ordinal) && RiftContextKnown && RiftInInstance;
+    private void ExpirePendingMutation()
+    {
+        string id = PendingRequest.RequestID;
+        if (id.Length > 0 && timedOutMutations.Add(id))
+        {
+            timedOutOrder.Enqueue(id);
+            while (timedOutOrder.Count > 32) timedOutMutations.Remove(timedOutOrder.Dequeue());
+        }
+        // Free later operations, drop derived views and ask for one authoritative
+        // snapshot (sent by the host tick). Nothing local is rolled back or applied.
+        PendingRequest = null; pendingAwaitingReply = false; InvalidateQuote(); InvalidateSpiritPreview();
+        nativeSnapshotRefreshPending = true;
+        Error = "timeout"; Message = PendingTimeoutMessage; PublishNotice(Message); Version++;
+    }
+    private void PublishNotice(string text) { Notice = text; NoticeSerial++; }
+    // A receipt for a request already released by the timeout is never applied:
+    // its effects reach the client only through the fresh authoritative snapshot.
+    private bool ApplyLateReceipt(EndgameResponse response)
+    {
+        RememberResponse(response); nativeSnapshotRefreshPending = true;
+        string detail = response.Message.Length > 0 ? response.Message : ErrorText(response.Error);
+        string text = response.OK ? "此前超时的操作已由服务器确认生效，已重新同步。" : "此前超时的操作未生效：" + detail;
+        if (!Pending) { Error = response.OK ? "" : response.Error; Message = text; }
+        PublishNotice(text); Version++; return false;
     }
     public void InvalidateQuote() { Quote = null; QuotePending = false; QuoteRequestID = ""; Version++; }
     public void NoteTransportFailure(string message, EndgameRequest request = null)
@@ -122,6 +169,8 @@ public sealed partial class EndgameClientState
         TickRiftPages(now);
         TickPowerBook(now);
         TickSpirit(now);
+        if (Negotiated && pendingAwaitingReply && PendingRequest != null && !RiftReconcilesPending &&
+            (now - PendingSinceUtc).TotalSeconds >= PendingMutationTimeoutSeconds) ExpirePendingMutation();
         // A read-only hello can disappear during a map transfer or a dropped
         // send. Release it after a bounded wait, then use the same cooldown as
         // transient server errors. Never retry each host frame indefinitely.
@@ -266,6 +315,7 @@ public sealed partial class EndgameClientState
             Version++; return accepted;
         }
         if (!Negotiated) return false;
+        if (response.RequestID.Length > 0 && timedOutMutations.Remove(response.RequestID)) return ApplyLateReceipt(response);
         if (response.Kind == "capabilities") return ApplyRiftCapabilities(response);
         if (response.Kind == "spirit.open" || response.Kind == "spirit.preview") return ApplySpiritRead(response);
         if (response.Kind.StartsWith("spirit.", StringComparison.Ordinal) && (PendingRequest == null || PendingRequest.RequestID != response.RequestID)) return false;

@@ -78,9 +78,41 @@ class EndgameContracts
         s.Apply(Response("{\"kind\":\"cube.recover\",\"ok\":true,\"requestId\":\"" + recover.RequestID + "\",\"revision\":\"43\"}"));
         Check(!s.Pending, "correlated recovery success ends pending state");
     }
+    static string Receipt(EndgameRequest r, bool ok, string extra = "") =>
+        "{\"kind\":\"" + r.Op + "\",\"requestId\":\"" + r.RequestID + "\",\"ok\":" + (ok ? "true" : "false") + extra + "}";
+    static void PendingTimeoutContracts()
+    {
+        var s = State(); s.Apply(Response(Snap("timeout-base", "1", 0, 1, Item())));
+        var silent = new EndgameRequest("socket.insert", "1", "9007199254740993", "82", 0);
+        Check(s.Begin(silent), "silent mutation enters pending");
+        s.Tick(DateTime.UtcNow.AddSeconds(EndgameClientState.PendingMutationTimeoutSeconds - 2));
+        Check(ReferenceEquals(s.PendingRequest, silent) && s.NoticeSerial == 0, "pending mutation survives inside the bound");
+        s.Apply(Response(Receipt(silent, false, ",\"error\":\"storage\"")));
+        Check(ReferenceEquals(s.PendingRequest, silent), "transient storage reply keeps the exact request");
+        s.Tick(DateTime.UtcNow.AddSeconds(EndgameClientState.PendingMutationTimeoutSeconds + 1));
+        Check(!s.Pending && s.Error == "timeout" && s.Message == EndgameClientState.PendingTimeoutMessage, "silent server releases pending as uncertain");
+        Check(s.NoticeSerial == 1 && s.Notice == EndgameClientState.PendingTimeoutMessage, "timeout raises one player notice");
+        Check(s.NeedsInventorySnapshotRefresh, "timeout requests one authoritative snapshot");
+        var next = new EndgameRequest("socket.insert", "1", "9007199254740993", "83", 0);
+        Check(s.Begin(next), "later mutation is not blocked after timeout");
+        Check(!s.Apply(Response(Receipt(silent, true, ",\"revision\":\"9\""))), "late receipt is never applied");
+        Check(ReferenceEquals(s.PendingRequest, next) && s.Revision == "1", "late receipt cannot free a newer request or advance revision");
+        Check(s.NoticeSerial == 2 && s.ResponseFor(silent.RequestID) != null && s.NeedsInventorySnapshotRefresh, "late receipt is announced, correlated and resynchronized");
+        Check(s.Apply(Response(Receipt(next, true, ",\"revision\":\"2\""))) && !s.Pending && s.Revision == "2", "newer receipt still completes normally");
+        var restored = State(); restored.Apply(Response(Snap("timeout-restored", "1", 0, 1, Item())));
+        var uncertain = new EndgameRequest("socket.insert", "1", "9007199254740993", "84", 0);
+        restored.RestoreUncertainRequest(uncertain); restored.Tick(DateTime.UtcNow.AddHours(1));
+        Check(ReferenceEquals(restored.PendingRequest, uncertain), "restored request waits for an explicit query");
+        restored.NoteRetrySent(); restored.Tick(DateTime.UtcNow.AddSeconds(EndgameClientState.PendingMutationTimeoutSeconds - 2));
+        Check(restored.Pending, "retry restarts the bounded wait");
+        restored.Tick(DateTime.UtcNow.AddSeconds(EndgameClientState.PendingMutationTimeoutSeconds + 1));
+        Check(!restored.Pending && restored.Error == "timeout", "silent retry is released as well");
+        restored.Reset(); Check(restored.NoticeSerial == 1, "reset keeps notice serial monotonic");
+    }
     static void Main(string[] args)
     {
         PortableCubeContracts();
+        PendingTimeoutContracts();
         var s = State(); Check(s.Negotiated, "hello negotiated");
         foreach (string error in new[] { "snapshot_size", "storage" })
         {

@@ -87,6 +87,7 @@ public sealed partial class EndgamePanel : MonoBehaviour
         ObservePowerBookRequest();
         ObserveRiftPhase();
         RecoverPendingRiftRequest(DateTime.UtcNow);
+        ObserveEndgameNotice();
         UpdateRiftWorldVisuals();
         if (open && module == EndgameModule.Rift && State.RiftContextKnown && State.RiftInInstance) Close();
         if (open && module == EndgameModule.Cube && !CubeSourceCurrent()) Close();
@@ -94,6 +95,16 @@ public sealed partial class EndgamePanel : MonoBehaviour
         { if (powerFilterOpen >= 0) ResetPowerFilterDropdown(); else if (riftTierOpen) ResetRiftTierDropdown(); else Close(); }
         if (State.Negotiated && State.Rift != null && PollRun(State.Rift) && Time.unscaledTime >= nextRiftRefresh)
         { nextRiftRefresh = Time.unscaledTime + 3f; QueryRift(); }
+    }
+    private long seenNoticeSerial;
+    // Timeouts and late receipts are announced once, even with the panel closed.
+    private void ObserveEndgameNotice()
+    {
+        if (State.NoticeSerial == seenNoticeSerial) return;
+        seenNoticeSerial = State.NoticeSerial;
+        if (State.Notice.Length > 0) NewbieTipBox.PushText(State.Notice);
+        if (spiritAwaiting.Length > 0 && State.PendingRequest?.RequestID != spiritAwaiting && State.ResponseFor(spiritAwaiting) == null)
+        { spiritAwaiting = ""; spiritPreviewRevision = ""; }
     }
     private bool Send(EndgameRequest request) => client != null && client.SendEndgame(request);
     private void QueryRift() => Send(new EndgameRequest("rift.state", runID: State.Rift == null ? "" : State.Rift.RunID));
