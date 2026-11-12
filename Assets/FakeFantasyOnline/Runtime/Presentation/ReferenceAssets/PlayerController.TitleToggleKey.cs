@@ -40,12 +40,6 @@ public partial class PlayerController
     {
         if (!Input.GetKeyDown(KeyCode.Z)) return;
         if (ChatUI.TypingNow || Win05.GmTyping || GUIUtility.keyboardControl != 0) return;
-        ToggleTitleVisibility();
-    }
-
-    // The Z branch body, shared with the mobile 更多 panel's 称号 entry.
-    internal static void ToggleTitleVisibility()
-    {
         bool visibleBeforeFlip = CharData.showTitle;
         CharData.showTitle = !visibleBeforeFlip;
         // Official order: invert first, then report the state the byte reached, chosen from

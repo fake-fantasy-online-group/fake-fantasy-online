@@ -50,12 +50,16 @@ for cls, closer in re.findall(r'\{ typeof\((\w+)\), (\w+\.\w+) \}', chrome):
     check(closer + '();' in esc, cls + ' closes exactly like Esc (' + closer + ')')
 check(chrome.count('typeof(') >= 20, 'close chrome covers the legacy window set')
 
-hud = src('GameHud.MobileMoreToggles.cs'); upd = src('UIManager.Update.cs')
+# The 更多 panel stays exactly as at baseline 1180319: no extra hotkey toggles on mobile.
+upd = src('UIManager.Update.cs')
 for key, call in [('D', 'DuelDlg.Toggle()'), ('X', 'Win05.ChangeSetHotkey()'), ('F12', 'HelpWinDlg.Toggle()'), ('Insert', 'HeadHpBar.Toggle()')]:
-    a = upd.index('KeyCode.' + key + ')'); check(call in upd[a:a + 120], 'desktop ' + key + ' calls ' + call)
-    check(call + ';' in hud, 'more panel reuses ' + call)
-check('PlayerController.ToggleTitleVisibility();' in hud and 'ToggleTitleVisibility();' in src('PlayerController.TitleToggleKey.cs'), 'title entry shares the Z body')
-check('internal const int MoreMenuEntryCount = 5;' in mcp and 'MobileMoreToggleLabels = { "\u51b3\u6597", "\u6362\u5957\u88c5", "\u79f0\u53f7", "\u8840\u6761", "\u5e2e\u52a9" }' in hud, 'five labelled entries')
+    a = upd.index('KeyCode.' + key + ')'); check(call in upd[a:a + 120], 'desktop ' + key + ' hotkey unchanged (' + call + ')')
+check(not (ra / 'GameHud.MobileMoreToggles.cs').exists() and not (ra / 'GameHud.MobileMoreToggles.cs.meta').exists(), 'more-panel toggle file removed')
+all_src = '\n'.join(f.read_text() for f in ra.glob('*.cs'))
+for name in ['DrawMobileMoreToggles', 'MobileMoreToggleLabels', 'ActivateMobileMoreToggle', 'MoreMenuEntryCount', 'MenuEntryCount', 'ToggleTitleVisibility']:
+    check(name not in all_src, 'more-panel toggle symbol absent: ' + name)
+check('MenuColumnsForWidth(MenuAvailableWidth,Scale,\n        GameHud.ControlButtonCountForIndependentRuntime)' in mcp and 'int count=GameHud.ControlButtonCountForIndependentRuntime;' in mcp, 'more panel lays out only the original ctrlbar entries')
+check('DrawMobileMoreToggles' not in src('GameHud.Mobile.cs'), 'mobile HUD draws no extra more-panel entries')
 
 bag = src('InventoryDlg.BagDestinations.cs')
 check('DropBagItemWithConfirmation((byte)HeldTab, heldSlot, heldId, heldName, heldBound, x, y, false);' in bag, 'desktop discard keeps its prompt rules')

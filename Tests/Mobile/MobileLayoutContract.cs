@@ -40,8 +40,7 @@ for(int i=0;i<controls.Length;i++){Check(Within(controls[i],safe),"Safe bounds "
 Check(MobileClientPresentation.MenuToggleRect.yMax<safe.y+100f*MobileClientPresentation.Scale,"Menu switch stays in top band");
 Check(MobileClientPresentation.MenuToggleRect.x>=safe.x+171f*MobileClientPresentation.Scale,"Menu avoids avatar");
 Check(MobileClientPresentation.MenuRect.xMax<=MobileClientPresentation.MinimapRect.x-12f*MobileClientPresentation.Scale+.01f,"Menu avoids map");
-Check(MobileClientPresentation.MenuEntryCount==14,"Nine ctrlbar entries plus five hotkey entries");
-for(int i=0;i<MobileClientPresentation.MenuEntryCount;i++){Rect entry=MobileClientPresentation.MenuItemRect(i);Check(Within(entry,MobileClientPresentation.MenuRect),"Entry within menu "+i);Check(!Overlap(entry,MobileClientPresentation.MenuToggleRect),"Entry avoids switch "+i);for(int j=0;j<i;j++)Check(!Overlap(entry,MobileClientPresentation.MenuItemRect(j)),"Distinct menu entry "+i+","+j);}
+for(int i=0;i<9;i++){Rect entry=MobileClientPresentation.MenuItemRect(i);Check(Within(entry,MobileClientPresentation.MenuRect),"Entry within menu "+i);Check(!Overlap(entry,MobileClientPresentation.MenuToggleRect),"Entry avoids switch "+i);for(int j=0;j<i;j++)Check(!Overlap(entry,MobileClientPresentation.MenuItemRect(j)),"Distinct menu entry "+i+","+j);}
 MobileClientPresentation.ChatExpanded=false;Check(Within(MobileClientPresentation.ChatRect,safe),"Compact chat safe");
 Check(Math.Abs(MobileClientPresentation.ChatRect.height-MobileClientPresentation.ChatPreviewHeight*MobileClientPresentation.Scale)<.01f,"Compact chat height");
 Check(!Overlap(MobileClientPresentation.ChatRect,MobileClientPresentation.JoystickRect),"Chat avoids joystick");
