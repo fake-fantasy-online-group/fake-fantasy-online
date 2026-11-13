@@ -104,6 +104,19 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
     /// Exact UITip text under the current pointer, consumed by the shared owner after this branch.
     /// </summary>
     public string HoverTooltip { get; private set; } = string.Empty;
+    private static int pluginHoverRow = -1, pluginHoverTarget;
+    private static float pluginHoverUntil;
+    internal static string LastNativeStatusTooltipForPlugin = string.Empty;
+    private static float lastNativeStatusTooltipAt;
+    internal static string NativeStatusTooltipForPlugin => Time.realtimeSinceStartup - lastNativeStatusTooltipAt < .25f ? LastNativeStatusTooltipForPlugin : string.Empty;
+    internal static bool HoverStatusForPlugin(int index, int entityId)
+    {
+        if (entityId <= 0 || index < 0 || index >= MaximumVisibleStatusRows || GameHud.tgStatusOf != entityId || index >= GameHud.tgStatus.Count) return false;
+        pluginHoverRow = index; pluginHoverTarget = entityId;
+        pluginHoverUntil = Time.realtimeSinceStartup + 5f;
+        return true;
+    }
+
 
     public int LastStatusRowsDrawn { get; private set; }
 
@@ -188,6 +201,8 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
 
     public void Dispose()
     {
+        pluginHoverUntil = 0f;
+        LastNativeStatusTooltipForPlugin = string.Empty;
         if (disposed)
         {
             return;
@@ -423,6 +438,8 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
         // null Event branch (ARM 43d0cc) throws; it is not an empty-row return.
         float elapsedWindow = Time.realtimeSinceStartup - GameHud.tgStatusRecv;
         Vector2 mouse = Event.current.mousePosition;
+        bool pluginHover = pluginHoverRow >= 0 && pluginHoverTarget == statusId && Time.realtimeSinceStartup < pluginHoverUntil;
+        if (pluginHover) mouse = TargetStatusRect(pluginHoverRow, scale).center;
         Color previousColor = GUI.color;
         // The official clock is one truncating cast of (realtimeSinceStartup - tgStatusRecv) *
         // 1000f. arm64 0x43cae4-0x43cafc (fmul, fcvtzs, fcmp against 0x7f800000, csel to
@@ -488,7 +505,10 @@ public sealed class ReferenceFirstWorldTargetHud : IDisposable
                 box.y <= mouse.y && mouse.y < box.y + box.height)
             {
                 HoverTooltip = StatusTooltip(row, remaining);
-                UITip.Show(HoverTooltip, scale);
+                LastNativeStatusTooltipForPlugin = HoverTooltip;
+                lastNativeStatusTooltipAt = Time.realtimeSinceStartup;
+                if (pluginHover) UITip.ShowAtForIndependentRuntime(HoverTooltip, scale, mouse);
+                else UITip.Show(HoverTooltip, scale);
             }
 
             visibleIndex++;

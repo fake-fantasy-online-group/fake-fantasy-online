@@ -189,6 +189,11 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
                 continue;
             }
 
+            if ((row.Effect == "流血" || row.Effect == "灼光") && row.DurationMilliseconds <= 0)
+            {
+                if (current != null) { current.GenericPlayer?.Stop(); current.GenericPlayer = null; current.ExpiresAt = nowSeconds; current.Revision = row.Revision; }
+                continue;
+            }
             float expiresAt = nowSeconds + Mathf.Max(
                 MinimumLifetimeSeconds,
                 row.DurationMilliseconds / 1000f);
@@ -226,6 +231,11 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
                     false);
                 if (player)
                 {
+                    if (player.IsGenericDOTForAudit)
+                    {
+                        current?.GenericPlayer?.Stop();
+                        replacement.GenericPlayer = player;
+                    }
                     player.followTarget = owner;
                     player.attachSort = bodyRenderer;
                 }
@@ -246,6 +256,7 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
         {
             if (!desired.Contains(effects[index].Name))
             {
+                effects[index].GenericPlayer?.Stop();
                 effects.RemoveAt(index);
             }
         }
@@ -268,6 +279,7 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
             RuntimeEffect effect = effects[index];
             if (effect.ExpiresAt <= nowSeconds)
             {
+                effect.GenericPlayer?.Stop(); effect.GenericPlayer = null;
                 continue;
             }
 
@@ -465,6 +477,7 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
     private void ReleaseOwnedState()
     {
         built = false;
+        foreach (var effect in effects) effect.GenericPlayer?.Stop();
         effects.Clear();
         activeCount = 0;
         frameIndex = -1;
@@ -532,6 +545,7 @@ internal sealed class ReferenceWorldMonsterStatusEffectView : IDisposable
             Slot = slot;
         }
 
+        public EffectPlayer GenericPlayer { get; set; }
         public string Name { get; }
         public byte PositionMode { get; }
         public long Revision { get; set; }

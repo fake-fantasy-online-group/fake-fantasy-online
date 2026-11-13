@@ -10,6 +10,12 @@ public partial class EffectPlayer : MonoBehaviour
 {
     private void Update()
     {
+        if (genericDOT) { TickGenericDOT(); return; }
+        if (genericNativeRadiant)
+        {
+            if (genericNativeRadiantFirstFrame) { t = 0f; genericNativeRadiantFirstFrame = false; }
+            loopMode = 3; loopDelay = 450f; selfDestroy = false;
+        }
         if (tpl == null || tpl.layers == null || rends == null)
         {
             Destroy(gameObject);

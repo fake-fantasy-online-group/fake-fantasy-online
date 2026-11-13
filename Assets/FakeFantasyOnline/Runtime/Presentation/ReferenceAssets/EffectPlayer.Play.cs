@@ -79,6 +79,8 @@ public partial class EffectPlayer : MonoBehaviour
         bool flip = false,
         bool followFacing = false)
     {
+        if (effName == "流血") return CreateGenericDOT(worldPos, effName);
+        if (effName == "灼光") return CreateNativeRadiantDOT(worldPos, ppu, facingSign, dir, flip, followFacing);
         if (LoadTemplate(effName) != null)
         {
             return Play(worldPos, effName, ppu, facingSign, dir, flip, followFacing);
