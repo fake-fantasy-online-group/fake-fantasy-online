@@ -209,6 +209,14 @@ public sealed partial class ActorEffects : MonoBehaviour
                     playerSr ? playerSr.sortingOrder : int.MinValue);
                 return;
             default:
+                if (instance.ep.IsGenericDOTForAudit)
+                {
+                    effectTransform.localPosition = new Vector3(
+                        mountOffsetU.x,
+                        instance.ep.ChestLocalY(bodyHeightU, mountOffsetU.y),
+                        0f);
+                    return;
+                }
                 effectTransform.localPosition = new Vector3(
                     mountOffsetU.x,
                     mountOffsetU.y,

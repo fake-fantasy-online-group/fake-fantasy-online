@@ -79,8 +79,8 @@ public partial class EffectPlayer : MonoBehaviour
         bool flip = false,
         bool followFacing = false)
     {
-        if (effName == "流血") return CreateNativeStatusDOT(worldPos, GenericBleedEffect, GenericStatusDOTScale, ppu, facingSign, dir, flip, followFacing);
-        if (effName == "灼光") return CreateNativeStatusDOT(worldPos, GenericRadiantEffect, GenericStatusDOTScale, ppu, facingSign, dir, flip, followFacing);
+        if (effName == "流血") return CreateNativeStatusDOT(worldPos, GenericBleedEffect, ppu, facingSign, dir, flip, followFacing);
+        if (effName == "灼光") return CreateNativeStatusDOT(worldPos, GenericRadiantEffect, ppu, facingSign, dir, flip, followFacing);
         if (LoadTemplate(effName) != null)
         {
             return Play(worldPos, effName, ppu, facingSign, dir, flip, followFacing);

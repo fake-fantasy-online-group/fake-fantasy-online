@@ -65,21 +65,74 @@ internal static class GenericDotVisuals
 public partial class EffectPlayer
 {
     // User-chosen existing package FX, referenced in place. Do not retint,
-    // retime, or rename the original assets. Scale and a low-frequency replay
-    // only keep a short native burst readable as a sustained status.
+    // retime, or rename the original assets. Playback follows each template's
+    // authored lifeMs; scale and chest height follow the host actor.
     internal const string GenericBleedEffect = "TFX1231_70";   // effect/TFX1231_70.eff, curated 血-1 E0282
     internal const string GenericRadiantEffect = "lizi";       // effect/lizi.eff, curated 光-3 E0034
-    internal const float GenericStatusDOTScale = 0.30f;
-    internal const float GenericStatusDOTLoopDelayMs = 700f;
+    // Catalog lifeMs of the chosen templates (E0282=1900, E0034=1085). Fallback
+    // only until tpl.lifeMs is available; not a user-specified delay.
+    internal const float GenericBleedLifeMs = 1900f;
+    internal const float GenericRadiantLifeMs = 1085f;
+    internal const float GenericStatusDOTRestFraction = 0.18f;
+    internal const float GenericStatusDOTRestMinMs = 180f;
+    internal const float GenericStatusDOTChestFactor = 0.45f;
+    internal const float GenericStatusDOTScaleMin = 0.60f;
+    internal const float GenericStatusDOTScaleMax = 1.10f;
+    internal const float GenericStatusDOTHeightScale = 0.50f;
+    internal const float GenericStatusDOTHeightBias = 0.25f;
 
     private bool genericStatusDOT;
     private bool genericStatusDOTFirstFrame;
     internal static int GenericDOTLiveForAudit { get; private set; }
     internal static int GenericDOTRenderersForAudit { get; private set; }
+    internal static int GenericDOTCreatedForAudit { get; private set; }
+    internal static float GenericDOTScaleForAudit { get; private set; }
+    internal static float GenericDOTLoopDelayForAudit { get; private set; }
+    internal static float GenericDOTBodyHeightForAudit { get; private set; }
     internal bool IsGenericDOTForAudit => genericStatusDOT;
-    private static EffectPlayer CreateNativeStatusDOT(Vector3 position, string asset, float scale, float pixelsPerUnit, int facing, int direction, bool flip, bool follow)
+
+    internal static float RestDelayMs(float lifeMs)
     {
-        NextScale = scale;
+        if (lifeMs <= 0f) lifeMs = GenericBleedLifeMs;
+        return Mathf.Max(GenericStatusDOTRestMinMs, lifeMs * GenericStatusDOTRestFraction);
+    }
+
+    internal static float ScaleForBody(float bodyHeightU)
+    {
+        float height = Mathf.Max(bodyHeightU, 0.8f);
+        return Mathf.Clamp(GenericStatusDOTHeightScale * height + GenericStatusDOTHeightBias,
+            GenericStatusDOTScaleMin, GenericStatusDOTScaleMax);
+    }
+
+    internal static float FallbackLifeMs(string asset)
+    {
+        return asset == GenericRadiantEffect ? GenericRadiantLifeMs : GenericBleedLifeMs;
+    }
+
+    internal float ChestLocalY(float bodyHeightU, float mountY)
+    {
+        return mountY + Mathf.Max(bodyHeightU, 0.8f) * GenericStatusDOTChestFactor;
+    }
+
+    internal void ConfigureGenericStatusPresentation(float bodyHeightU)
+    {
+        if (!genericStatusDOT) return;
+        float life = tpl != null && tpl.lifeMs > 0f ? tpl.lifeMs : GenericBleedLifeMs;
+        float scale = ScaleForBody(bodyHeightU);
+        transform.localScale = new Vector3(scale, scale, 1f);
+        loopMode = 3;
+        loopDelay = RestDelayMs(life);
+        selfDestroy = false;
+        attachUnder = false;
+        GenericDOTScaleForAudit = scale;
+        GenericDOTLoopDelayForAudit = loopDelay;
+        GenericDOTBodyHeightForAudit = bodyHeightU;
+    }
+
+    private static EffectPlayer CreateNativeStatusDOT(Vector3 position, string asset, float pixelsPerUnit, int facing, int direction, bool flip, bool follow)
+    {
+        // Provisional mid scale; Sync immediately retunes to the host body.
+        NextScale = ScaleForBody(1.2f);
         var ep = Play(position, asset, pixelsPerUnit, facing, direction, flip, follow);
         NextScale = 1f;
         if (!ep) return null;
@@ -87,9 +140,12 @@ public partial class EffectPlayer
         ep.genericStatusDOTFirstFrame = true;
         ep.selfDestroy = false;
         ep.loopMode = 3;
-        ep.loopDelay = GenericStatusDOTLoopDelayMs;
+        float life = ep.tpl != null && ep.tpl.lifeMs > 0f ? ep.tpl.lifeMs : FallbackLifeMs(asset);
+        ep.loopDelay = RestDelayMs(life);
         GenericDOTLiveForAudit++;
+        GenericDOTCreatedForAudit++;
         GenericDOTRenderersForAudit += ep.rends == null ? 0 : ep.rends.Length;
+        GenericDOTLoopDelayForAudit = ep.loopDelay;
         return ep;
     }
     private void OnDestroy()

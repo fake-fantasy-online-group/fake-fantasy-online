@@ -121,11 +121,21 @@ public sealed partial class ActorEffects
             player.loopMode = classSetLoop ? 1 : 0;
             player.selfDestroy = false;
             player.transform.SetParent(transform, false);
-            if (!classSetLoop) player.SettleToEnd();
-            if (!orbit && playerSr)
+            if (player.IsGenericDOTForAudit)
             {
+                // Sparse body FX must sit on the torso in front of the sprite.
+                // Do not SettleToEnd: these short bursts replay on their native clock.
                 player.attachSort = playerSr;
-                player.attachUnder = true;
+                player.ConfigureGenericStatusPresentation(bodyHeightU);
+            }
+            else
+            {
+                if (!classSetLoop) player.SettleToEnd();
+                if (!orbit && playerSr)
+                {
+                    player.attachSort = playerSr;
+                    player.attachUnder = true;
+                }
             }
             if (_hidden) player.gameObject.SetActive(false);
             auras[pair.Key] = new Inst

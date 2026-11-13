@@ -13,7 +13,10 @@ public partial class EffectPlayer : MonoBehaviour
         if (genericStatusDOT)
         {
             if (genericStatusDOTFirstFrame) { t = 0f; genericStatusDOTFirstFrame = false; }
-            loopMode = 3; loopDelay = GenericStatusDOTLoopDelayMs; selfDestroy = false;
+            loopMode = 3;
+            selfDestroy = false;
+            float life = tpl != null && tpl.lifeMs > 0f ? tpl.lifeMs : GenericBleedLifeMs;
+            loopDelay = RestDelayMs(life);
         }
         if (tpl == null || tpl.layers == null || rends == null)
         {
