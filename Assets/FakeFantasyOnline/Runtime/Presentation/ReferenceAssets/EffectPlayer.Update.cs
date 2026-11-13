@@ -10,11 +10,10 @@ public partial class EffectPlayer : MonoBehaviour
 {
     private void Update()
     {
-        if (genericDOT) { TickGenericDOT(); return; }
-        if (genericNativeRadiant)
+        if (genericStatusDOT)
         {
-            if (genericNativeRadiantFirstFrame) { t = 0f; genericNativeRadiantFirstFrame = false; }
-            loopMode = 3; loopDelay = 450f; selfDestroy = false;
+            if (genericStatusDOTFirstFrame) { t = 0f; genericStatusDOTFirstFrame = false; }
+            loopMode = 3; loopDelay = GenericStatusDOTLoopDelayMs; selfDestroy = false;
         }
         if (tpl == null || tpl.layers == null || rends == null)
         {
